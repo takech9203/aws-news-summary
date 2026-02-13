@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Backup - クロスリージョンデータベーススナップショットの論理的エアギャップボールトへの直接コピー</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <style>
+        :root {
+            --squid-ink: #232F3E;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --text-primary: #FFFFFF;
+            --text-secondary: #AAAAAA;
+            --light-gray: #D5DBDB;
+            --card-bg: #2D3A4A;
+            --dark-squid: #1A242F;
+            --border-color: #3D4A5A;
+            --aws-teal: #00A1C9;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background-color: var(--squid-ink);
+            color: var(--light-gray);
+            line-height: 1.8;
+            font-size: 16px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-bottom: 30px;
+            border-bottom: 3px solid var(--aws-orange);
+        }
+
+        .service-badge {
+            display: inline-block;
+            background-color: var(--aws-orange);
+            color: var(--squid-ink);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .release-date {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            margin-bottom: 20px;
+            padding-left: 15px;
+            border-left: 4px solid var(--aws-orange);
+        }
+
+        .overview-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        .overview-text {
+            font-size: 16px;
+            line-height: 1.9;
+        }
+
+        .highlight {
+            background-color: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--card-bg) 0%, var(--dark-squid) 100%);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 153, 0, 0.2);
+        }
+
+        .stat-icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--aws-orange);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Before/After comparison */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .comparison-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .comparison-card.before {
+            border-top: 4px solid #E74C3C;
+        }
+
+        .comparison-card.after {
+            border-top: 4px solid #2ECC71;
+        }
+
+        .comparison-label {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+
+        .comparison-card.before .comparison-label {
+            color: #E74C3C;
+        }
+
+        .comparison-card.after .comparison-label {
+            color: #2ECC71;
+        }
+
+        .comparison-list {
+            list-style: none;
+        }
+
+        .comparison-list li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            font-size: 14px;
+        }
+
+        .comparison-card.before .comparison-list li::before {
+            content: "\2717";
+            position: absolute;
+            left: 0;
+            color: #E74C3C;
+            font-weight: bold;
+        }
+
+        .comparison-card.after .comparison-list li::before {
+            content: "\2713";
+            position: absolute;
+            left: 0;
+            color: #2ECC71;
+            font-weight: bold;
+        }
+
+        /* Mermaid diagram */
+        .diagram-container {
+            background-color: #FFFFFF;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            border-radius: 12px;
+            padding: 25px;
+            overflow-x: auto;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        .diagram-note {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 12px;
+            text-align: center;
+        }
+
+        /* Feature cards */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .feature-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border-left: 3px solid var(--aws-orange);
+        }
+
+        .feature-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+        }
+
+        .feature-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--aws-orange);
+        }
+
+        .feature-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        /* DB support grid */
+        .db-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .db-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid rgba(255, 153, 0, 0.15);
+        }
+
+        .db-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .db-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .db-check {
+            color: #2ECC71;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        /* Comparison table */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+
+        .compare-table th {
+            background-color: var(--dark-squid);
+            color: var(--aws-orange);
+            padding: 10px 14px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 700;
+            border-bottom: 2px solid var(--aws-orange);
+        }
+
+        .compare-table td {
+            padding: 10px 14px;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--light-gray);
+        }
+
+        .compare-table .old-val {
+            color: #E74C3C;
+        }
+
+        .compare-table .new-val {
+            color: #2ECC71;
+            font-weight: 700;
+        }
+
+        /* Flow diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+
+        .flow-step {
+            background: var(--dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 120px;
+            font-size: 14px;
+        }
+
+        .flow-arrow {
+            color: var(--aws-orange);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        /* Code block */
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+
+        .code-title {
+            color: var(--light-gray);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        /* Use case cards */
+        .usecase-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 3px solid var(--aws-orange);
+        }
+
+        .usecase-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .usecase-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--aws-orange);
+        }
+
+        .usecase-scenario {
+            font-size: 14px;
+            color: var(--light-gray);
+            margin-bottom: 12px;
+        }
+
+        .usecase-effect {
+            font-size: 14px;
+            color: #2ECC71;
+            padding: 10px;
+            background-color: rgba(46, 204, 113, 0.1);
+            border-radius: 8px;
+        }
+
+        .usecase-effect::before {
+            content: "\2713 ";
+            font-weight: bold;
+        }
+
+        /* Merit/Demerit */
+        .merit-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .merit-section {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .merit-section h3 {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--aws-orange);
+        }
+
+        .merit-list {
+            list-style: none;
+        }
+
+        .merit-list li {
+            padding: 6px 0;
+            padding-left: 22px;
+            position: relative;
+            font-size: 14px;
+            color: var(--light-gray);
+        }
+
+        .merit-list li::before {
+            content: "\2713";
+            position: absolute;
+            left: 0;
+            color: #2ECC71;
+            font-weight: bold;
+        }
+
+        /* Constraint */
+        .constraint-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 3px solid #E74C3C;
+        }
+
+        .constraint-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #E74C3C;
+        }
+
+        .constraint-list {
+            list-style: none;
+        }
+
+        .constraint-list li {
+            padding: 6px 0;
+            padding-left: 22px;
+            position: relative;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .constraint-list li::before {
+            content: "\26A0";
+            position: absolute;
+            left: 0;
+            font-size: 12px;
+        }
+
+        /* Pricing */
+        .pricing-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+
+        .pricing-table th {
+            background-color: var(--dark-squid);
+            color: var(--aws-orange);
+            padding: 10px 14px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 700;
+            border-bottom: 2px solid var(--aws-orange);
+        }
+
+        .pricing-table td {
+            padding: 10px 14px;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--light-gray);
+        }
+
+        .pricing-note {
+            font-size: 14px;
+            color: #2ECC71;
+            padding: 12px;
+            background-color: rgba(46, 204, 113, 0.1);
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        /* Related services */
+        .related-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .related-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+
+        .related-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .related-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .source-links {
+            list-style: none;
+            margin-bottom: 16px;
+        }
+
+        .source-links li {
+            margin-bottom: 6px;
+        }
+
+        .source-link {
+            color: var(--aws-teal);
+            text-decoration: none;
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .source-link:hover {
+            color: var(--aws-smile-orange);
+            text-decoration: underline;
+        }
+
+        .footer-note {
+            color: var(--text-secondary);
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .comparison-grid,
+            .merit-grid {
+                grid-template-columns: 1fr;
+            }
+            .features-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+            .db-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+            .related-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <span class="service-badge">AWS Backup</span>
+            <h1>クロスリージョン論理的エアギャップボールトへの直接コピー</h1>
+            <p style="color: var(--light-gray); font-size: 15px; margin-bottom: 8px;">データベーススナップショットを単一アクションで別リージョンのエアギャップボールトへ直接コピー</p>
+            <p class="release-date">2026 年 2 月 12 日</p>
+        </header>
+
+        <!-- Overview -->
+        <section class="section">
+            <h2 class="section-title">概要</h2>
+            <div class="overview-card">
+                <p class="overview-text">
+                    AWS Backup が AWS リージョン間で<span class="highlight">論理的エアギャップボールトへのデータベーススナップショットの単一アクションコピー</span>をサポートしました。Amazon Aurora、Amazon Neptune、Amazon DocumentDB のスナップショットを対象とし、ターゲットリージョンでの中間コピー手順が不要になりました。
+                </p>
+                <p class="overview-text" style="margin-top: 12px;">
+                    ランサムウェア攻撃やリージョン障害からの保護のためのクロスリージョン・クロスアカウントスナップショットコピーが<span class="highlight">ワンステップで完了</span>し、より高速な RPO を達成しながら、中間コピーに関連するコストを削減できます。
+                </p>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">&#9889;</div>
+                    <div class="stat-value">1</div>
+                    <div class="stat-label">必要なステップ数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#128451;&#65039;</div>
+                    <div class="stat-value">3</div>
+                    <div class="stat-label">対応データベース</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#128176;</div>
+                    <div class="stat-value">$0</div>
+                    <div class="stat-label">中間コピーコスト</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#128640;</div>
+                    <div class="stat-value">高速</div>
+                    <div class="stat-label">RPO 改善</div>
+                </div>
+            </div>
+
+            <!-- Before/After -->
+            <div class="comparison-grid">
+                <div class="comparison-card before">
+                    <div class="comparison-label">Before - アップデート前の課題</div>
+                    <ul class="comparison-list">
+                        <li>論理的エアギャップボールトへのクロスリージョンコピーには 2 ステップのプロセスが必要だった</li>
+                        <li>まずターゲットリージョンの通常ボールトにコピーし、その後エアギャップボールトにコピーする必要があった</li>
+                        <li>中間コピーのステータス監視のためにカスタムスクリプトや Lambda 関数が必要だった</li>
+                    </ul>
+                </div>
+                <div class="comparison-card after">
+                    <div class="comparison-label">After - アップデート後の改善</div>
+                    <ul class="comparison-list">
+                        <li>1 回のアクションでクロスリージョンエアギャップボールトへ直接コピー可能</li>
+                        <li>中間コピーのコストと管理オーバーヘッドを排除</li>
+                        <li>より高速な RPO を実現</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architecture Diagram -->
+        <section class="section">
+            <h2 class="section-title">アーキテクチャ図</h2>
+            <div class="diagram-container">
+                <div class="mermaid">
+flowchart LR
+    subgraph Source["&#128205; ソースリージョン"]
+        DB["&#128451;&#65039; Aurora/Neptune/<br/>DocumentDB"]
+        SNAP["&#128248; スナップショット"]
+        DB --> SNAP
+    end
+
+    subgraph Target["&#128205; ターゲットリージョン"]
+        AGV["&#128274; 論理的<br/>エアギャップボールト"]
+    end
+
+    subgraph Before["&#10060; 以前 - 2 ステップ"]
+        direction TB
+        B1["1&#65039;&#8419; 通常ボールト<br/>へコピー"]
+        B2["2&#65039;&#8419; エアギャップ<br/>へコピー"]
+        B1 --> B2
+    end
+
+    subgraph After["&#9989; 現在 - 1 ステップ"]
+        A1["&#128228; 直接コピー"]
+    end
+
+    SNAP --> |"単一アクション"| AGV
+
+    classDef source fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef target fill:#E8F5E9,stroke:#C8E6C9,stroke-width:2px,color:#2E7D32
+    classDef old fill:#FFEBEE,stroke:#FFCDD2,stroke-width:2px,color:#C62828
+    classDef new fill:#E8F5E9,stroke:#C8E6C9,stroke-width:2px,color:#2E7D32
+
+    class Source source
+    class Target target
+    class Before old
+    class After new
+                </div>
+            </div>
+            <p class="diagram-note">以前は 2 ステップ必要だったクロスリージョンエアギャップコピーが、単一アクションで完了するようになりました。</p>
+        </section>
+
+        <!-- Key Features -->
+        <section class="section">
+            <h2 class="section-title">主要機能</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">&#9889;</div>
+                    <div class="feature-title">単一アクションコピー</div>
+                    <div class="feature-description">ソースリージョンから直接ターゲットリージョンのエアギャップボールトへコピー。中間ボールトへの一時コピーが不要。自動化されたワークフローの簡素化。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#128451;&#65039;</div>
+                    <div class="feature-title">対応データベース</div>
+                    <div class="feature-description">Amazon Aurora (MySQL、PostgreSQL 互換)、Amazon Neptune、Amazon DocumentDB の 3 つのデータベースサービスに対応。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#128274;</div>
+                    <div class="feature-title">セキュリティ強化</div>
+                    <div class="feature-description">論理的エアギャップボールトによる隔離。クロスアカウントコピーのサポート。ランサムウェア対策の強化。</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Technical Spec -->
+        <section class="section">
+            <h2 class="section-title">技術仕様</h2>
+
+            <h3 style="font-size: 16px; color: var(--text-primary); margin-bottom: 12px;">サポートされるデータベース</h3>
+            <div class="db-grid">
+                <div class="db-card">
+                    <div class="db-icon">&#128451;&#65039;</div>
+                    <div class="db-name">Amazon Aurora<br>(MySQL)</div>
+                    <div class="db-check">&#10003;</div>
+                </div>
+                <div class="db-card">
+                    <div class="db-icon">&#128451;&#65039;</div>
+                    <div class="db-name">Amazon Aurora<br>(PostgreSQL)</div>
+                    <div class="db-check">&#10003;</div>
+                </div>
+                <div class="db-card">
+                    <div class="db-icon">&#128202;</div>
+                    <div class="db-name">Amazon<br>Neptune</div>
+                    <div class="db-check">&#10003;</div>
+                </div>
+                <div class="db-card">
+                    <div class="db-icon">&#128196;</div>
+                    <div class="db-name">Amazon<br>DocumentDB</div>
+                    <div class="db-check">&#10003;</div>
+                </div>
+            </div>
+
+            <h3 style="font-size: 16px; color: var(--text-primary); margin-top: 24px; margin-bottom: 12px;">コピー機能の比較</h3>
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>機能</th>
+                        <th>以前</th>
+                        <th>現在</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>必要なステップ数</td>
+                        <td class="old-val">2</td>
+                        <td class="new-val">1</td>
+                    </tr>
+                    <tr>
+                        <td>中間コピーのコスト</td>
+                        <td class="old-val">発生</td>
+                        <td class="new-val">なし</td>
+                    </tr>
+                    <tr>
+                        <td>カスタムスクリプト</td>
+                        <td class="old-val">必要</td>
+                        <td class="new-val">不要</td>
+                    </tr>
+                    <tr>
+                        <td>RPO</td>
+                        <td class="old-val">遅い</td>
+                        <td class="new-val">高速</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Configuration -->
+        <section class="section">
+            <h2 class="section-title">設定方法</h2>
+
+            <div class="overview-card" style="margin-bottom: 16px;">
+                <h3 style="font-size: 15px; color: var(--aws-orange); margin-bottom: 10px;">前提条件</h3>
+                <ul class="merit-list">
+                    <li>AWS Backup が有効なアカウント</li>
+                    <li>ソースリージョンにデータベーススナップショット</li>
+                    <li>ターゲットリージョンに論理的エアギャップボールト</li>
+                </ul>
+            </div>
+
+            <h3 style="font-size: 16px; color: var(--text-primary); margin-bottom: 16px;">設定手順</h3>
+            <div class="flow-diagram">
+                <div class="flow-step">&#128274; エアギャップ<br>ボールト作成</div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">&#128228; クロスリージョン<br>コピー実行</div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">&#9881;&#65039; バックアップ<br>プラン自動化</div>
+            </div>
+
+            <div style="display: grid; gap: 16px; margin-top: 20px;">
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Bash</span>
+                        <span class="code-title">Step 1: 論理的エアギャップボールトの作成</span>
+                    </div>
+                    <pre><code class="language-bash">aws backup create-logically-air-gapped-backup-vault \
+  --backup-vault-name my-air-gapped-vault \
+  --min-retention-days 7 \
+  --max-retention-days 365 \
+  --region eu-west-1</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Bash</span>
+                        <span class="code-title">Step 2: クロスリージョンコピーの実行</span>
+                    </div>
+                    <pre><code class="language-bash">aws backup start-copy-job \
+  --recovery-point-arn arn:aws:rds:ap-northeast-1:123456789012:snapshot:my-aurora-snapshot \
+  --source-backup-vault-name Default \
+  --destination-backup-vault-arn arn:aws:backup:eu-west-1:123456789012:backup-vault:my-air-gapped-vault \
+  --iam-role-arn arn:aws:iam::123456789012:role/AWSBackupDefaultServiceRole</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">JSON</span>
+                        <span class="code-title">Step 3: バックアッププランでの自動化</span>
+                    </div>
+                    <pre><code class="language-json">{
+  "BackupPlanName": "CrossRegionAirGapPlan",
+  "Rules": [
+    {
+      "RuleName": "DailyBackupToAirGap",
+      "TargetBackupVaultName": "Default",
+      "ScheduleExpression": "cron(0 5 ? * * *)",
+      "CopyActions": [
+        {
+          "DestinationBackupVaultArn": "arn:aws:backup:eu-west-1:123456789012:backup-vault:my-air-gapped-vault",
+          "Lifecycle": {
+            "DeleteAfterDays": 365
+          }
+        }
+      ]
+    }
+  ]
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Benefits -->
+        <section class="section">
+            <h2 class="section-title">メリット</h2>
+            <div class="merit-grid">
+                <div class="merit-section">
+                    <h3>&#128188; ビジネス面</h3>
+                    <ul class="merit-list">
+                        <li><strong style="color: var(--text-primary);">コスト削減:</strong> 中間コピーのストレージコストとデータ転送コストを排除</li>
+                        <li><strong style="color: var(--text-primary);">RPO 改善:</strong> バックアッププロセスの簡素化により復旧ポイントを高速化</li>
+                        <li><strong style="color: var(--text-primary);">運用効率:</strong> カスタムスクリプトの開発・保守が不要</li>
+                    </ul>
+                </div>
+                <div class="merit-section">
+                    <h3>&#128736;&#65039; 技術面</h3>
+                    <ul class="merit-list">
+                        <li><strong style="color: var(--text-primary);">シンプルなアーキテクチャ:</strong> 2 ステップから 1 ステップへプロセスを簡素化</li>
+                        <li><strong style="color: var(--text-primary);">自動化の容易さ:</strong> AWS Backup プランで直接設定可能</li>
+                        <li><strong style="color: var(--text-primary);">セキュリティ強化:</strong> 論理的エアギャップによるランサムウェア対策</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Limitations -->
+        <section class="section">
+            <h2 class="section-title">制約事項・注意点</h2>
+            <div class="constraint-card">
+                <div class="constraint-title">制限事項</div>
+                <ul class="constraint-list">
+                    <li>対応データベースは Aurora、Neptune、DocumentDB に限定</li>
+                    <li>論理的エアギャップボールトをサポートするリージョンでのみ利用可能</li>
+                    <li>ボールトの最小/最大保持期間の設定が必要</li>
+                </ul>
+            </div>
+            <div class="constraint-card">
+                <div class="constraint-title">考慮すべき点</div>
+                <ul class="constraint-list">
+                    <li>クロスリージョンデータ転送料金は引き続き発生</li>
+                    <li>論理的エアギャップボールトからの復元は通常ボールトより時間がかかる場合がある</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Use Cases -->
+        <section class="section">
+            <h2 class="section-title">ユースケース</h2>
+
+            <div class="usecase-card">
+                <div class="usecase-header">
+                    <span style="font-size: 24px;">&#128274;&#127974;</span>
+                    <div class="usecase-title">ランサムウェア対策</div>
+                </div>
+                <div class="usecase-scenario">
+                    <strong style="color: var(--text-primary);">シナリオ:</strong> 金融機関が重要なデータベースをランサムウェアから保護。毎日のバックアップを別リージョンのエアギャップボールトにコピーし、攻撃者がプライマリ環境を侵害した場合でも安全なバックアップを維持。
+                </div>
+                <div class="usecase-effect">
+                    攻撃者がプライマリ環境を侵害しても、エアギャップボールトのバックアップは保護される
+                </div>
+            </div>
+
+            <div class="usecase-card">
+                <div class="usecase-header">
+                    <span style="font-size: 24px;">&#127758;&#128679;</span>
+                    <div class="usecase-title">リージョン障害からの災害復旧</div>
+                </div>
+                <div class="usecase-scenario">
+                    <strong style="color: var(--text-primary);">シナリオ:</strong> グローバル企業が東京リージョンの Aurora クラスターをフランクフルトにバックアップ。リージョン全体の障害に備え、エアギャップボールトで隔離されたバックアップを維持。
+                </div>
+                <div class="usecase-effect">
+                    リージョン全体の障害時も、エアギャップボールトから迅速に復旧可能
+                </div>
+            </div>
+
+            <div class="usecase-card">
+                <div class="usecase-header">
+                    <span style="font-size: 24px;">&#128220;&#127973;</span>
+                    <div class="usecase-title">コンプライアンス要件への対応</div>
+                </div>
+                <div class="usecase-scenario">
+                    <strong style="color: var(--text-primary);">シナリオ:</strong> 医療機関がデータ保護規制のためにバックアップを物理的に分離。クロスアカウント・クロスリージョンコピーで規制要件に準拠したバックアップ戦略を効率的に実装。
+                </div>
+                <div class="usecase-effect">
+                    規制要件に準拠したバックアップ戦略を効率的に実装
+                </div>
+            </div>
+        </section>
+
+        <!-- Pricing -->
+        <section class="section">
+            <h2 class="section-title">料金</h2>
+            <table class="pricing-table">
+                <thead>
+                    <tr>
+                        <th>項目</th>
+                        <th>料金</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>バックアップストレージ</td>
+                        <td>使用量に応じた料金</td>
+                    </tr>
+                    <tr>
+                        <td>クロスリージョンデータ転送</td>
+                        <td>リージョン間のデータ転送料金</td>
+                    </tr>
+                    <tr>
+                        <td>論理的エアギャップボールト</td>
+                        <td style="color: #2ECC71; font-weight: 700;">追加料金なし</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="pricing-note">
+                &#10003; 中間コピーが不要になることで、以前と比較してコスト削減が期待できます
+            </div>
+        </section>
+
+        <!-- Region -->
+        <section class="section">
+            <h2 class="section-title">利用可能リージョン</h2>
+            <div class="overview-card">
+                <p class="overview-text" style="text-align: center;">
+                    AWS Backup がデータベースと論理的エアギャップボールトをサポートする<span class="highlight">すべてのリージョン</span>で利用可能です。
+                </p>
+            </div>
+        </section>
+
+        <!-- Related Services -->
+        <section class="section">
+            <h2 class="section-title">関連サービス・機能</h2>
+            <div class="related-grid">
+                <div class="related-card">
+                    <div style="font-size: 24px; margin-bottom: 8px;">&#127970;</div>
+                    <div class="related-name">AWS Organizations</div>
+                    <div class="related-desc">マルチアカウントバックアップ戦略</div>
+                </div>
+                <div class="related-card">
+                    <div style="font-size: 24px; margin-bottom: 8px;">&#128203;</div>
+                    <div class="related-name">AWS Backup Audit Manager</div>
+                    <div class="related-desc">コンプライアンスの監視</div>
+                </div>
+                <div class="related-card">
+                    <div style="font-size: 24px; margin-bottom: 8px;">&#128279;</div>
+                    <div class="related-name">AWS RAM</div>
+                    <div class="related-desc">クロスアカウントボールト共有</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">参考リンク</p>
+            <ul class="source-links">
+                <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/02/aws-backup-adds-cross-region-database-snapshot-logically-air-gapped-vaults/" class="source-link" target="_blank">公式発表 - What's New</a></li>
+                <li><a href="https://docs.aws.amazon.com/aws-backup/latest/devguide/backup-feature-availability.html#features-by-resource" class="source-link" target="_blank">AWS Backup ドキュメント</a></li>
+            </ul>
+            <p class="footer-note">AWS Backup - クロスリージョン論理的エアギャップボールトへの直接コピー | 2026 年 2 月 12 日</p>
+        </footer>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            },
+            flowchart: {
+                curve: 'basis',
+                padding: 20
+            }
+        });
+        hljs.highlightAll();
+    </script>
+</body>
+</html>
