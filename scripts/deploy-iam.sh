@@ -2,10 +2,10 @@
 # Deploy OIDC provider and IAM role for AWS News Summary CI/CD.
 #
 # Usage:
-#   # GitHub Actions
+#   # GitHub Actions (role: GitHubActions-AWSNewsSummary, stack: awsnews-summary-github-iam)
 #   ./scripts/deploy-iam.sh -p github -o myorg -r awsnews-summary
 #
-#   # GitLab CI
+#   # GitLab CI (role: GitLabCI-AWSNewsSummary, stack: awsnews-summary-gitlab-iam)
 #   ./scripts/deploy-iam.sh -p gitlab -g mygroup -r awsnews-summary
 #
 #   # Custom role name and region
@@ -14,9 +14,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-STACK_NAME="awsnews-summary-iam"
+STACK_NAME=""
 REGION="us-east-1"
-ROLE_NAME="CICD-AWSNewsSummary"
+ROLE_NAME=""
 PLATFORM=""
 ORG_OR_GROUP=""
 REPO_OR_PROJECT=""
@@ -38,8 +38,8 @@ Platform-specific:
     -r, --repo REPO           GitLab project name
 
 Optional:
-  -n, --role-name NAME        IAM role name (default: CICD-AWSNewsSummary)
-  -s, --stack-name NAME       CloudFormation stack name (default: awsnews-summary-iam)
+  -n, --role-name NAME        IAM role name (default: GitHubActions-AWSNewsSummary or GitLabCI-AWSNewsSummary)
+  -s, --stack-name NAME       CloudFormation stack name (default: awsnews-summary-github-iam or awsnews-summary-gitlab-iam)
   -R, --region REGION         AWS region (default: us-east-1)
   -h, --help                  Show this help
 EOF
@@ -87,11 +87,15 @@ fi
 
 # Select template and parameters
 if [[ "$PLATFORM" == "github" ]]; then
+  [[ -z "$ROLE_NAME" ]] && ROLE_NAME="GitHubActions-AWSNewsSummary"
+  [[ -z "$STACK_NAME" ]] && STACK_NAME="awsnews-summary-github-iam"
   TEMPLATE="${SCRIPT_DIR}/cfn-github-oidc-iam.yaml"
   PARAMS="RoleName=${ROLE_NAME} GitHubOrg=${ORG_OR_GROUP} GitHubRepo=${REPO_OR_PROJECT}"
   LABEL="GitHub Actions"
   REPO_DISPLAY="${ORG_OR_GROUP}/${REPO_OR_PROJECT}"
 else
+  [[ -z "$ROLE_NAME" ]] && ROLE_NAME="GitLabCI-AWSNewsSummary"
+  [[ -z "$STACK_NAME" ]] && STACK_NAME="awsnews-summary-gitlab-iam"
   TEMPLATE="${SCRIPT_DIR}/cfn-gitlab-oidc-iam.yaml"
   PARAMS="RoleName=${ROLE_NAME} GitLabGroup=${ORG_OR_GROUP} GitLabProject=${REPO_OR_PROJECT}"
   LABEL="GitLab CI"

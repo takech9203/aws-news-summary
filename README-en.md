@@ -494,10 +494,15 @@ The MCP configuration is automatically loaded by the Claude Agent SDK via `setti
 
 This skill is automatically executed from GitHub Actions or GitLab CI using the Claude Agent SDK.
 
-**Setup**: See [SETUP-en.md](docs/SETUP-en.md) for detailed CI/CD configuration instructions including:
-- AWS IAM OIDC provider setup
-- IAM role and trust policy configuration
-- GitHub Actions / GitLab CI variables configuration
+**Setup Instructions**: Running in CI/CD requires configuring AWS IAM OIDC provider, IAM role, and CI/CD variables. See the following documentation for detailed instructions:
+
+📖 **[CI/CD Setup Guide (docs/SETUP-en.md)](docs/SETUP-en.md)**
+
+The setup guide includes:
+
+- Creating AWS IAM OIDC provider and IAM role (with automation script)
+- Configuring GitHub Actions / GitLab CI variables
+- Troubleshooting
 
 **GitHub Actions**:
 ```yaml

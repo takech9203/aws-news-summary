@@ -70,7 +70,7 @@ sequenceDiagram
 
 ### Step 1: Create OIDC Provider and IAM Role
 
-Run the following script to create the GitHub OIDC provider, Bedrock IAM policy, and IAM role in one step.
+Run the following script to create the GitHub OIDC provider, Bedrock IAM policy, and IAM role as a CloudFormation stack in one step.
 
 ```bash
 ./scripts/deploy-iam.sh -p github -o <OWNER> -r <REPO>
@@ -81,11 +81,26 @@ Run the following script to create the GitHub OIDC provider, Bedrock IAM policy,
 
 See `./scripts/deploy-iam.sh --help` for additional options.
 
-The script creates the following resources via CloudFormation:
+**Resources created**:
 
-- GitHub OIDC provider
-- IAM policy for Bedrock model invocation
-- IAM role (with OIDC trust policy)
+| Resource | Name | Description |
+|----------|------|-------------|
+| CloudFormation Stack | `awsnews-summary-github-iam` | Manages all resources |
+| OIDC Provider | `token.actions.githubusercontent.com` | For GitHub Actions authentication |
+| IAM Managed Policy | `GitHubActions-AWSNewsSummary-BedrockInvoke` | Bedrock model invocation permissions |
+| IAM Role | `GitHubActions-AWSNewsSummary` | Role assumed by GitHub Actions |
+
+**Customization options**:
+
+```bash
+# Specify custom role name and region
+./scripts/deploy-iam.sh -p github -o myorg -r awsnews-summary \
+  -n MyCustomRole -R us-west-2
+
+# Specify custom stack name
+./scripts/deploy-iam.sh -p github -o myorg -r awsnews-summary \
+  -s my-custom-stack
+```
 
 <details>
 <summary>IAM policy details</summary>
@@ -179,7 +194,7 @@ aws iam create-open-id-connect-provider \
 ```
 
 4. Click **Next** and attach a Bedrock IAM policy (see "IAM policy details" above) created manually
-5. Name the role (e.g., `CICD-AWSNewsSummary`)
+5. Name the role (e.g., `GitHubActions-AWSNewsSummary`)
 6. Click **Create role**
 
 Replace:
@@ -196,7 +211,7 @@ Replace:
 
 | Name | Value | Description |
 |------|-------|-------------|
-| `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/CICD-AWSNewsSummary` | IAM role ARN |
+| `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/GitHubActions-AWSNewsSummary` | IAM role ARN (use output from script execution) |
 | `AWS_REGION` | `us-east-1` | AWS region for Bedrock |
 | `INFOGRAPHIC_BASE_URL` | `https://<owner>.github.io/<repo>` | Base URL for infographic links |
 
@@ -227,7 +242,7 @@ steps:
 
 ### Step 1: Create OIDC Provider and IAM Role
 
-Run the following script to create the GitLab OIDC provider, Bedrock IAM policy, and IAM role in one step.
+Run the following script to create the GitLab OIDC provider, Bedrock IAM policy, and IAM role as a CloudFormation stack in one step.
 
 ```bash
 ./scripts/deploy-iam.sh -p gitlab -g <GROUP> -r <PROJECT>
@@ -238,11 +253,26 @@ Run the following script to create the GitLab OIDC provider, Bedrock IAM policy,
 
 See `./scripts/deploy-iam.sh --help` for additional options.
 
-The script creates the following resources via CloudFormation:
+**Resources created**:
 
-- GitLab OIDC provider
-- IAM policy for Bedrock model invocation
-- IAM role (with OIDC trust policy)
+| Resource | Name | Description |
+|----------|------|-------------|
+| CloudFormation Stack | `awsnews-summary-gitlab-iam` | Manages all resources |
+| OIDC Provider | `gitlab.com` | For GitLab CI authentication |
+| IAM Managed Policy | `GitLabCI-AWSNewsSummary-BedrockInvoke` | Bedrock model invocation permissions |
+| IAM Role | `GitLabCI-AWSNewsSummary` | Role assumed by GitLab CI |
+
+**Customization options**:
+
+```bash
+# Specify custom role name and region
+./scripts/deploy-iam.sh -p gitlab -g mygroup -r awsnews-summary \
+  -n MyCustomRole -R us-west-2
+
+# Specify custom stack name
+./scripts/deploy-iam.sh -p gitlab -g mygroup -r awsnews-summary \
+  -s my-custom-stack
+```
 
 <details>
 <summary>IAM policy details</summary>
@@ -305,7 +335,7 @@ aws iam create-open-id-connect-provider \
 ```
 
 4. Click **Next** and attach a Bedrock IAM policy (see "IAM policy details" above) created manually
-5. Name the role (e.g., `CICD-AWSNewsSummary`)
+5. Name the role (e.g., `GitLabCI-AWSNewsSummary`)
 6. Click **Create role**
 
 Replace:
@@ -340,7 +370,7 @@ Replace:
 
 | Key | Value | Flags | Required |
 |-----|-------|-------|----------|
-| `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/CICD-AWSNewsSummary` | Protected, Masked | ✅ |
+| `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/GitLabCI-AWSNewsSummary` | Protected, Masked | ✅ |
 | `AWS_DEFAULT_REGION` | `us-east-1` | - | ⚠️ Recommended |
 | `CI_PUSH_TOKEN` | `<Copied Personal Access Token>` | Protected, Masked | ✅ |
 | `INFOGRAPHIC_BASE_URL` | `https://<owner>.gitlab.io/<project>` | - | ⚠️ Recommended |

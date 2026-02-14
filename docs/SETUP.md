@@ -76,7 +76,7 @@ sequenceDiagram
 
 ### ステップ 1: OIDC プロバイダーと IAM ロールを作成
 
-以下のスクリプトで、GitHub OIDC プロバイダー、Bedrock 用 IAM ポリシー、IAM ロールを一括作成できる。
+以下のスクリプトで、GitHub OIDC プロバイダー、Bedrock 用 IAM ポリシー、IAM ロールを CloudFormation スタックとして一括作成できる。
 
 ```bash
 ./scripts/deploy-iam.sh -p github -o <OWNER> -r <REPO>
@@ -87,11 +87,26 @@ sequenceDiagram
 
 オプションの詳細は `./scripts/deploy-iam.sh --help` を参照。
 
-スクリプトにより、以下のリソースが CloudFormation で一括作成される。
+**作成されるリソース**:
 
-- GitHub OIDC プロバイダー
-- Bedrock モデル呼び出し用 IAM ポリシー
-- IAM ロール (OIDC 信頼ポリシー付き)
+| リソース | 名前 | 説明 |
+|---------|------|------|
+| CloudFormation スタック | `awsnews-summary-github-iam` | すべてのリソースを管理 |
+| OIDC プロバイダー | `token.actions.githubusercontent.com` | GitHub Actions 認証用 |
+| IAM Managed Policy | `GitHubActions-AWSNewsSummary-BedrockInvoke` | Bedrock モデル呼び出し権限 |
+| IAM ロール | `GitHubActions-AWSNewsSummary` | GitHub Actions が引き受けるロール |
+
+**カスタマイズオプション**:
+
+```bash
+# カスタムロール名とリージョンを指定
+./scripts/deploy-iam.sh -p github -o myorg -r awsnews-summary \
+  -n MyCustomRole -R us-west-2
+
+# カスタムスタック名を指定
+./scripts/deploy-iam.sh -p github -o myorg -r awsnews-summary \
+  -s my-custom-stack
+```
 
 <details>
 <summary>作成される IAM ポリシーの内容</summary>
@@ -185,7 +200,7 @@ aws iam create-open-id-connect-provider \
 ```
 
 4. **Next** をクリックし、Bedrock 用 IAM ポリシー (上記「作成される IAM ポリシーの内容」参照) を手動で作成してアタッチ
-5. ロール名を入力 (例: `CICD-AWSNewsSummary`)
+5. ロール名を入力 (例: `GitHubActions-AWSNewsSummary`)
 6. **Create role** をクリック
 
 置換する値は以下の通り。
@@ -202,7 +217,7 @@ aws iam create-open-id-connect-provider \
 
 | 名前 | 値 | 説明 |
 |------|-----|------|
-| `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/CICD-AWSNewsSummary` | IAM ロール ARN |
+| `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/GitHubActions-AWSNewsSummary` | IAM ロール ARN (スクリプト実行後の出力を使用) |
 | `AWS_REGION` | `us-east-1` | Bedrock 用 AWS リージョン |
 | `INFOGRAPHIC_BASE_URL` | `https://<owner>.github.io/<repo>` | インフォグラフィックのリンク用ベース URL |
 
@@ -233,7 +248,7 @@ steps:
 
 ### ステップ 1: OIDC プロバイダーと IAM ロールを作成
 
-以下のスクリプトで、GitLab OIDC プロバイダー、Bedrock 用 IAM ポリシー、IAM ロールを一括作成できる。
+以下のスクリプトで、GitLab OIDC プロバイダー、Bedrock 用 IAM ポリシー、IAM ロールを CloudFormation スタックとして一括作成できる。
 
 ```bash
 ./scripts/deploy-iam.sh -p gitlab -g <GROUP> -r <PROJECT>
@@ -244,11 +259,26 @@ steps:
 
 オプションの詳細は `./scripts/deploy-iam.sh --help` を参照。
 
-スクリプトにより、以下のリソースが CloudFormation で一括作成される。
+**作成されるリソース**:
 
-- GitLab OIDC プロバイダー
-- Bedrock モデル呼び出し用 IAM ポリシー
-- IAM ロール (OIDC 信頼ポリシー付き)
+| リソース | 名前 | 説明 |
+|---------|------|------|
+| CloudFormation スタック | `awsnews-summary-gitlab-iam` | すべてのリソースを管理 |
+| OIDC プロバイダー | `gitlab.com` | GitLab CI 認証用 |
+| IAM Managed Policy | `GitLabCI-AWSNewsSummary-BedrockInvoke` | Bedrock モデル呼び出し権限 |
+| IAM ロール | `GitLabCI-AWSNewsSummary` | GitLab CI が引き受けるロール |
+
+**カスタマイズオプション**:
+
+```bash
+# カスタムロール名とリージョンを指定
+./scripts/deploy-iam.sh -p gitlab -g mygroup -r awsnews-summary \
+  -n MyCustomRole -R us-west-2
+
+# カスタムスタック名を指定
+./scripts/deploy-iam.sh -p gitlab -g mygroup -r awsnews-summary \
+  -s my-custom-stack
+```
 
 <details>
 <summary>作成される IAM ポリシーの内容</summary>
@@ -311,7 +341,7 @@ aws iam create-open-id-connect-provider \
 ```
 
 4. **Next** をクリックし、Bedrock 用 IAM ポリシー (上記「作成される IAM ポリシーの内容」参照) を手動で作成してアタッチ
-5. ロール名を入力 (例: `CICD-AWSNewsSummary`)
+5. ロール名を入力 (例: `GitLabCI-AWSNewsSummary`)
 6. **Create role** をクリック
 
 置換する値は以下の通り。
@@ -346,7 +376,7 @@ aws iam create-open-id-connect-provider \
 
 | キー | 値 | フラグ | 必須 |
 |------|-----|--------|------|
-| `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/CICD-AWSNewsSummary` | Protected, Masked | ✅ |
+| `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/GitLabCI-AWSNewsSummary` | Protected, Masked | ✅ |
 | `AWS_DEFAULT_REGION` | `us-east-1` | - | ⚠️ 推奨 |
 | `CI_PUSH_TOKEN` | `<コピーした Personal Access Token>` | Protected, Masked | ✅ |
 | `INFOGRAPHIC_BASE_URL` | `https://<owner>.gitlab.io/<project>` | - | ⚠️ 推奨 |

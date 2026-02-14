@@ -526,11 +526,15 @@ MCP 設定は Claude Agent SDK の `setting_sources=["project"]` により自動
 
 このスキルは Claude Agent SDK を使用して GitHub Actions または GitLab CI から自動実行される。
 
-**セットアップ**: 詳細な CI/CD 設定手順は [SETUP.md](docs/SETUP.md) を参照。
+**セットアップ手順**: CI/CD 環境での実行には、AWS IAM OIDC プロバイダー、IAM ロール、CI/CD 変数の設定が必要です。詳細な手順は以下のドキュメントを参照してください。
 
-- AWS IAM OIDC プロバイダーのセットアップ
-- IAM ロールと信頼ポリシーの設定
+📖 **[CI/CD セットアップガイド (docs/SETUP.md)](docs/SETUP.md)**
+
+セットアップガイドには以下の内容が含まれます。
+
+- AWS IAM OIDC プロバイダーと IAM ロールの作成 (自動化スクリプト付き)
 - GitHub Actions / GitLab CI 変数の設定
+- トラブルシューティング
 
 **GitHub Actions**:
 ```yaml
