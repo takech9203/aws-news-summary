@@ -73,23 +73,40 @@ aws_news_summary:
     - pip install -r requirements.txt
     - echo "Installing AWS CLI..."
     - pip install awscli
-    - echo "Verifying AWS credentials..."
-    - aws sts get-caller-identity
     - git config --global user.name "AWS News Bot"
     - git config --global user.email "awsnews-bot@noreply.gitlab.com"
 
   script:
-    # 1. レポート・インフォグラフィック生成
-    - echo "Starting AWS News Summary generation..."
+    # 0. アーティファクトディレクトリ作成 (認証失敗時も artifacts: when: always で収集可能にする)
     - mkdir -p artifacts/new_reports artifacts/new_infographics
+
+    # 1. AWS 認証確認
+    - echo "Verifying AWS credentials..."
+    - |
+      if ! aws sts get-caller-identity; then
+        echo "============================================"
+        echo "ERROR: AWS authentication failed."
+        echo "  GitLab Group:   ${CI_PROJECT_NAMESPACE}"
+        echo "  GitLab Project: ${CI_PROJECT_PATH}"
+        echo "  Role ARN:       ${AWS_ROLE_ARN}"
+        echo ""
+        echo "Check the IAM role trust policy conditions:"
+        echo "  GitLab:Group   = ${CI_PROJECT_NAMESPACE}"
+        echo "  GitLab:Project = ${CI_PROJECT_PATH}"
+        echo "============================================"
+        exit 1
+      fi
+
+    # 2. レポート・インフォグラフィック生成
+    - echo "Starting AWS News Summary generation..."
     - python run.py --debug || true
 
-    # 2. インデックスファイル更新
+    # 3. インデックスファイル更新
     - echo "Updating index files..."
     - python -c "from run import generate_reports_index; from pathlib import Path; generate_reports_index(Path('reports'))"
     - python -c "from run import generate_infographic_index; from pathlib import Path; generate_infographic_index(Path('infographic'))"
 
-    # 3. アーティファクト収集
+    # 4. アーティファクト収集
     - |
       git status --porcelain reports/ | while IFS= read -r line; do
         [ -z "$line" ] && continue
@@ -102,7 +119,7 @@ aws_news_summary:
         [ -f "$file" ] && cp "$file" "artifacts/new_infographics/"
       done
 
-    # 4. 一括 commit & push
+    # 5. 一括 commit & push
     - |
       if [ -n "$(git status --porcelain reports/ infographic/)" ]; then
         echo "Committing all new reports and infographics..."
