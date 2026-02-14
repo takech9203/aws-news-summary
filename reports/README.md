@@ -45,6 +45,7 @@
 - [2026-02-10 - Amazon SageMaker HyperPod - コンソールからのノードアクション管理](2026/2026-02-10-amazon-sagemaker-hyperpod-node-actions.md)
 - [2026-02-10 - Amazon OpenSearch Serverless - Collection Groups によるコスト最適化](2026/2026-02-10-amazon-opensearch-serverless-supports-collection-groups.md)
 - [2026-02-10 - Amazon Aurora Global Database - マネージドマイナーバージョンアップグレード](2026/2026-02-10-amazon-aurora-global-database-managed-minor.md)
+- [2026-02-10 - Amazon CloudWatch - Alarm Mute Rules](2026/2026-02-10-amazon-cloudwatch-alarm-muting-rules.md)
 - [2026-02-10 - Kiro - オープンウェイトモデルのサポート開始](2026/2026-02-10-kiro-open-weight-models.md)
 - [2026-02-09 - Amazon EC2 C8gn インスタンス - 追加リージョンでの提供開始 (2026 年 2 月)](2026/2026-02-09-amazon-ec2-c8gn-instances-additional-regions.md)
 - [2026-02-09 - Amazon Redshift - 自動最適化用の追加コンピュートリソース割り当て](2026/2026-02-09-amazon-redshift-allocate-extra-compute-for-automatic-optimizations.md)
