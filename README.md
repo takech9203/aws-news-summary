@@ -38,7 +38,7 @@ flowchart TD
 
     subgraph Phase1["Phase 1: レポート生成"]
         direction TB
-        Skill["📋 awsnews-summary Skill"]
+        Skill["📋 aws-news-summary Skill"]
 
         subgraph Collect["データ収集"]
             direction LR
@@ -96,7 +96,7 @@ flowchart TD
 
 このスキルは CI/CD から定期実行され、`run.py` が 2 フェーズで処理を行います。
 
-1. **Phase 1 - レポート生成**: RSS/Atom フィードと AWS ドキュメントから情報を取得し、テンプレートベースで構造化された日本語レポートを作成 (awsnews-summary スキル)
+1. **Phase 1 - レポート生成**: RSS/Atom フィードと AWS ドキュメントから情報を取得し、テンプレートベースで構造化された日本語レポートを作成 (aws-news-summary スキル)
 2. **Phase 2 - インフォグラフィック生成**: メインエージェントが `AgentDefinition` で定義された `infographic-generator` subagent を Task ツール経由で並列に起動し、各レポートの HTML インフォグラフィックを生成 (creating-infographic スキル)
 
 ### システム概要 (詳細版)
@@ -262,7 +262,7 @@ flowchart TB
 
 ### シーケンス図
 
-以下は、CI/CD パイプラインから run.py が Claude Agent SDK を実行し、2 フェーズでレポートとインフォグラフィックを生成する全体フローを示す。Phase 1 では awsnews-summary スキルを使用してレポートを生成し、Phase 2 では `AgentDefinition` で定義した `infographic-generator` subagent を Task ツール経由で並列に起動してインフォグラフィックを生成する。各フェーズのコンテキストが分離されることで、コンテキスト枯渇による生成漏れを防止する。
+以下は、CI/CD パイプラインから run.py が Claude Agent SDK を実行し、2 フェーズでレポートとインフォグラフィックを生成する全体フローを示す。Phase 1 では aws-news-summary スキルを使用してレポートを生成し、Phase 2 では `AgentDefinition` で定義した `infographic-generator` subagent を Task ツール経由で並列に起動してインフォグラフィックを生成する。各フェーズのコンテキストが分離されることで、コンテキスト枯渇による生成漏れを防止する。
 
 ```mermaid
 sequenceDiagram
@@ -281,7 +281,7 @@ sequenceDiagram
     RunPy->>RunPy: AWS 認証情報検証 (STS)
     RunPy->>RunPy: モデル選択<br/>(Primary / Fallback)
 
-    Note over CI,FS: Phase 1: レポート生成 (awsnews-summary スキル)
+    Note over CI,FS: Phase 1: レポート生成 (aws-news-summary スキル)
 
     activate RunPy
     RunPy->>SDK: run_skill(prompt)
@@ -289,7 +289,7 @@ sequenceDiagram
 
     SDK->>LLM: Request (prompt + tools)
     activate LLM
-    LLM-->>SDK: Response (tool_use: Skill=awsnews-summary)
+    LLM-->>SDK: Response (tool_use: Skill=aws-news-summary)
     deactivate LLM
 
     rect rgb(255, 255, 255)
@@ -433,7 +433,7 @@ sequenceDiagram
         activate Sub
         Sub->>FS: Read reports/2026/2026-02-10-xxx.md
         FS-->>Sub: レポート内容
-        Sub->>Sub: Skill(creating-infographic)<br/>+ テーマ (awsnews.md) 読み込み
+        Sub->>Sub: Skill(creating-infographic)<br/>+ テーマ (aws-news.md) 読み込み
         Sub->>Sub: HTML インフォグラフィック生成
         Sub->>FS: Write infographic/20260210-xxx.html
         Sub-->>SDK: 完了 (成功)
@@ -443,7 +443,7 @@ sequenceDiagram
         activate Sub
         Sub->>FS: Read reports/2026/2026-02-10-yyy.md
         FS-->>Sub: レポート内容
-        Sub->>Sub: Skill(creating-infographic)<br/>+ テーマ (awsnews.md) 読み込み
+        Sub->>Sub: Skill(creating-infographic)<br/>+ テーマ (aws-news.md) 読み込み
         Sub->>Sub: HTML インフォグラフィック生成
         Sub->>FS: Write infographic/20260210-yyy.html
         Sub-->>SDK: 完了 (成功)
@@ -453,7 +453,7 @@ sequenceDiagram
         activate Sub
         Sub->>FS: Read reports/2026/2026-02-10-zzz.md
         FS-->>Sub: レポート内容
-        Sub->>Sub: Skill(creating-infographic)<br/>+ テーマ (awsnews.md) 読み込み
+        Sub->>Sub: Skill(creating-infographic)<br/>+ テーマ (aws-news.md) 読み込み
         Sub->>Sub: HTML インフォグラフィック生成
         Sub->>FS: Write infographic/20260210-zzz.html
         Sub-->>SDK: 完了 (成功)
@@ -474,11 +474,11 @@ sequenceDiagram
 ## プロジェクト構造
 
 ```
-awsnews-summary/
+aws-news-summary/
 ├── .claude/                           # Claude Code 設定
 │   ├── settings.json                  # 権限と MCP 設定
 │   └── skills/
-│       ├── awsnews-summary/           # スキル定義 (レポート生成)
+│       ├── aws-news-summary/          # スキル定義 (レポート生成)
 │       │   ├── SKILL.md               # スキル指示
 │       │   ├── report_template.md     # レポートテンプレート
 │       │   └── scripts/               # パーサースクリプト
@@ -538,7 +538,7 @@ MCP 設定は Claude Agent SDK の `setting_sources=["project"]` により自動
 
 **GitHub Actions**:
 ```yaml
-# .github/workflows/awsnews-summary.yml
+# .github/workflows/aws-news-summary.yml
 - name: Configure AWS credentials
   uses: aws-actions/configure-aws-credentials@v4
   with:
@@ -564,31 +564,31 @@ aws_news_summary:
 
 **Claude Code CLI を使用**:
 ```bash
-cd ~/.claude/skills/awsnews-summary
+cd ~/.claude/skills/aws-news-summary
 claude "AWS の最新ニュースをレポートして"
 ```
 
 **run.py を使用**:
 ```bash
-cd ~/.claude/skills/awsnews-summary
+cd ~/.claude/skills/aws-news-summary
 pip install -r requirements.txt
 
 # デフォルトプロンプト (過去 1 週間)
 python run.py
 
 # カスタムプロンプト - 特定のサービスに絞る
-python run.py "Run the awsnews-summary skill for Amazon Bedrock updates"
+python run.py "Run the aws-news-summary skill for Amazon Bedrock updates"
 
 # カスタムプロンプト - 特定の期間を指定
-python run.py "Run the awsnews-summary skill for AWS updates from the past 2 weeks"
+python run.py "Run the aws-news-summary skill for AWS updates from the past 2 weeks"
 
 # カスタムプロンプト - 特定の月を指定（実行時の現在日時が自動的に含まれます）
-python run.py "Run the awsnews-summary skill for AWS updates launched in January 2026"
+python run.py "Run the aws-news-summary skill for AWS updates launched in January 2026"
 ```
 
 **注意**:
 - `run.py` は Bedrock アクセス用の AWS 認証情報が設定されている必要がある
-- プロンプトには「Run the awsnews-summary skill」を含めることで、スキルが確実に呼び出されます
+- プロンプトには「Run the aws-news-summary skill」を含めることで、スキルが確実に呼び出されます
 - 実行時の現在日時が自動的にプロンプトに追加されるため、期間指定が正確に処理されます
 
 ## 情報ソース

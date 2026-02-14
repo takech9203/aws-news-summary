@@ -129,11 +129,9 @@ AWS Orange 背景でサービス名を表示。
 1. **レポートファイルを読み込む**
 2. **Web から関連情報を収集** (ドキュメント、Blog、サンプルコード)
 3. **情報を整理・選別**
-4. **インフォグラフィック URL を決定**: 環境変数 `INFOGRAPHIC_BASE_URL` から取得
-5. **インフォグラフィックを生成** (AWS ダークテーマベース)
-   - HTML 内の出典リンク (自己参照 URL) にも同じ `INFOGRAPHIC_BASE_URL` を使用
-6. **`infographic/{YYYYMMDD}-{slug}.html` に保存**
-7. **レポートにリンクを追加** (`{INFOGRAPHIC_BASE_URL}/{YYYYMMDD}-{slug}.html`)
+4. **インフォグラフィックを生成** (AWS ダークテーマベース)
+5. **`infographic/{YYYYMMDD}-{slug}.html` に保存**
+6. **レポートにリンクを追加** (環境変数 `INFOGRAPHIC_BASE_URL` を使用)
 
 ## 注意事項
 

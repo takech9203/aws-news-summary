@@ -21,7 +21,7 @@ description: グラフィックレコーディング風の HTML インフォグ�
 | AWS ライト | #[[file:themes/aws-light.md]] | AWS プレゼンテーション風ライトテーマ | 「AWS」「ライト」「白背景」「ドキュメント」「印刷」 |
 | AWS スライドダーク | #[[file:themes/aws-slide-dark.md]] | AWS スライド形式 (PDF 複数ページ対応) ダーク | 「スライド」「プレゼン」「PDF」「複数ページ」「AWS」「ダーク」 |
 | AWS スライドライト | #[[file:themes/aws-slide-light.md]] | AWS スライド形式 (PDF 複数ページ対応) ライト | 「スライド」「プレゼン」「PDF」「複数ページ」「AWS」「ライト」 |
-| AWS News | #[[file:themes/awsnews.md]] | AWS ニュースレポート専用テーマ | 「AWS ニュース」「レポート」「What's New」「アップデート」 |
+| AWS News | #[[file:themes/aws-news.md]] | AWS ニュースレポート専用テーマ | 「AWS ニュース」「レポート」「What's New」「アップデート」 |
 
 各テーマファイルには、カラーパレット、CSS テンプレート、HTML テンプレート例が含まれています。テーマを適用する際は、該当ファイルを参照してください。
 

@@ -2,14 +2,14 @@
 # Deploy OIDC provider and IAM role for AWS News Summary CI/CD.
 #
 # Usage:
-#   # GitHub Actions (role: GitHubActions-AWSNewsSummary, stack: awsnews-summary-github-iam)
-#   ./scripts/deploy-iam.sh -p github -o myorg -r awsnews-summary
+#   # GitHub Actions (role: GitHubActions-AWSNewsSummary, stack: aws-news-summary-github-iam)
+#   ./scripts/deploy-iam.sh -p github -o myorg -r aws-news-summary
 #
-#   # GitLab CI (role: GitLabCI-AWSNewsSummary, stack: awsnews-summary-gitlab-iam)
-#   ./scripts/deploy-iam.sh -p gitlab -g mygroup -r awsnews-summary
+#   # GitLab CI (role: GitLabCI-AWSNewsSummary, stack: aws-news-summary-gitlab-iam)
+#   ./scripts/deploy-iam.sh -p gitlab -g mygroup -r aws-news-summary
 #
 #   # Custom role name and region
-#   ./scripts/deploy-iam.sh -p github -o myorg -r awsnews-summary -n MyRole -R us-west-2
+#   ./scripts/deploy-iam.sh -p github -o myorg -r aws-news-summary -n MyRole -R us-west-2
 
 set -euo pipefail
 
@@ -39,7 +39,7 @@ Platform-specific:
 
 Optional:
   -n, --role-name NAME        IAM role name (default: GitHubActions-AWSNewsSummary or GitLabCI-AWSNewsSummary)
-  -s, --stack-name NAME       CloudFormation stack name (default: awsnews-summary-github-iam or awsnews-summary-gitlab-iam)
+  -s, --stack-name NAME       CloudFormation stack name (default: aws-news-summary-github-iam or aws-news-summary-gitlab-iam)
   -R, --region REGION         AWS region (default: us-east-1)
   -h, --help                  Show this help
 EOF
@@ -88,14 +88,14 @@ fi
 # Select template and parameters
 if [[ "$PLATFORM" == "github" ]]; then
   [[ -z "$ROLE_NAME" ]] && ROLE_NAME="GitHubActions-AWSNewsSummary"
-  [[ -z "$STACK_NAME" ]] && STACK_NAME="awsnews-summary-github-iam"
+  [[ -z "$STACK_NAME" ]] && STACK_NAME="aws-news-summary-github-iam"
   TEMPLATE="${SCRIPT_DIR}/cfn-github-oidc-iam.yaml"
   PARAMS="RoleName=${ROLE_NAME} GitHubOrg=${ORG_OR_GROUP} GitHubRepo=${REPO_OR_PROJECT}"
   LABEL="GitHub Actions"
   REPO_DISPLAY="${ORG_OR_GROUP}/${REPO_OR_PROJECT}"
 else
   [[ -z "$ROLE_NAME" ]] && ROLE_NAME="GitLabCI-AWSNewsSummary"
-  [[ -z "$STACK_NAME" ]] && STACK_NAME="awsnews-summary-gitlab-iam"
+  [[ -z "$STACK_NAME" ]] && STACK_NAME="aws-news-summary-gitlab-iam"
   TEMPLATE="${SCRIPT_DIR}/cfn-gitlab-oidc-iam.yaml"
   PARAMS="RoleName=${ROLE_NAME} GitLabGroup=${ORG_OR_GROUP} GitLabProject=${REPO_OR_PROJECT}"
   LABEL="GitLab CI"

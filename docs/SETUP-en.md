@@ -77,7 +77,7 @@ Run the following script to create the GitHub OIDC provider, Bedrock IAM policy,
 ```
 
 - `<OWNER>`: GitHub repository owner/org (e.g., `myorg`)
-- `<REPO>`: GitHub repository name (e.g., `awsnews-summary`)
+- `<REPO>`: GitHub repository name (e.g., `aws-news-summary`)
 
 See `./scripts/deploy-iam.sh --help` for additional options.
 
@@ -85,7 +85,7 @@ See `./scripts/deploy-iam.sh --help` for additional options.
 
 | Resource | Name | Description |
 |----------|------|-------------|
-| CloudFormation Stack | `awsnews-summary-github-iam` | Manages all resources |
+| CloudFormation Stack | `aws-news-summary-github-iam` | Manages all resources |
 | OIDC Provider | `token.actions.githubusercontent.com` | For GitHub Actions authentication |
 | IAM Managed Policy | `GitHubActions-AWSNewsSummary-BedrockInvoke` | Bedrock model invocation permissions |
 | IAM Role | `GitHubActions-AWSNewsSummary` | Role assumed by GitHub Actions |
@@ -94,11 +94,11 @@ See `./scripts/deploy-iam.sh --help` for additional options.
 
 ```bash
 # Specify custom role name and region
-./scripts/deploy-iam.sh -p github -o myorg -r awsnews-summary \
+./scripts/deploy-iam.sh -p github -o myorg -r aws-news-summary \
   -n MyCustomRole -R us-west-2
 
 # Specify custom stack name
-./scripts/deploy-iam.sh -p github -o myorg -r awsnews-summary \
+./scripts/deploy-iam.sh -p github -o myorg -r aws-news-summary \
   -s my-custom-stack
 ```
 
@@ -199,7 +199,7 @@ aws iam create-open-id-connect-provider \
 
 Replace:
 - `<AWS_ACCOUNT_ID>`: Your AWS account ID
-- `<OWNER>/<REPO>`: Your GitHub repository (e.g., `myorg/awsnews-summary`)
+- `<OWNER>/<REPO>`: Your GitHub repository (e.g., `myorg/aws-news-summary`)
 
 </details>
 
@@ -213,11 +213,11 @@ Replace:
 |------|-------|-------------|
 | `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/GitHubActions-AWSNewsSummary` | IAM role ARN (use output from script execution) |
 | `AWS_REGION` | `us-east-1` | AWS region for Bedrock |
-| `INFOGRAPHIC_BASE_URL` | `https://<owner>.github.io/<repo>` | Base URL for infographic links |
+| `INFOGRAPHIC_BASE_URL` | `https://takech9203.github.io/aws-news-summary` | Base URL for infographic links (without trailing slash) |
 
 ### Step 3: Verify Workflow Configuration
 
-The repository includes `.github/workflows/awsnews-summary.yml`. Key sections:
+The repository includes `.github/workflows/aws-news-summary.yml`. Key sections:
 
 ```yaml
 permissions:
@@ -249,7 +249,7 @@ Run the following script to create the GitLab OIDC provider, Bedrock IAM policy,
 ```
 
 - `<GROUP>`: GitLab group/namespace (e.g., `mygroup`)
-- `<PROJECT>`: GitLab project name (e.g., `awsnews-summary`)
+- `<PROJECT>`: GitLab project name (e.g., `aws-news-summary`)
 
 See `./scripts/deploy-iam.sh --help` for additional options.
 
@@ -257,7 +257,7 @@ See `./scripts/deploy-iam.sh --help` for additional options.
 
 | Resource | Name | Description |
 |----------|------|-------------|
-| CloudFormation Stack | `awsnews-summary-gitlab-iam` | Manages all resources |
+| CloudFormation Stack | `aws-news-summary-gitlab-iam` | Manages all resources |
 | OIDC Provider | `gitlab.com` | For GitLab CI authentication |
 | IAM Managed Policy | `GitLabCI-AWSNewsSummary-BedrockInvoke` | Bedrock model invocation permissions |
 | IAM Role | `GitLabCI-AWSNewsSummary` | Role assumed by GitLab CI |
@@ -266,11 +266,11 @@ See `./scripts/deploy-iam.sh --help` for additional options.
 
 ```bash
 # Specify custom role name and region
-./scripts/deploy-iam.sh -p gitlab -g mygroup -r awsnews-summary \
+./scripts/deploy-iam.sh -p gitlab -g mygroup -r aws-news-summary \
   -n MyCustomRole -R us-west-2
 
 # Specify custom stack name
-./scripts/deploy-iam.sh -p gitlab -g mygroup -r awsnews-summary \
+./scripts/deploy-iam.sh -p gitlab -g mygroup -r aws-news-summary \
   -s my-custom-stack
 ```
 
@@ -340,7 +340,7 @@ aws iam create-open-id-connect-provider \
 
 Replace:
 - `<AWS_ACCOUNT_ID>`: Your AWS account ID
-- `<GROUP>/<PROJECT>`: Your GitLab project path (e.g., `mygroup/awsnews-summary`)
+- `<GROUP>/<PROJECT>`: Your GitLab project path (e.g., `mygroup/aws-news-summary`)
 
 </details>
 
@@ -373,12 +373,12 @@ Replace:
 | `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/GitLabCI-AWSNewsSummary` | Protected, Masked | ✅ |
 | `AWS_DEFAULT_REGION` | `us-east-1` | - | ⚠️ Recommended |
 | `CI_PUSH_TOKEN` | `<Copied Personal Access Token>` | Protected, Masked | ✅ |
-| `INFOGRAPHIC_BASE_URL` | `https://<owner>.gitlab.io/<project>` | - | ⚠️ Recommended |
+| `INFOGRAPHIC_BASE_URL` | `https://takech9203.gitlab.io/aws-news-summary` | - | ⚠️ Recommended |
 
 **Note**: 
 - `AWS_DEFAULT_REGION` has a default value of `us-east-1` in `.gitlab-ci.yml`, but you can override it if using a different region
 - For gitlab.com, the OIDC audience defaults to `https://gitlab.com` and does not need to be configured
-- `INFOGRAPHIC_BASE_URL` is used for infographic link URLs in reports. Set this to your GitLab Pages or GitHub Pages URL
+- `INFOGRAPHIC_BASE_URL` is used for infographic link URLs in reports. Set this to your complete GitHub Pages or GitLab Pages URL (e.g., `https://<owner>.github.io/<repo>` or `https://<owner>.gitlab.io/<project>`, without trailing slash)
 
 ### Step 3: Configure Pipeline Schedule
 

@@ -1,5 +1,5 @@
 ---
-name: awsnews-summary
+name: aws-news-summary
 description: AWS What's New、AWS API Changes、Kiro (kiro.dev) の情報を取得し、日本語で詳細な解説レポートを作成するスキル。ユーザーが「AWS新機能」「AWSアップデート」「AWS What's New」「AWS API変更」「AWSニュース」「最新のAWS情報」「Kiroアップデート」「Kiro新機能」などと言った場合に使用する。特定のAWSサービスの最新情報や、期間を指定したAWSアップデートの調査にも対応。Kiro (kiro.dev) のブログやチェンジログの更新情報も同様にレポートを生成する。
 ---
 
@@ -88,7 +88,7 @@ date "+%Y-%m-%d %H:%M:%S %Z"
 curl -L -s "https://aws.amazon.com/new/feed/" > /tmp/aws_news_feed.xml
 
 # パーサースクリプトで JSON に変換（過去7日間）
-python3 .claude/skills/awsnews-summary/scripts/parse_aws_news_feed.py --days 7 --feed /tmp/aws_news_feed.xml
+python3 .claude/skills/aws-news-summary/scripts/parse_aws_news_feed.py --days 7 --feed /tmp/aws_news_feed.xml
 ```
 
 **パーサースクリプトのオプション:**
@@ -98,7 +98,7 @@ python3 .claude/skills/awsnews-summary/scripts/parse_aws_news_feed.py --days 7 -
 **期間指定の例:**
 ```bash
 # 過去14日間のアイテムを取得
-python3 .claude/skills/awsnews-summary/scripts/parse_aws_news_feed.py --days 14
+python3 .claude/skills/aws-news-summary/scripts/parse_aws_news_feed.py --days 14
 ```
 
 - RSS フィードは XML 形式で以下の情報を含む:
@@ -126,10 +126,10 @@ curl -sL "https://kiro.dev/blog/" > /tmp/kiro_blog.html
 curl -sL "https://kiro.dev/changelog/" > /tmp/kiro_changelog.html
 
 # Blog エントリをパース（過去7日間）
-python3 .claude/skills/awsnews-summary/scripts/parse_kiro_updates.py --source blog --days 7 --feed /tmp/kiro_blog.html
+python3 .claude/skills/aws-news-summary/scripts/parse_kiro_updates.py --source blog --days 7 --feed /tmp/kiro_blog.html
 
 # Changelog エントリをパース（過去7日間）
-python3 .claude/skills/awsnews-summary/scripts/parse_kiro_updates.py --source changelog --days 7 --feed /tmp/kiro_changelog.html
+python3 .claude/skills/aws-news-summary/scripts/parse_kiro_updates.py --source changelog --days 7 --feed /tmp/kiro_changelog.html
 ```
 
 **パーサースクリプトのオプション:**
@@ -219,10 +219,10 @@ Glob(pattern="reports/{pubDateの年}/*.md")
 curl -L -s "https://awsapichanges.com/feed/feed.rss" > /tmp/aws_api_changes_feed.xml
 
 # パーサースクリプトで JSON に変換（過去7日間）
-python3 .claude/skills/awsnews-summary/scripts/parse_aws_api_changes_feed.py --days 7 --feed /tmp/aws_api_changes_feed.xml
+python3 .claude/skills/aws-news-summary/scripts/parse_aws_api_changes_feed.py --days 7 --feed /tmp/aws_api_changes_feed.xml
 
 # 特定のサービスの詳細情報を取得（API メソッド名と変更内容を含む）
-python3 .claude/skills/awsnews-summary/scripts/parse_aws_api_changes_feed.py --days 30 --service "Bedrock" --details --feed /tmp/aws_api_changes_feed.xml
+python3 .claude/skills/aws-news-summary/scripts/parse_aws_api_changes_feed.py --days 30 --service "Bedrock" --details --feed /tmp/aws_api_changes_feed.xml
 ```
 
 **パーサースクリプトのオプション:**
@@ -271,7 +271,7 @@ Changelog エントリは `parse_kiro_updates.py` の出力に `description` フ
 
 ### 6. レポート作成
 
-`.claude/skills/awsnews-summary/report_template.md` のテンプレートを使用してレポートを作成する。
+`.claude/skills/aws-news-summary/report_template.md` のテンプレートを使用してレポートを作成する。
 
 **インフォグラフィック URL の決定:**
 
@@ -363,7 +363,7 @@ mcp__aws-knowledge-mcp-server__aws___search_documentation(
 curl -L -s "https://aws.amazon.com/blogs/aws/feed/" > /tmp/aws_blog_feed.xml
 
 # パーサースクリプトで JSON に変換（過去7日間）
-python3 .claude/skills/awsnews-summary/scripts/parse_aws_blog_feed.py --days 7 --feed /tmp/aws_blog_feed.xml
+python3 .claude/skills/aws-news-summary/scripts/parse_aws_blog_feed.py --days 7 --feed /tmp/aws_blog_feed.xml
 ```
 
 **パーサースクリプトのオプション:**
@@ -403,7 +403,7 @@ python3 .claude/skills/awsnews-summary/scripts/parse_aws_blog_feed.py --days 7 -
 1. AWS What's New RSS フィード取得（curl、1回のみ）
 2. 過去 14 日間のアイテムを抽出（`--days 14`）
    ```bash
-   python3 .claude/skills/awsnews-summary/scripts/parse_aws_news_feed.py --days 14
+   python3 .claude/skills/aws-news-summary/scripts/parse_aws_news_feed.py --days 14
    ```
 3. 以降同様
 

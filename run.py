@@ -2,7 +2,7 @@
 """
 AWS News Summary Automation Script
 
-This script runs the awsnews-summary skill using the Claude Agent SDK with Amazon Bedrock.
+This script runs the aws-news-summary skill using the Claude Agent SDK with Amazon Bedrock.
 It's designed to be executed by GitLab CI or GitHub Actions on a daily schedule.
 
 Usage:
@@ -38,8 +38,8 @@ from claude_agent_sdk.types import (
 
 # Default prompt for the skill
 DEFAULT_PROMPT = (
-    "Run the awsnews-summary skill to report AWS news from the past week. "
-    "Make sure to invoke the Skill tool with skill='awsnews-summary'."
+    "Run the aws-news-summary skill to report AWS news from the past week. "
+    "Make sure to invoke the Skill tool with skill='aws-news-summary'."
 )
 
 # Model configuration with fallback
@@ -432,7 +432,7 @@ def is_throttling_error(error: Exception) -> bool:
 
 
 async def run_skill(prompt: str = DEFAULT_PROMPT) -> list[str]:
-    """Run the awsnews-summary skill using Claude Agent SDK.
+    """Run the aws-news-summary skill using Claude Agent SDK.
 
     Args:
         prompt: The prompt to send to the skill. Defaults to DEFAULT_PROMPT.
@@ -1029,7 +1029,7 @@ async def generate_infographics(report_paths: list[str]) -> list[str]:
         "When given a report file path and output path:\n"
         "1. Read the report file\n"
         "2. Use the creating-infographic skill with the AWS News theme "
-        "(refer to .claude/skills/creating-infographic/themes/awsnews.md)\n"
+        "(refer to .claude/skills/creating-infographic/themes/aws-news.md)\n"
         "3. Generate a visually appealing infographic HTML file\n"
         "4. Include all sections from the report\n"
         "5. If the report contains Mermaid diagrams, embed them using Mermaid.js\n"
@@ -1192,7 +1192,7 @@ async def generate_infographics(report_paths: list[str]) -> list[str]:
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Run the awsnews-summary skill using Claude Agent SDK.",
+        description="Run the aws-news-summary skill using Claude Agent SDK.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

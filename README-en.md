@@ -37,7 +37,7 @@ flowchart TD
 
     subgraph Phase1["Phase 1: Report Generation"]
         direction TB
-        Skill["📋 awsnews-summary Skill"]
+        Skill["📋 aws-news-summary Skill"]
 
         subgraph Collect["Data Collection"]
             direction LR
@@ -95,7 +95,7 @@ flowchart TD
 
 This skill runs periodically from CI/CD, with `run.py` orchestrating two phases.
 
-1. **Phase 1 - Report Generation**: Retrieve information from RSS/Atom feeds and AWS documentation, create structured Japanese reports based on templates (awsnews-summary skill)
+1. **Phase 1 - Report Generation**: Retrieve information from RSS/Atom feeds and AWS documentation, create structured Japanese reports based on templates (aws-news-summary skill)
 2. **Phase 2 - Infographic Generation**: The main agent delegates to `infographic-generator` subagents defined via `AgentDefinition`, spawning them in parallel via the Task tool to generate HTML infographics (creating-infographic skill)
 
 ### System Overview (Detailed)
@@ -261,7 +261,7 @@ flowchart TB
 
 ### Sequence Diagram
 
-The following sequence diagram shows the complete flow from CI/CD pipeline execution through two-phase report and infographic generation. In Phase 1, the awsnews-summary skill generates reports. In Phase 2, `run.py` launches an orchestrator agent that delegates to `infographic-generator` subagents defined via `AgentDefinition`, spawning them in parallel via the Task tool. Context isolation between phases and between subagents prevents context exhaustion from causing missed generations.
+The following sequence diagram shows the complete flow from CI/CD pipeline execution through two-phase report and infographic generation. In Phase 1, the aws-news-summary skill generates reports. In Phase 2, `run.py` launches an orchestrator agent that delegates to `infographic-generator` subagents defined via `AgentDefinition`, spawning them in parallel via the Task tool. Context isolation between phases and between subagents prevents context exhaustion from causing missed generations.
 
 ```mermaid
 sequenceDiagram
@@ -280,7 +280,7 @@ sequenceDiagram
     RunPy->>RunPy: Verify AWS credentials (STS)
     RunPy->>RunPy: Select model<br/>(Primary / Fallback)
 
-    Note over CI,FS: Phase 1: Report Generation (awsnews-summary skill)
+    Note over CI,FS: Phase 1: Report Generation (aws-news-summary skill)
 
     activate RunPy
     RunPy->>SDK: run_skill(prompt)
@@ -401,7 +401,7 @@ sequenceDiagram
         activate Sub
         Sub->>FS: Read reports/2026/2026-02-10-xxx.md
         FS-->>Sub: Report content
-        Sub->>Sub: Skill(creating-infographic)<br/>+ load theme (awsnews.md)
+        Sub->>Sub: Skill(creating-infographic)<br/>+ load theme (aws-news.md)
         Sub->>Sub: Generate HTML infographic
         Sub->>FS: Write infographic/20260210-xxx.html
         Sub-->>SDK: Complete (success)
@@ -411,7 +411,7 @@ sequenceDiagram
         activate Sub
         Sub->>FS: Read reports/2026/2026-02-10-yyy.md
         FS-->>Sub: Report content
-        Sub->>Sub: Skill(creating-infographic)<br/>+ load theme (awsnews.md)
+        Sub->>Sub: Skill(creating-infographic)<br/>+ load theme (aws-news.md)
         Sub->>Sub: Generate HTML infographic
         Sub->>FS: Write infographic/20260210-yyy.html
         Sub-->>SDK: Complete (success)
@@ -421,7 +421,7 @@ sequenceDiagram
         activate Sub
         Sub->>FS: Read reports/2026/2026-02-10-zzz.md
         FS-->>Sub: Report content
-        Sub->>Sub: Skill(creating-infographic)<br/>+ load theme (awsnews.md)
+        Sub->>Sub: Skill(creating-infographic)<br/>+ load theme (aws-news.md)
         Sub->>Sub: Generate HTML infographic
         Sub->>FS: Write infographic/20260210-zzz.html
         Sub-->>SDK: Complete (success)
@@ -442,11 +442,11 @@ sequenceDiagram
 ## Project Structure
 
 ```
-awsnews-summary/
+aws-news-summary/
 ├── .claude/                           # Claude Code settings
 │   ├── settings.json                  # Permissions & MCP config
 │   └── skills/
-│       ├── awsnews-summary/           # Skill definition (report generation)
+│       ├── aws-news-summary/          # Skill definition (report generation)
 │       │   ├── SKILL.md               # Skill instructions
 │       │   ├── report_template.md     # Report template
 │       │   └── scripts/               # Parser scripts
@@ -506,7 +506,7 @@ The setup guide includes:
 
 **GitHub Actions**:
 ```yaml
-# .github/workflows/awsnews-summary.yml
+# .github/workflows/aws-news-summary.yml
 - name: Configure AWS credentials
   uses: aws-actions/configure-aws-credentials@v4
   with:
@@ -532,31 +532,31 @@ aws_news_summary:
 
 **Using Claude Code CLI**:
 ```bash
-cd ~/.claude/skills/awsnews-summary
+cd ~/.claude/skills/aws-news-summary
 claude "Report the latest AWS news"
 ```
 
 **Using run.py**:
 ```bash
-cd ~/.claude/skills/awsnews-summary
+cd ~/.claude/skills/aws-news-summary
 pip install -r requirements.txt
 
 # Default prompt (past week)
 python run.py
 
 # Custom prompt - Filter by specific service
-python run.py "Run the awsnews-summary skill for Amazon Bedrock updates"
+python run.py "Run the aws-news-summary skill for Amazon Bedrock updates"
 
 # Custom prompt - Specify time period
-python run.py "Run the awsnews-summary skill for AWS updates from the past 2 weeks"
+python run.py "Run the aws-news-summary skill for AWS updates from the past 2 weeks"
 
 # Custom prompt - Specify month (current datetime is automatically included)
-python run.py "Run the awsnews-summary skill for AWS updates launched in January 2026"
+python run.py "Run the aws-news-summary skill for AWS updates launched in January 2026"
 ```
 
 **Notes**:
 - `run.py` requires AWS credentials configured for Bedrock access
-- Include "Run the awsnews-summary skill" in prompts to ensure the skill is invoked
+- Include "Run the aws-news-summary skill" in prompts to ensure the skill is invoked
 - Current datetime is automatically added to the prompt for accurate date filtering
 
 ## Information Sources

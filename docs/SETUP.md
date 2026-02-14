@@ -83,7 +83,7 @@ sequenceDiagram
 ```
 
 - `<OWNER>`: GitHub リポジトリのオーナー/org (例: `myorg`)
-- `<REPO>`: GitHub リポジトリ名 (例: `awsnews-summary`)
+- `<REPO>`: GitHub リポジトリ名 (例: `aws-news-summary`)
 
 オプションの詳細は `./scripts/deploy-iam.sh --help` を参照。
 
@@ -91,7 +91,7 @@ sequenceDiagram
 
 | リソース | 名前 | 説明 |
 |---------|------|------|
-| CloudFormation スタック | `awsnews-summary-github-iam` | すべてのリソースを管理 |
+| CloudFormation スタック | `aws-news-summary-github-iam` | すべてのリソースを管理 |
 | OIDC プロバイダー | `token.actions.githubusercontent.com` | GitHub Actions 認証用 |
 | IAM Managed Policy | `GitHubActions-AWSNewsSummary-BedrockInvoke` | Bedrock モデル呼び出し権限 |
 | IAM ロール | `GitHubActions-AWSNewsSummary` | GitHub Actions が引き受けるロール |
@@ -100,11 +100,11 @@ sequenceDiagram
 
 ```bash
 # カスタムロール名とリージョンを指定
-./scripts/deploy-iam.sh -p github -o myorg -r awsnews-summary \
+./scripts/deploy-iam.sh -p github -o myorg -r aws-news-summary \
   -n MyCustomRole -R us-west-2
 
 # カスタムスタック名を指定
-./scripts/deploy-iam.sh -p github -o myorg -r awsnews-summary \
+./scripts/deploy-iam.sh -p github -o myorg -r aws-news-summary \
   -s my-custom-stack
 ```
 
@@ -205,7 +205,7 @@ aws iam create-open-id-connect-provider \
 
 置換する値は以下の通り。
 - `<AWS_ACCOUNT_ID>`: AWS アカウント ID
-- `<OWNER>/<REPO>`: GitHub リポジトリ (例: `myorg/awsnews-summary`)
+- `<OWNER>/<REPO>`: GitHub リポジトリ (例: `myorg/aws-news-summary`)
 
 </details>
 
@@ -219,11 +219,11 @@ aws iam create-open-id-connect-provider \
 |------|-----|------|
 | `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/GitHubActions-AWSNewsSummary` | IAM ロール ARN (スクリプト実行後の出力を使用) |
 | `AWS_REGION` | `us-east-1` | Bedrock 用 AWS リージョン |
-| `INFOGRAPHIC_BASE_URL` | `https://<owner>.github.io/<repo>` | インフォグラフィックのリンク用ベース URL |
+| `INFOGRAPHIC_BASE_URL` | `https://takech9203.github.io/aws-news-summary` | インフォグラフィックのリンク用ベース URL (末尾スラッシュなし) |
 
 ### ステップ 3: ワークフロー設定を確認
 
-リポジトリには `.github/workflows/awsnews-summary.yml` が含まれている。主要なセクションは以下の通り。
+リポジトリには `.github/workflows/aws-news-summary.yml` が含まれている。主要なセクションは以下の通り。
 
 ```yaml
 permissions:
@@ -255,7 +255,7 @@ steps:
 ```
 
 - `<GROUP>`: GitLab グループ/namespace (例: `mygroup`)
-- `<PROJECT>`: GitLab プロジェクト名 (例: `awsnews-summary`)
+- `<PROJECT>`: GitLab プロジェクト名 (例: `aws-news-summary`)
 
 オプションの詳細は `./scripts/deploy-iam.sh --help` を参照。
 
@@ -263,7 +263,7 @@ steps:
 
 | リソース | 名前 | 説明 |
 |---------|------|------|
-| CloudFormation スタック | `awsnews-summary-gitlab-iam` | すべてのリソースを管理 |
+| CloudFormation スタック | `aws-news-summary-gitlab-iam` | すべてのリソースを管理 |
 | OIDC プロバイダー | `gitlab.com` | GitLab CI 認証用 |
 | IAM Managed Policy | `GitLabCI-AWSNewsSummary-BedrockInvoke` | Bedrock モデル呼び出し権限 |
 | IAM ロール | `GitLabCI-AWSNewsSummary` | GitLab CI が引き受けるロール |
@@ -272,11 +272,11 @@ steps:
 
 ```bash
 # カスタムロール名とリージョンを指定
-./scripts/deploy-iam.sh -p gitlab -g mygroup -r awsnews-summary \
+./scripts/deploy-iam.sh -p gitlab -g mygroup -r aws-news-summary \
   -n MyCustomRole -R us-west-2
 
 # カスタムスタック名を指定
-./scripts/deploy-iam.sh -p gitlab -g mygroup -r awsnews-summary \
+./scripts/deploy-iam.sh -p gitlab -g mygroup -r aws-news-summary \
   -s my-custom-stack
 ```
 
@@ -346,7 +346,7 @@ aws iam create-open-id-connect-provider \
 
 置換する値は以下の通り。
 - `<AWS_ACCOUNT_ID>`: AWS アカウント ID
-- `<GROUP>/<PROJECT>`: GitLab プロジェクトパス (例: `mygroup/awsnews-summary`)
+- `<GROUP>/<PROJECT>`: GitLab プロジェクトパス (例: `mygroup/aws-news-summary`)
 
 </details>
 
@@ -379,12 +379,12 @@ aws iam create-open-id-connect-provider \
 | `AWS_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/GitLabCI-AWSNewsSummary` | Protected, Masked | ✅ |
 | `AWS_DEFAULT_REGION` | `us-east-1` | - | ⚠️ 推奨 |
 | `CI_PUSH_TOKEN` | `<コピーした Personal Access Token>` | Protected, Masked | ✅ |
-| `INFOGRAPHIC_BASE_URL` | `https://<owner>.gitlab.io/<project>` | - | ⚠️ 推奨 |
+| `INFOGRAPHIC_BASE_URL` | `https://takech9203.gitlab.io/aws-news-summary` | - | ⚠️ 推奨 |
 
 **注意**: 
 - `AWS_DEFAULT_REGION` は `.gitlab-ci.yml` でデフォルト値 `us-east-1` が設定されていますが、別のリージョンを使用する場合は上書きしてください
 - gitlab.com の場合、OIDC audience はデフォルトで `https://gitlab.com` に設定されるため、設定不要
-- `INFOGRAPHIC_BASE_URL` はレポート内のインフォグラフィックリンク URL に使用される。GitLab Pages または GitHub Pages の URL を設定する
+- `INFOGRAPHIC_BASE_URL` はレポート内のインフォグラフィックリンク URL に使用される。GitHub Pages または GitLab Pages の完全な URL を設定する（例: `https://<owner>.github.io/<repo>` または `https://<owner>.gitlab.io/<project>`、末尾スラッシュなし）
 
 ### ステップ 3: パイプラインスケジュールを設定
 
