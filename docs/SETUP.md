@@ -79,11 +79,14 @@ sequenceDiagram
 以下のスクリプトで、GitHub OIDC プロバイダー、Bedrock 用 IAM ポリシー、IAM ロールを CloudFormation スタックとして一括作成できる。
 
 ```bash
-./scripts/deploy-iam.sh -p github -o <OWNER> -r <REPO>
+./scripts/deploy-iam.sh -p github -o <OWNER>
 ```
 
 - `<OWNER>`: GitHub リポジトリのオーナー/org (例: `myorg`)
-- `<REPO>`: GitHub リポジトリ名 (例: `aws-news-summary`)
+
+リポジトリ名はデフォルトで `aws-news-summary` が使用されます。別のリポジトリ名を使用する場合は `-r` オプションで指定できます。
+
+**自動検出機能**: スクリプトは自動的に既存の GitHub Actions OIDC プロバイダーを検出します。既存のプロバイダーが見つかった場合は、それを使用します (新規作成をスキップ)。見つからない場合は、新しいプロバイダーを作成します。
 
 オプションの詳細は `./scripts/deploy-iam.sh --help` を参照。
 
@@ -99,13 +102,20 @@ sequenceDiagram
 **カスタマイズオプション**:
 
 ```bash
+# カスタムリポジトリ名を指定
+./scripts/deploy-iam.sh -p github -o myorg -r my-custom-repo
+
 # カスタムロール名とリージョンを指定
-./scripts/deploy-iam.sh -p github -o myorg -r aws-news-summary \
+./scripts/deploy-iam.sh -p github -o myorg \
   -n MyCustomRole -R us-west-2
 
 # カスタムスタック名を指定
-./scripts/deploy-iam.sh -p github -o myorg -r aws-news-summary \
+./scripts/deploy-iam.sh -p github -o myorg \
   -s my-custom-stack
+
+# 明示的に OIDC プロバイダー ARN を指定 (自動検出をオーバーライド)
+./scripts/deploy-iam.sh -p github -o myorg \
+  -O arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com
 ```
 
 <details>
@@ -251,11 +261,14 @@ steps:
 以下のスクリプトで、GitLab OIDC プロバイダー、Bedrock 用 IAM ポリシー、IAM ロールを CloudFormation スタックとして一括作成できる。
 
 ```bash
-./scripts/deploy-iam.sh -p gitlab -g <GROUP> -r <PROJECT>
+./scripts/deploy-iam.sh -p gitlab -g <GROUP>
 ```
 
 - `<GROUP>`: GitLab グループ/namespace (例: `mygroup`)
-- `<PROJECT>`: GitLab プロジェクト名 (例: `aws-news-summary`)
+
+プロジェクト名はデフォルトで `aws-news-summary` が使用されます。別のプロジェクト名を使用する場合は `-r` オプションで指定できます。
+
+**自動検出機能**: スクリプトは自動的に既存の GitLab CI OIDC プロバイダーを検出します。既存のプロバイダーが見つかった場合は、それを使用します (新規作成をスキップ)。見つからない場合は、新しいプロバイダーを作成します。
 
 オプションの詳細は `./scripts/deploy-iam.sh --help` を参照。
 
@@ -271,13 +284,20 @@ steps:
 **カスタマイズオプション**:
 
 ```bash
+# カスタムプロジェクト名を指定
+./scripts/deploy-iam.sh -p gitlab -g mygroup -r my-custom-project
+
 # カスタムロール名とリージョンを指定
-./scripts/deploy-iam.sh -p gitlab -g mygroup -r aws-news-summary \
+./scripts/deploy-iam.sh -p gitlab -g mygroup \
   -n MyCustomRole -R us-west-2
 
 # カスタムスタック名を指定
-./scripts/deploy-iam.sh -p gitlab -g mygroup -r aws-news-summary \
+./scripts/deploy-iam.sh -p gitlab -g mygroup \
   -s my-custom-stack
+
+# 明示的に OIDC プロバイダー ARN を指定 (自動検出をオーバーライド)
+./scripts/deploy-iam.sh -p gitlab -g mygroup \
+  -O arn:aws:iam::123456789012:oidc-provider/gitlab.com
 ```
 
 <details>
