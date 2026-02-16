@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon EC2 - 仮想インスタンスでのネステッド仮想化サポート</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+    <style>
+        :root {
+            --squid-ink: #232F3E;
+            --dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --smile-orange: #FFAD33;
+            --text-primary: #FFFFFF;
+            --text-secondary: #D5DBDB;
+            --text-muted: #AAAAAA;
+            --card-bg: #2D3A4A;
+            --border-color: #3D4A5A;
+            --aws-teal: #00A1C9;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+            --aws-purple: #8C4FFF;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background-color: var(--squid-ink);
+            color: var(--text-secondary);
+            line-height: 1.8;
+            font-size: 16px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-bottom: 30px;
+            border-bottom: 3px solid var(--aws-orange);
+        }
+
+        .badge-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .service-badge {
+            display: inline-block;
+            background-color: var(--aws-orange);
+            color: var(--squid-ink);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .feature-badge {
+            display: inline-block;
+            background-color: var(--aws-teal);
+            color: #FFFFFF;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .nitro-badge {
+            display: inline-block;
+            background-color: var(--aws-purple);
+            color: #FFFFFF;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+
+        .release-date {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            margin-bottom: 20px;
+            padding-left: 15px;
+            border-left: 4px solid var(--aws-orange);
+        }
+
+        .overview-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        .overview-text {
+            font-size: 16px;
+            line-height: 1.9;
+        }
+
+        .highlight {
+            color: var(--aws-orange);
+            font-weight: 700;
+        }
+
+        /* Comparison Grid */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .comparison-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .comparison-card.before {
+            border-top: 4px solid #E74C3C;
+        }
+
+        .comparison-card.after {
+            border-top: 4px solid #2ECC71;
+        }
+
+        .comparison-label {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+
+        .comparison-card.before .comparison-label {
+            color: #E74C3C;
+        }
+
+        .comparison-card.after .comparison-label {
+            color: #2ECC71;
+        }
+
+        .comparison-list {
+            list-style: none;
+        }
+
+        .comparison-list li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            font-size: 14px;
+        }
+
+        .comparison-card.before .comparison-list li::before {
+            content: "\2717";
+            position: absolute;
+            left: 0;
+            color: #E74C3C;
+            font-weight: bold;
+        }
+
+        .comparison-card.after .comparison-list li::before {
+            content: "\2713";
+            position: absolute;
+            left: 0;
+            color: #2ECC71;
+            font-weight: bold;
+        }
+
+        /* Statistics Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--card-bg) 0%, var(--dark-squid) 100%);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 153, 0, 0.2);
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            line-height: 1.2;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+
+        .stat-sublabel {
+            font-size: 11px;
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+
+        /* Instance Family Grid */
+        .family-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .family-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 25px;
+            border-top: 4px solid var(--aws-orange);
+            text-align: center;
+        }
+
+        .family-card-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+
+        .family-card-name {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            margin-bottom: 6px;
+        }
+
+        .family-card-type {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 15px;
+        }
+
+        .family-card-specs {
+            list-style: none;
+            text-align: left;
+        }
+
+        .family-card-specs li {
+            padding: 6px 0;
+            padding-left: 22px;
+            position: relative;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .family-card-specs li::before {
+            content: "\2713";
+            position: absolute;
+            left: 0;
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+
+        /* Features Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .feature-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .feature-icon {
+            font-size: 36px;
+            margin-bottom: 15px;
+        }
+
+        .feature-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--aws-orange);
+        }
+
+        .feature-description {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+
+        /* Technical Table */
+        .tech-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        .tech-table th,
+        .tech-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .tech-table th {
+            color: var(--aws-orange);
+            font-weight: 700;
+            background-color: var(--dark-squid);
+            font-size: 13px;
+        }
+
+        .tech-table td {
+            color: var(--text-secondary);
+        }
+
+        .tech-table .tech-value {
+            color: var(--aws-orange);
+            font-weight: 700;
+        }
+
+        .tech-table tr:hover {
+            background-color: rgba(255, 153, 0, 0.05);
+        }
+
+        .tech-table a {
+            color: var(--aws-teal);
+            text-decoration: none;
+        }
+
+        .tech-table a:hover {
+            color: var(--smile-orange);
+            text-decoration: underline;
+        }
+
+        /* Use Cases */
+        .usecase-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 3px solid var(--smile-orange);
+        }
+
+        .usecase-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: var(--aws-orange);
+        }
+
+        .usecase-scenario {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            font-style: italic;
+        }
+
+        .usecase-description {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+
+        .usecase-effect {
+            font-size: 13px;
+            color: #2ECC71;
+            margin-top: 8px;
+            font-weight: 500;
+        }
+
+        /* Benefits Grid */
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .benefit-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 25px;
+            border-left: 4px solid var(--aws-orange);
+        }
+
+        .benefit-card-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .benefit-list {
+            list-style: none;
+        }
+
+        .benefit-list li {
+            padding: 6px 0;
+            padding-left: 22px;
+            position: relative;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .benefit-list li::before {
+            content: "\2713";
+            position: absolute;
+            left: 0;
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+
+        /* Considerations */
+        .consideration-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        .consideration-card.warning {
+            border-left: 4px solid #F39C12;
+        }
+
+        .consideration-card.info {
+            border-left: 4px solid var(--aws-teal);
+        }
+
+        .consideration-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .consideration-list {
+            list-style: none;
+        }
+
+        .consideration-list li {
+            padding: 6px 0;
+            padding-left: 22px;
+            position: relative;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .consideration-card.warning .consideration-list li::before {
+            content: "\26A0";
+            position: absolute;
+            left: 0;
+            color: #F39C12;
+        }
+
+        .consideration-card.info .consideration-list li::before {
+            content: "\2139";
+            position: absolute;
+            left: 0;
+            color: var(--aws-teal);
+            font-weight: bold;
+        }
+
+        /* Code Block */
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+
+        .code-title {
+            color: var(--text-muted);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        /* Mermaid Container */
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Flow Diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+
+        .flow-step {
+            background: var(--dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 100px;
+            font-size: 14px;
+        }
+
+        .flow-arrow {
+            color: var(--aws-orange);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        /* Pricing */
+        .pricing-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 25px;
+        }
+
+        .pricing-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        .pricing-table th,
+        .pricing-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .pricing-table th {
+            color: var(--aws-orange);
+            font-weight: 700;
+            background-color: var(--dark-squid);
+            font-size: 13px;
+        }
+
+        .pricing-table td {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .pricing-table .instance-name {
+            color: var(--aws-orange);
+            font-weight: 700;
+        }
+
+        .pricing-table tr:hover {
+            background-color: rgba(255, 153, 0, 0.05);
+        }
+
+        /* Related Services */
+        .related-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .related-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+        }
+
+        .related-icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .related-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .related-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .source-link {
+            color: var(--aws-teal);
+            text-decoration: none;
+            font-size: 14px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .source-link:hover {
+            color: var(--smile-orange);
+            text-decoration: underline;
+        }
+
+        .footer-note {
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-top: 15px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+            .features-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .benefits-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .related-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .family-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="badge-row">
+                <span class="service-badge">Amazon EC2</span>
+                <span class="feature-badge">Nested Virtualization</span>
+                <span class="nitro-badge">AWS Nitro System</span>
+            </div>
+            <h1>Amazon EC2 - 仮想インスタンスでの<br>ネステッド仮想化サポート</h1>
+            <p class="release-date">2026 年 2 月 16 日</p>
+        </header>
+
+        <!-- Overview Section -->
+        <section class="section">
+            <h2 class="section-title">概要</h2>
+            <div class="overview-card">
+                <p class="overview-text">
+                    仮想 Amazon EC2 インスタンス上で<span class="highlight">ネステッド仮想化</span>が利用可能になりました。これまでベアメタル EC2 インスタンスでのみサポートされていたネステッド仮想化が、<span class="highlight">C8i</span>、<span class="highlight">M8i</span>、<span class="highlight">R8i</span> の仮想インスタンスでも利用できるようになり、KVM や Hyper-V などのハイパーバイザーを実行してネストされた仮想マシンを作成・管理できます。
+                </p>
+                <p class="overview-text" style="margin-top: 12px;">
+                    <span class="highlight">Nitro System</span> がプロセッサ拡張機能 (Intel VT-x) を仮想インスタンスに渡すことで実現され、L0 (Nitro ハイパーバイザー) / L1 (EC2 インスタンス) / L2 (ネスト VM) の <span class="highlight">3 層アーキテクチャ</span>で構成されます。すべての商用リージョンで<span class="highlight">追加料金なし</span>で利用可能です。
+                </p>
+            </div>
+
+            <div class="comparison-grid">
+                <div class="comparison-card before">
+                    <div class="comparison-label">Before - アップデート前の課題</div>
+                    <ul class="comparison-list">
+                        <li>ネステッド仮想化にはベアメタル EC2 インスタンスが必要で、コストが高くサイズの柔軟性に欠けていた</li>
+                        <li>ベアメタルインスタンスは大型サイズのみで、小規模な開発・テスト用途には過剰なリソースだった</li>
+                        <li>Docker Desktop、WSL2、Android Studio エミュレータなどの開発ツールをクラウド上で実行する選択肢が限定的だった</li>
+                    </ul>
+                </div>
+                <div class="comparison-card after">
+                    <div class="comparison-label">After - アップデート後の改善</div>
+                    <ul class="comparison-list">
+                        <li>仮想 EC2 インスタンス上で KVM や Hyper-V を実行し、ネストされた仮想マシンを作成可能に</li>
+                        <li>ベアメタル不要で、幅広いインスタンスサイズから要件に合ったものを選択可能に</li>
+                        <li>Docker Desktop、WSL2、Android Studio エミュレータ、QEMU を柔軟に利用可能に</li>
+                        <li>追加料金なしで利用可能なため、コスト効率が大幅に改善</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stats Section -->
+        <section class="section">
+            <h2 class="section-title">数字で見るアップデート</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">3</div>
+                    <div class="stat-label">対応インスタンスファミリー</div>
+                    <div class="stat-sublabel">C8i / M8i / R8i</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">3 層</div>
+                    <div class="stat-label">仮想化アーキテクチャ</div>
+                    <div class="stat-sublabel">L0 Nitro / L1 EC2 / L2 VM</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">$0</div>
+                    <div class="stat-label">追加料金</div>
+                    <div class="stat-sublabel">既存インスタンス料金のみ</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architecture Diagram Section -->
+        <section class="section">
+            <h2 class="section-title">アーキテクチャ図</h2>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    subgraph Before["&#128274; アップデート前: ベアメタルのみ"]
+        direction TB
+        subgraph BM["&#128421;&#65039; ベアメタル EC2 インスタンス"]
+            BMHyp["&#9881;&#65039; KVM / Hyper-V&lt;br/&gt;L1 ハイパーバイザー"]
+            BMVM1["&#128421;&#65039; 仮想マシン L2"]
+            BMVM2["&#128421;&#65039; 仮想マシン L2"]
+            BMHyp --> BMVM1
+            BMHyp --> BMVM2
+        end
+        subgraph Virtual1["&#128187; 仮想 EC2 インスタンス"]
+            NoNest["&#10060; ネステッド仮想化&lt;br/&gt;非対応"]
+        end
+    end
+
+    subgraph After["&#9989; アップデート後: 仮想インスタンスも対応"]
+        direction TB
+        subgraph BM2["&#128421;&#65039; ベアメタル EC2 インスタンス"]
+            BMHyp2["&#9881;&#65039; KVM / Hyper-V"]
+            BMVM3["&#128421;&#65039; 仮想マシン L2"]
+            BMHyp2 --> BMVM3
+        end
+        subgraph Virtual2["&#128187; 仮想 EC2 インスタンス&lt;br/&gt;C8i / M8i / R8i"]
+            VHyp["&#9881;&#65039; KVM / Hyper-V&lt;br/&gt;L1 ハイパーバイザー"]
+            VVM1["&#128421;&#65039; 仮想マシン L2"]
+            VVM2["&#128421;&#65039; 仮想マシン L2"]
+            VHyp --> VVM1
+            VHyp --> VVM2
+        end
+    end
+
+    subgraph Nitro["&#128295; AWS Nitro System L0"]
+        NitroHyp["&#128737;&#65039; Nitro ハイパーバイザー&lt;br/&gt;Intel VT-x パススルー"]
+    end
+
+    NitroHyp -.->|"プロセッサ拡張機能を提供"| BM
+    NitroHyp -.->|"プロセッサ拡張機能を提供"| Virtual2
+    NitroHyp -.->|"プロセッサ拡張機能を提供"| BM2
+
+    classDef before fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#E65100
+    classDef after fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#1B5E20
+    classDef nitro fill:#E3F2FD,stroke:#42A5F5,stroke-width:2px,color:#0D47A1
+    classDef instance fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef vm fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef blocked fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#B71C1C
+
+    class Before before
+    class After after
+    class Nitro,NitroHyp nitro
+    class BM,BM2,Virtual2 instance
+    class BMHyp,BMHyp2,VHyp,BMVM1,BMVM2,BMVM3,VVM1,VVM2 vm
+    class Virtual1,NoNest blocked
+                </pre>
+            </div>
+            <p style="font-size: 14px; color: var(--text-muted); text-align: center; margin-top: 10px;">
+                アップデート前はベアメタルインスタンスでのみネステッド仮想化が可能でしたが、アップデート後は仮想インスタンス (C8i、M8i、R8i) でも Nitro System による Intel VT-x パススルーにより L2 仮想マシンを作成できるようになりました。
+            </p>
+        </section>
+
+        <!-- 3-Layer Architecture Flow -->
+        <section class="section">
+            <h2 class="section-title">3 層仮想化アーキテクチャ</h2>
+            <div class="flow-diagram">
+                <div class="flow-step">&#128737;&#65039; L0<br>Nitro ハイパーバイザー<br><small style="color: var(--text-muted);">物理 AWS インフラ</small></div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">&#128187; L1<br>EC2 インスタンス<br><small style="color: var(--text-muted);">KVM / Hyper-V</small></div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">&#128421;&#65039; L2<br>ネスト VM<br><small style="color: var(--text-muted);">仮想マシン</small></div>
+            </div>
+            <p style="font-size: 14px; color: var(--text-muted); text-align: center;">
+                Nitro System がプロセッサ拡張機能 (Intel VT-x) を仮想インスタンスにパススルーし、3 層構成でネステッド仮想化を実現
+            </p>
+        </section>
+
+        <!-- Instance Families -->
+        <section class="section">
+            <h2 class="section-title">対応インスタンスタイプ</h2>
+            <div class="family-grid">
+                <div class="family-card">
+                    <div class="family-card-icon">&#9889;</div>
+                    <div class="family-card-name">C8i</div>
+                    <div class="family-card-type">コンピューティング最適化</div>
+                    <ul class="family-card-specs">
+                        <li>コンピューティング集約型ワークロード</li>
+                        <li>車載ハードウェアシミュレーション</li>
+                        <li>バッチ処理</li>
+                        <li>CI/CD パイプライン</li>
+                    </ul>
+                </div>
+                <div class="family-card">
+                    <div class="family-card-icon">&#9881;&#65039;</div>
+                    <div class="family-card-name">M8i</div>
+                    <div class="family-card-type">汎用</div>
+                    <ul class="family-card-specs">
+                        <li>バランスの取れたリソース構成</li>
+                        <li>Android エミュレータ開発</li>
+                        <li>Docker Desktop 実行</li>
+                        <li>汎用仮想化ワークロード</li>
+                    </ul>
+                </div>
+                <div class="family-card">
+                    <div class="family-card-icon">&#128204;</div>
+                    <div class="family-card-name">R8i</div>
+                    <div class="family-card-type">メモリ最適化</div>
+                    <ul class="family-card-specs">
+                        <li>メモリ集約型ワークロード</li>
+                        <li>WSL2 ワークステーション</li>
+                        <li>複数 VM の同時実行</li>
+                        <li>クロスプラットフォーム開発</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Key Features Section -->
+        <section class="section">
+            <h2 class="section-title">主要機能</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">&#128187;</div>
+                    <div class="feature-title">仮想インスタンスでのネステッド仮想化</div>
+                    <div class="feature-description">仮想 EC2 インスタンス上で KVM および Hyper-V ハイパーバイザーを実行可能。Nitro System が Intel VT-x をパススルーすることで L0 / L1 / L2 の 3 層構成を実現。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#128640;</div>
+                    <div class="feature-title">新規インスタンス起動時の有効化</div>
+                    <div class="feature-description">起動ウィザードの「Advanced details」で「Nested virtualization」を「Enable」に設定。AWS CLI では --cpu-options オプションで指定。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#128260;</div>
+                    <div class="feature-title">既存インスタンスへの適用</div>
+                    <div class="feature-description">停止状態のインスタンスに対して、コンソールまたは modify-instance-cpu-options コマンドでネステッド仮想化を有効化可能。移行不要。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#128176;</div>
+                    <div class="feature-title">追加料金なし</div>
+                    <div class="feature-description">ネステッド仮想化の利用に追加コストは発生しない。通常の EC2 インスタンス料金のみで機能を活用可能。</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Technical Specifications -->
+        <section class="section">
+            <h2 class="section-title">技術仕様</h2>
+            <div class="overview-card">
+                <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;">対応インスタンスタイプとハイパーバイザー</div>
+                <table class="tech-table">
+                    <thead>
+                        <tr>
+                            <th>項目</th>
+                            <th>詳細</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>対応インスタンスタイプ</td>
+                            <td class="tech-value">C8i、M8i、R8i</td>
+                        </tr>
+                        <tr>
+                            <td>対応 L1 ハイパーバイザー</td>
+                            <td class="tech-value">KVM、Hyper-V</td>
+                        </tr>
+                        <tr>
+                            <td>アーキテクチャ</td>
+                            <td>3 層構成 (L0: Nitro、L1: EC2 インスタンス、L2: ネスト VM)</td>
+                        </tr>
+                        <tr>
+                            <td>プロセッサ拡張機能</td>
+                            <td class="tech-value">Intel VT-x パススルー</td>
+                        </tr>
+                        <tr>
+                            <td>追加料金</td>
+                            <td class="tech-value">なし</td>
+                        </tr>
+                        <tr>
+                            <td>利用可能リージョン</td>
+                            <td class="tech-value">すべての商用リージョン</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="overview-card" style="margin-top: 20px;">
+                <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;">制約事項</div>
+                <table class="tech-table">
+                    <thead>
+                        <tr>
+                            <th>項目</th>
+                            <th>詳細</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Windows インスタンスの制限</td>
+                            <td>192 CPU を超える Windows インスタンスでは非対応</td>
+                        </tr>
+                        <tr>
+                            <td>Virtual Secure Mode</td>
+                            <td>ネステッド仮想化を有効化すると VSM は自動的に無効化</td>
+                        </tr>
+                        <tr>
+                            <td>Credential Guard</td>
+                            <td>VSM の無効化に伴い Credential Guard も無効化</td>
+                        </tr>
+                        <tr>
+                            <td>ハイバネーション</td>
+                            <td>ネステッド仮想化が有効なインスタンスでは非対応</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="overview-card" style="margin-top: 20px;">
+                <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;">API 変更履歴</div>
+                <table class="tech-table">
+                    <thead>
+                        <tr>
+                            <th>日付</th>
+                            <th>サービス</th>
+                            <th>変更内容</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>2026/02/12</td>
+                            <td><a href="https://awsapichanges.com/archive/changes/504b9a-ec2.html" target="_blank" rel="noopener noreferrer">Amazon Elastic Compute Cloud</a></td>
+                            <td>8 updated api methods - ネステッド仮想化の起動</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Setup Section -->
+        <section class="section">
+            <h2 class="section-title">設定方法</h2>
+            <div class="overview-card">
+                <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;">前提条件</div>
+                <ul class="benefit-list" style="margin-bottom: 20px;">
+                    <li>AWS アカウントと EC2 インスタンスを起動するための適切な IAM 権限</li>
+                    <li>C8i、M8i、または R8i インスタンスタイプが利用可能なリージョン</li>
+                    <li>既存インスタンスに適用する場合は、インスタンスが停止状態であること</li>
+                </ul>
+
+                <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;">ステップ 1: 新規インスタンスの起動時にネステッド仮想化を有効化</div>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Bash</span>
+                        <span class="code-title">C8i インスタンスでネステッド仮想化を有効にして起動</span>
+                    </div>
+                    <pre><code class="language-bash">aws ec2 run-instances \
+    --image-id ami-0abcdef1234567890 \
+    --instance-type c8i.4xlarge \
+    --cpu-options "NestedVirtualization=enabled" \
+    --key-name my-key-pair</code></pre>
+                </div>
+                <p style="font-size: 14px; color: var(--text-muted); margin-top: 8px; margin-bottom: 20px;">
+                    <code style="color: var(--aws-orange);">--cpu-options</code> パラメータで <code style="color: var(--aws-orange);">NestedVirtualization=enabled</code> を指定することで、インスタンス内でハイパーバイザーを実行できるようになります。
+                </p>
+
+                <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;">ステップ 2: 既存インスタンスでネステッド仮想化を有効化</div>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Bash</span>
+                        <span class="code-title">既存インスタンスへの適用</span>
+                    </div>
+                    <pre><code class="language-bash"># まずインスタンスを停止
+aws ec2 stop-instances --instance-id i-1234567890abcdef0
+
+# 停止を確認後、ネステッド仮想化を有効化
+aws ec2 modify-instance-cpu-options \
+    --instance-id i-1234567890abcdef0 \
+    --core-count 4 \
+    --threads-per-core 2 \
+    --nested-virtualization enabled
+
+# インスタンスを再起動
+aws ec2 start-instances --instance-id i-1234567890abcdef0</code></pre>
+                </div>
+                <p style="font-size: 14px; color: var(--text-muted); margin-top: 8px; margin-bottom: 20px;">
+                    既存インスタンスでは停止状態でのみ設定変更が可能です。CPU オプションを変更してネステッド仮想化を有効化した後、インスタンスを再起動します。
+                </p>
+
+                <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;">ステップ 3: コンソールからの設定</div>
+                <div style="background: var(--dark-squid); border-radius: 8px; padding: 16px; margin-top: 8px;">
+                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;"><strong style="color: var(--aws-orange);">新規インスタンス:</strong> インスタンス起動ウィザードで「Advanced details」を展開し、「Nested virtualization」で「Enable」を選択</p>
+                    <p style="font-size: 14px; color: var(--text-secondary);"><strong style="color: var(--aws-orange);">既存インスタンス:</strong> インスタンスを選択 &rarr; 「Actions」&rarr;「Instance settings」&rarr;「Change CPU options」&rarr;「Nested virtualization」で「Enable」を選択</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Use Cases Section -->
+        <section class="section">
+            <h2 class="section-title">ユースケース</h2>
+            <div class="usecase-card">
+                <div class="usecase-title">&#128241; ユースケース 1: モバイルアプリケーション開発とテスト</div>
+                <div class="usecase-scenario">シナリオ: モバイルアプリ開発チームが、Android Studio のエミュレータを使用してクラウド上で自動テストパイプラインを構築したい</div>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Bash</span>
+                        <span class="code-title">M8i インスタンスで Android エミュレータ環境を起動</span>
+                    </div>
+                    <pre><code class="language-bash">aws ec2 run-instances \
+    --image-id ami-0abcdef1234567890 \
+    --instance-type m8i.2xlarge \
+    --cpu-options "NestedVirtualization=enabled" \
+    --key-name dev-key-pair \
+    --tag-specifications 'ResourceType=instance,Tags=[{Key=Purpose,Value=android-emulator}]'</code></pre>
+                </div>
+                <div class="usecase-effect">&#10004; ベアメタルインスタンスと比較してコストを大幅に削減しつつ、Android エミュレータをハードウェアアクセラレーション付きで実行でき、テストの速度と効率が向上</div>
+            </div>
+            <div class="usecase-card">
+                <div class="usecase-title">&#128663; ユースケース 2: 自動車の車載ハードウェアシミュレーション</div>
+                <div class="usecase-scenario">シナリオ: 自動車メーカーが、車載 ECU のソフトウェアをクラウド上でシミュレーションしてテストしたい</div>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Bash</span>
+                        <span class="code-title">C8i インスタンスでコンピューティング最適化環境を構築</span>
+                    </div>
+                    <pre><code class="language-bash">aws ec2 run-instances \
+    --image-id ami-0abcdef1234567890 \
+    --instance-type c8i.8xlarge \
+    --cpu-options "NestedVirtualization=enabled" \
+    --key-name simulation-key \
+    --tag-specifications 'ResourceType=instance,Tags=[{Key=Purpose,Value=vehicle-simulation}]'</code></pre>
+                </div>
+                <div class="usecase-effect">&#10004; 専用の物理ハードウェアを用意することなく、クラウド上で車載環境をシミュレーションでき、開発サイクルの短縮とインフラコストの削減を実現</div>
+            </div>
+            <div class="usecase-card">
+                <div class="usecase-title">&#128187; ユースケース 3: Windows ワークステーションでの WSL2 利用</div>
+                <div class="usecase-scenario">シナリオ: 開発チームが、クラウド上の Windows ワークステーションで WSL2 を使用して Linux 開発環境と Windows 開発環境を同時に利用したい</div>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Bash</span>
+                        <span class="code-title">R8i インスタンスでメモリ最適化 Windows ワークステーションを起動</span>
+                    </div>
+                    <pre><code class="language-bash">aws ec2 run-instances \
+    --image-id ami-windows-server-2022 \
+    --instance-type r8i.4xlarge \
+    --cpu-options "NestedVirtualization=enabled" \
+    --key-name windows-key \
+    --tag-specifications 'ResourceType=instance,Tags=[{Key=Purpose,Value=wsl2-workstation}]'</code></pre>
+                </div>
+                <div class="usecase-effect">&#10004; 1 つの Windows インスタンス上で WSL2 を通じて Linux 環境を利用でき、クロスプラットフォーム開発の生産性が向上。メモリ最適化の R8i インスタンスにより、複数の開発環境を同時に快適に実行可能</div>
+            </div>
+        </section>
+
+        <!-- Benefits Section -->
+        <section class="section">
+            <h2 class="section-title">メリット</h2>
+            <div class="benefits-grid">
+                <div class="benefit-card">
+                    <div class="benefit-card-title">&#128176; ビジネス面</div>
+                    <ul class="benefit-list">
+                        <li>コスト削減: ベアメタルではなく小型で安価な仮想インスタンスでネステッド仮想化を実現</li>
+                        <li>柔軟なリソース選択: C8i、M8i、R8i の幅広いインスタンスサイズからワークロードに最適なリソースを選択可能</li>
+                        <li>開発効率の向上: クラウド上で Docker Desktop、WSL2、エミュレータなどの開発ツールを手軽に利用でき、開発サイクルが短縮</li>
+                    </ul>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-card-title">&#9889; 技術面</div>
+                    <ul class="benefit-list">
+                        <li>幅広いインスタンスサイズ: ベアメタルに限定されず、さまざまなサイズでネステッド仮想化を利用可能</li>
+                        <li>追加料金なし: 既存のインスタンス料金のみで機能を活用可能</li>
+                        <li>Nitro System による高いセキュリティ: EC2 インスタンス間の強力な分離境界を維持</li>
+                        <li>既存インスタンスへの適用: 新規だけでなく既存のインスタンスにも設定変更で有効化可能</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Considerations Section -->
+        <section class="section">
+            <h2 class="section-title">制約事項・考慮点</h2>
+            <div class="consideration-card warning">
+                <div class="consideration-title">&#9888; 制限事項</div>
+                <ul class="consideration-list">
+                    <li>対応インスタンスタイプは C8i、M8i、R8i のみで、他のインスタンスファミリーでは利用不可</li>
+                    <li>L1 ハイパーバイザーとして KVM と Hyper-V のみがサポート</li>
+                    <li>192 CPU を超える Windows インスタンスではネステッド仮想化は非対応</li>
+                    <li>Windows インスタンスでは VSM が自動的に無効化され、Credential Guard が利用不可</li>
+                    <li>ネステッド仮想化が有効なインスタンスではハイバネーションが非対応</li>
+                </ul>
+            </div>
+            <div class="consideration-card info">
+                <div class="consideration-title">&#8505; 考慮すべき点</div>
+                <ul class="consideration-list">
+                    <li>パフォーマンスに敏感なワークロードや厳格なレイテンシ要件がある場合は、引き続きベアメタルインスタンスの利用を検討</li>
+                    <li>インスタンス内のハイパーバイザー、ネスト VM、ゲスト OS、アプリケーション、データのセキュリティはユーザーの責任 (共有責任モデル)</li>
+                    <li>既存インスタンスで有効化する場合は、インスタンスの停止が必要</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Pricing Section -->
+        <section class="section">
+            <h2 class="section-title">料金</h2>
+            <div class="pricing-card">
+                <p style="font-size: 14px; margin-bottom: 15px;">ネステッド仮想化の利用に追加料金は発生しません。通常の EC2 インスタンス料金のみが適用されます。</p>
+                <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;">料金例 - 米国東部 (バージニア北部) オンデマンド料金参考値</div>
+                <table class="pricing-table">
+                    <thead>
+                        <tr>
+                            <th>インスタンスタイプ</th>
+                            <th>vCPU</th>
+                            <th>メモリ (GiB)</th>
+                            <th>用途</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="instance-name">c8i.4xlarge</td>
+                            <td>16</td>
+                            <td>32</td>
+                            <td>コンピューティング最適化ワークロード</td>
+                        </tr>
+                        <tr>
+                            <td class="instance-name">m8i.4xlarge</td>
+                            <td>16</td>
+                            <td>64</td>
+                            <td>汎用ワークロード</td>
+                        </tr>
+                        <tr>
+                            <td class="instance-name">r8i.4xlarge</td>
+                            <td>16</td>
+                            <td>128</td>
+                            <td>メモリ最適化ワークロード</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 12px;">
+                    ベアメタルインスタンスと比較して、同等の vCPU 数で仮想インスタンスを使用することにより、より細かい粒度でリソースを選択でき、コスト最適化が可能です。最新の料金については <a href="https://aws.amazon.com/ec2/pricing/" target="_blank" rel="noopener noreferrer" style="color: var(--aws-teal); text-decoration: none;">Amazon EC2 料金ページ</a>をご確認ください。
+                </p>
+            </div>
+        </section>
+
+        <!-- Available Regions Section -->
+        <section class="section">
+            <h2 class="section-title">利用可能リージョン</h2>
+            <div class="overview-card" style="text-align: center;">
+                <p style="font-size: 14px; margin-bottom: 15px;">ネステッド仮想化は、C8i、M8i、R8i インスタンスが利用可能な<span class="highlight">すべての商用リージョン</span>で提供されています。</p>
+            </div>
+        </section>
+
+        <!-- Related Services Section -->
+        <section class="section">
+            <h2 class="section-title">関連サービス</h2>
+            <div class="related-grid">
+                <div class="related-card">
+                    <div class="related-icon">&#128421;&#65039;</div>
+                    <div class="related-name">Amazon EC2 ベアメタルインスタンス</div>
+                    <div class="related-desc">パフォーマンスに敏感なワークロードでは引き続きベアメタルでのネステッド仮想化も利用可能</div>
+                </div>
+                <div class="related-card">
+                    <div class="related-icon">&#128737;&#65039;</div>
+                    <div class="related-name">AWS Nitro System</div>
+                    <div class="related-desc">ネステッド仮想化を実現する基盤技術。プロセッサ拡張機能のパススルーとインスタンス間の強力な分離を提供</div>
+                </div>
+                <div class="related-card">
+                    <div class="related-icon">&#128187;</div>
+                    <div class="related-name">Amazon WorkSpaces</div>
+                    <div class="related-desc">Windows ワークステーション環境が必要な場合の代替サービス</div>
+                </div>
+                <div class="related-card">
+                    <div class="related-icon">&#128295;</div>
+                    <div class="related-name">AWS Systems Manager</div>
+                    <div class="related-desc">ネステッド仮想化が有効なインスタンスの設定と管理の自動化に活用可能</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <div>
+                <a href="https://aws.amazon.com/about-aws/whats-new/2026/02/amazon-ec2-nested-virtualization-on-virtual" class="source-link" target="_blank" rel="noopener noreferrer">
+                    &#128279; 公式発表 (What's New) を見る
+                </a>
+            </div>
+            <div>
+                <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/amazon-ec2-nested-virtualization.html" class="source-link" target="_blank" rel="noopener noreferrer">
+                    &#128196; ドキュメント: ネステッド仮想化
+                </a>
+            </div>
+            <div>
+                <a href="https://aws.amazon.com/ec2/pricing/" class="source-link" target="_blank" rel="noopener noreferrer">
+                    &#128176; Amazon EC2 料金ページ
+                </a>
+            </div>
+            <div>
+                <a href="https://awsapichanges.com/archive/changes/504b9a-ec2.html" class="source-link" target="_blank" rel="noopener noreferrer">
+                    &#128203; API 変更履歴: Amazon EC2
+                </a>
+            </div>
+            <p class="footer-note">Amazon EC2 が仮想インスタンスでのネステッド仮想化をサポートしたことにより、ベアメタルインスタンスに限定されていた制約が解消され、より柔軟でコスト効率の高い仮想化環境を構築できるようになりました。C8i、M8i、R8i インスタンスの幅広いサイズから最適なリソースを選択し、追加料金なしでモバイルエミュレータ、車載シミュレーション、WSL2 環境などを実行できます。</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -5,12 +5,16 @@
 
 ## 2026 年
 
+- [2026-02-16 - Amazon EC2 - 仮想インスタンスでのネステッド仮想化のサポート](2026/2026-02-16-amazon-ec2-nested-virtualization-on-virtual.md)
+- [2026-02-16 - Amazon DocumentDB - エンジンバージョン 5.0 長期サポート (LTS) の提供開始](2026/2026-02-16-announcing-amazon-documentdb-5-0-long-term-support.md)
+- [2026-02-13 - Amazon EC2 - High Memory U7i インスタンスが追加リージョンで利用可能に](2026/2026-02-13-amazon-ec2-highmem-instances-available.md)
 - [2026-02-13 - Amazon Connect - タスク向け AI アシスタンス](2026/2026-02-13-amazon-connect-tasks-ai-assistance.md)
 - [2026-02-13 - Kiro - エンタープライズ ID プロバイダーとユーザーアクティビティメトリクス](2026/2026-02-13-kiro-enterprise-identity-and-usage-metrics.md)
 - [2026-02-13 - Amazon Connect - アプリ内通知機能](2026/2026-02-13-amazon-connect-in-app-notifications.md)
 - [2026-02-13 - AWS Batch - ジョブキューとシェア使用率の可視化](2026/2026-02-13-aws-batch-provides-job-queue-share-utilization.md)
 - [2026-02-13 - Amazon RDS / Aurora - スナップショット復元時のバックアップ設定](2026/2026-02-13-rds-aurora-backup-configuration-restoring-snapshots.md)
 - [2026-02-13 - Amazon Aurora DSQL - ID 列とシーケンスオブジェクトのサポート](2026/2026-02-13-amazon-aurora-dsql-adds-identity-columns-sequence.md)
+- [2026-02-12 - Amazon S3 Access Grants - アジアパシフィック (台北) リージョンで利用可能に](2026/2026-02-12-amazon-s3-access-grants-are-available-in-taipei.md)
 - [2026-02-12 - Kiro - 外部 ID プロバイダーサポートと Claude Opus 4.6 の eu-central-1 対応](2026/2026-02-12-kiro-changelog-2026-02-12.md)
 - [2026-02-12 - Amazon S3 Tables - CreateTable API でのパーティションおよびソートオーダー定義](2026/2026-02-12-s3-tables-partition-and-sort-order-createtable-api.md)
 - [2026-02-12 - AWS Resource Control Policies - Amazon DynamoDB のサポート拡大](2026/2026-02-12-aws-expands-resource-control-policies-amazon.md)
