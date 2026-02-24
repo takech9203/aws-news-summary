@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Trusted Advisor - Compute Optimizer を活用した未使用 NAT Gateway チェックの強化</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <style>
+        :root {
+            --squid-ink: #232F3E;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --text-primary: #FFFFFF;
+            --text-secondary: #AAAAAA;
+            --light-gray: #D5DBDB;
+            --card-bg: #2D3A4A;
+            --dark-squid: #1A242F;
+            --border-color: #3D4A5A;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background-color: var(--squid-ink);
+            color: var(--light-gray);
+            line-height: 1.8;
+            font-size: 16px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-bottom: 30px;
+            border-bottom: 3px solid var(--aws-orange);
+        }
+
+        .service-badge {
+            display: inline-block;
+            background-color: var(--aws-orange);
+            color: var(--squid-ink);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .header-subtitle {
+            color: var(--light-gray);
+            font-size: 15px;
+            margin-bottom: 8px;
+        }
+
+        .release-date {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            margin-bottom: 20px;
+            padding-left: 15px;
+            border-left: 4px solid var(--aws-orange);
+        }
+
+        .overview-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        .overview-text {
+            font-size: 16px;
+            line-height: 1.9;
+        }
+
+        .highlight {
+            background-color: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--card-bg) 0%, var(--dark-squid) 100%);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 153, 0, 0.2);
+        }
+
+        .stat-icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--aws-orange);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Before/After comparison */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .comparison-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .comparison-card.before {
+            border-top: 4px solid #E74C3C;
+        }
+
+        .comparison-card.after {
+            border-top: 4px solid #2ECC71;
+        }
+
+        .comparison-label {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+
+        .comparison-card.before .comparison-label {
+            color: #E74C3C;
+        }
+
+        .comparison-card.after .comparison-label {
+            color: #2ECC71;
+        }
+
+        .comparison-list {
+            list-style: none;
+        }
+
+        .comparison-list li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            font-size: 14px;
+        }
+
+        .comparison-card.before .comparison-list li::before {
+            content: "\2717";
+            position: absolute;
+            left: 0;
+            color: #E74C3C;
+            font-weight: bold;
+        }
+
+        .comparison-card.after .comparison-list li::before {
+            content: "\2713";
+            position: absolute;
+            left: 0;
+            color: #2ECC71;
+            font-weight: bold;
+        }
+
+        /* Mermaid diagram */
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Feature cards */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .feature-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            border-left: 3px solid var(--aws-orange);
+        }
+
+        .feature-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .feature-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--aws-orange);
+        }
+
+        .feature-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        /* Tech spec table */
+        .spec-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+
+        .spec-table th {
+            background-color: var(--dark-squid);
+            color: var(--aws-orange);
+            padding: 12px 14px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 700;
+            border-bottom: 2px solid var(--aws-orange);
+        }
+
+        .spec-table td {
+            padding: 12px 14px;
+            font-size: 14px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--light-gray);
+        }
+
+        .spec-table tr:hover {
+            background-color: rgba(255, 153, 0, 0.05);
+        }
+
+        .spec-table .highlight-row {
+            background-color: rgba(255, 153, 0, 0.08);
+        }
+
+        .spec-table .new-badge {
+            display: inline-block;
+            background-color: var(--aws-orange);
+            color: var(--squid-ink);
+            padding: 1px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-left: 6px;
+        }
+
+        .spec-table .old-badge {
+            display: inline-block;
+            background-color: var(--text-secondary);
+            color: var(--squid-ink);
+            padding: 1px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-left: 6px;
+        }
+
+        /* Flow diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+
+        .flow-step {
+            background: var(--dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 120px;
+            font-size: 14px;
+        }
+
+        .flow-arrow {
+            color: var(--aws-orange);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        /* Use case cards */
+        .usecase-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 3px solid var(--aws-orange);
+        }
+
+        .usecase-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .usecase-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--aws-orange);
+        }
+
+        .usecase-scenario {
+            font-size: 14px;
+            color: var(--light-gray);
+            margin-bottom: 12px;
+        }
+
+        .usecase-effect {
+            font-size: 14px;
+            color: #2ECC71;
+            padding: 10px;
+            background-color: rgba(46, 204, 113, 0.1);
+            border-radius: 8px;
+        }
+
+        .usecase-effect::before {
+            content: "\2713 ";
+            font-weight: bold;
+        }
+
+        /* Merit/Demerit */
+        .merit-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .merit-section {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .merit-section h3 {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--aws-orange);
+        }
+
+        .merit-list {
+            list-style: none;
+        }
+
+        .merit-list li {
+            padding: 6px 0;
+            padding-left: 22px;
+            position: relative;
+            font-size: 14px;
+            color: var(--light-gray);
+        }
+
+        .merit-list li::before {
+            content: "\2713";
+            position: absolute;
+            left: 0;
+            color: #2ECC71;
+            font-weight: bold;
+        }
+
+        /* Constraint/Limitation */
+        .constraint-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 3px solid #E74C3C;
+        }
+
+        .constraint-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #E74C3C;
+        }
+
+        .constraint-list {
+            list-style: none;
+        }
+
+        .constraint-list li {
+            padding: 6px 0;
+            padding-left: 22px;
+            position: relative;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .constraint-list li::before {
+            content: "\26A0";
+            position: absolute;
+            left: 0;
+            font-size: 12px;
+        }
+
+        /* Pricing card */
+        .pricing-card {
+            background: linear-gradient(135deg, rgba(29, 129, 2, 0.15) 0%, var(--card-bg) 100%);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(29, 129, 2, 0.3);
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .pricing-highlight {
+            font-size: 22px;
+            font-weight: 700;
+            color: #2ECC71;
+            margin-bottom: 8px;
+        }
+
+        .pricing-detail {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .pricing-table-wrapper {
+            margin-top: 20px;
+        }
+
+        /* Region */
+        .region-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .region-card p {
+            font-size: 15px;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Related services */
+        .related-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+
+        .related-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+
+        .related-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .related-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Sub-section title */
+        .sub-section-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 14px;
+            margin-top: 24px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sub-section-title:first-child {
+            margin-top: 0;
+        }
+
+        /* Code block */
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+
+        .code-title {
+            color: var(--light-gray);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        /* Judgment conditions */
+        .condition-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .condition-card {
+            background-color: var(--dark-squid);
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .condition-icon {
+            font-size: 24px;
+            margin-bottom: 6px;
+        }
+
+        .condition-metric {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .condition-value {
+            font-size: 12px;
+            color: var(--aws-orange);
+            font-weight: 600;
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .source-links {
+            list-style: none;
+            margin-bottom: 16px;
+        }
+
+        .source-links li {
+            margin-bottom: 6px;
+        }
+
+        .source-link {
+            color: var(--aws-teal);
+            text-decoration: none;
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .source-link:hover {
+            color: var(--aws-smile-orange);
+            text-decoration: underline;
+        }
+
+        .footer-note {
+            color: var(--text-secondary);
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .comparison-grid,
+            .merit-grid {
+                grid-template-columns: 1fr;
+            }
+            .features-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+            .related-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+            .condition-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .related-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <span class="service-badge">AWS Trusted Advisor</span>
+            <h1>Compute Optimizer を活用した未使用 NAT Gateway チェックの強化</h1>
+            <p class="header-subtitle">高精度な検出で誤検知を削減し、コスト最適化レコメンデーションを強化</p>
+            <p class="release-date">2026 年 2 月 23 日</p>
+        </header>
+
+        <!-- Overview -->
+        <section class="section">
+            <h2 class="section-title">&#128203; 概要</h2>
+            <div class="overview-card">
+                <p class="overview-text">
+                    AWS Trusted Advisor が、<span class="highlight">AWS Compute Optimizer を活用した未使用 NAT Gateway の検出機能</span>を強化しました。新しい検出方法では、<span class="highlight">32 日間のルックバック期間</span>にわたって複数の CloudWatch メトリクスを分析し、NAT Gateway がルートテーブルに関連付けられているかを検証します。これにより、重要なバックアップリソースの誤検知を大幅に削減し、各レコメンデーションには<span class="highlight">推定月額コスト削減額</span>が含まれるようになりました。
+                </p>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">&#128197;</div>
+                    <div class="stat-value">32 日間</div>
+                    <div class="stat-label">ルックバック期間</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#128202;</div>
+                    <div class="stat-value">3+</div>
+                    <div class="stat-label">分析メトリクス数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#128176;</div>
+                    <div class="stat-value">~$32/月</div>
+                    <div class="stat-label">NAT GW 1 台あたりの削減可能額</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#9989;</div>
+                    <div class="stat-value">$0</div>
+                    <div class="stat-label">追加料金</div>
+                </div>
+            </div>
+
+            <!-- Before/After -->
+            <div class="comparison-grid">
+                <div class="comparison-card before">
+                    <div class="comparison-label">Before - Inactive NAT Gateways</div>
+                    <ul class="comparison-list">
+                        <li>30 日間のデータ処理量のみで判定し、検出精度が限定的</li>
+                        <li>ルートテーブルとの関連付けを確認せず、バックアップ用途の NAT Gateway も誤検知</li>
+                        <li>コスト削減額の見積もりがなく、優先順位付けが困難</li>
+                    </ul>
+                </div>
+                <div class="comparison-card after">
+                    <div class="comparison-label">After - Idle NAT gateways</div>
+                    <ul class="comparison-list">
+                        <li>32 日間にわたり複数の CloudWatch メトリクスを包括的に分析</li>
+                        <li>ルートテーブル関連付けを検証し、バックアップリソースの誤検知を回避</li>
+                        <li>推定月額コスト削減額を表示し、優先順位付けが容易</li>
+                        <li>Cost Optimization Hub との統合で組織全体を一元管理</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architecture Diagram -->
+        <section class="section">
+            <h2 class="section-title">&#128736;&#65039; アーキテクチャ図</h2>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    subgraph AWSCloud["&#9729;&#65039; AWS Cloud"]
+        subgraph Analysis["&#128269; 分析フェーズ"]
+            CO["&#9881;&#65039; AWS Compute Optimizer&lt;br/&gt;未使用リソース検出エンジン"]
+            CW["&#128202; CloudWatch メトリクス&lt;br/&gt;32 日間ルックバック"]
+            RT["&#128268; ルートテーブル検証&lt;br/&gt;関連付け確認"]
+        end
+        subgraph Detection["&#127919; 検出フェーズ"]
+            Filter["&#128737;&#65039; フィルタリング&lt;br/&gt;バックアップリソース除外"]
+            Savings["&#128176; コスト試算&lt;br/&gt;推定月額削減額"]
+        end
+        subgraph Delivery["&#128203; 配信フェーズ"]
+            direction LR
+            TA["&#9989; Trusted Advisor&lt;br/&gt;レコメンデーション"]
+            COH["&#128200; Cost Optimization Hub&lt;br/&gt;一元管理"]
+            TA ~~~ COH
+        end
+    end
+
+    NAT(["&#127760; NAT Gateway&lt;br/&gt;対象リソース"]) --> CO
+    CO --> CW
+    CO --> RT
+    CW --> Filter
+    RT --> Filter
+    Filter --> Savings
+    Savings --> TA
+    Savings --> COH
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef metric fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef filter fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef savings fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef delivery fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef resource fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class AWSCloud cloud
+    class Analysis,Detection,Delivery layer
+    class CO compute
+    class CW,RT metric
+    class Filter filter
+    class Savings savings
+    class TA,COH delivery
+    class NAT resource
+                </pre>
+            </div>
+            <p style="font-size: 14px; color: var(--text-secondary); margin-top: 12px; text-align: center;">Compute Optimizer が CloudWatch メトリクスの分析とルートテーブルの検証を行い、バックアップリソースを除外したうえで、推定コスト削減額を含むレコメンデーションを配信</p>
+        </section>
+
+        <!-- Key Features -->
+        <section class="section">
+            <h2 class="section-title">&#11088; 主要機能</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">&#128202;</div>
+                    <div class="feature-title">Compute Optimizer を活用した高精度な検出</div>
+                    <div class="feature-description">32 日間のルックバック期間で CloudWatch メトリクスを分析。アクティブ接続数、VPC からの受信パケット数、宛先からの受信パケット数を評価し、従来の 30 日間のデータ処理量のみの判定から大幅に精度が向上。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#128268;</div>
+                    <div class="feature-title">ルートテーブル関連付けの検証</div>
+                    <div class="feature-description">NAT Gateway が AWS ルートテーブルに関連付けられているかを確認。ディザスタリカバリや高可用性のためのバックアップリソースを保護し、誤検知を大幅に削減。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#128176;</div>
+                    <div class="feature-title">コスト削減額の見積もり</div>
+                    <div class="feature-description">各レコメンデーションに推定月額コスト削減額を表示。対応の優先順位付けが金額ベースで可能になり、Cost Optimization Hub で組織全体の重複排除された削減額を確認可能。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#9989;</div>
+                    <div class="feature-title">Trusted Advisor との統合</div>
+                    <div class="feature-description">Trusted Advisor コンソールで直接レコメンデーションを確認可能。API を通じたプログラマティックなアクセスにも対応し、新しい statusReason 属性で詳細な理由を提供。</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Technical Specifications -->
+        <section class="section">
+            <h2 class="section-title">&#128295; 技術仕様</h2>
+
+            <h3 class="sub-section-title">チェックの比較</h3>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>項目</th>
+                        <th>Idle NAT gateways <span class="new-badge">NEW</span></th>
+                        <th>Inactive NAT Gateways <span class="old-badge">従来</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong style="color: var(--text-primary);">Check ID</strong></td>
+                        <td><code style="color: var(--aws-orange);">c1z7kmr18n</code></td>
+                        <td><code>c2vlfg022t</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong style="color: var(--text-primary);">ソース</strong></td>
+                        <td>AWS Cost Optimization Hub</td>
+                        <td>Trusted Advisor 内部</td>
+                    </tr>
+                    <tr>
+                        <td><strong style="color: var(--text-primary);">分析エンジン</strong></td>
+                        <td>AWS Compute Optimizer</td>
+                        <td>Trusted Advisor 独自</td>
+                    </tr>
+                    <tr class="highlight-row">
+                        <td><strong style="color: var(--text-primary);">ルックバック期間</strong></td>
+                        <td style="color: var(--aws-orange); font-weight: 600;">32 日間</td>
+                        <td>30 日間</td>
+                    </tr>
+                    <tr class="highlight-row">
+                        <td><strong style="color: var(--text-primary);">分析メトリクス</strong></td>
+                        <td style="color: var(--aws-orange); font-weight: 600;">アクティブ接続数、受信パケット数など複数</td>
+                        <td>データ処理量のみ</td>
+                    </tr>
+                    <tr class="highlight-row">
+                        <td><strong style="color: var(--text-primary);">ルートテーブル検証</strong></td>
+                        <td style="color: #2ECC71; font-weight: 600;">あり</td>
+                        <td style="color: #E74C3C;">なし</td>
+                    </tr>
+                    <tr class="highlight-row">
+                        <td><strong style="color: var(--text-primary);">コスト試算</strong></td>
+                        <td style="color: #2ECC71; font-weight: 600;">推定月額削減額を表示</td>
+                        <td style="color: #E74C3C;">なし</td>
+                    </tr>
+                    <tr>
+                        <td><strong style="color: var(--text-primary);">前提条件</strong></td>
+                        <td>Cost Optimization Hub + Compute Optimizer へのオプトイン</td>
+                        <td>なし</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 class="sub-section-title">未使用判定の条件</h3>
+            <p style="font-size: 14px; margin-bottom: 16px;">NAT Gateway が未使用と判定されるには、32 日間のルックバック期間中に以下の<strong style="color: var(--text-primary);">すべて</strong>の条件を満たす必要があります。</p>
+            <div class="condition-grid">
+                <div class="condition-card">
+                    <div class="condition-icon">&#128279;</div>
+                    <div class="condition-metric">ActiveConnectionCount</div>
+                    <div class="condition-value">= 0</div>
+                </div>
+                <div class="condition-card">
+                    <div class="condition-icon">&#128229;</div>
+                    <div class="condition-metric">PacketsInFromSource</div>
+                    <div class="condition-value">= 0</div>
+                </div>
+                <div class="condition-card">
+                    <div class="condition-icon">&#128228;</div>
+                    <div class="condition-metric">PacketsInFromDestination</div>
+                    <div class="condition-value">= 0</div>
+                </div>
+                <div class="condition-card">
+                    <div class="condition-icon">&#128268;</div>
+                    <div class="condition-metric">ルートテーブル関連付け</div>
+                    <div class="condition-value">なし</div>
+                </div>
+            </div>
+
+            <h3 class="sub-section-title">API 変更履歴</h3>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>日付</th>
+                        <th>サービス</th>
+                        <th>変更内容</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>2026/02/20</td>
+                        <td><a href="https://awsapichanges.com/archive/changes/b4cc47-trustedadvisor.html" target="_blank" style="color: var(--aws-teal); text-decoration: none;">TrustedAdvisor Public API</a></td>
+                        <td>6 updated api methods - API レスポンスに新しい statusReason 属性を追加</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Setup -->
+        <section class="section">
+            <h2 class="section-title">&#9881;&#65039; 設定方法</h2>
+
+            <h3 class="sub-section-title">前提条件</h3>
+            <div class="overview-card" style="margin-bottom: 16px;">
+                <ul class="merit-list">
+                    <li>AWS Business Support、Enterprise Support、または Unified Operations プランに加入していること</li>
+                    <li>Cost Optimization Hub へのオプトインが完了していること</li>
+                    <li>AWS Compute Optimizer へのオプトインが完了していること</li>
+                    <li>適切な IAM 権限が設定されていること</li>
+                </ul>
+            </div>
+
+            <h3 class="sub-section-title">ステップ 1: Compute Optimizer へのオプトイン</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">Compute Optimizer へのオプトイン</span>
+                </div>
+                <pre><code class="language-bash"># Compute Optimizer へのオプトイン
+aws compute-optimizer update-enrollment-status \
+  --status Active</code></pre>
+            </div>
+            <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px;">オプトイン後、24 時間以内に未使用 NAT Gateway のレコメンデーションが生成されます。</p>
+
+            <h3 class="sub-section-title">ステップ 2: Cost Optimization Hub へのオプトイン</h3>
+            <div class="flow-diagram">
+                <div class="flow-step">&#128187; AWS Billing<br>コンソールを開く</div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">&#128200; Cost Optimization<br>Hub を選択</div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">&#9989; Opt in を選択<br>して有効化</div>
+            </div>
+
+            <h3 class="sub-section-title">ステップ 3: レコメンデーション確認</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">Trusted Advisor でコスト最適化チェックの結果を取得</span>
+                </div>
+                <pre><code class="language-bash"># Trusted Advisor でコスト最適化チェックの結果を取得
+aws trustedadvisor list-recommendations \
+  --pillar CostOptimizing \
+  --source CostOptimizationHub</code></pre>
+            </div>
+
+            <h3 class="sub-section-title">ステップ 4: 個別リソースの詳細確認</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">Compute Optimizer で未使用 NAT Gateway の詳細を確認</span>
+                </div>
+                <pre><code class="language-bash"># Compute Optimizer で未使用 NAT Gateway の詳細を確認
+aws compute-optimizer get-idle-recommendations \
+  --resource-type NatGateway</code></pre>
+            </div>
+
+            <h3 class="sub-section-title">ステップ 5: 未使用 NAT Gateway の削除</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">未使用と確認された NAT Gateway を削除</span>
+                </div>
+                <pre><code class="language-bash"># 未使用と確認された NAT Gateway を削除
+aws ec2 delete-nat-gateway \
+  --nat-gateway-id nat-xxxxxxxxxxxxxxxxx
+
+# 関連する Elastic IP の解放
+aws ec2 release-address \
+  --allocation-id eipalloc-xxxxxxxxxxxxxxxxx</code></pre>
+            </div>
+            <p style="font-size: 14px; color: var(--text-secondary); margin-top: 8px;">削除前に、ディザスタリカバリや高可用性の要件を考慮し、関連する Elastic IP アドレスの解放も検討してください。</p>
+        </section>
+
+        <!-- Benefits -->
+        <section class="section">
+            <h2 class="section-title">&#128077; メリット</h2>
+            <div class="merit-grid">
+                <div class="merit-section">
+                    <h3>&#128188; ビジネス面</h3>
+                    <ul class="merit-list">
+                        <li><strong style="color: var(--text-primary);">コスト最適化の精度向上:</strong> Compute Optimizer の高度な分析により、本当に不要なリソースのみを特定し、安全にコスト削減を実現</li>
+                        <li><strong style="color: var(--text-primary);">優先順位付けの容易化:</strong> 推定月額コスト削減額が表示されるため、最もインパクトの大きいリソースから対応可能</li>
+                        <li><strong style="color: var(--text-primary);">組織全体の可視化:</strong> Cost Optimization Hub との統合により、マルチアカウント環境全体のコスト最適化機会を一元的に把握</li>
+                    </ul>
+                </div>
+                <div class="merit-section">
+                    <h3>&#128736;&#65039; 技術面</h3>
+                    <ul class="merit-list">
+                        <li><strong style="color: var(--text-primary);">誤検知の削減:</strong> ルートテーブル関連付けの検証により、バックアップ用途のリソースを誤って削除対象にするリスクを最小化</li>
+                        <li><strong style="color: var(--text-primary);">包括的なメトリクス分析:</strong> 複数の CloudWatch メトリクスを 32 日間にわたって分析し、より正確な未使用判定を実現</li>
+                        <li><strong style="color: var(--text-primary);">プログラマティックなアクセス:</strong> Trusted Advisor API および Compute Optimizer API を通じて自動化ワークフローに統合可能</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Limitations -->
+        <section class="section">
+            <h2 class="section-title">&#9888;&#65039; 制約事項・注意点</h2>
+            <div class="constraint-card">
+                <div class="constraint-title">制限事項</div>
+                <ul class="constraint-list">
+                    <li>Cost Optimization Hub と Compute Optimizer の両方へのオプトインが必須</li>
+                    <li>AWS Business Support 以上のサポートプランが必要</li>
+                    <li>レコメンデーション生成まで最大 24 時間かかる</li>
+                    <li>AWS GovCloud (US) リージョンおよび中国リージョンでは利用不可</li>
+                </ul>
+            </div>
+            <div class="constraint-card">
+                <div class="constraint-title">考慮すべき点</div>
+                <ul class="constraint-list">
+                    <li>バックアップリソースの自動除外は完全ではない可能性がある。高可用性やディザスタリカバリのアーキテクチャを手動で確認してから削除すること</li>
+                    <li>NAT Gateway を削除すると、関連するプライベートサブネットからインターネットへのアウトバウンド通信が遮断される</li>
+                    <li>NAT Gateway に関連付けられた Elastic IP アドレスは自動的には解放されない。別途対応が必要</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Use Cases -->
+        <section class="section">
+            <h2 class="section-title">&#128161; ユースケース</h2>
+
+            <div class="usecase-card">
+                <div class="usecase-header">
+                    <span style="font-size: 24px;">&#128640;</span>
+                    <div class="usecase-title">ワークロード移行後のリソースクリーンアップ</div>
+                </div>
+                <div class="usecase-scenario">
+                    オンプレミスから AWS への移行プロジェクトが完了し、移行期間中に使用していた一時的な VPC やサブネットに NAT Gateway が残存している。
+                </div>
+                <div class="usecase-effect">
+                    移行完了後に不要になった NAT Gateway を確実に特定し、月額コストを削減。ルートテーブル検証により、まだ使用中のリソースを誤って削除するリスクを回避。
+                </div>
+            </div>
+
+            <div class="usecase-card">
+                <div class="usecase-header">
+                    <span style="font-size: 24px;">&#127970;</span>
+                    <div class="usecase-title">マルチアカウント環境での定期コスト監査</div>
+                </div>
+                <div class="usecase-scenario">
+                    大規模な AWS Organizations 環境で、複数のアカウントにまたがる NAT Gateway のコスト最適化を定期的に実施したい。
+                </div>
+                <div class="usecase-effect">
+                    Cost Optimization Hub の重複排除機能により、組織全体の正確なコスト削減額を把握。定期的な監査プロセスに組み込むことで、未使用リソースの蓄積を防止。
+                </div>
+            </div>
+
+            <div class="usecase-card">
+                <div class="usecase-header">
+                    <span style="font-size: 24px;">&#128187;</span>
+                    <div class="usecase-title">開発・テスト環境のコスト管理</div>
+                </div>
+                <div class="usecase-scenario">
+                    開発・テスト環境で一時的に作成された VPC の NAT Gateway が、テスト完了後もそのまま残っている。
+                </div>
+                <div class="usecase-effect">
+                    開発・テスト環境で放置されがちな NAT Gateway を自動検出し、不要なコストを排除。NAT Gateway 1 つあたり月額約 $32 のコスト削減が可能。
+                </div>
+            </div>
+        </section>
+
+        <!-- Pricing -->
+        <section class="section">
+            <h2 class="section-title">&#128176; 料金</h2>
+            <div class="pricing-card">
+                <div class="pricing-highlight">この機能自体に追加料金なし</div>
+                <div class="pricing-detail">ただし、AWS Business Support 以上のサポートプラン、および Compute Optimizer / Cost Optimization Hub へのオプトインが必要です。</div>
+            </div>
+
+            <div class="pricing-table-wrapper">
+                <h3 class="sub-section-title">前提条件の料金</h3>
+                <table class="spec-table">
+                    <thead>
+                        <tr>
+                            <th>項目</th>
+                            <th>料金</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong style="color: var(--text-primary);">AWS Support プラン</strong></td>
+                            <td>Business Support 以上が必要</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color: var(--text-primary);">AWS Compute Optimizer</strong></td>
+                            <td style="color: #2ECC71;">無料 (オプトインが必要)</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color: var(--text-primary);">Cost Optimization Hub</strong></td>
+                            <td style="color: #2ECC71;">無料 (オプトインが必要)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 class="sub-section-title">NAT Gateway の料金参考</h3>
+                <table class="spec-table">
+                    <thead>
+                        <tr>
+                            <th>項目</th>
+                            <th>料金 (東京リージョン)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong style="color: var(--text-primary);">NAT Gateway 時間あたり</strong></td>
+                            <td>$0.045/時間 (約 $32.40/月)</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color: var(--text-primary);">データ処理</strong></td>
+                            <td>$0.045/GB</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Region -->
+        <section class="section">
+            <h2 class="section-title">&#127758; 利用可能リージョン</h2>
+            <div class="region-card">
+                <div style="font-size: 28px; margin-bottom: 8px;">&#127758;</div>
+                <p>Trusted Advisor がサポートされているすべての AWS リージョンで利用可能</p>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 8px;">ただし、Compute Optimizer の未使用 NAT Gateway レコメンデーションは AWS GovCloud (US) および中国リージョンでは利用不可</p>
+            </div>
+        </section>
+
+        <!-- Related Services -->
+        <section class="section">
+            <h2 class="section-title">&#128279; 関連サービス</h2>
+            <div class="related-grid">
+                <div class="related-card">
+                    <div style="font-size: 24px; margin-bottom: 8px;">&#9881;&#65039;</div>
+                    <div class="related-name">AWS Compute Optimizer</div>
+                    <div class="related-desc">未使用 NAT Gateway の検出エンジン。CloudWatch メトリクス分析とルートテーブル検証を実行</div>
+                </div>
+                <div class="related-card">
+                    <div style="font-size: 24px; margin-bottom: 8px;">&#128200;</div>
+                    <div class="related-name">Cost Optimization Hub</div>
+                    <div class="related-desc">組織全体の最適化機会を一元管理し、重複排除されたコスト削減額を提供</div>
+                </div>
+                <div class="related-card">
+                    <div style="font-size: 24px; margin-bottom: 8px;">&#128202;</div>
+                    <div class="related-name">Amazon CloudWatch</div>
+                    <div class="related-desc">NAT Gateway の使用率メトリクスを収集</div>
+                </div>
+                <div class="related-card">
+                    <div style="font-size: 24px; margin-bottom: 8px;">&#127760;</div>
+                    <div class="related-name">Amazon VPC</div>
+                    <div class="related-desc">NAT Gateway およびルートテーブルの管理</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">参考リンク</p>
+            <ul class="source-links">
+                <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/02/trusted-advisor-unused-nat-gateway-check/" class="source-link" target="_blank">公式発表 (What's New)</a></li>
+                <li><a href="https://docs.aws.amazon.com/awssupport/latest/user/cost-optimization-checks.html#idle-nat-gateways" class="source-link" target="_blank">ドキュメント - Cost optimization checks: Idle NAT gateways</a></li>
+                <li><a href="https://awsapichanges.com/archive/changes/b4cc47-trustedadvisor.html" class="source-link" target="_blank">API 変更履歴 - TrustedAdvisor</a></li>
+                <li><a href="https://aws.amazon.com/blogs/aws-cloud-financial-management/announcing-unused-nat-gateway-recommendations-in-aws-compute-optimizer/" class="source-link" target="_blank">AWS Blog - Announcing Unused NAT Gateway Recommendations in AWS Compute Optimizer</a></li>
+                <li><a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/view-idle-recommendations.html" class="source-link" target="_blank">Compute Optimizer - Viewing idle resource recommendations</a></li>
+                <li><a href="https://aws.amazon.com/vpc/pricing/" class="source-link" target="_blank">NAT Gateway 料金</a></li>
+            </ul>
+            <p class="footer-note">AWS Trusted Advisor - Compute Optimizer を活用した未使用 NAT Gateway チェックの強化 | 2026 年 2 月 23 日</p>
+        </footer>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+        hljs.highlightAll();
+    </script>
+</body>
+</html>

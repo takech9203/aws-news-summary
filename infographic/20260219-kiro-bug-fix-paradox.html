@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kiro - Property-Aware Code Evolution: バグ修正ワークフロー</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+        :root {
+            --aws-squid-ink: #232F3E;
+            --aws-dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --aws-white: #FFFFFF;
+            --aws-light-gray: #D5DBDB;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--aws-squid-ink);
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            color: var(--aws-light-gray);
+            font-size: 16px;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header-left { flex: 1; min-width: 280px; }
+
+        .service-badge {
+            display: inline-block;
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--aws-white);
+            line-height: 1.3;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: var(--aws-light-gray);
+        }
+
+        .header-right {
+            text-align: right;
+            font-size: 14px;
+            color: var(--aws-light-gray);
+        }
+
+        .date-badge {
+            background: rgba(255, 153, 0, 0.15);
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: var(--aws-orange);
+            font-weight: 600;
+        }
+
+        /* Section */
+        .section {
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--aws-orange);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--aws-white);
+            margin-bottom: 12px;
+            margin-top: 20px;
+        }
+
+        p { margin-bottom: 12px; }
+
+        .highlight {
+            background-color: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        /* Before/After */
+        .before-after-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .before-card {
+            background: rgba(209, 50, 18, 0.1);
+            border: 1px solid rgba(209, 50, 18, 0.4);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .before-card .card-label {
+            color: var(--aws-red);
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .after-card {
+            background: rgba(29, 129, 2, 0.1);
+            border: 1px solid rgba(29, 129, 2, 0.4);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .after-card .card-label {
+            color: var(--aws-green);
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .before-card ul, .after-card ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .before-card li, .after-card li {
+            padding: 4px 0;
+            font-size: 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
+
+        .before-card li::before { content: "\2717"; color: var(--aws-red); font-weight: bold; }
+        .after-card li::before { content: "\2713"; color: var(--aws-green); font-weight: bold; }
+
+        /* Feature Cards */
+        .feature-card {
+            background: rgba(255, 153, 0, 0.05);
+            border-left: 4px solid var(--aws-orange);
+            border-radius: 0 8px 8px 0;
+            padding: 16px 20px;
+            margin: 12px 0;
+        }
+
+        .feature-card-title {
+            font-weight: 700;
+            color: var(--aws-white);
+            font-size: 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .feature-card p, .feature-card ul {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+        }
+
+        .feature-card ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .feature-card li {
+            padding: 3px 0;
+            padding-left: 18px;
+            position: relative;
+        }
+
+        .feature-card li::before {
+            content: "\2192";
+            color: var(--aws-orange);
+            position: absolute;
+            left: 0;
+        }
+
+        /* Tables */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 14px;
+        }
+
+        .data-table th {
+            background: rgba(255, 153, 0, 0.2);
+            color: var(--aws-orange);
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+        }
+
+        .data-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--aws-light-gray);
+        }
+
+        .data-table tr:hover td {
+            background: rgba(255, 153, 0, 0.05);
+        }
+
+        /* Use Cases */
+        .usecase-card {
+            background: rgba(255, 153, 0, 0.08);
+            border: 1px solid rgba(255, 153, 0, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 12px 0;
+        }
+
+        .usecase-card-title {
+            font-weight: 700;
+            color: var(--aws-orange);
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .usecase-scenario {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            margin-bottom: 12px;
+            font-style: italic;
+        }
+
+        .usecase-detail {
+            background: rgba(26, 36, 47, 0.8);
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin: 10px 0;
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .usecase-detail ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .usecase-detail li {
+            padding: 3px 0;
+            padding-left: 18px;
+            position: relative;
+        }
+
+        .usecase-detail li::before {
+            content: "\2192";
+            color: var(--aws-teal);
+            position: absolute;
+            left: 0;
+        }
+
+        .usecase-effect {
+            font-size: 14px;
+            color: var(--aws-green);
+            font-weight: 500;
+            margin-top: 8px;
+        }
+
+        /* Mermaid */
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Flow Diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+
+        .flow-step {
+            background: var(--aws-dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 100px;
+        }
+
+        .flow-arrow {
+            color: var(--aws-orange);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        /* Merit/Demerit */
+        .merit-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .merit-card {
+            background: rgba(29, 129, 2, 0.08);
+            border: 1px solid rgba(29, 129, 2, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .merit-card h4 {
+            color: var(--aws-green);
+            font-size: 15px;
+            margin-bottom: 8px;
+        }
+
+        .merit-card li {
+            font-size: 14px;
+            padding: 3px 0;
+        }
+
+        .merit-card ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .merit-card li::before { content: "\2705 "; }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+            margin-top: 4px;
+        }
+
+        /* Problem cards */
+        .problem-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .problem-card {
+            background: rgba(209, 50, 18, 0.08);
+            border: 1px solid rgba(209, 50, 18, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .problem-card h4 {
+            color: var(--aws-red);
+            font-size: 14px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .problem-card p {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+        }
+
+        /* Related Services */
+        .related-service {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .related-service:last-child { border-bottom: none; }
+
+        .related-service-name {
+            font-weight: 600;
+            color: var(--aws-teal);
+            font-size: 14px;
+            min-width: 180px;
+        }
+
+        .related-service-desc {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+        }
+
+        /* Region */
+        .region-badge {
+            display: inline-block;
+            background: rgba(0, 161, 201, 0.15);
+            border: 1px solid rgba(0, 161, 201, 0.3);
+            color: var(--aws-teal);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        /* Summary Box */
+        .summary-box {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(140, 79, 255, 0.08));
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        /* Concept highlight box */
+        .concept-box {
+            background: rgba(140, 79, 255, 0.08);
+            border: 1px solid rgba(140, 79, 255, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+
+        .concept-box h4 {
+            color: var(--aws-purple);
+            font-size: 15px;
+            margin-bottom: 8px;
+        }
+
+        .concept-box p {
+            font-size: 14px;
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            color: var(--aws-light-gray);
+        }
+
+        footer a {
+            color: var(--aws-teal);
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        footer a:hover { color: var(--aws-smile-orange); }
+
+        footer ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        footer li {
+            padding: 3px 0;
+        }
+
+        /* Responsive */
+        @media (max-width: 700px) {
+            h1 { font-size: 24px; }
+            .before-after-grid, .merit-grid { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .problem-grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; }
+            .header-right { text-align: left; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <span class="service-badge">Kiro</span>
+                <h1>Property-Aware Code Evolution: バグ修正ワークフロー</h1>
+                <p class="subtitle">AI エージェントのバグ修正における「ハンマー問題」を形式手法で解決</p>
+            </div>
+            <div class="header-right">
+                <span class="date-badge">2026 年 2 月 19 日</span>
+            </div>
+        </div>
+
+        <!-- 概要 -->
+        <div class="section">
+            <h2>概要</h2>
+            <p>Kiro が <span class="highlight">Property-Aware Code Evolution</span> と呼ばれるバグ修正手法に関する技術ブログを公開しました。AI エージェントによるバグ修正には「ハンマー問題」と呼ばれる根本的な課題があり、エージェントは人間と比較してガード句や防御的エラーハンドリングを追加する傾向が約 2 倍高く、不要なリファクタリングを行いがちです。</p>
+            <p>この手法の核心は、すべてのバグ修正には<span class="highlight">二重の意図</span>があるという洞察に基づいています。バグのある動作を修正することと、それ以外のすべてを保全することです。修正すべき範囲と保全すべき範囲の境界を形式的に明示することで、AI エージェントが正確かつ安全なバグ修正を実行できるようにします。</p>
+
+            <div class="before-after-grid">
+                <div class="before-card">
+                    <div class="card-label">アップデート前の課題</div>
+                    <ul>
+                        <li>AI エージェントがバグ修正時に不要なガード句やエラーハンドリングを過剰に追加していた</li>
+                        <li>修正すべき範囲と保全すべき範囲の境界が暗黙的であり、エージェントが境界を逸脱していた</li>
+                        <li>バグレポートが曖昧な場合、エージェントが独自に境界を発明してしまっていた</li>
+                        <li>エージェント自身が境界を遵守できたかどうかを検証する手段がなかった</li>
+                    </ul>
+                </div>
+                <div class="after-card">
+                    <div class="card-label">アップデート後の改善</div>
+                    <ul>
+                        <li>Bug Condition と Postcondition で修正範囲を形式的に定義</li>
+                        <li>Fix Property と Preservation Property で修正と保全の境界を明示</li>
+                        <li>Bugfix ドキュメントにより構造化された根本原因分析と修正が可能</li>
+                        <li>エージェントが自動生成した Spec とテストに基づいて修正の正確性を検証</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- アーキテクチャ図 -->
+        <div class="section">
+            <h2>アーキテクチャ図</h2>
+            <p>バグレポートから始まり、Kiro が分析して Bug Condition と Postcondition を定義し、Fix Property と Preservation Property による検証を経て、Spec、テスト、検証済みの修正を出力するワークフローを示しています。</p>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    subgraph Input["入力"]
+        BR(["バグレポート"])
+    end
+
+    subgraph Analysis["Kiro 分析"]
+        direction TB
+        KA["Kiro がバグレポートを解析"]
+        BD["Bugfix ドキュメント生成<br/>3 カテゴリに分類"]
+    end
+
+    subgraph Properties["プロパティ定義"]
+        direction LR
+        BC["Bug Condition C<br/>バグが発生する条件"]
+        PC["Postcondition P<br/>修正後の期待動作"]
+        BC ~~~ PC
+    end
+
+    subgraph Verification["検証プロパティ"]
+        direction LR
+        FP["Fix Property<br/>C が成立 then P を満たす"]
+        PP["Preservation Property<br/>C が不成立 then 動作不変"]
+        FP ~~~ PP
+    end
+
+    subgraph Output["出力"]
+        direction LR
+        SP["Spec 生成"]
+        TS["テスト生成"]
+        FX["検証済み修正"]
+        SP ~~~ TS ~~~ FX
+    end
+
+    BR --> KA
+    KA --> BD
+    BD --> BC
+    BD --> PC
+    BC --> FP
+    PC --> FP
+    BC --> PP
+    PC --> PP
+    FP --> SP
+    PP --> SP
+    SP --> TS
+    TS --> FX
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef success fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Input,Analysis,Properties,Verification,Output cloud
+    class KA,BD process
+    class BR user
+    class BC,PC decision
+    class FP,PP warning
+    class SP,TS,FX success
+                </pre>
+            </div>
+        </div>
+
+        <!-- ハンマー問題 -->
+        <div class="section">
+            <h2>ハンマー問題</h2>
+            <p>AI エージェントによるバグ修正には、以下の根本的な課題があります。</p>
+
+            <div class="problem-grid">
+                <div class="problem-card">
+                    <h4>過剰な防御的コーディング</h4>
+                    <p>AI エージェントは人間と比較して約 <span class="highlight">2 倍</span>の頻度でガード句や防御的エラーハンドリングを追加する</p>
+                </div>
+                <div class="problem-card">
+                    <h4>不要なリファクタリング</h4>
+                    <p>動作中のコードに対して不要な変更を加える傾向がある</p>
+                </div>
+                <div class="problem-card">
+                    <h4>意図からのドリフト</h4>
+                    <p>エージェントとの対話が増えるほど、元の意図からの逸脱が拡大する</p>
+                </div>
+            </div>
+
+            <p>これらの問題は、バグ修正における「修正すべき範囲」と「保全すべき範囲」の境界が<span class="highlight">暗黙的</span>であることに起因します。</p>
+        </div>
+
+        <!-- Property-Aware Code Evolution -->
+        <div class="section">
+            <h2>Property-Aware Code Evolution</h2>
+            <p>この手法の核心は、すべてのバグ修正には<span class="highlight">二重の意図</span>があるという認識です。</p>
+
+            <div class="feature-card">
+                <div class="feature-card-title">Bug Condition C</div>
+                <p>バグが発生する条件を特定し、入力空間を分割する述語。この条件が成立するとき、バグが発生する。</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-card-title">Postcondition P</div>
+                <p>バグのある入力に対して「修正された」とはどういう状態かを定義する。修正後のコードが満たすべき期待動作。</p>
+            </div>
+
+            <div class="feature-card" style="border-left-color: var(--aws-green);">
+                <div class="feature-card-title">Fix Property: C then P</div>
+                <p>Bug Condition C が成立する場合、修正後のコードは Postcondition P を満たす。これがバグ修正の正確性を保証する。</p>
+            </div>
+
+            <div class="feature-card" style="border-left-color: var(--aws-teal);">
+                <div class="feature-card-title">Preservation Property: not C then unchanged</div>
+                <p>Bug Condition C が成立しない場合、コードの動作は元のコードと同一である。これが既存動作の保全を保証する。</p>
+            </div>
+        </div>
+
+        <!-- Bug Condition が暗黙的な場合の 3 つの問題 -->
+        <div class="section">
+            <h2>Bug Condition が暗黙的な場合の 3 つの問題</h2>
+            <p>Bug Condition C を明示しない場合、以下の問題が発生します。</p>
+
+            <div class="feature-card" style="border-left-color: var(--aws-red);">
+                <div class="feature-card-title">1. エージェントのドリフト</div>
+                <p>複数のステップにわたる修正作業で、エージェントが境界から逸脱する。修正すべき範囲を超えて変更が拡大し、意図しない副作用が発生する。</p>
+            </div>
+
+            <div class="feature-card" style="border-left-color: var(--aws-red);">
+                <div class="feature-card-title">2. 境界の発明</div>
+                <p>バグレポートが曖昧な場合、エージェントが独自に境界を推測して作成する。この推測された境界は実際のバグ条件と一致しない場合がある。</p>
+            </div>
+
+            <div class="feature-card" style="border-left-color: var(--aws-red);">
+                <div class="feature-card-title">3. 検証の不可能性</div>
+                <p>境界が明示されていないため、エージェント自身が修正の正確性を検証できない。修正がバグを解決したか、既存動作を壊していないかを確認する手段がない。</p>
+            </div>
+        </div>
+
+        <!-- Kiro のバグ修正ワークフロー -->
+        <div class="section">
+            <h2>Kiro のバグ修正ワークフロー</h2>
+            <p>Kiro の Bug Fix Workflow は以下の手順で実行されます。</p>
+
+            <div class="flow-diagram">
+                <div class="flow-step">1. バグレポート<br/>分析</div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">2. Bugfix<br/>ドキュメント生成</div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">3. パーティション<br/>形式化</div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">4. 根本原因<br/>調査</div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">5. Spec/テスト<br/>生成</div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">6. 検証済み<br/>修正適用</div>
+            </div>
+
+            <h3>Bugfix ドキュメントの 3 カテゴリ</h3>
+            <div class="feature-card">
+                <div class="feature-card-title">Defective Behavior</div>
+                <p>現在のコードがどのように誤動作しているかを記述する。</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-card-title">Expected Fix</div>
+                <p>バグのある入力に対してコードがどのように動作すべきかを定義する。</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-card-title">Unchanged Behavior</div>
+                <p>バグのない入力に対して現在の動作を維持すべき範囲を明示する。</p>
+            </div>
+        </div>
+
+        <!-- 技術仕様 -->
+        <div class="section">
+            <h2>技術仕様</h2>
+
+            <h3>形式的検証アプローチ</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>プロパティ</th>
+                        <th>定義</th>
+                        <th>目的</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Bug Condition C</strong></td>
+                        <td>バグが発生する入力条件を特定する述語</td>
+                        <td>入力空間の分割</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Postcondition P</strong></td>
+                        <td>修正後の期待動作を定義</td>
+                        <td>修正の正確性の基準</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Fix Property</strong></td>
+                        <td>C then P</td>
+                        <td>バグのある入力が正しく処理されることを保証</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Preservation Property</strong></td>
+                        <td>not C then unchanged</td>
+                        <td>バグのない入力の動作が不変であることを保証</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Bugfix ドキュメントの 3 カテゴリ</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>カテゴリ</th>
+                        <th>説明</th>
+                        <th>対応するプロパティ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Defective Behavior</strong></td>
+                        <td>現在の誤動作の記述</td>
+                        <td>Bug Condition C の特定</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Expected Fix</strong></td>
+                        <td>修正後の期待動作</td>
+                        <td>Postcondition P の定義</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Unchanged Behavior</strong></td>
+                        <td>保全すべき既存動作</td>
+                        <td>Preservation Property の根拠</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>従来のアプローチとの比較</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>観点</th>
+                        <th>従来の AI バグ修正</th>
+                        <th>Property-Aware Code Evolution</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>修正範囲の定義</td>
+                        <td>暗黙的</td>
+                        <td>Bug Condition で明示的に定義</td>
+                    </tr>
+                    <tr>
+                        <td>既存動作の保証</td>
+                        <td>なし</td>
+                        <td>Preservation Property で保証</td>
+                    </tr>
+                    <tr>
+                        <td>修正の検証</td>
+                        <td>手動テスト</td>
+                        <td>自動生成テストで検証</td>
+                    </tr>
+                    <tr>
+                        <td>ドリフトの防止</td>
+                        <td>なし</td>
+                        <td>形式化された境界で防止</td>
+                    </tr>
+                    <tr>
+                        <td>過剰な変更</td>
+                        <td>頻発</td>
+                        <td>プロパティにより抑制</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 統計情報 -->
+        <div class="section">
+            <h2>数字で見るアップデート効果</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-value">~2x</span>
+                    <span class="stat-label">AI エージェントが追加する<br/>防御的コードの頻度</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">4</span>
+                    <span class="stat-label">形式的プロパティ定義</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">3</span>
+                    <span class="stat-label">Bugfix ドキュメント<br/>カテゴリ</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- メリット -->
+        <div class="section">
+            <h2>メリット</h2>
+            <div class="merit-grid">
+                <div class="merit-card">
+                    <h4>ビジネス面</h4>
+                    <ul>
+                        <li>形式的なプロパティ定義により、バグ修正の正確性が保証される</li>
+                        <li>Preservation Property により既存動作が保全され、新たなバグの混入を防止</li>
+                        <li>Bugfix ドキュメントが修正の意図と範囲を明確にするため、コードレビューが効率化</li>
+                    </ul>
+                </div>
+                <div class="merit-card">
+                    <h4>技術面</h4>
+                    <ul>
+                        <li>Bug Condition による入力空間の分割で、修正対象外のコードパスへの変更を防止</li>
+                        <li>Fix Property と Preservation Property に基づく自動テスト生成により、修正の正確性を機械的に検証可能</li>
+                        <li>明示的な境界定義により、複数ステップにわたる修正作業でもエージェントが意図から逸脱しない</li>
+                        <li>Bugfix ドキュメントの 3 カテゴリ分類により、問題の理解と修正方針が体系化される</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- ユースケース -->
+        <div class="section">
+            <h2>ユースケース</h2>
+
+            <div class="usecase-card">
+                <div class="usecase-card-title">ユースケース 1: 複雑な条件分岐のバグ修正</div>
+                <p class="usecase-scenario">注文処理システムで、特定の割引コードと会員ランクの組み合わせにおいて価格計算が誤っているバグが報告された</p>
+                <div class="usecase-detail">
+                    <ul>
+                        <li><strong>Bug Condition C</strong>: 割引コードが「VIP20」かつ会員ランクがゴールド以上の場合</li>
+                        <li><strong>Postcondition P</strong>: 割引率が 20% として正しく計算される</li>
+                        <li><strong>Fix Property</strong>: 上記条件の組み合わせで割引率が正しく適用される</li>
+                        <li><strong>Preservation Property</strong>: 上記条件以外のすべての割引コードと会員ランクの組み合わせで計算結果が変わらない</li>
+                    </ul>
+                </div>
+                <p class="usecase-effect">効果: 修正が特定の条件分岐のみに限定され、他の価格計算ロジックへの影響がないことが形式的に保証される</p>
+            </div>
+
+            <div class="usecase-card">
+                <div class="usecase-card-title">ユースケース 2: データ構造のバグ修正</div>
+                <p class="usecase-scenario">ツリー構造のデータを扱うアプリケーションで、特定の深さを超えるノードの削除処理が親ノードの参照を壊すバグが発見された</p>
+                <div class="usecase-detail">
+                    <ul>
+                        <li><strong>Bug Condition C</strong>: ノードの深さが 5 以上かつ子ノードを持つ場合の削除操作</li>
+                        <li><strong>Postcondition P</strong>: 削除後に親ノードの子参照リストが正しく更新され、ツリーの整合性が保たれる</li>
+                        <li><strong>Fix Property</strong>: 深さ 5 以上のノード削除時にツリーの整合性が維持される</li>
+                        <li><strong>Preservation Property</strong>: 深さ 4 以下のノード操作、および深さ 5 以上でも子ノードを持たないノードの削除動作が変わらない</li>
+                    </ul>
+                </div>
+                <p class="usecase-effect">効果: ツリー操作全体の動作保証を維持しながら、特定の条件でのみ修正が適用される</p>
+            </div>
+
+            <div class="usecase-card">
+                <div class="usecase-card-title">ユースケース 3: API 連携のバグ修正</div>
+                <p class="usecase-scenario">外部 API との連携で、レスポンスの pagination トークンが空文字列の場合にループが終了せず、無限ループが発生するバグがある</p>
+                <div class="usecase-detail">
+                    <ul>
+                        <li><strong>Bug Condition C</strong>: API レスポンスの pagination トークンが空文字列の場合</li>
+                        <li><strong>Postcondition P</strong>: 空文字列のトークンを終了条件として扱い、ループが正常に終了する</li>
+                        <li><strong>Fix Property</strong>: 空文字列トークン受信時にループが終了する</li>
+                        <li><strong>Preservation Property</strong>: null トークン、有効なトークン、トークンフィールド自体が存在しない場合の動作が変わらない</li>
+                    </ul>
+                </div>
+                <p class="usecase-effect">効果: 無限ループのバグを修正しつつ、正常な pagination 処理や他の終了条件の動作に影響を与えない</p>
+            </div>
+        </div>
+
+        <!-- 利用可能リージョン -->
+        <div class="section">
+            <h2>利用可能リージョン</h2>
+            <p><span class="region-badge">グローバル</span></p>
+        </div>
+
+        <!-- 関連サービス -->
+        <div class="section">
+            <h2>関連サービス・機能</h2>
+            <div class="related-service">
+                <span class="related-service-name">Kiro IDE</span>
+                <span class="related-service-desc">AI 搭載統合開発環境。Property-Aware Code Evolution を実装する基盤。</span>
+            </div>
+            <div class="related-service">
+                <span class="related-service-name">Kiro Specs</span>
+                <span class="related-service-desc">構造化された開発ワークフロー。Bugfix Spec が本手法の実装に使用される。</span>
+            </div>
+            <div class="related-service">
+                <span class="related-service-name">Kiro Powers</span>
+                <span class="related-service-desc">MCP サーバーとステアリングファイルのレジストリ。</span>
+            </div>
+        </div>
+
+        <!-- まとめ -->
+        <div class="section">
+            <h2>まとめ</h2>
+            <div class="summary-box">
+                <p>Kiro の Property-Aware Code Evolution は、AI エージェントによるバグ修正の根本的な課題である<span class="highlight">ハンマー問題</span>に対する体系的な解決策です。</p>
+                <p>Bug Condition と Postcondition による入力空間の分割、Fix Property と Preservation Property による修正と保全の形式的定義により、エージェントは「修正すべき範囲」と「触れてはいけない範囲」を明確に区別できるようになります。</p>
+                <p>この手法により、AI エージェントが過剰な防御的コーディングや不要なリファクタリングを行うことなく、正確かつ安全なバグ修正を実行できます。バグ修正における品質向上とリグレッション防止を重視するチームに対して、本ワークフローの活用を推奨します。</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p><strong>出典:</strong></p>
+            <ul>
+                <li><a href="https://kiro.dev/blog/bug-fix-paradox/" target="_blank" rel="noopener noreferrer">Kiro Blog - The Bug Fix Paradox</a></li>
+                <li><a href="https://kiro.dev/" target="_blank" rel="noopener noreferrer">Kiro</a></li>
+                <li><a href="https://kiro.dev/docs/" target="_blank" rel="noopener noreferrer">Kiro ドキュメント</a></li>
+            </ul>
+        </footer>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+    </script>
+</body>
+</html>

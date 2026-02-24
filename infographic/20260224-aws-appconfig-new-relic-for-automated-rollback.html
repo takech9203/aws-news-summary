@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS AppConfig - New Relic 統合による自動ロールバック</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+          primaryColor: '#FF9900',
+          primaryTextColor: '#232F3E',
+          primaryBorderColor: '#FF9900',
+          lineColor: '#FF9900',
+          secondaryColor: '#F5F5F5',
+          tertiaryColor: '#FAFAFA',
+          background: '#FFFFFF',
+          mainBkg: '#FFF3E0',
+          nodeBorder: '#FF9900',
+          clusterBkg: '#FFF8E1',
+          clusterBorder: '#FF9900',
+          edgeLabelBackground: '#FFFFFF',
+          textColor: '#232F3E'
+        }
+      });
+    });
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid var(--aws-orange);
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 12px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .date {
+      color: var(--aws-orange);
+      font-weight: 500;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .overview-text {
+      font-size: 17px;
+      line-height: 1.8;
+      margin-bottom: 20px;
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Before/After */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 600px) {
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .comparison-card {
+      padding: 16px;
+      border-radius: 8px;
+    }
+
+    .comparison-card.before {
+      background: rgba(209, 50, 18, 0.15);
+      border: 2px solid var(--aws-red);
+    }
+
+    .comparison-card.after {
+      background: rgba(29, 129, 2, 0.15);
+      border: 2px solid var(--aws-green);
+    }
+
+    .comparison-title {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .comparison-card.before .comparison-title {
+      color: var(--aws-red);
+    }
+
+    .comparison-card.after .comparison-title {
+      color: var(--aws-green);
+    }
+
+    .comparison-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .comparison-list li {
+      padding: 6px 0;
+      font-size: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    /* 統計カード */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 700px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.2) 0%, rgba(140, 79, 255, 0.15) 100%);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Mermaid コンテナ */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* 機能カード */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 700px) {
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px;
+    }
+
+    .feature-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .feature-icon {
+      font-size: 24px;
+    }
+
+    .feature-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--aws-white);
+    }
+
+    .feature-list {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0 0 0;
+    }
+
+    .feature-list li {
+      padding: 4px 0;
+      font-size: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      color: var(--aws-light-gray);
+    }
+
+    /* テーブル */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+    }
+
+    .spec-table th,
+    .spec-table td {
+      padding: 10px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      text-align: left;
+      font-size: 14px;
+    }
+
+    .spec-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+    }
+
+    .spec-table td {
+      color: var(--aws-light-gray);
+    }
+
+    .spec-table tr:hover td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    /* フロー図 */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* ユースケース */
+    .usecase-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.1) 0%, rgba(255, 153, 0, 0.05) 100%);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .usecase-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .usecase-scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 8px;
+    }
+
+    .usecase-impl {
+      font-size: 14px;
+      color: var(--aws-teal);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .usecase-effect {
+      font-size: 14px;
+      color: var(--aws-green);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    /* メリット・デメリット */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 600px) {
+      .merit-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .merit-card {
+      padding: 16px;
+      border-radius: 8px;
+    }
+
+    .merit-card.positive {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+    }
+
+    .merit-card.negative {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+    }
+
+    .merit-title {
+      font-weight: 700;
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+
+    .merit-card.positive .merit-title {
+      color: var(--aws-green);
+    }
+
+    .merit-card.negative .merit-title {
+      color: var(--aws-red);
+    }
+
+    .merit-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .merit-list li {
+      padding: 5px 0;
+      font-size: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .merit-subsection {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .merit-subsection-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-bottom: 6px;
+      opacity: 0.8;
+    }
+
+    /* 注意事項カード */
+    .note-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    .note-card-title {
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .note-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .note-list li {
+      padding: 4px 0;
+      font-size: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      color: var(--aws-light-gray);
+    }
+
+    /* 関連サービスカード */
+    .related-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 700px) {
+      .related-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .related-card {
+      background: var(--aws-squid-ink);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .related-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .related-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+    }
+
+    .related-desc {
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    /* リージョンバッジ */
+    .region-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 161, 201, 0.15);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      border-radius: 8px;
+      padding: 12px 20px;
+      margin: 12px 0;
+    }
+
+    .region-badge-text {
+      color: var(--aws-teal);
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .region-sub {
+      color: var(--aws-light-gray);
+      font-size: 13px;
+    }
+
+    /* リンクカード */
+    .link-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    @media (max-width: 600px) {
+      .link-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .link-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--aws-squid-ink);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      border-radius: 8px;
+      padding: 12px 16px;
+      text-decoration: none;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .link-card:hover {
+      background: rgba(0, 161, 201, 0.1);
+      border-color: var(--aws-teal);
+    }
+
+    .link-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .link-text {
+      color: var(--aws-teal);
+      font-size: 14px;
+      font-weight: 500;
+      word-break: break-all;
+    }
+
+    /* フッター */
+    footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+      text-align: center;
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    /* サマリーバー */
+    .summary-bar {
+      background: linear-gradient(135deg, rgba(140, 79, 255, 0.2) 0%, rgba(255, 153, 0, 0.2) 100%);
+      border: 1px solid rgba(140, 79, 255, 0.3);
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .summary-bar p {
+      font-size: 16px;
+      line-height: 1.7;
+      margin: 0;
+      color: var(--aws-white);
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* ワークフローステップ */
+    .workflow-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 16px 0;
+    }
+
+    .workflow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 16px 0;
+    }
+
+    .step-number {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .step-desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    .step-connector {
+      width: 2px;
+      height: 16px;
+      background: rgba(255, 153, 0, 0.3);
+      margin-left: 17px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div>
+        <span class="service-badge">&#9881;&#65039; AWS AppConfig</span>
+      </div>
+      <h1>&#128260; New Relic 統合による自動ロールバック</h1>
+      <p class="subtitle">フィーチャーフラグデプロイ中の異常検知から数秒で自動ロールバックを実行するクローズドループ自動化</p>
+      <p class="date">&#128197; 2026 年 2 月 24 日</p>
+    </div>
+
+    <!-- サマリーバー -->
+    <div class="summary-bar">
+      <p>&#128640; AWS AppConfig が <span class="highlight">New Relic Workflow Automation</span> との統合をリリース。<span class="highlight">AT_DEPLOYMENT_TICK</span> アクションポイントで New Relic のアラート状態を継続的に監視し、エラーレートやレイテンシの上昇を検知すると<span class="highlight">数秒以内に自動ロールバック</span>を実行。手動介入を排除し、カスタマー影響を最小化するクローズドループ自動化を実現します。</p>
+    </div>
+
+    <!-- 統計カード -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">数秒以内</div>
+        <div class="stat-label">検知からロールバック完了まで<br/>手動対応では数分以上</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0 人</div>
+        <div class="stat-label">手動介入なしで<br/>障害時の自動修復</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">全リージョン</div>
+        <div class="stat-label">AWS GovCloud を含む<br/>すべての AWS リージョン</div>
+      </div>
+    </div>
+
+    <!-- 概要: Before/After -->
+    <div class="section">
+      <h2>&#128202; 概要: アップデート前後の比較</h2>
+      <p class="overview-text">
+        AWS AppConfig が <span class="highlight">New Relic Workflow Automation</span> との統合をリリースし、フィーチャーフラグおよび動的設定のデプロイ中に自動でインテリジェントなロールバックを実行できるようになりました。AWS AppConfig のサードパーティアラート機能を基盤として、New Relic がアプリケーションの健全性低下を自動検知し、数秒でロールバックをトリガーすることで、手動介入を排除します。
+      </p>
+      <div class="comparison-grid">
+        <div class="comparison-card before">
+          <div class="comparison-title">&#10060; アップデート前の課題</div>
+          <ul class="comparison-list">
+            <li><span>&#9888;&#65039;</span><span>サードパーティ APM ツールでの監視結果に基づくロールバックは手動対応が必要で、検知から修復まで数分以上を要した</span></li>
+            <li><span>&#9888;&#65039;</span><span>フィーチャーフラグのデプロイ中に問題が発生した場合、オペレーターが監視ダッシュボードを確認して手動で判断する必要があった</span></li>
+            <li><span>&#9888;&#65039;</span><span>New Relic を使用するチームが AWS AppConfig のロールバック機能を統合するためのネイティブソリューションが存在しなかった</span></li>
+          </ul>
+        </div>
+        <div class="comparison-card after">
+          <div class="comparison-title">&#9989; アップデート後の改善</div>
+          <ul class="comparison-list">
+            <li><span>&#128640;</span><span>New Relic Workflow Automation と連携し、デプロイ中のアプリケーション健全性を自動監視</span></li>
+            <li><span>&#9889;</span><span>問題検知から数秒でロールバックが自動実行され、検知から修復までの時間を大幅に短縮</span></li>
+            <li><span>&#128260;</span><span>クローズドループの自動化により、手動介入なしで障害時のカスタマー影響を最小化</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>&#127959;&#65039; アーキテクチャ図</h2>
+      <p style="font-size: 14px; margin-bottom: 16px;">AWS AppConfig の段階的デプロイ中、New Relic Extension が <code style="color: var(--aws-teal);">AT_DEPLOYMENT_TICK</code> アクションポイントで継続的にアラート状態を確認し、異常検知時に Workflow Automation を通じて即座にロールバックを実行します。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+sequenceDiagram
+    participant Op as &#128100; オペレーター
+    participant AC as &#9881;&#65039; AWS AppConfig
+    participant App as &#128421;&#65039; アプリケーション
+    participant Ext as &#128268; AppConfig Extension
+    participant NR as &#128202; New Relic
+    participant WF as &#128260; Workflow Automation
+
+    Op->>AC: フィーチャーフラグデプロイ開始
+    Note over AC: 段階的デプロイ戦略を使用
+    AC->>App: 設定を段階的に配信
+
+    loop デプロイの各ステップ
+        AC->>Ext: AT_DEPLOYMENT_TICK
+        Ext->>NR: アラート状態を確認
+        alt 正常
+            NR-->>Ext: アラートなし
+            Ext-->>AC: デプロイ続行
+        else 異常検知
+            NR-->>Ext: アラート発生
+            Note over NR: エラーレート上昇を検知
+            NR->>WF: Workflow Automation 起動
+            WF->>AC: ロールバック通知を送信
+            AC->>App: 前の設定に自動ロールバック
+            AC-->>Op: ロールバック完了通知
+        end
+    end
+        </pre>
+      </div>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>&#9889; 主要機能</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-card-header">
+            <span class="feature-icon">&#128337;</span>
+            <span class="feature-title">AT_DEPLOYMENT_TICK アクションポイント</span>
+          </div>
+          <ul class="feature-list">
+            <li><span>&#8594;</span><span>段階的デプロイ中に同期的に呼び出されるアクションポイント</span></li>
+            <li><span>&#8594;</span><span>デプロイの各ステップで New Relic のアラート状態をチェック</span></li>
+            <li><span>&#8594;</span><span>エラー発生時にデプロイワークフローを停止してロールバックを実行</span></li>
+          </ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-header">
+            <span class="feature-icon">&#128260;</span>
+            <span class="feature-title">New Relic Workflow Automation 連携</span>
+          </div>
+          <ul class="feature-list">
+            <li><span>&#8594;</span><span>New Relic のアラート条件に基づく自動トリガー</span></li>
+            <li><span>&#8594;</span><span>エラーレート、レイテンシなどのメトリクスを継続監視</span></li>
+            <li><span>&#8594;</span><span>アラート検知時にロールバック通知を自動送信</span></li>
+          </ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-header">
+            <span class="feature-icon">&#128256;</span>
+            <span class="feature-title">クローズドループの自動化</span>
+          </div>
+          <ul class="feature-list">
+            <li><span>&#8594;</span><span>検知から修復までのプロセスが完全に自動化</span></li>
+            <li><span>&#8594;</span><span>手動介入なしで数秒以内にロールバックを完了</span></li>
+            <li><span>&#8594;</span><span>フィーチャーフラグを前の状態に自動で戻す</span></li>
+          </ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-header">
+            <span class="feature-icon">&#128200;</span>
+            <span class="feature-title">段階的デプロイ戦略との統合</span>
+          </div>
+          <ul class="feature-list">
+            <li><span>&#8594;</span><span>AWS AppConfig のデプロイ戦略と組み合わせて使用</span></li>
+            <li><span>&#8594;</span><span>デプロイの各段階でヘルスチェックを実施</span></li>
+            <li><span>&#8594;</span><span>部分的なロールアウト中に問題を早期発見</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 仕組み -->
+    <div class="section">
+      <h2>&#9881;&#65039; 仕組み</h2>
+      <p style="font-size: 15px; line-height: 1.8; margin-bottom: 16px;">
+        AWS AppConfig New Relic Extension は <span class="highlight">AWS Lambda 関数</span>として実装され、<span class="highlight">AT_DEPLOYMENT_TICK</span> アクションポイントに関連付けられます。このアクションポイントは AWS AppConfig のデプロイ処理オーケストレーション中に同期的に呼び出されます。
+      </p>
+      <p style="font-size: 15px; line-height: 1.8;">
+        Extension は各デプロイステップで New Relic API を呼び出してアラート条件を確認します。<code style="color: var(--aws-teal);">AT_*</code> アクションポイントはデプロイワークフローと並行して同期的に実行されるため、エラーが発生した場合にはデプロイワークフローが停止され、自動的にロールバックが開始されます。
+      </p>
+      <div class="flow-diagram">
+        <div class="flow-step">&#128268; Extension<br/><span style="font-size: 11px; color: var(--aws-light-gray);">Lambda 関数</span></div>
+        <span class="flow-arrow">&#8594;</span>
+        <div class="flow-step">&#128337; AT_DEPLOYMENT<br/>_TICK<br/><span style="font-size: 11px; color: var(--aws-light-gray);">同期呼び出し</span></div>
+        <span class="flow-arrow">&#8594;</span>
+        <div class="flow-step">&#128202; New Relic<br/>API<br/><span style="font-size: 11px; color: var(--aws-light-gray);">アラート確認</span></div>
+        <span class="flow-arrow">&#8594;</span>
+        <div class="flow-step">&#128260; 判定<br/><span style="font-size: 11px; color: var(--aws-light-gray);">続行 or<br/>ロールバック</span></div>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>&#128295; 技術仕様</h2>
+
+      <h3 style="color: var(--aws-white); font-size: 16px; margin: 0 0 12px 0;">&#128204; Extension 基本仕様</h3>
+      <table class="spec-table">
+        <tr>
+          <th>項目</th>
+          <th>詳細</th>
+        </tr>
+        <tr>
+          <td>Extension タイプ</td>
+          <td>カスタム AWS AppConfig Extension</td>
+        </tr>
+        <tr>
+          <td>実行基盤</td>
+          <td>AWS Lambda</td>
+        </tr>
+        <tr>
+          <td>アクションポイント</td>
+          <td><code style="color: var(--aws-teal);">AT_DEPLOYMENT_TICK</code></td>
+        </tr>
+        <tr>
+          <td>アクションポイント種別</td>
+          <td>同期実行、デプロイワークフローと並行</td>
+        </tr>
+        <tr>
+          <td>監視対象</td>
+          <td>New Relic アラート条件</td>
+        </tr>
+        <tr>
+          <td>ロールバック方式</td>
+          <td>New Relic Workflow Automation 経由の通知</td>
+        </tr>
+        <tr>
+          <td>ロールバック速度</td>
+          <td>検知から数秒以内</td>
+        </tr>
+        <tr>
+          <td>デプロイ戦略</td>
+          <td>段階的デプロイ戦略と併用</td>
+        </tr>
+      </table>
+
+      <h3 style="color: var(--aws-white); font-size: 16px; margin: 20px 0 12px 0;">&#128204; AT_DEPLOYMENT_TICK アクションポイントの動作</h3>
+      <table class="spec-table">
+        <tr>
+          <th>アクションポイント種別</th>
+          <th>実行方式</th>
+          <th>エラー時の動作</th>
+        </tr>
+        <tr>
+          <td><code style="color: var(--aws-teal);">PRE_*</code></td>
+          <td>同期、リクエスト検証後</td>
+          <td>設定内容を変更可能、エラーでアクションを阻止</td>
+        </tr>
+        <tr>
+          <td><code style="color: var(--aws-teal);">ON_*</code></td>
+          <td>非同期</td>
+          <td>エラーを無視してワークフロー継続</td>
+        </tr>
+        <tr>
+          <td style="background: rgba(255, 153, 0, 0.1);"><code style="color: var(--aws-orange); font-weight: 600;">AT_*</code></td>
+          <td style="background: rgba(255, 153, 0, 0.1);">同期、ワークフローと並行</td>
+          <td style="background: rgba(255, 153, 0, 0.1);"><strong style="color: var(--aws-orange);">ワークフローを停止しロールバックを実行</strong></td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>&#128736;&#65039; 設定方法</h2>
+
+      <h3 style="color: var(--aws-white); font-size: 16px; margin: 0 0 12px 0;">&#128204; 前提条件</h3>
+      <ul class="feature-list" style="margin-bottom: 20px;">
+        <li><span>&#10003;</span><span>AWS アカウントと AWS AppConfig の設定</span></li>
+        <li><span>&#10003;</span><span>New Relic アカウントとアラート条件の設定</span></li>
+        <li><span>&#10003;</span><span>New Relic Workflow Automation の有効化</span></li>
+        <li><span>&#10003;</span><span>AWS Lambda 関数の作成権限</span></li>
+        <li><span>&#10003;</span><span>IAM ロールの設定権限</span></li>
+      </ul>
+
+      <div class="workflow-steps">
+        <div class="workflow-step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <div class="step-title">New Relic でアラート条件を設定</div>
+            <div class="step-desc">エラーレート、レイテンシ、スループットなど、デプロイの影響を検知するためのメトリクスを定義します。</div>
+          </div>
+        </div>
+        <div class="step-connector"></div>
+        <div class="workflow-step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <div class="step-title">Lambda 関数をデプロイ</div>
+            <div class="step-desc">GitHub リポジトリから AWS AppConfig New Relic Extension の Lambda 関数をデプロイします。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Lambda 関数のデプロイ</span>
+        </div>
+        <pre><code class="language-bash"># リポジトリをクローン
+git clone https://github.com/aws-samples/sample-aws-appconfig-tick-extn-for-newrelic.git
+
+# Lambda 関数をデプロイ (SAM または CloudFormation を使用)
+cd sample-aws-appconfig-tick-extn-for-newrelic
+sam build
+sam deploy --guided</code></pre>
+      </div>
+
+      <div class="workflow-steps">
+        <div class="workflow-step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <div class="step-title">AWS AppConfig Extension を作成</div>
+            <div class="step-desc">Lambda 関数を AT_DEPLOYMENT_TICK アクションポイントに関連付ける Extension を作成します。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">Extension 定義</span>
+        </div>
+        <pre><code class="language-json">{
+    "Name": "NewRelicMonitoringExtension",
+    "Description": "New Relic monitoring integration for automatic rollback",
+    "Actions": {
+        "AT_DEPLOYMENT_TICK": [
+            {
+                "Name": "CheckNewRelicAlarms",
+                "Uri": "arn:aws:lambda:us-east-1:123456789012:function:appconfig-newrelic-extension",
+                "RoleArn": "arn:aws:iam::123456789012:role/AppConfigExtensionRole"
+            }
+        ]
+    }
+}</code></pre>
+      </div>
+
+      <div class="workflow-steps">
+        <div class="workflow-step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <div class="step-title">Extension Association を作成</div>
+            <div class="step-desc">Extension を AWS AppConfig のアプリケーション、環境、または設定プロファイルに関連付けます。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Extension Association の作成</span>
+        </div>
+        <pre><code class="language-bash">aws appconfig create-extension-association \
+    --extension-identifier NewRelicMonitoringExtension \
+    --resource-identifier "arn:aws:appconfig:us-east-1:123456789012:application/MyApp/environment/Production"</code></pre>
+      </div>
+
+      <div class="workflow-steps">
+        <div class="workflow-step">
+          <div class="step-number">5</div>
+          <div class="step-content">
+            <div class="step-title">New Relic Workflow Automation を設定</div>
+            <div class="step-desc">アラート検知時にロールバック通知を送信するワークフローを設定します。</div>
+          </div>
+        </div>
+        <div class="step-connector"></div>
+        <div class="workflow-step">
+          <div class="step-number">6</div>
+          <div class="step-content">
+            <div class="step-title">デプロイをテスト</div>
+            <div class="step-desc">段階的デプロイ戦略を使用してフィーチャーフラグをデプロイし、New Relic との連携が正常に機能することを確認します。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">テストデプロイの実行</span>
+        </div>
+        <pre><code class="language-bash">aws appconfig start-deployment \
+    --application-id MyApp \
+    --environment-id Production \
+    --deployment-strategy-id MyGradualStrategy \
+    --configuration-profile-id MyFeatureFlags \
+    --configuration-version 2</code></pre>
+      </div>
+    </div>
+
+    <!-- メリット・デメリット -->
+    <div class="section">
+      <h2>&#9878;&#65039; メリット・制約事項</h2>
+      <div class="merit-grid">
+        <div class="merit-card positive">
+          <div class="merit-title">&#9989; メリット</div>
+          <div class="merit-subsection">
+            <div class="merit-subsection-title">&#128296; 技術面</div>
+            <ul class="merit-list">
+              <li><span>&#9889;</span><span><strong style="color: var(--aws-white);">検知から修復の高速化</strong>: 手動対応では数分かかっていた修復を数秒以内に完了</span></li>
+              <li><span>&#128260;</span><span><strong style="color: var(--aws-white);">クローズドループ自動化</strong>: 監視、検知、ロールバックの一連のプロセスが完全自動化</span></li>
+              <li><span>&#128200;</span><span><strong style="color: var(--aws-white);">段階的デプロイとの統合</strong>: 各段階で継続的にヘルスチェックを実行し早期発見が可能</span></li>
+            </ul>
+          </div>
+          <div class="merit-subsection">
+            <div class="merit-subsection-title">&#128188; ビジネス面</div>
+            <ul class="merit-list">
+              <li><span>&#127919;</span><span><strong style="color: var(--aws-white);">カスタマー影響の最小化</strong>: 障害発生時の影響範囲と時間を大幅に削減</span></li>
+              <li><span>&#128176;</span><span><strong style="color: var(--aws-white);">運用コストの削減</strong>: 手動監視とオペレーター介入の必要性を排除</span></li>
+              <li><span>&#128640;</span><span><strong style="color: var(--aws-white);">デプロイ頻度の向上</strong>: 安全なロールバック機構により頻繁なデプロイへの信頼性が向上</span></li>
+            </ul>
+          </div>
+          <div class="merit-subsection">
+            <div class="merit-subsection-title">&#128421;&#65039; 運用面</div>
+            <ul class="merit-list">
+              <li><span>&#128268;</span><span><strong style="color: var(--aws-white);">既存ツールチェーンとの統合</strong>: New Relic を既に使用しているチームはワークフローを変更せずに導入可能</span></li>
+              <li><span>&#128164;</span><span><strong style="color: var(--aws-white);">オペレーター負荷の軽減</strong>: 24 時間 365 日の手動監視が不要</span></li>
+              <li><span>&#128203;</span><span><strong style="color: var(--aws-white);">インシデント対応の標準化</strong>: ロールバック判断と実行が自動化されヒューマンエラーを排除</span></li>
+            </ul>
+          </div>
+        </div>
+        <div class="merit-card negative">
+          <div class="merit-title">&#9888;&#65039; 制約事項・注意点</div>
+          <div class="merit-subsection">
+            <div class="merit-subsection-title">&#128296; 技術的な制約</div>
+            <ul class="merit-list">
+              <li><span>&#128273;</span><span><strong style="color: var(--aws-white);">New Relic 必須</strong>: New Relic アカウントとライセンスが別途必要</span></li>
+              <li><span>&#9201;&#65039;</span><span><strong style="color: var(--aws-white);">Lambda レイテンシ</strong>: Lambda 関数の実行時間がデプロイステップのレイテンシに影響する可能性</span></li>
+              <li><span>&#9888;&#65039;</span><span><strong style="color: var(--aws-white);">誤検知リスク</strong>: AT_DEPLOYMENT_TICK でのエラーは無条件でロールバックをトリガーするため、ネットワーク一時障害に注意</span></li>
+            </ul>
+          </div>
+          <div class="merit-subsection">
+            <div class="merit-subsection-title">&#128421;&#65039; 運用上の制約</div>
+            <ul class="merit-list">
+              <li><span>&#9881;&#65039;</span><span><strong style="color: var(--aws-white);">アラート設計</strong>: 不適切なアラート条件設定で不要なロールバックが発生する可能性</span></li>
+              <li><span>&#128218;</span><span><strong style="color: var(--aws-white);">知識要件</strong>: Lambda、IAM、AppConfig Extensions の知識が必要</span></li>
+              <li><span>&#128736;&#65039;</span><span><strong style="color: var(--aws-white);">追加管理</strong>: New Relic Workflow Automation の設定と管理が別途必要</span></li>
+            </ul>
+          </div>
+          <div class="merit-subsection">
+            <div class="merit-subsection-title">&#128176; コスト面の考慮</div>
+            <ul class="merit-list">
+              <li><span>&#128178;</span><span>AWS Lambda の実行コストが追加で発生</span></li>
+              <li><span>&#128178;</span><span>New Relic のサブスクリプション費用が別途必要</span></li>
+              <li><span>&#128178;</span><span>AWS AppConfig の設定リクエストおよび設定受信に対する従量課金</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>&#127919; ユースケース</h2>
+      <div class="usecase-card">
+        <div class="usecase-title">&#128722; ユースケース 1: EC サイトのフィーチャーフラグリリース</div>
+        <div class="usecase-scenario"><strong>シナリオ</strong>: EC サイトで新しいチェックアウトフローをフィーチャーフラグで段階的にリリースする際、エラーレートの上昇やレスポンスタイムの悪化を即座に検知して自動ロールバックしたい。</div>
+        <div class="usecase-impl"><span>&#128296;</span><span><strong>実装</strong>: AWS AppConfig の段階的デプロイ戦略 10% / 25% / 50% / 100% で新しいチェックアウトフラグをデプロイし、New Relic Extension でトランザクションエラーレートとレスポンスタイムを監視</span></div>
+        <div class="usecase-effect"><span>&#10024;</span><span><strong>効果</strong>: 10% のユーザーへのロールアウト段階でエラーレート上昇を検知した場合、残り 90% のユーザーに影響が及ぶ前に数秒でロールバックを完了し、カスタマー影響を最小化</span></div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-title">&#128295; ユースケース 2: マイクロサービスの動的設定変更</div>
+        <div class="usecase-scenario"><strong>シナリオ</strong>: マイクロサービスアーキテクチャで、スロットリングリミットやログレベルなどの動的設定を変更する際、サービス間の依存関係により予期しないパフォーマンス低下が発生するリスクがある。</div>
+        <div class="usecase-impl"><span>&#128296;</span><span><strong>実装</strong>: AWS AppConfig のフリーフォーム設定プロファイルで動的設定を管理し、New Relic APM でサービス間のレイテンシとエラーレートを監視。異常検知時に自動ロールバックを実行</span></div>
+        <div class="usecase-effect"><span>&#10024;</span><span><strong>効果</strong>: スロットリングリミットの変更が下流サービスのレイテンシ増加を引き起こした場合、Workflow Automation が即座にロールバックをトリガーし、カスケード障害を防止</span></div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-title">&#9729;&#65039; ユースケース 3: SaaS プラットフォームのテナント別フィーチャーリリース</div>
+        <div class="usecase-scenario"><strong>シナリオ</strong>: SaaS プラットフォームで、特定のテナントグループに対して新機能を先行リリースし、テナント固有のメトリクスに基づいて安全性を確認したい。</div>
+        <div class="usecase-impl"><span>&#128296;</span><span><strong>実装</strong>: AWS AppConfig のフィーチャーフラグターゲティング機能でテナントグループを指定し、New Relic のカスタムアラート条件でテナント別のエラーレートとパフォーマンスメトリクスを監視</span></div>
+        <div class="usecase-effect"><span>&#10024;</span><span><strong>効果</strong>: 先行リリース対象テナントで問題が検出された場合、自動ロールバックにより全テナントへの影響拡大を防止し、安全なリリース管理を実現</span></div>
+      </div>
+    </div>
+
+    <!-- 料金情報 -->
+    <div class="section">
+      <h2>&#128176; 料金情報</h2>
+      <p style="font-size: 15px; line-height: 1.8; margin-bottom: 16px;">
+        AWS AppConfig New Relic Extension 自体に追加料金はありません。以下のサービスの料金が個別に適用されます。
+      </p>
+
+      <h3 style="color: var(--aws-white); font-size: 16px; margin: 0 0 12px 0;">&#128204; AWS AppConfig</h3>
+      <table class="spec-table">
+        <tr>
+          <th>項目</th>
+          <th>料金</th>
+        </tr>
+        <tr>
+          <td>設定リクエスト (API コール)</td>
+          <td><code style="color: var(--aws-teal);">$0.0000002 / リクエスト</code></td>
+        </tr>
+        <tr>
+          <td>設定受信</td>
+          <td><code style="color: var(--aws-teal);">$0.0008 / 受信</code></td>
+        </tr>
+      </table>
+
+      <h3 style="color: var(--aws-white); font-size: 16px; margin: 20px 0 12px 0;">&#128204; 関連コスト</h3>
+      <div class="note-card">
+        <ul class="note-list">
+          <li><span>&#9889;</span><span><strong style="color: var(--aws-white);">AWS Lambda</strong>: Extension 用 Lambda 関数の実行料金 (リクエスト数と実行時間に基づく従量課金)</span></li>
+          <li><span>&#128202;</span><span><strong style="color: var(--aws-white);">New Relic</strong>: New Relic のサブスクリプション費用 (New Relic の料金体系に準拠)</span></li>
+          <li><span>&#128274;</span><span><strong style="color: var(--aws-white);">AWS IAM</strong>: 追加料金なし</span></li>
+        </ul>
+      </div>
+      <p style="margin-top: 12px;">
+        <a href="https://aws.amazon.com/systems-manager/pricing/" target="_blank" rel="noopener noreferrer" style="color: var(--aws-teal); text-decoration: none; font-weight: 500;">&#8594; AWS Systems Manager 料金ページ</a>
+      </p>
+    </div>
+
+    <!-- 利用可能リージョン -->
+    <div class="section">
+      <h2>&#127758; 利用可能リージョン</h2>
+      <div class="region-badge">
+        <span style="font-size: 24px;">&#127760;</span>
+        <div>
+          <div class="region-badge-text">すべての AWS リージョン</div>
+          <div class="region-sub">AWS GovCloud (US) リージョンを含む</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>&#128279; 関連サービス・機能</h2>
+      <div class="related-grid">
+        <div class="related-card">
+          <div class="related-icon">&#9881;&#65039;</div>
+          <div class="related-name">AWS AppConfig</div>
+          <div class="related-desc">フィーチャーフラグと動的設定の管理・デプロイ</div>
+        </div>
+        <div class="related-card">
+          <div class="related-icon">&#128268;</div>
+          <div class="related-name">AppConfig Extensions</div>
+          <div class="related-desc">デプロイワークフローにカスタムアクションを追加する拡張機能</div>
+        </div>
+        <div class="related-card">
+          <div class="related-icon">&#9889;</div>
+          <div class="related-name">AWS Lambda</div>
+          <div class="related-desc">Extension のロジックを実行するサーバーレスコンピューティング基盤</div>
+        </div>
+        <div class="related-card">
+          <div class="related-icon">&#128202;</div>
+          <div class="related-name">New Relic APM</div>
+          <div class="related-desc">アプリケーションパフォーマンス監視</div>
+        </div>
+        <div class="related-card">
+          <div class="related-icon">&#128260;</div>
+          <div class="related-name">New Relic Workflow Automation</div>
+          <div class="related-desc">アラートに基づく自動ワークフロー実行</div>
+        </div>
+        <div class="related-card">
+          <div class="related-icon">&#128065;&#65039;</div>
+          <div class="related-name">Amazon CloudWatch</div>
+          <div class="related-desc">AWS ネイティブの監視・ロールバック統合 (代替手段)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 参考リンク -->
+    <div class="section">
+      <h2>&#128218; 参考リンク</h2>
+      <div class="link-grid">
+        <a href="https://aws.amazon.com/about-aws/whats-new/2026/02/aws-appconfig-new-relic-for-automated-rollback/" target="_blank" rel="noopener noreferrer" class="link-card">
+          <span class="link-icon">&#128226;</span>
+          <span class="link-text">公式発表 - What's New</span>
+        </a>
+        <a href="https://github.com/aws-samples/sample-aws-appconfig-tick-extn-for-newrelic" target="_blank" rel="noopener noreferrer" class="link-card">
+          <span class="link-icon">&#128187;</span>
+          <span class="link-text">GitHub - New Relic Extension サンプル</span>
+        </a>
+        <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/getting-started-with-appconfig.html" target="_blank" rel="noopener noreferrer" class="link-card">
+          <span class="link-icon">&#128214;</span>
+          <span class="link-text">AWS AppConfig ユーザーガイド</span>
+        </a>
+        <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/monitoring-deployments.html" target="_blank" rel="noopener noreferrer" class="link-card">
+          <span class="link-icon">&#128202;</span>
+          <span class="link-text">デプロイの監視と自動ロールバック</span>
+        </a>
+        <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/working-with-appconfig-extensions-about.html" target="_blank" rel="noopener noreferrer" class="link-card">
+          <span class="link-icon">&#128268;</span>
+          <span class="link-text">AppConfig Extensions ドキュメント</span>
+        </a>
+        <a href="https://aws.amazon.com/systems-manager/pricing/" target="_blank" rel="noopener noreferrer" class="link-card">
+          <span class="link-icon">&#128176;</span>
+          <span class="link-text">AWS Systems Manager 料金</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section" style="border: 2px solid var(--aws-orange);">
+      <h2>&#128204; まとめ</h2>
+      <p style="font-size: 16px; line-height: 1.8;">
+        AWS AppConfig と <span class="highlight">New Relic Workflow Automation</span> の統合により、フィーチャーフラグおよび動的設定のデプロイ中に発生する問題を自動的に検知し、<span class="highlight">数秒以内にロールバック</span>を実行するクローズドループの自動化が実現しました。<span class="highlight">AT_DEPLOYMENT_TICK</span> アクションポイントを活用した Extension が段階的デプロイの各ステップで New Relic のアラート状態を監視し、エラーレートやレイテンシの上昇を検知した場合に即座にロールバックをトリガーします。New Relic を既に使用しているチームにとって、既存の監視ワークフローを活かしながらデプロイの安全性を大幅に向上させる機能です。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>&#128206; 出典:</p>
+      <p><a href="https://aws.amazon.com/about-aws/whats-new/2026/02/aws-appconfig-new-relic-for-automated-rollback/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/02/aws-appconfig-new-relic-for-automated-rollback/</a></p>
+      <p><a href="https://github.com/aws-samples/sample-aws-appconfig-tick-extn-for-newrelic" target="_blank" rel="noopener noreferrer">https://github.com/aws-samples/sample-aws-appconfig-tick-extn-for-newrelic</a></p>
+      <p><a href="https://docs.aws.amazon.com/appconfig/latest/userguide/working-with-appconfig-extensions-about.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/appconfig/latest/userguide/working-with-appconfig-extensions-about.html</a></p>
+      <p style="margin-top: 12px; color: rgba(213, 219, 219, 0.6);">Generated by AWS News Infographic Tool</p>
+    </footer>
+
+  </div>
+</body>
+</html>
