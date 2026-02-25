@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon Bedrock - AgentCore Gateway によるサーバーサイドツール実行</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <style>
+        :root {
+            --aws-squid-ink: #232F3E;
+            --aws-dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --aws-white: #FFFFFF;
+            --aws-light-gray: #D5DBDB;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background: var(--aws-squid-ink);
+            color: var(--aws-light-gray);
+            line-height: 1.8;
+            padding: 40px 20px;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 24px;
+            background: linear-gradient(135deg, var(--aws-dark-squid) 0%, var(--aws-squid-ink) 100%);
+            border-radius: 12px;
+            border: 3px solid var(--aws-orange);
+        }
+        .service-badge {
+            display: inline-block;
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            padding: 8px 24px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 16px;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--aws-white);
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+        .header .subtitle { font-size: 16px; color: var(--aws-light-gray); }
+        .release-date {
+            font-size: 14px;
+            color: var(--aws-orange);
+            margin-top: 16px;
+            font-weight: 600;
+        }
+
+        /* Sections */
+        .section {
+            background: var(--aws-dark-squid);
+            padding: 24px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .section h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--aws-orange);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section p {
+            font-size: 15px;
+            line-height: 1.8;
+        }
+
+        /* Before/After Comparison */
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        @media (max-width: 768px) { .comparison { grid-template-columns: 1fr; } }
+        .comparison-card {
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 5px solid;
+        }
+        .comparison-card.before {
+            background: rgba(209, 50, 18, 0.15);
+            border-left-color: var(--aws-red);
+        }
+        .comparison-card.after {
+            background: rgba(29, 129, 2, 0.15);
+            border-left-color: var(--aws-green);
+        }
+        .comparison-card h4 { font-size: 16px; margin-bottom: 12px; font-weight: 600; }
+        .comparison-card.before h4 { color: var(--aws-red); }
+        .comparison-card.after h4 { color: var(--aws-green); }
+        .comparison-card ul { list-style: none; padding-left: 0; }
+        .comparison-card li {
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .comparison-card.before li::before { content: "\2715"; position: absolute; left: 0; color: var(--aws-red); font-weight: bold; }
+        .comparison-card.after li::before { content: "\2713"; position: absolute; left: 0; color: var(--aws-green); font-weight: bold; }
+
+        /* Cards */
+        .card {
+            background: var(--aws-dark-squid);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            margin-bottom: 16px;
+        }
+        .card h3 {
+            font-size: 18px;
+            color: var(--aws-orange);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card p { font-size: 15px; color: var(--aws-light-gray); }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+        @media (max-width: 768px) { .stats-grid { grid-template-columns: 1fr; } }
+        .stats-card {
+            background: linear-gradient(135deg, var(--aws-orange) 0%, #FF6B00 100%);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            color: var(--aws-white);
+        }
+        .stats-card .number { font-size: 28px; font-weight: bold; line-height: 1; }
+        .stats-card .label { font-size: 13px; margin-top: 8px; }
+
+        .stats-card.purple {
+            background: linear-gradient(135deg, var(--aws-purple) 0%, #6A3FCC 100%);
+        }
+        .stats-card.teal {
+            background: linear-gradient(135deg, var(--aws-teal) 0%, #0088AA 100%);
+        }
+
+        /* Flow Diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+        .flow-step {
+            background: var(--aws-dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 120px;
+        }
+        .flow-arrow { color: var(--aws-orange); font-size: 24px; font-weight: bold; }
+
+        /* Use Cases */
+        .usecase {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.15) 0%, rgba(255, 153, 0, 0.05) 100%);
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            margin-bottom: 16px;
+        }
+        .usecase h3 { font-size: 18px; color: var(--aws-orange); margin-bottom: 8px; }
+        .usecase p { font-size: 15px; color: #EEEEEE; }
+
+        /* Highlight */
+        .highlight {
+            background: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        /* Links */
+        a { color: var(--aws-teal); text-decoration: none; }
+        a:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+        /* Mermaid */
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Comparison Table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            font-size: 14px;
+        }
+        .comparison-table th {
+            background: rgba(255, 153, 0, 0.2);
+            color: var(--aws-orange);
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--aws-orange);
+        }
+        .comparison-table td {
+            padding: 10px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--aws-light-gray);
+        }
+        .comparison-table tr:hover td {
+            background: rgba(255, 153, 0, 0.05);
+        }
+
+        /* Code Block */
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+        .code-title {
+            color: var(--aws-light-gray);
+        }
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+        }
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        /* Parameter Table */
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            font-size: 14px;
+        }
+        .param-table th {
+            background: rgba(140, 79, 255, 0.2);
+            color: var(--aws-purple);
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--aws-purple);
+        }
+        .param-table td {
+            padding: 8px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--aws-light-gray);
+        }
+        .param-table code {
+            background: rgba(255, 153, 0, 0.15);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: var(--aws-orange);
+        }
+
+        /* Pricing Card */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+        @media (max-width: 768px) { .pricing-grid { grid-template-columns: 1fr; } }
+        .pricing-card {
+            background: rgba(0, 161, 201, 0.1);
+            border: 2px solid rgba(0, 161, 201, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .pricing-card h4 { color: var(--aws-teal); font-size: 16px; margin-bottom: 8px; }
+        .pricing-card p { font-size: 14px; color: var(--aws-light-gray); }
+        .pricing-card ul { list-style: none; padding-left: 0; margin-top: 8px; }
+        .pricing-card li {
+            padding-left: 18px;
+            position: relative;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        .pricing-card li::before {
+            content: "\25B8";
+            position: absolute;
+            left: 0;
+            color: var(--aws-teal);
+        }
+
+        /* Limitations */
+        .limitation-list { list-style: none; padding-left: 0; margin-top: 12px; }
+        .limitation-list li {
+            padding: 10px 16px 10px 36px;
+            position: relative;
+            margin-bottom: 8px;
+            background: rgba(209, 50, 18, 0.08);
+            border-radius: 6px;
+            border-left: 3px solid rgba(209, 50, 18, 0.4);
+            font-size: 14px;
+        }
+        .limitation-list li::before {
+            content: "\26A0";
+            position: absolute;
+            left: 12px;
+            color: var(--aws-red);
+        }
+
+        .consideration-list { list-style: none; padding-left: 0; margin-top: 12px; }
+        .consideration-list li {
+            padding: 10px 16px 10px 36px;
+            position: relative;
+            margin-bottom: 8px;
+            background: rgba(255, 153, 0, 0.08);
+            border-radius: 6px;
+            border-left: 3px solid rgba(255, 153, 0, 0.4);
+            font-size: 14px;
+        }
+        .consideration-list li::before {
+            content: "\1F4A1";
+            position: absolute;
+            left: 10px;
+        }
+
+        /* Related Services */
+        .related-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+        @media (max-width: 768px) { .related-grid { grid-template-columns: 1fr; } }
+        .related-card {
+            background: rgba(140, 79, 255, 0.1);
+            border: 1px solid rgba(140, 79, 255, 0.3);
+            border-radius: 8px;
+            padding: 14px;
+        }
+        .related-card h4 { color: var(--aws-purple); font-size: 14px; margin-bottom: 6px; }
+        .related-card p { font-size: 13px; color: var(--aws-light-gray); }
+
+        /* Footer */
+        footer {
+            margin-top: 32px;
+            padding: 24px;
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            border-top: 3px solid var(--aws-orange);
+        }
+        footer h3 { font-size: 18px; color: var(--aws-orange); margin-bottom: 16px; }
+        footer a {
+            display: block;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: rgba(255, 153, 0, 0.1);
+            border-radius: 6px;
+            word-break: break-all;
+        }
+        .footer-note {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #333;
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            mermaid.initialize({
+                startOnLoad: true,
+                theme: 'base',
+                themeVariables: {
+                    primaryColor: '#FF9900',
+                    primaryTextColor: '#232F3E',
+                    primaryBorderColor: '#FF9900',
+                    lineColor: '#FF9900',
+                    secondaryColor: '#F5F5F5',
+                    tertiaryColor: '#FAFAFA',
+                    background: '#FFFFFF',
+                    mainBkg: '#FFF3E0',
+                    nodeBorder: '#FF9900',
+                    clusterBkg: '#FFF8E1',
+                    clusterBorder: '#FF9900',
+                    edgeLabelBackground: '#FFFFFF',
+                    textColor: '#232F3E'
+                }
+            });
+            hljs.highlightAll();
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <div class="header">
+            <div class="service-badge">Amazon Bedrock</div>
+            <h1>🔌 AgentCore Gateway による<br/>サーバーサイドツール実行</h1>
+            <div class="subtitle">Responses API + AgentCore Gateway で、ツールの検出から実行まで単一 API コールで完結</div>
+            <div class="release-date">📅 リリース日: 2026 年 2 月 24 日</div>
+        </div>
+
+        <!-- Overview -->
+        <div class="section">
+            <h2>📊 概要</h2>
+            <p>Amazon Bedrock の Responses API が <span class="highlight">AgentCore Gateway</span> を統合したサーバーサイドツール実行をサポート開始しました。AgentCore Gateway の ARN をツールコネクタとして指定するだけで、Amazon Bedrock がゲートウェイから利用可能なツールを<span class="highlight">自動検出</span>し、推論中にモデルへ提示し、モデルが選択したツールを<span class="highlight">サーバーサイドで実行</span>します。これらの処理はすべて<span class="highlight">単一の API コール</span>内で完結します。</p>
+            <p style="margin-top: 12px; font-size: 14px; color: #aaa;">2026 年 1 月 29 日にリリースされたサーバーサイドカスタムツール (Lambda 関数ベース) に続く機能拡張であり、AgentCore Gateway の MCP サーバーコネクタタイプを活用することで、より高度なツール管理と検出機能を提供します。</p>
+
+            <div class="comparison">
+                <div class="comparison-card before">
+                    <h4>⚠️ アップデート前</h4>
+                    <ul>
+                        <li>開発者がツール呼び出しループを構築・維持する必要があった</li>
+                        <li>ツールの検出、選択、実行、結果注入をすべてクライアント側で実装</li>
+                        <li>複数のツールソース統合に個別の接続管理が必要</li>
+                        <li>クライアントとモデル間で複数回のラウンドトリップが発生</li>
+                    </ul>
+                </div>
+                <div class="comparison-card after">
+                    <h4>✨ アップデート後</h4>
+                    <ul>
+                        <li>AgentCore Gateway ARN を指定するだけで Bedrock がツール検出から実行まで自動処理</li>
+                        <li>クライアントサイドのオーケストレーションループが不要に</li>
+                        <li>単一の API コール内で複数ツール呼び出しが完結</li>
+                        <li>ツール実行結果がリアルタイムでストリーミング返却</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="section">
+            <h2>📈 数字で見るアップデート効果</h2>
+            <div class="stats-grid">
+                <div class="stats-card">
+                    <div class="number">1 API</div>
+                    <div class="label">コールで全処理完結</div>
+                </div>
+                <div class="stats-card purple">
+                    <div class="number">MCP</div>
+                    <div class="label">互換プロトコル対応</div>
+                </div>
+                <div class="stats-card teal">
+                    <div class="number">4+</div>
+                    <div class="label">ターゲットタイプ<br/>Lambda / API GW / OpenAPI / MCP</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="section">
+            <h2>🏗️ アーキテクチャ図</h2>
+            <p>クライアントが Responses API にリクエストを送信した後、Amazon Bedrock がサーバーサイドで AgentCore Gateway を通じてツールの検出、モデルによるツール選択、ツール実行、結果注入を自動的に処理するフローです。</p>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+sequenceDiagram
+    participant Client as 👤 クライアント
+    participant Bedrock as 🧠 Amazon Bedrock<br/>Responses API
+    participant Gateway as 🔌 AgentCore Gateway
+    participant MCP as 🛠️ MCP ツール群
+    participant Model as 🤖 モデル
+
+    Client->>Bedrock: 1. Responses API リクエスト<br/>Gateway ARN をツールコネクタに指定
+    Bedrock->>Gateway: 2. ツール自動検出
+    Gateway-->>Bedrock: 3. 利用可能なツール一覧
+    Bedrock->>Model: 4. プロンプト + ツール定義で推論
+    Model-->>Bedrock: 5. ツール呼び出しを選択
+    Bedrock->>Gateway: 6. ツール実行リクエスト
+    Gateway->>MCP: 7. MCP プロトコルで実行
+
+    alt 単一ツール呼び出し
+        MCP-->>Gateway: 8. ツール結果
+        Gateway-->>Bedrock: 9. 結果返却
+    else 複数ツール呼び出し
+        MCP-->>Gateway: 8a. ツール結果 A
+        Gateway-->>Bedrock: 9a. 結果返却
+        Bedrock->>Gateway: 9b. 追加ツール実行
+        Gateway->>MCP: 9c. MCP プロトコルで実行
+        MCP-->>Gateway: 9d. ツール結果 B
+        Gateway-->>Bedrock: 9e. 結果返却
+    end
+
+    Bedrock->>Model: 10. ツール結果を含めて最終推論
+    Model-->>Bedrock: 11. 最終レスポンス生成
+    Bedrock-->>Client: 12. レスポンスをリアルタイムストリーミング
+                </pre>
+            </div>
+        </div>
+
+        <!-- Simplified Flow -->
+        <div class="section">
+            <h2>⚡ 処理フロー</h2>
+            <div class="flow-diagram">
+                <div class="flow-step">📱 API リクエスト<br/><small>Gateway ARN 指定</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-step">🔍 ツール自動検出<br/><small>AgentCore Gateway</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-step">🤖 モデル推論<br/><small>ツール選択</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-step">⚙️ サーバーサイド<br/><small>ツール実行</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-step">📤 ストリーミング<br/><small>結果返却</small></div>
+            </div>
+        </div>
+
+        <!-- Key Features -->
+        <div class="section">
+            <h2>🎯 主要機能</h2>
+            <div class="card">
+                <h3>🔍 自動ツール検出</h3>
+                <p>AgentCore Gateway ARN を指定するだけで、ゲートウェイに登録されたすべてのツールを自動検出。ツール定義をクライアント側で個別に管理する必要がなく、セマンティック検索によるコンテキストに応じた最適なツール選択をサポートします。</p>
+            </div>
+            <div class="card">
+                <h3>⚙️ サーバーサイドツール実行</h3>
+                <p>Amazon Bedrock がモデルのツール選択に基づいてサーバーサイドでツールを実行。クライアントサイドのオーケストレーションループが不要になり、単一の会話ターン内で複数のツール呼び出しをサポートします。</p>
+            </div>
+            <div class="card">
+                <h3>🔌 MCP サーバーコネクタタイプ</h3>
+                <p>ツール定義に <code>type: "mcp"</code> を指定し、<code>connector_id</code> に Gateway ARN を設定。Model Context Protocol 互換のツール接続を提供し、Lambda、API Gateway、OpenAPI スキーマ、MCP サーバーなど複数のターゲットタイプをサポートします。</p>
+            </div>
+            <div class="card">
+                <h3>📡 リアルタイムストリーミング</h3>
+                <p>ツール実行結果がリアルタイムでクライアントにストリーミング。<code>stream: true</code> を指定することでストリーミングレスポンスを受信可能で、エージェント型ワークフローでの応答性が向上します。</p>
+            </div>
+        </div>
+
+        <!-- Technical Specs -->
+        <div class="section">
+            <h2>🔧 技術仕様</h2>
+            <h3 style="color: var(--aws-white); margin-bottom: 12px; font-size: 17px;">リクエストパラメータ</h3>
+            <table class="param-table">
+                <thead>
+                    <tr>
+                        <th>パラメータ</th>
+                        <th>型</th>
+                        <th>必須</th>
+                        <th>説明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>type</code></td>
+                        <td>string</td>
+                        <td>Yes</td>
+                        <td><code>"mcp"</code> を指定</td>
+                    </tr>
+                    <tr>
+                        <td><code>server_label</code></td>
+                        <td>string</td>
+                        <td>Yes</td>
+                        <td>リクエスト内でのツールコネクタの一意識別子</td>
+                    </tr>
+                    <tr>
+                        <td><code>connector_id</code></td>
+                        <td>string</td>
+                        <td>Yes</td>
+                        <td>AgentCore Gateway の ARN</td>
+                    </tr>
+                    <tr>
+                        <td><code>server_description</code></td>
+                        <td>string</td>
+                        <td>No</td>
+                        <td>ゲートウェイが提供するツールの説明</td>
+                    </tr>
+                    <tr>
+                        <td><code>require_approval</code></td>
+                        <td>string</td>
+                        <td>Yes</td>
+                        <td><code>"never"</code> を指定</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Code Sample: API Request -->
+        <div class="section">
+            <h2>💻 設定例</h2>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Python</span>
+                    <span class="code-title">Responses API でツールコネクタを指定</span>
+                </div>
+                <pre><code class="language-python">from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://bedrock-runtime.us-west-2.amazonaws.com/v1"
+)
+
+response = client.responses.create(
+    model="openai.gpt-oss-120b",
+    stream=True,
+    tools=[
+        {
+            "type": "mcp",
+            "server_label": "agentcore_tools",
+            "connector_id": "arn:aws:bedrock-agentcore:us-west-2:123456789012:gateway/my-tools-gateway",
+            "server_description": "AgentCore Gateway providing custom tools",
+            "require_approval": "never"
+        }
+    ],
+    input=[
+        {
+            "type": "message",
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "データベースから最新の売上レポートを取得してください"
+                }
+            ]
+        }
+    ]
+)
+
+for event in response:
+    print(event)</code></pre>
+            </div>
+
+            <h3 style="color: var(--aws-white); margin-top: 24px; margin-bottom: 12px; font-size: 17px;">🔐 IAM 権限設定</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">JSON</span>
+                    <span class="code-title">Bedrock 実行ロールの IAM ポリシー</span>
+                </div>
+                <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:InvokeGateway"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:us-west-2:123456789012:gateway/my-gateway"
+    }
+  ]
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- Lambda vs AgentCore Comparison -->
+        <div class="section">
+            <h2>⚖️ Lambda 統合との比較</h2>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>項目</th>
+                        <th>Lambda 統合</th>
+                        <th>AgentCore Gateway 統合</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>ツール指定方法</td>
+                        <td>Lambda 関数 ARN</td>
+                        <td>AgentCore Gateway ARN</td>
+                    </tr>
+                    <tr>
+                        <td>ツール検出</td>
+                        <td>手動定義</td>
+                        <td><span class="highlight">自動検出</span></td>
+                    </tr>
+                    <tr>
+                        <td>ツール管理</td>
+                        <td>個別管理</td>
+                        <td><span class="highlight">ゲートウェイで一元管理</span></td>
+                    </tr>
+                    <tr>
+                        <td>サポートターゲット</td>
+                        <td>Lambda 関数のみ</td>
+                        <td><span class="highlight">Lambda, API GW, OpenAPI, MCP</span></td>
+                    </tr>
+                    <tr>
+                        <td>認証</td>
+                        <td>IAM</td>
+                        <td><span class="highlight">IAM + OAuth フロー対応</span></td>
+                    </tr>
+                    <tr>
+                        <td>サードパーティ統合</td>
+                        <td>個別実装</td>
+                        <td><span class="highlight">Salesforce, Slack, Jira 等 1 クリック統合</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Setup Steps -->
+        <div class="section">
+            <h2>🛠️ セットアップ手順</h2>
+            <p style="margin-bottom: 16px;">AgentCore Gateway によるサーバーサイドツール実行を利用するための 3 ステップです。</p>
+            <div class="card">
+                <h3>1️⃣ AgentCore Gateway の作成とツール設定</h3>
+                <p>AgentCore Gateway を作成し、ツールターゲットを設定します。Salesforce、Slack、Jira、Asana、Zendesk などのサードパーティツールは 1 クリックで統合可能です。</p>
+                <div class="code-block" style="margin-top: 12px;">
+                    <div class="code-header">
+                        <span class="code-lang">Bash</span>
+                        <span class="code-title">Gateway 作成コマンド</span>
+                    </div>
+                    <pre><code class="language-bash">aws bedrock-agentcore create-gateway \
+  --gateway-name my-tools-gateway \
+  --description "AI エージェント用ツールゲートウェイ" \
+  --region us-west-2</code></pre>
+                </div>
+            </div>
+            <div class="card">
+                <h3>2️⃣ IAM 権限の設定</h3>
+                <p>Bedrock の実行ロールに <code>bedrock-agentcore:InvokeGateway</code> 権限を付与します。Gateway は IAM 認証が設定されている必要があります。</p>
+            </div>
+            <div class="card">
+                <h3>3️⃣ Responses API でツールコネクタを指定</h3>
+                <p>Responses API リクエストで AgentCore Gateway ARN を MCP サーバーコネクタとして指定するだけです。Amazon Bedrock が自動的にゲートウェイからツールを検出し、モデルのツール選択に基づいてサーバーサイドで実行します。</p>
+            </div>
+            <h3 style="color: var(--aws-white); margin-top: 16px; margin-bottom: 8px; font-size: 15px;">前提条件</h3>
+            <ul style="list-style: none; padding-left: 0;">
+                <li style="padding-left: 20px; position: relative; margin-bottom: 6px; font-size: 14px;"><span style="position: absolute; left: 0; color: var(--aws-green);">✓</span> AWS アカウントと Amazon Bedrock へのアクセス権限</li>
+                <li style="padding-left: 20px; position: relative; margin-bottom: 6px; font-size: 14px;"><span style="position: absolute; left: 0; color: var(--aws-green);">✓</span> AgentCore Gateway が作成・設定済みであること</li>
+                <li style="padding-left: 20px; position: relative; margin-bottom: 6px; font-size: 14px;"><span style="position: absolute; left: 0; color: var(--aws-green);">✓</span> Gateway に IAM 認証が設定されていること</li>
+                <li style="padding-left: 20px; position: relative; margin-bottom: 6px; font-size: 14px;"><span style="position: absolute; left: 0; color: var(--aws-green);">✓</span> Bedrock 実行ロールに <code style="background: rgba(255, 153, 0, 0.15); padding: 2px 6px; border-radius: 3px; font-size: 13px; color: var(--aws-orange);">bedrock-agentcore:InvokeGateway</code> 権限が付与されていること</li>
+            </ul>
+        </div>
+
+        <!-- Benefits -->
+        <div class="section">
+            <h2>✨ メリット</h2>
+            <div class="comparison" style="margin-top: 0;">
+                <div style="padding: 0;">
+                    <h3 style="color: var(--aws-teal); font-size: 17px; margin-bottom: 12px;">💼 ビジネス面</h3>
+                    <div class="card">
+                        <h3 style="font-size: 15px;">💰 開発コストの削減</h3>
+                        <p style="font-size: 14px;">クライアントサイドのツールオーケストレーションコードが不要になり、開発・保守コストを削減</p>
+                    </div>
+                    <div class="card">
+                        <h3 style="font-size: 15px;">🚀 市場投入の迅速化</h3>
+                        <p style="font-size: 14px;">数週間のカスタムコード開発が不要になり、エージェントアプリケーションの構築を加速</p>
+                    </div>
+                    <div class="card">
+                        <h3 style="font-size: 15px;">🔐 セキュリティの強化</h3>
+                        <p style="font-size: 14px;">IAM 認証と Gateway ポリシーによる包括的なアクセス制御</p>
+                    </div>
+                </div>
+                <div style="padding: 0;">
+                    <h3 style="color: var(--aws-purple); font-size: 17px; margin-bottom: 12px;">⚙️ 技術面</h3>
+                    <div class="card">
+                        <h3 style="font-size: 15px;">⚡ レイテンシーの削減</h3>
+                        <p style="font-size: 14px;">クライアントとモデル間のラウンドトリップが排除され、応答時間が短縮</p>
+                    </div>
+                    <div class="card">
+                        <h3 style="font-size: 15px;">🎯 アーキテクチャのシンプル化</h3>
+                        <p style="font-size: 14px;">単一の API コールでツール検出、選択、実行、結果注入が完結</p>
+                    </div>
+                    <div class="card">
+                        <h3 style="font-size: 15px;">🔗 フレームワーク互換性</h3>
+                        <p style="font-size: 14px;">CrewAI、LangGraph、LlamaIndex、Strands Agents など主要フレームワーク対応</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Limitations -->
+        <div class="section">
+            <h2>⚠️ 制限事項・注意点</h2>
+            <h3 style="color: var(--aws-red); font-size: 16px; margin-bottom: 8px;">制限事項</h3>
+            <ul class="limitation-list">
+                <li>AgentCore Gateway の事前セットアップが必要 (ゲートウェイ作成、ターゲット設定、認証設定)</li>
+                <li>Bedrock は IAM 認証が設定された AgentCore Gateway のみサポート</li>
+                <li>Responses API のみで利用可能 (Converse API や Chat Completions API では利用不可)</li>
+                <li><code style="background: rgba(255, 153, 0, 0.15); padding: 2px 4px; border-radius: 3px; font-size: 13px; color: var(--aws-orange);">require_approval</code> パラメータは <code style="background: rgba(255, 153, 0, 0.15); padding: 2px 4px; border-radius: 3px; font-size: 13px; color: var(--aws-orange);">"never"</code> のみサポート</li>
+            </ul>
+            <h3 style="color: var(--aws-orange); font-size: 16px; margin-top: 20px; margin-bottom: 8px;">考慮すべき点</h3>
+            <ul class="consideration-list">
+                <li>ターゲットの実行時間がツール実行のレイテンシーに影響</li>
+                <li>登録ツール数が多い場合、ツール検出とモデルへの提示に影響する可能性</li>
+                <li>AgentCore Gateway の料金が別途発生するため、コスト計画に含める必要あり</li>
+                <li>既存 Lambda ベースからの移行には Gateway 設定と IAM 権限の更新が必要</li>
+            </ul>
+        </div>
+
+        <!-- Use Cases -->
+        <div class="section">
+            <h2>💡 ユースケース</h2>
+            <div class="usecase">
+                <h3>🗄️ マルチステップのエージェント型ワークフロー</h3>
+                <p>AI エージェントがユーザーの質問に対して、データベースクエリ、外部 API 呼び出し、計算処理など複数のツールを組み合わせて回答を生成。Amazon Bedrock がデータベースクエリツールと CRM ツールを自動的に検出・実行し、単一の API コール内でマルチステップの処理を完結します。</p>
+            </div>
+            <div class="usecase">
+                <h3>🔍 外部ツールを活用した RAG ワークフロー</h3>
+                <p>ナレッジベース検索に加えて、外部の検索エンジンやドキュメント管理システムからリアルタイムで情報を取得。モデルが自動的に Web 検索ツールとドキュメント検索ツールを選択・実行し、最新の情報をリアルタイムで取得します。</p>
+            </div>
+            <div class="usecase">
+                <h3>🏢 SaaS ツール統合によるビジネス自動化</h3>
+                <p>Salesforce、Slack、Jira などのビジネスツールを AI エージェントから統合的に操作。AgentCore Gateway の 1 クリック統合機能を活用して、単一の API コールでクロスプラットフォームの業務自動化を実現します。カスタム統合コードの開発が不要になり、数週間の開発期間を短縮します。</p>
+            </div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="section">
+            <h2>💰 料金情報</h2>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <h4>🧠 Amazon Bedrock Responses API</h4>
+                    <ul>
+                        <li>モデル使用料: トークン数に応じた従量課金</li>
+                    </ul>
+                </div>
+                <div class="pricing-card">
+                    <h4>🔌 AgentCore Gateway</h4>
+                    <ul>
+                        <li>Gateway 使用料: リクエスト数に応じた従量課金</li>
+                        <li>ターゲット実行料: Lambda、API Gateway 等の料金が別途適用</li>
+                    </ul>
+                </div>
+                <div class="pricing-card">
+                    <h4>📡 データ転送</h4>
+                    <ul>
+                        <li>リージョン間のデータ転送が発生する場合に適用</li>
+                    </ul>
+                </div>
+                <div class="pricing-card">
+                    <h4>🔐 IAM</h4>
+                    <ul>
+                        <li>追加料金なし</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Region -->
+        <div class="section">
+            <h2>🌏 利用可能リージョン</h2>
+            <p>Amazon Bedrock Responses API と Amazon Bedrock AgentCore Gateway の両方が利用可能なすべての AWS リージョンで一般提供されています。</p>
+        </div>
+
+        <!-- Related Services -->
+        <div class="section">
+            <h2>🔗 関連サービス・機能</h2>
+            <div class="related-grid">
+                <div class="related-card">
+                    <h4>🧠 Bedrock Responses API</h4>
+                    <p>OpenAI API 互換のステートフル会話管理 API</p>
+                </div>
+                <div class="related-card">
+                    <h4>🔌 AgentCore Gateway</h4>
+                    <p>MCP 互換のツール管理・検出・実行基盤</p>
+                </div>
+                <div class="related-card">
+                    <h4>⚡ サーバーサイドカスタムツール</h4>
+                    <p>Lambda 関数ベースのサーバーサイドツール実行 (2026/01/29)</p>
+                </div>
+                <div class="related-card">
+                    <h4>💬 Bedrock Converse API</h4>
+                    <p>クライアントサイドツール使用をサポートする会話 API</p>
+                </div>
+                <div class="related-card">
+                    <h4>⚙️ AWS Lambda</h4>
+                    <p>AgentCore Gateway のターゲットとして使用可能なサーバーレス基盤</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <h3>📎 出典・参考リンク</h3>
+            <a href="https://aws.amazon.com/about-aws/whats-new/2026/02/amazon-bedrock-server-side-tool-execution-agentcore-gateway/" target="_blank">🔗 公式発表 (What's New)</a>
+            <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/tool-use.html" target="_blank">📖 Amazon Bedrock ドキュメント - ツール使用</a>
+            <a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html" target="_blank">📖 AgentCore Gateway ドキュメント</a>
+            <a href="https://aws.amazon.com/about-aws/whats-new/2026/01/amazon-bedrock-server-side-custom-tools-responses-api/" target="_blank">🔗 関連発表 - サーバーサイドカスタムツール</a>
+            <a href="https://aws.amazon.com/bedrock/pricing/" target="_blank">💰 Amazon Bedrock 料金ページ</a>
+            <a href="https://aws.amazon.com/bedrock/agentcore/pricing/" target="_blank">💰 AgentCore Gateway 料金ページ</a>
+            <p class="footer-note">🤖 Generated with Claude Code | 📅 2026-02-25</p>
+        </footer>
+    </div>
+</body>
+</html>
