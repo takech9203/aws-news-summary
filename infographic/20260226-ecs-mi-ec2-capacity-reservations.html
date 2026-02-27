@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon ECS Managed Instances - EC2 Capacity Reservations との統合</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <style>
+        :root {
+            --squid-ink: #232F3E;
+            --aws-orange: #FF9900;
+            --smile-orange: #FFAD33;
+            --text-primary: #FFFFFF;
+            --text-secondary: #D5DBDB;
+            --text-muted: #AAAAAA;
+            --card-bg: #2D3A4A;
+            --dark-squid: #1A242F;
+            --border-color: #3D4A5A;
+            --teal: #00A1C9;
+            --green: #2ECC71;
+            --red: #E74C3C;
+            --purple: #8C4FFF;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background-color: var(--squid-ink);
+            color: var(--text-secondary);
+            line-height: 1.8;
+            font-size: 16px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-bottom: 30px;
+            border-bottom: 3px solid var(--aws-orange);
+        }
+
+        .service-badge {
+            display: inline-block;
+            background-color: var(--aws-orange);
+            color: var(--squid-ink);
+            padding: 5px 18px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+
+        .release-date {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            margin-bottom: 20px;
+            padding-left: 15px;
+            border-left: 4px solid var(--aws-orange);
+        }
+
+        .overview-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        .overview-text {
+            font-size: 16px;
+            line-height: 1.9;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+            .features-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr !important;
+            }
+            .strategy-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
+        .comparison-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .comparison-card.before {
+            border-top: 4px solid var(--red);
+        }
+
+        .comparison-card.after {
+            border-top: 4px solid var(--green);
+        }
+
+        .comparison-label {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+
+        .comparison-card.before .comparison-label {
+            color: var(--red);
+        }
+
+        .comparison-card.after .comparison-label {
+            color: var(--green);
+        }
+
+        .comparison-list {
+            list-style: none;
+        }
+
+        .comparison-list li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            font-size: 14px;
+        }
+
+        .comparison-card.before .comparison-list li::before {
+            content: "x";
+            position: absolute;
+            left: 0;
+            color: var(--red);
+            font-weight: bold;
+        }
+
+        .comparison-card.after .comparison-list li::before {
+            content: "v";
+            position: absolute;
+            left: 0;
+            color: var(--green);
+            font-weight: bold;
+        }
+
+        .diagram-container {
+            background-color: #FFFFFF;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            border-radius: 12px;
+            padding: 25px;
+            overflow-x: auto;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        .diagram-caption {
+            margin-top: 16px;
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .feature-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            border-left: 4px solid var(--aws-orange);
+        }
+
+        .feature-icon {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .feature-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--aws-orange);
+        }
+
+        .feature-description {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+
+        .strategy-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .strategy-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border-top: 4px solid var(--aws-orange);
+        }
+
+        .strategy-icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .strategy-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+
+        .strategy-desc {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .strategy-usecase {
+            font-size: 12px;
+            color: var(--teal);
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .spec-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            font-size: 14px;
+        }
+
+        .spec-table th {
+            background-color: rgba(255, 153, 0, 0.2);
+            color: var(--aws-orange);
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 700;
+            border-bottom: 2px solid var(--aws-orange);
+        }
+
+        .spec-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .spec-table tr:hover td {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        .usecase-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid var(--smile-orange);
+        }
+
+        .usecase-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: var(--aws-orange);
+        }
+
+        .usecase-scenario {
+            font-size: 13px;
+            color: var(--teal);
+            margin-bottom: 10px;
+        }
+
+        .usecase-description {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .pricing-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 16px;
+        }
+
+        .pricing-note {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 12px;
+            font-style: italic;
+        }
+
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+
+        .flow-step {
+            background: var(--dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 100px;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .flow-arrow {
+            color: var(--aws-orange);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+
+        .code-title {
+            color: var(--text-muted);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        .merit-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .merit-card h4 {
+            color: var(--aws-orange);
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+
+        .merit-list {
+            list-style: none;
+        }
+
+        .merit-list li {
+            padding: 6px 0;
+            padding-left: 24px;
+            position: relative;
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+
+        .merit-list li::before {
+            content: "v";
+            position: absolute;
+            left: 0;
+            color: var(--green);
+            font-weight: bold;
+        }
+
+        .demerit-list li::before {
+            content: "!";
+            color: var(--aws-orange) !important;
+        }
+
+        .region-badge {
+            display: inline-block;
+            background: rgba(0, 161, 201, 0.15);
+            border: 1px solid rgba(0, 161, 201, 0.4);
+            color: var(--teal);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .highlight {
+            background-color: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        .related-list {
+            list-style: none;
+        }
+
+        .related-list li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+
+        .related-list li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+
+        .related-list .related-name {
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        footer {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .source-links {
+            list-style: none;
+            margin-bottom: 16px;
+        }
+
+        .source-links li {
+            margin-bottom: 6px;
+        }
+
+        .source-link {
+            color: var(--teal);
+            text-decoration: none;
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .source-link:hover {
+            color: var(--smile-orange);
+            text-decoration: underline;
+        }
+
+        .footer-note {
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <span class="service-badge">Amazon ECS</span>
+            <h1>Amazon ECS Managed Instances<br>EC2 Capacity Reservations との統合</h1>
+            <p class="release-date">2026 年 2 月 26 日</p>
+        </header>
+
+        <!-- 概要セクション -->
+        <section class="section">
+            <h2 class="section-title">概要</h2>
+            <div class="overview-card">
+                <p class="overview-text">
+                    Amazon ECS Managed Instances が Amazon EC2 Capacity Reservations と統合され、予約済みキャパシティをコンテナワークロードに活用できるようになりました。キャパシティプロバイダーの <span class="highlight">capacityOptionType = reserved</span> を設定することで、既存の <span class="highlight">spot</span> や <span class="highlight">on-demand</span> に加えて Capacity Reservations を使用可能になり、可用性とコスト効率のバランスを実現できます。
+                </p>
+            </div>
+
+            <div class="comparison-grid">
+                <div class="comparison-card before">
+                    <div class="comparison-label">Before - アップデート前の課題</div>
+                    <ul class="comparison-list">
+                        <li>キャパシティプロバイダーではオンデマンドまたはスポットのみ選択可能</li>
+                        <li>確実なキャパシティ確保には ASG ベースのプロバイダーを自前管理が必要</li>
+                        <li>予約済みとオンデマンドのフォールバックを手動管理</li>
+                        <li>Capacity Reservations の投資を最大限に活用困難</li>
+                    </ul>
+                </div>
+                <div class="comparison-card after">
+                    <div class="comparison-label">After - アップデート後の改善</div>
+                    <ul class="comparison-list">
+                        <li>capacityOptionType=reserved で Capacity Reservations を直接利用可能</li>
+                        <li>3 つの予約戦略で柔軟なキャパシティ管理を実現</li>
+                        <li>予約からオンデマンドへの自動フォールバック</li>
+                        <li>すべてのインフラ管理は引き続き ECS が自動実行</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- 統計情報 -->
+        <section class="section">
+            <h2 class="section-title">数字で見るアップデート</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">3</div>
+                    <div class="stat-label">予約戦略オプション</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">ALL</div>
+                    <div class="stat-label">AWS リージョンで利用可能</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">$0</div>
+                    <div class="stat-label">統合に対する追加料金</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- アーキテクチャ図 -->
+        <section class="section">
+            <h2 class="section-title">アーキテクチャ図</h2>
+            <div class="diagram-container">
+                <pre class="mermaid">
+flowchart TD
+    subgraph ECSCluster["Amazon ECS クラスター"]
+        direction TB
+        Service["ECS サービス"]
+
+        subgraph MICP["Managed Instances キャパシティプロバイダー"]
+            direction TB
+            Config["capacityOptionType = reserved"]
+
+            subgraph Strategies["予約戦略"]
+                direction LR
+                Only["reservations-only"]
+                First["reservations-first"]
+                Excluded["reservations-excluded"]
+                Only ~~~ First ~~~ Excluded
+            end
+        end
+    end
+
+    subgraph EC2["Amazon EC2"]
+        direction TB
+        subgraph CRG["Capacity Reservation グループ"]
+            direction LR
+            CR1["Capacity Reservation 1"]
+            CR2["Capacity Reservation 2"]
+            CR1 ~~~ CR2
+        end
+
+        subgraph OnDemand["オンデマンドキャパシティ"]
+            OD["オンデマンドインスタンス"]
+        end
+    end
+
+    Service --> MICP
+    Config --> Strategies
+    Only -->|"予約キャパシティのみ"| CRG
+    First -->|"予約優先"| CRG
+    First -.->|"フォールバック"| OnDemand
+    Excluded -->|"予約を使用しない"| OnDemand
+
+    classDef cluster fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef service fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef config fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef strategy fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef reserved fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef ondemand fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class ECSCluster cluster
+    class Service service
+    class MICP cluster
+    class Config config
+    class Strategies cluster
+    class Only,First,Excluded strategy
+    class EC2 cluster
+    class CRG cluster
+    class CR1,CR2 reserved
+    class OnDemand cluster
+    class OD ondemand
+                </pre>
+            </div>
+            <p class="diagram-caption">
+                ECS サービスが Managed Instances キャパシティプロバイダーを通じて EC2 インスタンスを起動する際、capacityOptionType=reserved の設定と予約戦略に基づいて Capacity Reservations のキャパシティを使用します。reservations-first 戦略では、予約キャパシティが不足した場合にオンデマンドインスタンスへ自動的にフォールバックします。
+            </p>
+        </section>
+
+        <!-- 主要機能 -->
+        <section class="section">
+            <h2 class="section-title">主要機能</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">&#128274;</div>
+                    <div class="feature-title">Capacity Reservations タイプの追加</div>
+                    <div class="feature-description">capacityOptionType に新しい値 RESERVED が追加。既存の SPOT と ON_DEMAND に加え、3 つ目のキャパシティオプションとして利用可能。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#128260;</div>
+                    <div class="feature-title">予約戦略の選択</div>
+                    <div class="feature-description">reservations-only、reservations-first、reservations-excluded の 3 つの予約戦略で、柔軟なキャパシティ管理を実現。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#128194;</div>
+                    <div class="feature-title">Capacity Reservation グループの指定</div>
+                    <div class="feature-description">キャパシティプロバイダーに Capacity Reservation グループを関連付け、グループ内の複数の Reservations をまとめて管理。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">&#9881;&#65039;</div>
+                    <div class="feature-title">フルマネージドの継続</div>
+                    <div class="feature-description">Capacity Reservations を使用する場合も、プロビジョニング、スケーリング、最適化、AZ 分散、ビンパッキング等は ECS が自動実行。</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 予約戦略の詳細 -->
+        <section class="section">
+            <h2 class="section-title">予約戦略の詳細</h2>
+            <div class="strategy-grid">
+                <div class="strategy-card">
+                    <div class="strategy-icon">&#128274;</div>
+                    <div class="strategy-name">reservations-only</div>
+                    <div class="strategy-desc">予約キャパシティでのみインスタンスを起動。最大限の予測可能性を確保。</div>
+                    <div class="strategy-usecase">キャパシティの確保が最優先のワークロード</div>
+                </div>
+                <div class="strategy-card">
+                    <div class="strategy-icon">&#128260;</div>
+                    <div class="strategy-name">reservations-first</div>
+                    <div class="strategy-desc">予約を優先し、不足時はオンデマンドにフォールバック。</div>
+                    <div class="strategy-usecase">高可用性と柔軟性の両立が必要なワークロード</div>
+                </div>
+                <div class="strategy-card">
+                    <div class="strategy-icon">&#10060;</div>
+                    <div class="strategy-name">reservations-excluded</div>
+                    <div class="strategy-desc">キャパシティプロバイダーが予約を使用しないよう設定。</div>
+                    <div class="strategy-usecase">予約が他の用途に割り当てられている場合</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 技術仕様 -->
+        <section class="section">
+            <h2 class="section-title">技術仕様</h2>
+
+            <h3 style="color: var(--text-primary); font-size: 16px; margin-bottom: 12px;">キャパシティオプションタイプの比較</h3>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>オプション</th>
+                        <th>説明</th>
+                        <th>ユースケース</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="highlight">ON_DEMAND</span></td>
+                        <td>オンデマンド EC2 インスタンスを使用</td>
+                        <td>一般的なワークロード</td>
+                    </tr>
+                    <tr>
+                        <td><span class="highlight">SPOT</span></td>
+                        <td>スポットインスタンスを使用</td>
+                        <td>中断許容可能なワークロード</td>
+                    </tr>
+                    <tr>
+                        <td><span class="highlight">RESERVED</span></td>
+                        <td>Capacity Reservations を使用</td>
+                        <td>ミッションクリティカルなワークロード</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="color: var(--text-primary); font-size: 16px; margin-top: 28px; margin-bottom: 12px;">API 変更履歴</h3>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>日付</th>
+                        <th>サービス</th>
+                        <th>変更内容</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>2026/02/26</td>
+                        <td>Amazon EC2 Container Service</td>
+                        <td>4 updated api methods - CreateCapacityProvider と UpdateCapacityProvider API に新しい capacityOptionType 値 RESERVED と capacityReservations フィールドを導入</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- 設定方法 -->
+        <section class="section">
+            <h2 class="section-title">設定方法</h2>
+
+            <div class="overview-card" style="margin-bottom: 20px;">
+                <h3 style="color: var(--text-primary); font-size: 16px; margin-bottom: 12px;">前提条件</h3>
+                <ul class="merit-list">
+                    <li>Amazon ECS クラスターが作成済みであること</li>
+                    <li>EC2 Capacity Reservation グループが作成済みであること</li>
+                    <li>適切な IAM 権限が付与されていること</li>
+                    <li>AWS CLI v2 がインストールされていること</li>
+                </ul>
+            </div>
+
+            <div class="flow-diagram">
+                <div class="flow-step">1. CR グループ確認</div>
+                <span class="flow-arrow">&#8594;</span>
+                <div class="flow-step">2. CP 作成</div>
+                <span class="flow-arrow">&#8594;</span>
+                <div class="flow-step">3. クラスター関連付け</div>
+                <span class="flow-arrow">&#8594;</span>
+                <div class="flow-step">4. サービス作成</div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">JSON</span>
+                    <span class="code-title">キャパシティプロバイダー設定例</span>
+                </div>
+                <pre><code class="language-json">{
+  "name": "mi-reserved-cp",
+  "managedInstancesConfiguration": {
+    "capacityOptionType": "RESERVED",
+    "capacityReservations": {
+      "capacityReservationGroup": "arn:aws:ec2:us-east-1:123456789012:capacity-reservation-group/my-cr-group",
+      "reservationPreference": "reservations-first"
+    },
+    "instanceTypeConfiguration": {
+      "instanceTypes": ["m6i.xlarge", "m6i.2xlarge"]
+    }
+  }
+}</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">キャパシティプロバイダーの作成</span>
+                </div>
+                <pre><code class="language-bash"># Capacity Reservations を使用する Managed Instances キャパシティプロバイダーの作成
+aws ecs create-capacity-provider \
+  --name mi-reserved-cp \
+  --managed-instances-configuration '{
+    "capacityOptionType": "RESERVED",
+    "capacityReservations": {
+      "capacityReservationGroup": "arn:aws:ec2:us-east-1:123456789012:capacity-reservation-group/my-cr-group",
+      "reservationPreference": "reservations-first"
+    }
+  }'</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">クラスターへの関連付けとサービス作成</span>
+                </div>
+                <pre><code class="language-bash"># クラスターにキャパシティプロバイダーを関連付け
+aws ecs put-cluster-capacity-providers \
+  --cluster my-cluster \
+  --capacity-providers mi-reserved-cp \
+  --default-capacity-provider-strategy capacityProvider=mi-reserved-cp,weight=1
+
+# 予約キャパシティを使用するサービスの作成
+aws ecs create-service \
+  --cluster my-cluster \
+  --service-name my-service \
+  --task-definition my-task:1 \
+  --desired-count 3 \
+  --capacity-provider-strategy capacityProvider=mi-reserved-cp,weight=1</code></pre>
+            </div>
+        </section>
+
+        <!-- ユースケース -->
+        <section class="section">
+            <h2 class="section-title">ユースケース</h2>
+            <div class="usecase-card">
+                <div class="usecase-title">&#128184; ミッションクリティカルな本番ワークロード</div>
+                <div class="usecase-scenario">金融サービス企業がリアルタイム取引処理システムを ECS で運用</div>
+                <div class="usecase-description">
+                    reservations-only 戦略により、取引処理に必要なキャパシティが常に確保され、キャパシティ不足による取引遅延のリスクを排除。c6i.2xlarge インスタンスを予約キャパシティで確保し、安定した処理基盤を実現。
+                </div>
+            </div>
+            <div class="usecase-card">
+                <div class="usecase-title">&#128722; Web アプリケーションの可用性とコストのバランス</div>
+                <div class="usecase-scenario">EC サイトがピーク時のキャパシティを予約しつつ、トラフィック増加にも柔軟に対応</div>
+                <div class="usecase-description">
+                    reservations-first 戦略により、通常時は予約キャパシティを使用してコストを最適化。トラフィックの急増時にはオンデマンドキャパシティへ自動的にフォールバックして可用性を維持。
+                </div>
+            </div>
+            <div class="usecase-card">
+                <div class="usecase-title">&#129302; GPU ワークロードのキャパシティ確保</div>
+                <div class="usecase-scenario">ML 推論ワークロードで GPU インスタンスのキャパシティを事前に確保</div>
+                <div class="usecase-description">
+                    GPU インスタンスの供給が逼迫する状況でも、予約済みキャパシティにより必要な GPU リソースを確保。g5.xlarge / g5.2xlarge を活用し、ML 推論のレイテンシ SLA を満たすことが可能。
+                </div>
+            </div>
+        </section>
+
+        <!-- メリット・デメリット -->
+        <section class="section">
+            <h2 class="section-title">メリット・デメリット</h2>
+            <div class="comparison-grid">
+                <div class="merit-card">
+                    <h4>&#9989; ビジネス面のメリット</h4>
+                    <ul class="merit-list">
+                        <li>Capacity Reservations によりミッションクリティカルなワークロードのキャパシティを確実に確保</li>
+                        <li>Savings Plans や Reserved Instances と組み合わせてコスト最適化</li>
+                        <li>インフラ管理は ECS が自動実行、アプリケーション開発に集中可能</li>
+                        <li>reservations-first 戦略で予約とオンデマンドの柔軟な組み合わせ</li>
+                    </ul>
+                </div>
+                <div class="merit-card">
+                    <h4>&#9989; 技術面のメリット</h4>
+                    <ul class="merit-list">
+                        <li>API レベルでの統合 - CreateCapacityProvider / UpdateCapacityProvider API への設定追加のみ</li>
+                        <li>AZ 分散、ビンパッキング、アイドルインスタンス自動終了などの既存最適化機能との共存</li>
+                        <li>Console、CLI、CloudFormation、SDK で設定可能</li>
+                        <li>特定のインスタンスタイプ指定と属性ベースの選択の両方に対応</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="merit-card">
+                <h4 style="color: var(--aws-orange);">&#9888;&#65039; 制限事項と考慮点</h4>
+                <ul class="merit-list demerit-list">
+                    <li>Capacity Reservations は事前購入が必要、使用しない場合もコスト発生</li>
+                    <li>reservations-only 戦略では予約不足時にタスク起動が失敗する可能性</li>
+                    <li>Capacity Reservation グループは同一リージョン内のリザベーションのみグループ化可能</li>
+                    <li>Reservations のインスタンスタイプと ECS タスクのリソース要件が一致する必要あり</li>
+                    <li>reservations-first 戦略でのオンデマンドフォールバック時のコスト増加に注意</li>
+                    <li>Capacity Reservations の利用率を定期的にモニタリングすることを推奨</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 料金情報 -->
+        <section class="section">
+            <h2 class="section-title">料金情報</h2>
+            <div class="overview-card">
+                <p class="overview-text">ECS Managed Instances と Capacity Reservations の統合に対する<span class="highlight">追加料金は発生しません</span>。</p>
+            </div>
+
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>項目</th>
+                        <th>説明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>EC2 Capacity Reservations</td>
+                        <td>予約キャパシティに対する EC2 インスタンス料金 (使用有無にかかわらず発生)</td>
+                    </tr>
+                    <tr>
+                        <td>ECS Managed Instances</td>
+                        <td>ECS Managed Instances の利用料金</td>
+                    </tr>
+                    <tr>
+                        <td>データ転送</td>
+                        <td>標準の EC2 データ転送料金</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="pricing-card">
+                <h3 style="color: var(--text-primary); font-size: 16px; margin-bottom: 12px;">料金例 (概算、us-east-1)</h3>
+                <table class="spec-table">
+                    <thead>
+                        <tr>
+                            <th>構成</th>
+                            <th>月額料金</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>m6i.xlarge x 3 (Capacity Reservation)</td>
+                            <td>約 $432/月</td>
+                        </tr>
+                        <tr>
+                            <td>m6i.2xlarge x 2 (Capacity Reservation)</td>
+                            <td>約 $576/月</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="pricing-note">実際の料金は使用するインスタンスタイプ、リージョン、Savings Plans の適用状況により異なります。</p>
+            </div>
+        </section>
+
+        <!-- 利用可能リージョン -->
+        <section class="section">
+            <h2 class="section-title">利用可能リージョン</h2>
+            <div class="overview-card" style="text-align: center;">
+                <span class="region-badge">すべての AWS リージョンで利用可能</span>
+            </div>
+        </section>
+
+        <!-- 関連サービス -->
+        <section class="section">
+            <h2 class="section-title">関連サービス</h2>
+            <div class="overview-card">
+                <ul class="related-list">
+                    <li><span class="related-name">Amazon EC2 Capacity Reservations</span>: 特定の AZ で EC2 インスタンスのキャパシティを事前に予約。今回の統合の基盤</li>
+                    <li><span class="related-name">Amazon ECS Managed Instances</span>: インフラストラクチャ管理を自動化するフルマネージドコンピュートオプション</li>
+                    <li><span class="related-name">AWS Fargate</span>: サーバーレスコンピュートオプション。キャパシティ予約は不要だが EC2 固有の機能は利用不可</li>
+                    <li><span class="related-name">Amazon EC2 Auto Scaling グループ</span>: 従来の ECS キャパシティプロバイダーオプション。より詳細なインスタンス制御が必要な場合に使用</li>
+                    <li><span class="related-name">AWS Savings Plans / Reserved Instances</span>: Capacity Reservations と組み合わせてコスト最適化を実現</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- フッター -->
+        <footer>
+            <ul class="source-links">
+                <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/02/ecs-mi-ec2-capacity-reservations/" class="source-link" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+                <li><a href="https://aws.amazon.com/blogs/containers/deep-dive-amazon-ecs-managed-instances-provisioning-and-optimization/" class="source-link" target="_blank" rel="noopener noreferrer">AWS Blog - Deep Dive: Amazon ECS Managed Instances</a></li>
+                <li><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/managed-instances-instance-types.html#managed-instances-instance-billing-and-purchase-options" class="source-link" target="_blank" rel="noopener noreferrer">ECS Managed Instances ドキュメント</a></li>
+                <li><a href="https://aws.amazon.com/ec2/pricing/" class="source-link" target="_blank" rel="noopener noreferrer">EC2 料金ページ</a></li>
+            </ul>
+            <p class="footer-note">すべての AWS リージョンで利用可能 | 2026 年 2 月 26 日</p>
+        </footer>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            },
+            flowchart: {
+                curve: 'basis',
+                padding: 20
+            }
+        });
+        hljs.highlightAll();
+    </script>
+</body>
+</html>

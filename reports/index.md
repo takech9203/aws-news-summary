@@ -5,8 +5,19 @@
 
 ## 2026 年
 
+- [2026-02-27 - Amazon RDS for PostgreSQL - マイナーバージョン 18.3、17.9、16.13、15.17、14.22 のサポート](2026/2026-02-27-rds-minor-version-18-3-17-9-16-13-15-17-14-22.md)
+- [2026-02-27 - Amazon OpenSearch Service - クラスター安定性向上のための新しいインサイト](2026/2026-02-27-amazon-opensearch-service-adds-new-insights-improved-cluster-stability.md)
+- [2026-02-27 - Amazon CloudWatch Logs - 一元化ルールの送信先ロググループ名カスタマイズ](2026/2026-02-27-cloudwatch-centralization-custom-groups.md)
+- [2026-02-27 - AWS Billing - 英国のお客様向け Bacs Direct Debit 支払い方法のサポート](2026/2026-02-27-aws-supports-bacs-direct-debit-payment-method.md)
+- [2026-02-26 - AWS Marketplace - SaaS およびプロフェッショナルサービス製品の Concurrent Agreements サポート](2026/2026-02-26-concurrent-agreements-february.md)
+- [2026-02-26 - Amazon ECS Managed Instances - Amazon EC2 Capacity Reservations との統合](2026/2026-02-26-ecs-mi-ec2-capacity-reservations.md)
+- [2026-02-26 - Amazon EC2 I8g.metal-48xl - ストレージ最適化インスタンスの一般提供開始](2026/2026-02-26-ec2-i8g-metal-48xl-generally-available.md)
 - [2026-02-26 - Amazon Cognito - クライアントシークレットのローテーションとカスタムシークレットサポート](2026/2026-02-26-amazon-cognito-client-secret-lifecycle.md)
+- [2026-02-26 - Amazon CloudWatch - Amazon RDS for PostgreSQL 向けロック競合診断の提供開始](2026/2026-02-26-amazon-cloudwatch-lock-contention-diagnostics-rds-postgresql.md)
 - [2026-02-26 - AWS Security Hub - Extended プランでフルスタックエンタープライズセキュリティを実現](2026/2026-02-26-sec-hub-extended.md)
+- [2026-02-26 - Amazon SNS - Europe (Spain) リージョンでプッシュ通知をサポート](2026/2026-02-26-amazon-sns-push-expansion-spain.md)
+- [2026-02-26 - Amazon EC2 - M8i および M8i-flex インスタンスが追加リージョンで利用可能に](2026/2026-02-26-amazon-ec2-m8i-m8i-flex-instances-additional-regions.md)
+- [2026-02-26 - Amazon Bedrock - OpenAI 互換 Projects API の提供開始](2026/2026-02-26-amazon-bedrock-projects-api-mantle-inference-engine.md)
 - [2026-02-26 - AWS Lambda Durable Execution SDK for Java - Developer Preview](2026/2026-02-26-lambda-durable-execution-java-preview.md)
 - [2026-02-26 - Amazon Connect - アウトバウンドキャンペーンのダイヤルモード動的切替](2026/2026-02-26-connect-dynamic-dialing-modes.md)
 - [2026-02-25 - Amazon EC2 - M8gn/M8gb インスタンスの新しい Metal サイズ](2026/2026-02-25-amazon-ec2-m8gn-m8gb-new-metal-sizes.md)
