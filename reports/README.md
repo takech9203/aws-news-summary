@@ -5,10 +5,15 @@
 
 ## 2026 年
 
+- [2026-03-16 - Amazon Timestream for InfluxDB - InfluxDB 3 マルチノードクラスター構成の拡張](2026/2026-03-16-amazon-timestream-for-influxdb-3-multi-node-cluster.md)
+- [2026-03-16 - Amazon Connect - メール転送機能](2026/2026-03-16-amazon-connect-forward-email-contacts.md)
+- [2026-03-16 - Amazon SimpleDB - ドメインデータの Amazon S3 エクスポート機能](2026/2026-03-16-amazon-simpledb-domain-export-to-amazon-s3.md)
+- [2026-03-16 - AWS Partner Central - AI エージェントによる共同販売の加速](2026/2026-03-16-aws-partner-central-agents-accelerate-co-sell.md)
 - [2026-03-13 - AWS Lambda Managed Instances - Rust サポートの追加](2026/2026-03-13-aws-lambda-managed-instances-rust.md)
 - [2026-03-13 - Amazon CloudWatch Application Signals - 新しい SLO 機能の追加](2026/2026-03-13-cloudwatch-application-signals-adds-slo-capabilities.md)
 - [2026-03-13 - AWS SAM - Kiro Power によるサーバーレスアプリケーション開発の加速](2026/2026-03-13-aws-sam-kiro-power.md)
 - [2026-03-13 - Amazon EC2 M8azn - US East (Ohio) リージョンで利用可能に](2026/2026-03-13-amazon-ec2-m8azn-instances-ohio.md)
+- [2026-03-13 - Amazon Bedrock AgentCore Runtime - AG-UI プロトコルサポート](2026/2026-03-13-amazon-bedrock-agentcore-runtime-ag-ui-protocol.md)
 - [2026-03-13 - Amazon EC2 - R8a インスタンスが Asia Pacific (Tokyo) リージョンで利用可能に](2026/2026-03-13-amazon-ec2-r8a-instances-tokyo.md)
 - [2026-03-13 - Amazon MSK - Standard ブローカーで Graviton3 インスタンス (M7g) がアフリカ (ケープタウン) リージョンで利用可能に](2026/2026-03-13-amazon-msk-standardm7g-cpt-region.md)
 - [2026-03-13 - AWS Network Firewall - AWS European Sovereign Cloud での提供開始](2026/2026-03-13-network-firewall-european-sovereign-cloud-region.md)

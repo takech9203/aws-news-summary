@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Timestream for InfluxDB - InfluxDB 3 マルチノードクラスター構成の拡張</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .release-date {
+      font-size: 14px;
+      color: var(--aws-orange);
+      margin-top: 8px;
+    }
+
+    /* Section */
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Overview */
+    .overview-text {
+      font-size: 16px;
+      line-height: 1.8;
+      margin-bottom: 16px;
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 600px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+
+    .before-card, .after-card {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+    }
+
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+    }
+
+    .before-card h3 {
+      color: var(--aws-red);
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .after-card h3 {
+      color: var(--aws-green);
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .before-card ul, .after-card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .before-card li, .after-card li {
+      padding: 4px 0;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .before-card li::before {
+      content: "✗ ";
+      color: var(--aws-red);
+      font-weight: bold;
+    }
+
+    .after-card li::before {
+      content: "✓ ";
+      color: var(--aws-green);
+      font-weight: bold;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 600px) {
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.1;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* Feature Cards */
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 12px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .feature-card h3 {
+      color: var(--aws-white);
+      font-size: 17px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      line-height: 1.7;
+    }
+
+    .feature-card ul {
+      list-style: none;
+      padding: 0;
+      margin-top: 8px;
+    }
+
+    .feature-card li {
+      font-size: 14px;
+      padding: 3px 0;
+      color: var(--aws-light-gray);
+    }
+
+    .feature-card li::before {
+      content: "→ ";
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    /* Table */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .spec-table th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid var(--aws-orange);
+    }
+
+    .spec-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--aws-light-gray);
+    }
+
+    .spec-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 12px;
+      font-style: italic;
+    }
+
+    /* Usecase */
+    .usecase-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.08), rgba(255, 173, 51, 0.04));
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 14px 0;
+    }
+
+    .usecase-card h3 {
+      color: var(--aws-orange);
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+
+    .usecase-card .scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 10px;
+      line-height: 1.7;
+    }
+
+    .usecase-config {
+      background: rgba(26, 36, 47, 0.6);
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 13px;
+      line-height: 1.7;
+      margin: 8px 0;
+      font-family: 'Courier New', monospace;
+      color: var(--aws-light-gray);
+    }
+
+    .usecase-card .effect {
+      font-size: 14px;
+      color: var(--aws-green);
+      margin-top: 10px;
+      line-height: 1.6;
+    }
+
+    .usecase-card .effect::before {
+      content: "-> ";
+      font-weight: bold;
+    }
+
+    /* Merit/Demerit */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 600px) {
+      .merit-grid { grid-template-columns: 1fr; }
+    }
+
+    .merit-col h3 {
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .merit-item {
+      font-size: 14px;
+      padding: 6px 0;
+      line-height: 1.6;
+    }
+
+    .merit-item.positive::before {
+      content: "✅ ";
+    }
+
+    .merit-item.negative::before {
+      content: "⚠️ ";
+    }
+
+    /* Code Block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Related Services */
+    .related-card {
+      background: rgba(0, 161, 201, 0.08);
+      border: 1px solid rgba(0, 161, 201, 0.25);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 10px 0;
+    }
+
+    .related-card h4 {
+      color: var(--aws-teal);
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .related-card p {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      line-height: 1.6;
+    }
+
+    /* Links */
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: underline;
+      word-break: break-all;
+    }
+
+    footer ul {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0;
+    }
+
+    footer li {
+      padding: 3px 0;
+    }
+
+    /* Pricing note */
+    .pricing-note {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px dashed rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .region-badge {
+      display: inline-block;
+      background: rgba(0, 161, 201, 0.15);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 13px;
+      color: var(--aws-teal);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="service-badge">Amazon Timestream for InfluxDB</div>
+      <h1>InfluxDB 3 マルチノードクラスター構成の拡張</h1>
+      <p class="subtitle">Enterprise エディションで最大 15 ノードまでスケールアップ可能に</p>
+      <p class="release-date">📅 2026 年 3 月 16 日</p>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p class="overview-text">
+        Amazon Timestream for InfluxDB が、InfluxDB 3 Enterprise エディションにおける<span class="highlight">マルチノードクラスター構成の拡張</span>をサポート。
+        最大 <span class="highlight">15 ノード</span>までクラスターをスケールアップでき、高い読み取りスループットと高可用性を必要とする本番ワークロードに対応できるようになった。
+      </p>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number">15</div>
+          <div class="stat-label">最大ノード数</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">3</div>
+          <div class="stat-label">ノードロール種別</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">13</div>
+          <div class="stat-label">最大リーダーオンリーノード数</div>
+        </div>
+      </div>
+
+      <!-- Before/After -->
+      <div class="before-after">
+        <div class="before-card">
+          <h3>❌ Before</h3>
+          <ul>
+            <li>マルチノードのノード数に制限があり大規模対応が困難</li>
+            <li>読み取りスループットのスケーリングに限界</li>
+            <li>ワークロードに応じたノード構成の最適化が制限</li>
+          </ul>
+        </div>
+        <div class="after-card">
+          <h3>✅ After</h3>
+          <ul>
+            <li>最大 15 ノードまでクラスターをスケールアップ</li>
+            <li>ライター / リーダーとリーダーオンリーを分離して最適化</li>
+            <li>Core から Enterprise へのアップグレードパスを提供</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Cluster["InfluxDB 3 Enterprise クラスター 最大 15 ノード"]
+        subgraph Writers["ライター / リーダーノード 1-4 台"]
+            direction LR
+            W1["ライター / リーダー 1"]
+            W2["ライター / リーダー 2"]
+            W3["ライター / リーダー N"]
+            W1 ~~~ W2 ~~~ W3
+        end
+        subgraph Readers["リーダーオンリーノード 0-13 台"]
+            direction LR
+            R1["リーダーオンリー 1"]
+            R2["リーダーオンリー 2"]
+            R3["リーダーオンリー N"]
+            R1 ~~~ R2 ~~~ R3
+        end
+        subgraph CompactorGroup["コンパクターノード 1 台"]
+            Compactor["専用コンパクター"]
+        end
+    end
+
+    Client(["クライアント<br/>アプリケーション"]) -->|データ書き込み| Writers
+    Client -->|クエリ| Writers
+    Client -->|クエリ| Readers
+    Writers -->|データ同期| Readers
+    Writers -->|圧縮対象データ| CompactorGroup
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Cluster cloud
+    class Writers,Readers,CompactorGroup layer
+    class W1,W2,W3 compute
+    class R1,R2,R3 internal
+    class Compactor storage
+    class Client user
+        </pre>
+      </div>
+      <p class="diagram-caption">クライアントからの書き込みはライター / リーダーノードが処理し、読み取りクエリはライター / リーダーノードとリーダーオンリーノードの両方で処理できる。</p>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>🚀 主要機能</h2>
+
+      <div class="feature-card">
+        <h3>📈 最大 15 ノードへのクラスタースケーリング</h3>
+        <ul>
+          <li>従来の制限を超え、最大 15 ノードまでクラスターを構成可能</li>
+          <li>高い読み取りスループットと高可用性を必要とする本番ワークロードに対応</li>
+          <li>ノード数の拡張により、処理能力を柔軟にスケールアップ</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>⚙️ ノードロールの分離による最適化</h3>
+        <ul>
+          <li>ライター / リーダーノード: 1 から 4 台でデータ取り込みとクエリ処理を担当</li>
+          <li>リーダーオンリーノード: 0 から 13 台でクエリパフォーマンスのスケーリングに特化</li>
+          <li>専用コンパクターノード: 1 台でデータ圧縮処理を専用に実行</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>🔄 Core から Enterprise へのアップグレード</h3>
+        <ul>
+          <li>Core エディションから Enterprise エディションへのインプレースアップグレードが可能</li>
+          <li>ワークロードの成長に応じて段階的にスケールアップ</li>
+          <li>既存のデータを維持したまま上位エディションに移行可能</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3 style="color: var(--aws-white); font-size: 17px; margin-bottom: 12px;">クラスター構成の詳細</h3>
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>ノードタイプ</th>
+            <th>台数</th>
+            <th>役割</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ライター / リーダーノード</td>
+            <td>1-4 台</td>
+            <td>データ取り込みとクエリ処理</td>
+          </tr>
+          <tr>
+            <td>リーダーオンリーノード</td>
+            <td>0-13 台</td>
+            <td>読み取りクエリの処理に特化</td>
+          </tr>
+          <tr>
+            <td>コンパクターノード</td>
+            <td>1 台</td>
+            <td>データ圧縮処理を専用で実行</td>
+          </tr>
+          <tr>
+            <td><strong>合計最大ノード数</strong></td>
+            <td><strong>15 台</strong></td>
+            <td>-</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--aws-white); font-size: 17px; margin: 20px 0 12px;">エディション比較</h3>
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>Core エディション</th>
+            <th>Enterprise エディション</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>クラスター構成</td>
+            <td>シングルノード</td>
+            <td><span class="highlight">マルチノード 最大 15 台</span></td>
+          </tr>
+          <tr>
+            <td>高可用性</td>
+            <td>限定的</td>
+            <td>ノード冗長化による高可用性</td>
+          </tr>
+          <tr>
+            <td>読み取りスケーリング</td>
+            <td>単一ノードの性能に依存</td>
+            <td>リーダーオンリーノードによる水平スケーリング</td>
+          </tr>
+          <tr>
+            <td>アップグレードパス</td>
+            <td>-</td>
+            <td>Core からアップグレード可能</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Setup -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <p style="margin-bottom: 12px; font-size: 14px;">前提条件: AWS アカウント、Amazon Timestream for InfluxDB へのアクセス権限、InfluxDB 3 Enterprise エディション、適切な AWS サービスクォータ</p>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ステップ 1: 既存クラスターの確認</span>
+        </div>
+        <pre><code class="language-bash">aws timestream-influxdb list-db-instances \
+  --query "items[*].{Name:name,Status:status,DbInstanceType:dbInstanceType}"</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ステップ 2: クラスターノードの追加</span>
+        </div>
+        <pre><code class="language-bash">aws timestream-influxdb update-db-instance \
+  --db-instance-identifier my-influxdb-cluster \
+  --db-instance-type db.influx.xlarge \
+  --deployment-type MULTI_NODE_READ_REPLICAS</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ステップ 3: Core から Enterprise へのアップグレード</span>
+        </div>
+        <pre><code class="language-bash">aws timestream-influxdb update-db-instance \
+  --db-instance-identifier my-influxdb-core \
+  --deployment-type MULTI_NODE_READ_REPLICAS</code></pre>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+
+      <div class="usecase-card">
+        <h3>🏭 IoT デバイスモニタリング基盤</h3>
+        <p class="scenario">数万台の IoT デバイスからの時系列データを収集しつつ、複数のダッシュボードからのリアルタイムクエリに対応する必要がある場合。</p>
+        <div class="usecase-config">
+ライター / リーダーノード: 4 台 (高頻度データ取り込み)<br>
+リーダーオンリーノード: 10 台 (複数ダッシュボード対応)<br>
+コンパクターノード: 1 台<br>
+合計: 15 ノード
+        </div>
+        <p class="effect">大量のデバイスデータの書き込みがダッシュボードのクエリパフォーマンスに影響を与えることなく、安定した監視基盤を実現。</p>
+      </div>
+
+      <div class="usecase-card">
+        <h3>📊 アプリケーションパフォーマンスモニタリング</h3>
+        <p class="scenario">マイクロサービスアーキテクチャのアプリケーションにおいて、メトリクスの収集とアラート用クエリを同時に処理する必要がある場合。</p>
+        <div class="usecase-config">
+ライター / リーダーノード: 2 台 (メトリクス取り込みとアラートクエリ)<br>
+リーダーオンリーノード: 5 台 (分析クエリとダッシュボード)<br>
+コンパクターノード: 1 台<br>
+合計: 8 ノード
+        </div>
+        <p class="effect">アラート用の低レイテンシクエリと分析用の重いクエリを異なるノードで処理でき、アラートの遅延なく詳細な分析も実行可能。</p>
+      </div>
+
+      <div class="usecase-card">
+        <h3>🔄 Core エディションからの段階的移行</h3>
+        <p class="scenario">現在 Core エディションで運用しているが、データ量の増加に伴い読み取りパフォーマンスが低下してきたため、Enterprise エディションへの移行を検討している場合。</p>
+        <div class="usecase-config">
+Phase 1: Core から Enterprise にアップグレード<br>
+Phase 2: リーダーオンリーノードを段階的に追加<br>
+-> ワークロードの状況を監視しながら必要に応じてノードを追加
+        </div>
+        <p class="effect">既存のデータを維持したまま Enterprise エディションに移行し、段階的にノードを追加することで、コストを抑えながらパフォーマンスを向上。</p>
+      </div>
+    </div>
+
+    <!-- Merits / Demerits -->
+    <div class="section">
+      <h2>⚖️ メリットとデメリット</h2>
+      <div class="merit-grid">
+        <div class="merit-col">
+          <h3 style="color: var(--aws-green);">✅ メリット</h3>
+          <div class="merit-item positive">本番ワークロードへの対応力向上 - 最大 15 ノードまでスケールアップ</div>
+          <div class="merit-item positive">段階的なスケーリング - Core から Enterprise へのアップグレードパス</div>
+          <div class="merit-item positive">運用効率の向上 - 書き込みと読み取りのリソースを独立して最適化</div>
+          <div class="merit-item positive">読み取りスループットの水平スケーリング - 最大 13 台のリーダーオンリーノード</div>
+          <div class="merit-item positive">高可用性 - 複数ライター / リーダーノードによるフェイルオーバー</div>
+          <div class="merit-item positive">ワークロードの分離 - データ取り込み、クエリ処理、圧縮を専用ノードに分離</div>
+        </div>
+        <div class="merit-col">
+          <h3 style="color: var(--aws-red);">⚠️ 制約事項・考慮点</h3>
+          <div class="merit-item negative">Enterprise エディションのみでマルチノード構成が利用可能</div>
+          <div class="merit-item negative">ノード数の増加に伴いインフラストラクチャコストが増加</div>
+          <div class="merit-item negative">クラスター全体のノード数は最大 15 台に制限</div>
+          <div class="merit-item negative">ワークロードパターンの事前分析とノード比率の検討が必要</div>
+          <div class="merit-item negative">Core から Enterprise へのアップグレード時にダウンタイムが発生する可能性あり</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <div class="pricing-note">
+        <p>Amazon Timestream for InfluxDB の料金は、選択したインスタンスタイプとノード数に基づいて課金される。Enterprise エディションのマルチノード構成では、各ノードのインスタンス料金に加えてストレージ料金が発生する。ノード数の増加に応じて料金が比例して増加するため、ワークロードに適したノード数の選定が重要。</p>
+        <p style="margin-top: 8px;">📎 詳細: <a href="https://aws.amazon.com/timestream/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS 料金ページ</a></p>
+      </div>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p><span class="region-badge">Timestream for InfluxDB が利用可能なすべての AWS リージョン</span></p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+
+      <div class="related-card">
+        <h4>Amazon Timestream for InfluxDB Core エディション</h4>
+        <p>シングルノード構成の InfluxDB 3 サービス。小規模なワークロードに適しており、Enterprise エディションへのアップグレードが可能。</p>
+      </div>
+
+      <div class="related-card">
+        <h4>Amazon Timestream for LiveAnalytics</h4>
+        <p>AWS のサーバーレス時系列データベースサービス。InfluxDB 互換ではなく、独自の SQL ライクなクエリインターフェースを提供。</p>
+      </div>
+
+      <div class="related-card">
+        <h4>Amazon Managed Service for Prometheus</h4>
+        <p>メトリクス収集と監視に特化したマネージドサービス。時系列データの収集と可視化において Timestream for InfluxDB と補完的に利用可能。</p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/03/amazon-timestream-for-influxdb-3-multi-node-cluster/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/timestream/latest/developerguide/timestream-influxdb.html" target="_blank" rel="noopener noreferrer">ドキュメント</a></li>
+        <li><a href="https://aws.amazon.com/timestream/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a></li>
+      </ul>
+      <p style="margin-top: 8px; color: rgba(213,219,219,0.5);">Generated on 2026-03-16</p>
+    </footer>
+
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
