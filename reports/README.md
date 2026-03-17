@@ -5,10 +5,19 @@
 
 ## 2026 年
 
+- [2026-03-17 - Amazon Bedrock - アジアパシフィック (ニュージーランド) リージョンでの提供開始](2026/2026-03-17-amazon-bedrock-asia-pacific-new-zealand.md)
+- [2026-03-17 - Amazon MSK - Express Brokers がアフリカ (ケープタウン) およびアジアパシフィック (台北) リージョンに拡大](2026/2026-03-17-amazon-msk-express-2-new-aws-regions.md)
+- [2026-03-17 - Amazon SageMaker AI - Training Plans 延長機能](2026/2026-03-17-amazon-sagemaker-training-plan-extension.md)
+- [2026-03-17 - Amazon Bedrock AgentCore Runtime - シェルコマンド実行サポート](2026/2026-03-17-bedrock-agentcore-runtime-shell-command.md)
+- [2026-03-17 - Kiro - オープンウェイトモデルが IAM Identity Center ユーザーに提供開始](2026/2026-03-17-kiro-changelog-2026-03-17.md)
 - [2026-03-16 - Amazon Timestream for InfluxDB - InfluxDB 3 マルチノードクラスター構成の拡張](2026/2026-03-16-amazon-timestream-for-influxdb-3-multi-node-cluster.md)
 - [2026-03-16 - Amazon Connect - メール転送機能](2026/2026-03-16-amazon-connect-forward-email-contacts.md)
 - [2026-03-16 - Amazon SimpleDB - ドメインデータの Amazon S3 エクスポート機能](2026/2026-03-16-amazon-simpledb-domain-export-to-amazon-s3.md)
+- [2026-03-16 - Amazon CloudWatch Logs - HTTP ベースプロトコルによるログ取り込みサポート](2026/2026-03-16-cloudwatch-http-log-collector.md)
 - [2026-03-16 - AWS Partner Central - AI エージェントによる共同販売の加速](2026/2026-03-16-aws-partner-central-agents-accelerate-co-sell.md)
+- [2026-03-16 - Amazon CloudWatch - 組織全体の EC2 詳細モニタリング自動有効化](2026/2026-03-16-cloudwatch-org-enablement-ec2-metrics.md)
+- [2026-03-16 - Amazon Neptune - openCypher クエリによる S3 データ読み取りサポート](2026/2026-03-16-neptune-read-s3-opencypher.md)
+- [2026-03-16 - Amazon SageMaker HyperPod - アイドルリソース共有による動的クラスター活用](2026/2026-03-16-sagemaker-hyperpod-idle-resource-sharing.md)
 - [2026-03-13 - AWS Lambda Managed Instances - Rust サポートの追加](2026/2026-03-13-aws-lambda-managed-instances-rust.md)
 - [2026-03-13 - Amazon CloudWatch Application Signals - 新しい SLO 機能の追加](2026/2026-03-13-cloudwatch-application-signals-adds-slo-capabilities.md)
 - [2026-03-13 - AWS SAM - Kiro Power によるサーバーレスアプリケーション開発の加速](2026/2026-03-13-aws-sam-kiro-power.md)

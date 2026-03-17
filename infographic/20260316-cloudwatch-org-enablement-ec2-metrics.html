@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon CloudWatch - 組織全体の EC2 詳細モニタリング自動有効化</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .header-left { flex: 1; min-width: 280px; }
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+    }
+    .header-date {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      text-align: right;
+      white-space: nowrap;
+      padding-top: 4px;
+    }
+
+    /* Sections */
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h3 {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Before / After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .before-card, .after-card {
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+    }
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+    }
+    .ba-label {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .before-card .ba-label { color: var(--aws-red); }
+    .after-card .ba-label { color: var(--aws-green); }
+    .ba-list { list-style: none; padding: 0; margin: 0; }
+    .ba-list li {
+      font-size: 14px;
+      margin-bottom: 6px;
+      padding-left: 20px;
+      position: relative;
+    }
+    .before-card .ba-list li::before { content: "✗ "; position: absolute; left: 0; color: var(--aws-red); }
+    .after-card .ba-list li::before { content: "✓ "; position: absolute; left: 0; color: var(--aws-green); }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-number {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.1;
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* Feature Cards */
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 12px 0;
+    }
+    .feature-card-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-card p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    /* Use case cards */
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+    .usecase-card-title {
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+    .usecase-card p, .usecase-card .effect {
+      font-size: 14px;
+      margin: 4px 0;
+    }
+    .effect {
+      color: var(--aws-green);
+      margin-top: 8px;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code Blocks */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Flow */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Tags / badges */
+    .tag {
+      display: inline-block;
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 12px;
+      margin: 2px 4px 2px 0;
+    }
+
+    /* Related services */
+    .related-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .related-item {
+      background: var(--aws-squid-ink);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 14px;
+    }
+    .related-item strong {
+      color: var(--aws-teal);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    /* Links */
+    a { color: var(--aws-teal); text-decoration: none; }
+    a:hover { color: var(--aws-smile-orange); }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+    footer a { word-break: break-all; }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+      h1 { font-size: 24px; }
+      .before-after { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .section { padding: 16px; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">Amazon CloudWatch</span>
+        <h1>組織全体の EC2 詳細モニタリング自動有効化</h1>
+        <div class="subtitle">CloudWatch Ingestion の有効化ルールで、AWS Organizations 全体の EC2 詳細モニタリングを一元管理</div>
+      </div>
+      <div class="header-date">2026-03-16</div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon CloudWatch に、<span class="highlight">AWS Organizations 全体</span>で Amazon EC2 の詳細モニタリングを自動的に有効化する機能が追加されました。CloudWatch Ingestion に「有効化ルール」を作成することで、既存および新規に起動される EC2 インスタンスに対して詳細モニタリングを自動的にオンにし、<span class="highlight">1 分間隔</span>でのメトリクス収集を組織全体で統一的に実現できます。</p>
+      <p>有効化ルールは、組織全体、特定のアカウント、またはリソースタグに基づく特定のリソースにスコープを設定可能です。この機能は<span class="highlight">すべての AWS 商用リージョン</span>で利用可能です。</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="section">
+      <h2>📊 数字で見るアップデート</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number">5x</div>
+          <div class="stat-label">メトリクス収集頻度の向上<br/>5 分 → 1 分間隔</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">3</div>
+          <div class="stat-label">スコープ設定オプション<br/>組織全体 / アカウント / タグ</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">$0.30</div>
+          <div class="stat-label">1 メトリクスあたり月額<br/>詳細モニタリング料金</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Before / After -->
+    <div class="section">
+      <h2>🔄 Before / After</h2>
+      <div class="before-after">
+        <div class="before-card">
+          <div class="ba-label">❌ アップデート前</div>
+          <ul class="ba-list">
+            <li>各アカウント・各インスタンスで個別に設定が必要</li>
+            <li>新規インスタンスへの自動有効化の仕組みがなく設定漏れが発生</li>
+            <li>統一的なモニタリング設定にカスタムスクリプトや Config ルールが必要</li>
+            <li>基本モニタリング 5 分間隔のままで Auto Scaling の応答性が低下</li>
+          </ul>
+        </div>
+        <div class="after-card">
+          <div class="ba-label">✅ アップデート後</div>
+          <ul class="ba-list">
+            <li>有効化ルールで組織全体を一元的に管理可能</li>
+            <li>新規起動インスタンスにも自動適用で設定漏れを防止</li>
+            <li>タグベースのスコープ設定で柔軟な制御が可能</li>
+            <li>1 分間隔のメトリクスで Auto Scaling や障害検知の応答性が向上</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>管理アカウントの CloudWatch Ingestion で作成した有効化ルールが、組織内の各アカウントの EC2 インスタンスに自動的に適用され、1 分間隔の詳細メトリクスを CloudWatch に送信する仕組みです。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Org["&#127970; AWS Organizations"]
+        subgraph MgmtAccount["&#9881;&#65039; 管理アカウント"]
+            CWIngestion["&#128202; CloudWatch Ingestion&lt;br/&gt;有効化ルール"]
+        end
+
+        subgraph Account1["&#128193; アカウント A"]
+            direction LR
+            EC2A1["&#128421;&#65039; EC2&lt;br/&gt;env:production"]
+            EC2A2["&#128421;&#65039; EC2&lt;br/&gt;env:staging"]
+            EC2A1 ~~~ EC2A2
+        end
+
+        subgraph Account2["&#128193; アカウント B"]
+            direction LR
+            EC2B1["&#128421;&#65039; EC2&lt;br/&gt;env:production"]
+            EC2B2["&#128421;&#65039; EC2 新規起動"]
+            EC2B1 ~~~ EC2B2
+        end
+    end
+
+    subgraph Monitoring["&#128200; CloudWatch Metrics"]
+        DetailedMetrics["&#9201;&#65039; 詳細メトリクス&lt;br/&gt;1 分間隔"]
+        AutoScaling["&#128260; Auto Scaling&lt;br/&gt;迅速な応答"]
+    end
+
+    CWIngestion -->|ルール適用| Account1
+    CWIngestion -->|ルール適用| Account2
+    EC2A1 -->|詳細モニタリング有効| DetailedMetrics
+    EC2B1 -->|詳細モニタリング有効| DetailedMetrics
+    EC2B2 -.->|自動有効化| DetailedMetrics
+    DetailedMetrics --> AutoScaling
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef monitoring fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef account fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+
+    class Org cloud
+    class MgmtAccount,CWIngestion monitoring
+    class Account1,Account2 account
+    class EC2A1,EC2A2,EC2B1,EC2B2 compute
+    class Monitoring,DetailedMetrics,AutoScaling monitoring
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="feature-card-title">📊 CloudWatch Ingestion 有効化ルール</div>
+        <p>EC2 詳細モニタリングの有効化ルールを作成可能。ルールに一致する既存および新規 EC2 インスタンスに対して自動的に詳細モニタリングを有効化し、1 分間隔でのメトリクス収集を組織全体で統一的に実現。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card-title">🎯 柔軟なスコープ設定</div>
+        <p>組織全体、特定のアカウント、リソースタグに基づく特定リソースの 3 つのスコープ設定が可能。例えば <span class="tag">env:production</span> タグを持つインスタンスのみを対象にルールを適用できます。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card-title">🔄 自動適用メカニズム</div>
+        <p>既存の EC2 インスタンスに対してルール作成時に自動適用。新規起動される EC2 インスタンスにも自動的にルールを適用し、設定漏れを防止して一貫したモニタリング構成を維持。</p>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>詳細モニタリングとベーシックモニタリングの比較</h3>
+      <table>
+        <thead>
+          <tr><th>項目</th><th>ベーシック</th><th>詳細</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>メトリクス収集間隔</td><td>5 分</td><td><span class="highlight">1 分</span></td></tr>
+          <tr><td>料金</td><td>無料</td><td>有料</td></tr>
+          <tr><td>Auto Scaling 応答性</td><td>標準</td><td><span style="color:var(--aws-green);">高速</span></td></tr>
+          <tr><td>設定方法</td><td>デフォルトで有効</td><td>手動またはルールで有効化</td></tr>
+        </tbody>
+      </table>
+
+      <h3>スコープ設定オプション</h3>
+      <table>
+        <thead>
+          <tr><th>スコープ</th><th>説明</th><th>ユースケース</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="tag">組織全体</span></td><td>AWS Organizations 配下の全アカウント</td><td>全社的なモニタリング標準化</td></tr>
+          <tr><td><span class="tag">特定アカウント</span></td><td>指定したアカウントのみ</td><td>本番アカウントのみ対象</td></tr>
+          <tr><td><span class="tag">リソースタグ</span></td><td>特定タグを持つリソースのみ</td><td>環境別・プロジェクト別の制御</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Setup -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <ul>
+        <li>AWS Organizations が有効化されていること</li>
+        <li>管理アカウントまたは委任管理者アカウントへのアクセス権限</li>
+        <li>CloudWatch および EC2 に対する適切な IAM 権限</li>
+      </ul>
+
+      <h3>ステップ 1: 組織全体に有効化ルールを作成</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">組織全体に対して EC2 詳細モニタリングを有効化</span>
+        </div>
+        <pre><code class="language-bash">aws cloudwatch put-managed-insight-rules \
+  --managed-rules '[{
+    "TemplateName": "EC2DetailedMonitoring",
+    "ResourceARN": "arn:aws:organizations::123456789012:organization/o-example",
+    "Tags": []
+  }]'</code></pre>
+      </div>
+
+      <h3>ステップ 2: タグベースのスコープ設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">env:production タグのインスタンスのみ対象</span>
+        </div>
+        <pre><code class="language-bash">aws cloudwatch put-managed-insight-rules \
+  --managed-rules '[{
+    "TemplateName": "EC2DetailedMonitoring",
+    "ResourceARN": "arn:aws:organizations::123456789012:organization/o-example",
+    "Tags": [{"Key": "env", "Value": "production"}]
+  }]'</code></pre>
+      </div>
+
+      <h3>ステップ 3: 有効化状態の確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">EC2 インスタンスの詳細モニタリング状態を確認</span>
+        </div>
+        <pre><code class="language-bash">aws ec2 describe-instances \
+  --query "Reservations[].Instances[].{ID:InstanceId,Monitoring:Monitoring.State}" \
+  --output table</code></pre>
+      </div>
+
+      <h3>IAM ポリシー例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">有効化ルール管理に必要な IAM 権限の例</span>
+        </div>
+        <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutManagedInsightRules",
+        "ec2:MonitorInstances",
+        "ec2:DescribeInstances",
+        "organizations:ListAccounts",
+        "organizations:DescribeOrganization"
+      ],
+      "Resource": "*"
+    }
+  ]
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Benefits & Limitations -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+
+      <h3>ビジネス面</h3>
+      <div class="feature-card">
+        <div class="feature-card-title">💰 運用コスト削減</div>
+        <p>個別設定の手間がなくなり、運用チームの工数を大幅に削減</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">📋 コンプライアンス強化</div>
+        <p>組織全体で統一的なモニタリングポリシーを適用し、監査要件への対応を簡素化</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">🚨 障害対応の迅速化</div>
+        <p>1 分間隔のメトリクスにより、問題の早期検知と迅速な対応が可能</p>
+      </div>
+
+      <h3>技術面</h3>
+      <div class="feature-card">
+        <div class="feature-card-title">🔄 Auto Scaling の応答性向上</div>
+        <p>1 分間隔のメトリクスにより、Auto Scaling ポリシーがインスタンス使用率の変化に迅速に対応</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">🛡️ 設定ドリフトの防止</div>
+        <p>新規インスタンスにも自動適用されるため、設定漏れや不整合を防止</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">🎯 タグベースの柔軟な制御</div>
+        <p>環境やワークロードに応じた詳細モニタリングの適用範囲を柔軟にコントロール可能</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <ul>
+        <li>詳細モニタリングのメトリクスは<strong style="color:var(--aws-orange);">有料</strong>であり、大量のインスタンスに適用するとコストが増加する</li>
+        <li>現時点では <strong>EC2 インスタンスのみ</strong>が対象であり、他のリソースタイプへの自動有効化は対象外</li>
+        <li>AWS 商用リージョンのみで利用可能であり、GovCloud や中国リージョンでの利用可否は確認が必要</li>
+      </ul>
+      <h3>考慮すべき点</h3>
+      <ul>
+        <li>組織全体に適用する前に、詳細モニタリングの<span class="highlight">追加コストを見積もる</span>ことを推奨</li>
+        <li>タグベースのスコープを活用して、本番環境や重要なワークロードから段階的に導入することが効果的</li>
+      </ul>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+
+      <div class="usecase-card">
+        <div class="usecase-card-title">🏢 ユースケース 1: 本番環境の統一モニタリング</div>
+        <p>大規模な組織で複数のアカウントにまたがる本番 EC2 インスタンスのモニタリングを統一。<span class="tag">env:production</span> タグを持つ全インスタンスに詳細モニタリングを自動有効化。</p>
+        <div class="effect">→ 全アカウントの本番インスタンスで 1 分間隔のメトリクス収集が保証され、SLA 遵守の監視体制を確立</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-card-title">📈 ユースケース 2: Auto Scaling の精度向上</div>
+        <p>EC2 Auto Scaling グループで、負荷変動に対する応答速度を改善。Auto Scaling グループに属するインスタンスに詳細モニタリングを適用。</p>
+        <div class="effect">→ 1 分間隔のメトリクスにより、Auto Scaling ポリシーが負荷変動に 5 倍速く対応可能</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-card-title">🔒 ユースケース 3: マルチアカウント環境のセキュリティ監視</div>
+        <p>セキュリティチームが組織内の全 EC2 インスタンスの CPU・ネットワークメトリクスを 1 分間隔で監視し、CloudWatch Anomaly Detection と組み合わせて異常検知を実施。</p>
+        <div class="effect">→ 高頻度のメトリクスデータにより、異常検知の精度が向上し、セキュリティインシデントの早期発見が可能</div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💲 料金</h2>
+      <p>EC2 詳細モニタリングの有効化ルール自体の作成は<span class="highlight">無料</span>ですが、詳細モニタリングによるメトリクス収集は CloudWatch の標準料金に従って課金されます。詳細モニタリングメトリクスの料金は 1 メトリクスあたり月額 <strong style="color:var(--aws-orange);">$0.30</strong> です。各 EC2 インスタンスはデフォルトで 7 つのメトリクスを送信します。</p>
+
+      <table>
+        <thead>
+          <tr><th>使用量</th><th>月額料金 (概算、us-east-1)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>EC2 インスタンス 10 台 (7 メトリクス/台)</td><td>約 $21.00</td></tr>
+          <tr><td>EC2 インスタンス 100 台 (7 メトリクス/台)</td><td>約 $210.00</td></tr>
+          <tr><td>EC2 インスタンス 1,000 台 (7 メトリクス/台)</td><td>約 $2,100.00</td></tr>
+        </tbody>
+      </table>
+
+      <p style="font-size:13px; color:var(--aws-light-gray); margin-top:8px;">送信されるメトリクス: CPUUtilization, DiskReadOps, DiskWriteOps, DiskReadBytes, DiskWriteBytes, NetworkIn, NetworkOut</p>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>すべての AWS 商用リージョンで利用可能です。</p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="related-grid">
+        <div class="related-item">
+          <strong>Amazon EC2 Auto Scaling</strong>
+          詳細モニタリングにより、Auto Scaling ポリシーの応答性が向上
+        </div>
+        <div class="related-item">
+          <strong>AWS Organizations</strong>
+          組織全体でのルール適用の基盤として必要
+        </div>
+        <div class="related-item">
+          <strong>CloudWatch Alarms</strong>
+          1 分間隔のメトリクスを活用した、より精密なアラーム設定が可能
+        </div>
+        <div class="related-item">
+          <strong>AWS Config</strong>
+          EC2 インスタンスの詳細モニタリング設定状態の継続的な監査に活用可能
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>Amazon CloudWatch の組織全体 EC2 詳細モニタリング自動有効化機能は、マルチアカウント環境におけるモニタリングの一貫性と運用効率を大幅に向上させるアップデートです。特に大規模な組織では、設定漏れの防止と Auto Scaling の応答性向上に大きな効果が期待できます。</p>
+      <p>AWS Organizations を利用している環境では、まず本番環境のインスタンスを対象にタグベースのルールから導入を開始し、段階的に適用範囲を拡大することを推奨します。</p>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul style="margin:4px 0; padding-left:20px;">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/03/cloudwatch-org-enablement-ec2-metrics/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/" target="_blank" rel="noopener noreferrer">Amazon CloudWatch ドキュメント</a></li>
+        <li><a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer">CloudWatch 料金ページ</a></li>
+        <li><a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-cloudwatch-new.html" target="_blank" rel="noopener noreferrer">EC2 詳細モニタリングドキュメント</a></li>
+      </ul>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

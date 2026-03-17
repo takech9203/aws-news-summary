@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon Bedrock AgentCore Runtime - シェルコマンド実行サポート</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+        :root {
+            --aws-squid-ink: #232F3E;
+            --aws-dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --aws-white: #FFFFFF;
+            --aws-light-gray: #D5DBDB;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--aws-squid-ink);
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            color: var(--aws-light-gray);
+            font-size: 16px;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .header-left { flex: 1; min-width: 280px; }
+        .service-badge {
+            display: inline-block;
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            font-weight: 700;
+            font-size: 13px;
+            padding: 4px 14px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+        }
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--aws-white);
+            line-height: 1.3;
+        }
+        .header-meta {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            margin-top: 8px;
+        }
+        .header-meta span { margin-right: 16px; }
+
+        /* Sections */
+        .section {
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--aws-orange);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--aws-white);
+            margin: 20px 0 12px;
+        }
+        p { margin-bottom: 12px; }
+
+        .highlight {
+            background-color: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        /* Overview banner */
+        .overview-banner {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            font-size: 17px;
+            line-height: 1.7;
+        }
+
+        /* Before/After */
+        .before-after { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+        .before-card, .after-card {
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .before-card {
+            background: rgba(209, 50, 18, 0.1);
+            border: 1px solid rgba(209, 50, 18, 0.3);
+        }
+        .after-card {
+            background: rgba(29, 129, 2, 0.1);
+            border: 1px solid rgba(29, 129, 2, 0.3);
+        }
+        .before-card .label { color: var(--aws-red); font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+        .after-card .label { color: var(--aws-green); font-weight: 700; margin-bottom: 8px; font-size: 14px; }
+        .before-card ul, .after-card ul { list-style: none; padding: 0; }
+        .before-card li, .after-card li { padding: 4px 0; font-size: 14px; }
+        .before-card li::before { content: "&#10007; "; color: var(--aws-red); }
+        .after-card li::before { content: "&#10003; "; color: var(--aws-green); }
+
+        /* Stats */
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 16px 0; }
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-number { font-size: 36px; font-weight: 700; color: var(--aws-orange); }
+        .stat-label { font-size: 13px; color: var(--aws-light-gray); margin-top: 4px; }
+
+        /* Feature cards */
+        .feature-card {
+            background: var(--aws-dark-squid);
+            border-left: 4px solid var(--aws-orange);
+            border-radius: 0 8px 8px 0;
+            padding: 16px 20px;
+            margin: 12px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .feature-card .feature-title {
+            font-weight: 600;
+            color: var(--aws-white);
+            font-size: 16px;
+            margin-bottom: 6px;
+        }
+        .feature-card .feature-desc { font-size: 14px; color: var(--aws-light-gray); }
+
+        /* Model table */
+        .model-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+        .model-table th {
+            background: rgba(255, 153, 0, 0.2);
+            color: var(--aws-orange);
+            font-weight: 600;
+            text-align: left;
+            padding: 10px 14px;
+            font-size: 14px;
+        }
+        .model-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 14px;
+        }
+        .model-table tr:hover td { background: rgba(255, 255, 255, 0.03); }
+
+        /* Usecase */
+        .usecase-card {
+            background: rgba(255, 153, 0, 0.08);
+            border: 1px solid rgba(255, 153, 0, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 12px 0;
+        }
+        .usecase-card .usecase-title {
+            font-weight: 600;
+            color: var(--aws-orange);
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+        .usecase-card .usecase-scenario {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            margin-bottom: 8px;
+        }
+        .usecase-card .usecase-effect {
+            font-size: 14px;
+            color: var(--aws-green);
+            font-weight: 500;
+        }
+
+        /* Region info */
+        .region-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            margin: 16px 0;
+        }
+        .region-item {
+            background: rgba(0, 161, 201, 0.1);
+            border: 1px solid rgba(0, 161, 201, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        .region-item .region-label { font-size: 12px; color: var(--aws-teal); margin-bottom: 4px; }
+        .region-item .region-value { font-size: 14px; font-weight: 600; color: var(--aws-white); }
+
+        /* Considerations */
+        .warning-card {
+            background: rgba(209, 50, 18, 0.08);
+            border: 1px solid rgba(209, 50, 18, 0.2);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+        .warning-card li {
+            padding: 4px 0;
+            font-size: 14px;
+            list-style: none;
+        }
+
+        .note-card {
+            background: rgba(255, 153, 0, 0.08);
+            border: 1px solid rgba(255, 153, 0, 0.2);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+        .note-card li {
+            padding: 4px 0;
+            font-size: 14px;
+            list-style: none;
+        }
+
+        /* Merits */
+        .merit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+        .merit-card {
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .merit-biz {
+            background: rgba(140, 79, 255, 0.1);
+            border: 1px solid rgba(140, 79, 255, 0.3);
+        }
+        .merit-tech {
+            background: rgba(0, 161, 201, 0.1);
+            border: 1px solid rgba(0, 161, 201, 0.3);
+        }
+        .merit-card h3 { margin-top: 0; }
+        .merit-card ul { list-style: none; padding: 0; }
+        .merit-card li { padding: 6px 0; font-size: 14px; }
+
+        /* Mermaid */
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Code blocks */
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        .code-lang { color: var(--aws-orange); font-weight: bold; }
+        .code-title { color: var(--aws-light-gray); }
+        .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        /* Flow diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+        .flow-step {
+            background: var(--aws-dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 100px;
+        }
+        .flow-arrow {
+            color: var(--aws-orange);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        /* Related services */
+        .related-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+        .related-card {
+            background: rgba(255, 153, 0, 0.06);
+            border: 1px solid rgba(255, 153, 0, 0.15);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .related-card .related-title { font-weight: 600; color: var(--aws-white); font-size: 14px; margin-bottom: 6px; }
+        .related-card .related-desc { font-size: 13px; color: var(--aws-light-gray); }
+
+        /* Links */
+        .aws-link {
+            color: var(--aws-teal);
+            text-decoration: none;
+        }
+        .aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+        .links-list { list-style: none; padding: 0; }
+        .links-list li { padding: 6px 0; font-size: 14px; }
+
+        /* Footer */
+        footer {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            color: var(--aws-light-gray);
+        }
+        footer a { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+        footer a:hover { color: var(--aws-smile-orange); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            h1 { font-size: 24px; }
+            .before-after, .merit-grid { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .region-info { grid-template-columns: 1fr; }
+            .related-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <span class="service-badge">Amazon Bedrock AgentCore</span>
+                <h1>&#128187; AgentCore Runtime<br/>シェルコマンド実行サポート</h1>
+                <div class="header-meta">
+                    <span>&#128197; 2026 年 3 月 17 日</span>
+                    <span>&#128268; InvokeAgentRuntimeCommand API</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overview -->
+        <div class="overview-banner">
+            Amazon Bedrock AgentCore Runtime が<span class="highlight">InvokeAgentRuntimeCommand</span> API を新たにサポートしました。実行中の AgentCore Runtime セッション内で<span class="highlight">シェルコマンドを直接実行</span>し、<span class="highlight">HTTP/2 経由でリアルタイムに出力をストリーミング受信</span>できます。カスタムのコマンド実行ロジックが不要になり、開発者はエージェントのコアロジックに集中できるようになります。
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">14</div>
+                <div class="stat-label">利用可能リージョン数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">HTTP/2</div>
+                <div class="stat-label">リアルタイムストリーミング<br/>プロトコル</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">0</div>
+                <div class="stat-label">追加 API 料金<br/>ランタイム料金に含まれる</div>
+            </div>
+        </div>
+
+        <!-- Before/After -->
+        <div class="section">
+            <h2>&#128260; Before / After 比較</h2>
+            <div class="before-after">
+                <div class="before-card">
+                    <div class="label">&#10060; アップデート前の課題</div>
+                    <ul>
+                        <li>コンテナ内にカスタムのコマンド実行ロジックを構築する必要があった</li>
+                        <li>子プロセスの生成、stdout/stderr のキャプチャ、タイムアウト処理を独自に実装する必要があった</li>
+                        <li>差別化されない作業に開発リソースを費やしていた</li>
+                        <li>エージェント推論中のシェルコマンド並行実行を独自に構築する必要があった</li>
+                    </ul>
+                </div>
+                <div class="after-card">
+                    <div class="label">&#9989; アップデート後の改善</div>
+                    <ul>
+                        <li>プラットフォームレベルの API でシェルコマンドを実行可能に</li>
+                        <li>HTTP/2 経由でコマンド出力をリアルタイムにストリーミング受信</li>
+                        <li>エージェント呼び出しをブロックせず並行実行が可能に</li>
+                        <li>カスタムロジック不要で開発者はコアロジックに集中可能</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="section">
+            <h2>&#128396;&#65039; アーキテクチャ図</h2>
+            <p>InvokeAgentRuntimeCommand API によるシェルコマンド実行のフローを示しています。開発者が API を呼び出すと、エージェントと同じコンテナ内でコマンドが実行され、出力が HTTP/2 経由でリアルタイムにストリーミングされます。</p>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+sequenceDiagram
+    participant Dev as &#128100; 開発者
+    participant API as &#128268; AgentCore API
+    participant RT as &#9889; AgentCore Runtime
+    participant Container as &#128230; エージェントコンテナ
+
+    Dev->>API: InvokeAgentRuntimeCommand
+    API->>RT: コマンド実行リクエスト
+    RT->>Container: シェルコマンド実行
+
+    Note over Container: エージェント呼び出しと<br/>並行して実行可能
+
+    loop HTTP/2 ストリーミング
+        Container-->>RT: stdout / stderr 出力
+        RT-->>API: リアルタイムストリーム
+        API-->>Dev: 出力ストリーム
+    end
+
+    Container-->>RT: 終了コード
+    RT-->>API: 実行結果
+    API-->>Dev: 終了コード返却
+                </pre>
+            </div>
+        </div>
+
+        <!-- Key Features -->
+        <div class="section">
+            <h2>&#9889; 主要機能</h2>
+
+            <div class="feature-card">
+                <div class="feature-title">&#128268; InvokeAgentRuntimeCommand API</div>
+                <div class="feature-desc">
+                    実行中の AgentCore Runtime セッション内でシェルコマンドを直接実行する新しい API。エージェント呼び出しとは独立して動作し、ブロッキングなしで並行実行が可能です。コマンドの終了コードを返却し、成功・失敗の判定が容易になります。
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-title">&#128225; HTTP/2 リアルタイムストリーミング</div>
+                <div class="feature-desc">
+                    コマンドの stdout および stderr 出力を HTTP/2 経由でリアルタイムにストリーミング。長時間実行されるコマンドの進捗をリアルタイムに監視可能で、コマンド完了を待たずに出力を逐次確認できます。
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-title">&#128230; 同一環境での実行</div>
+                <div class="feature-desc">
+                    コマンドはエージェントセッションと同じコンテナ、ファイルシステム、環境で実行。エージェントが生成したファイルやインストールしたパッケージに直接アクセス可能で、環境変数やワーキングディレクトリを共有するため追加の設定が不要です。
+                </div>
+            </div>
+        </div>
+
+        <!-- API Spec Table -->
+        <div class="section">
+            <h2>&#128202; 技術仕様</h2>
+            <table class="model-table">
+                <thead>
+                    <tr>
+                        <th>項目</th>
+                        <th>詳細</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>API 名</td><td>InvokeAgentRuntimeCommand</td></tr>
+                    <tr><td>プロトコル</td><td>HTTP/2</td></tr>
+                    <tr><td>出力形式</td><td>リアルタイムストリーミング</td></tr>
+                    <tr><td>返却値</td><td>stdout/stderr ストリーム、終了コード</td></tr>
+                    <tr><td>実行環境</td><td>エージェントセッションと同一コンテナ</td></tr>
+                    <tr><td>並行実行</td><td>エージェント呼び出しと並行可能</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Setup -->
+        <div class="section">
+            <h2>&#128736;&#65039; 設定方法</h2>
+            <h3>前提条件</h3>
+            <ul style="margin-left: 20px; margin-bottom: 16px; font-size: 14px;">
+                <li>AWS アカウントと AgentCore Runtime へのアクセス権限</li>
+                <li>実行中の AgentCore Runtime セッション</li>
+                <li>InvokeAgentRuntimeCommand に対する IAM 権限</li>
+            </ul>
+
+            <div class="flow-diagram">
+                <div class="flow-step">&#9312; Runtime 作成<br/><small>エージェントデプロイ</small></div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">&#9313; コマンド実行<br/><small>API 呼び出し</small></div>
+                <span class="flow-arrow">&rarr;</span>
+                <div class="flow-step">&#9314; ワークフロー統合<br/><small>並行実行</small></div>
+            </div>
+
+            <h3>ステップ 1: AgentCore Runtime セッションの起動</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">AgentCore Runtime の作成</span>
+                </div>
+                <pre><code class="language-bash">aws bedrock-agentcore-control create-agent-runtime \
+  --agent-runtime-name my-agent \
+  --agent-runtime-artifact '{"containerConfiguration":{"containerUri":"123456789012.dkr.ecr.us-east-1.amazonaws.com/my-agent:latest"}}' \
+  --role-arn arn:aws:iam::123456789012:role/AgentCoreRuntimeRole</code></pre>
+            </div>
+
+            <h3>ステップ 2: シェルコマンドの実行</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Python</span>
+                    <span class="code-title">InvokeAgentRuntimeCommand API の使用例</span>
+                </div>
+                <pre><code class="language-python">import boto3
+
+client = boto3.client('bedrock-agentcore')
+
+# シェルコマンドを実行し、出力をストリーミング受信
+response = client.invoke_agent_runtime_command(
+    agentRuntimeId='my-agent-runtime-id',
+    sessionId='my-session-id',
+    command='pip install pandas && python run_analysis.py'
+)
+
+# ストリーミング出力の処理
+for event in response['outputStream']:
+    if 'stdout' in event:
+        print(event['stdout'])
+    if 'stderr' in event:
+        print(f"ERROR: {event['stderr']}")
+
+print(f"Exit code: {response['exitCode']}")</code></pre>
+            </div>
+
+            <h3>ステップ 3: エージェントワークフローへの統合</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Python</span>
+                    <span class="code-title">LLM 推論とシェルコマンドの並行実行</span>
+                </div>
+                <pre><code class="language-python">import asyncio
+
+async def agent_workflow(client, runtime_id, session_id):
+    # エージェント呼び出し (LLM 推論)
+    agent_task = asyncio.create_task(
+        client.invoke_agent_runtime(
+            agentRuntimeId=runtime_id,
+            sessionId=session_id,
+            inputText='テストコードを生成してください'
+        )
+    )
+
+    # シェルコマンド (並行実行)
+    command_task = asyncio.create_task(
+        client.invoke_agent_runtime_command(
+            agentRuntimeId=runtime_id,
+            sessionId=session_id,
+            command='git status'
+        )
+    )
+
+    # 両方の結果を待機
+    agent_result, command_result = await asyncio.gather(
+        agent_task, command_task
+    )</code></pre>
+            </div>
+
+            <h3>IAM ポリシー例</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">JSON</span>
+                    <span class="code-title">InvokeAgentRuntimeCommand の IAM ポリシー</span>
+                </div>
+                <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeAgentRuntimeCommand"
+      ],
+      "Resource": "arn:aws:bedrock:*:*:agent-runtime/*"
+    }
+  ]
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- Merits -->
+        <div class="section">
+            <h2>&#127775; メリット</h2>
+            <div class="merit-grid">
+                <div class="merit-card merit-biz">
+                    <h3 style="color: var(--aws-purple);">&#128188; ビジネス面</h3>
+                    <ul>
+                        <li><strong>開発工数の削減</strong>: コマンド実行ロジックの自前実装が不要になり、エージェント開発に集中できる</li>
+                        <li><strong>市場投入の加速</strong>: プラットフォームレベルの API を利用することで、エージェントの機能拡張が迅速に行える</li>
+                        <li><strong>運用コストの削減</strong>: カスタムのプロセス管理やエラーハンドリングのメンテナンスが不要になる</li>
+                    </ul>
+                </div>
+                <div class="merit-card merit-tech">
+                    <h3 style="color: var(--aws-teal);">&#9881;&#65039; 技術面</h3>
+                    <ul>
+                        <li><strong>アーキテクチャの簡素化</strong>: カスタムのコマンド実行レイヤーが不要になり、コンテナイメージが軽量化される</li>
+                        <li><strong>信頼性の向上</strong>: プラットフォームレベルで標準化されたコマンド実行により、プロセス管理やタイムアウト処理が安定する</li>
+                        <li><strong>並行処理の実現</strong>: エージェント呼び出しとシェルコマンドをブロッキングなしで並行実行でき、スループットが向上する</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Limitations -->
+        <div class="section">
+            <h2>&#9888;&#65039; デメリット・制約事項</h2>
+            <h3>制限事項</h3>
+            <div class="warning-card">
+                <ul>
+                    <li>&#9888;&#65039; コンテナに含まれていないツールやコマンドは使用できない</li>
+                    <li>&#9888;&#65039; 実行可能なコマンドの範囲はコンテナの権限と設定に依存する</li>
+                    <li>&#9888;&#65039; クライアント側で HTTP/2 をサポートする必要がある</li>
+                </ul>
+            </div>
+            <h3>考慮すべき点</h3>
+            <div class="note-card">
+                <ul>
+                    <li>&#128161; シェルコマンドの実行権限はコンテナの IAM ロールとセキュリティ設定に基づくため、適切な権限設計が必要</li>
+                    <li>&#128161; 長時間実行されるコマンドについては、タイムアウトの設定とエラーハンドリングを考慮する必要がある</li>
+                    <li>&#128161; コマンドの実行結果がエージェントの推論に影響する場合、実行順序の制御を適切に設計する必要がある</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Use Cases -->
+        <div class="section">
+            <h2>&#128161; ユースケース</h2>
+
+            <div class="usecase-card">
+                <div class="usecase-title">&#129514; ユースケース 1: 自動テスト実行エージェント</div>
+                <div class="usecase-scenario">AI エージェントがコードを生成した後、InvokeAgentRuntimeCommand を使用してテストを実行し、結果に基づいてコードを修正するワークフロー。</div>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Python</span>
+                        <span class="code-title">コード生成 + テスト実行の自動化</span>
+                    </div>
+                    <pre><code class="language-python"># エージェントがコードを生成
+code = await invoke_agent("ユーザー認証の API を実装してください")
+
+# 生成したコードのテストを実行
+test_result = client.invoke_agent_runtime_command(
+    agentRuntimeId=runtime_id,
+    sessionId=session_id,
+    command='python -m pytest tests/ -v'
+)
+
+# テスト失敗時にエージェントにフィードバック
+if test_result['exitCode'] != 0:
+    fix = await invoke_agent(f"テストが失敗しました: {test_result['output']}")</code></pre>
+                </div>
+                <div class="usecase-effect">&#10003; 効果: エージェントの推論とテスト実行を同一セッション内でシームレスに連携でき、コード品質の自動検証ループを構築できる</div>
+            </div>
+
+            <div class="usecase-card">
+                <div class="usecase-title">&#128230; ユースケース 2: 依存関係管理とビルド自動化</div>
+                <div class="usecase-scenario">エージェントがプロジェクトの依存関係を分析し、必要なパッケージのインストールやビルドプロセスを自動的に実行する。</div>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Python</span>
+                        <span class="code-title">依存関係インストール + ビルド実行</span>
+                    </div>
+                    <pre><code class="language-python"># 依存関係のインストール
+install_result = client.invoke_agent_runtime_command(
+    agentRuntimeId=runtime_id,
+    sessionId=session_id,
+    command='pip install -r requirements.txt'
+)
+
+# ビルドの実行
+build_result = client.invoke_agent_runtime_command(
+    agentRuntimeId=runtime_id,
+    sessionId=session_id,
+    command='python setup.py build'
+)
+
+# ストリーミングで進捗を監視
+for event in build_result['outputStream']:
+    print(event.get('stdout', ''))</code></pre>
+                </div>
+                <div class="usecase-effect">&#10003; 効果: エージェントが推論した依存関係情報に基づいて、パッケージのインストールからビルドまでを一貫して自動化できる</div>
+            </div>
+
+            <div class="usecase-card">
+                <div class="usecase-title">&#128736;&#65039; ユースケース 3: Git 操作を含むコード管理エージェント</div>
+                <div class="usecase-scenario">エージェントがコード変更を行った後、git コマンドを使用してブランチ作成、コミット、プッシュを自動的に実行する。</div>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Python</span>
+                        <span class="code-title">Git 操作の自動化</span>
+                    </div>
+                    <pre><code class="language-python"># ブランチの作成とチェックアウト
+client.invoke_agent_runtime_command(
+    agentRuntimeId=runtime_id,
+    sessionId=session_id,
+    command='git checkout -b feature/auto-fix-123'
+)
+
+# 変更のステージングとコミット
+client.invoke_agent_runtime_command(
+    agentRuntimeId=runtime_id,
+    sessionId=session_id,
+    command='git add -A && git commit -m "fix: auto-generated bug fix"'
+)
+
+# リモートへのプッシュ
+client.invoke_agent_runtime_command(
+    agentRuntimeId=runtime_id,
+    sessionId=session_id,
+    command='git push origin feature/auto-fix-123'
+)</code></pre>
+                </div>
+                <div class="usecase-effect">&#10003; 効果: エージェントによるコード変更からバージョン管理までを一連のワークフローとして自動化でき、開発プロセスの効率化を実現できる</div>
+            </div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="section">
+            <h2>&#128176; 料金情報</h2>
+            <p style="font-size: 14px;">AgentCore Runtime の料金は、microVM の実行時間とリソース使用量に基づきます。InvokeAgentRuntimeCommand API の利用は AgentCore Runtime のセッション内で実行されるため、<span class="highlight">追加の API 呼び出し料金は発生せず</span>、既存のランタイム料金に含まれます。</p>
+            <p style="font-size: 13px; color: var(--aws-light-gray);">&#8251; 詳細な料金は <a href="https://aws.amazon.com/bedrock/pricing/" target="_blank" class="aws-link">Amazon Bedrock 料金ページ</a> を参照してください。</p>
+        </div>
+
+        <!-- API Changes -->
+        <div class="section">
+            <h2>&#128203; API 変更履歴</h2>
+            <table class="model-table">
+                <thead>
+                    <tr>
+                        <th>日付</th>
+                        <th>サービス</th>
+                        <th>変更内容</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>2026/03/16</td>
+                        <td><a href="https://awsapichanges.com/archive/changes/dac0d1-bedrock-agentcore.html" target="_blank" class="aws-link">Amazon Bedrock AgentCore</a></td>
+                        <td style="font-size: 13px;">1 new api method - InvokeAgentRuntimeCommand API の追加</td>
+                    </tr>
+                    <tr>
+                        <td>2026/03/17</td>
+                        <td><a href="https://awsapichanges.com/archive/changes/bda7d0-bedrock-agentcore-control.html" target="_blank" class="aws-link">Amazon Bedrock AgentCore Control</a></td>
+                        <td style="font-size: 13px;">3 updated api methods - namespaces フィールドの非推奨化と namespaceTemplates の追加</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Regions -->
+        <div class="section">
+            <h2>&#127759; 利用可能リージョン</h2>
+            <p style="font-size: 14px; margin-bottom: 16px;">14 リージョンで利用可能です。東京リージョンを含みます。</p>
+            <div class="region-info">
+                <div class="region-item">
+                    <div class="region-label">米国東部 バージニア北部</div>
+                    <div class="region-value">us-east-1</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">米国東部 オハイオ</div>
+                    <div class="region-value">us-east-2</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">米国西部 オレゴン</div>
+                    <div class="region-value">us-west-2</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">アジアパシフィック 東京</div>
+                    <div class="region-value">ap-northeast-1</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">アジアパシフィック ソウル</div>
+                    <div class="region-value">ap-northeast-2</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">アジアパシフィック ムンバイ</div>
+                    <div class="region-value">ap-south-1</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">アジアパシフィック シンガポール</div>
+                    <div class="region-value">ap-southeast-1</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">アジアパシフィック シドニー</div>
+                    <div class="region-value">ap-southeast-2</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">カナダ 中部</div>
+                    <div class="region-value">ca-central-1</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">欧州 フランクフルト</div>
+                    <div class="region-value">eu-central-1</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">欧州 アイルランド</div>
+                    <div class="region-value">eu-west-1</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">欧州 ロンドン</div>
+                    <div class="region-value">eu-west-2</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">欧州 パリ</div>
+                    <div class="region-value">eu-west-3</div>
+                </div>
+                <div class="region-item">
+                    <div class="region-label">欧州 ストックホルム</div>
+                    <div class="region-value">eu-north-1</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Related Services -->
+        <div class="section">
+            <h2>&#128279; 関連サービス・機能</h2>
+            <div class="related-grid">
+                <div class="related-card">
+                    <div class="related-title">&#9889; AgentCore Runtime</div>
+                    <div class="related-desc">エージェントのホスティング基盤で、認証、セッション分離、スケーリングを自動管理。InvokeAgentRuntimeCommand はこのランタイム上で動作する</div>
+                </div>
+                <div class="related-card">
+                    <div class="related-title">&#128268; Model Context Protocol</div>
+                    <div class="related-desc">エージェントにツールやコンテキストを提供するプロトコル。シェルコマンド実行と組み合わせて、ツール連携と決定論的操作を実現可能</div>
+                </div>
+                <div class="related-card">
+                    <div class="related-title">&#128101; Agent-to-Agent Protocol</div>
+                    <div class="related-desc">エージェント間通信を実現するプロトコル。複数エージェントが連携するワークフローでシェルコマンドを共有環境で実行可能</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reference Links -->
+        <div class="section">
+            <h2>&#128206; 参考リンク</h2>
+            <ul class="links-list">
+                <li>&#128279; <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/bedrock-agentcore-runtime-shell-command/" target="_blank" class="aws-link">公式発表 (What's New)</a></li>
+                <li>&#128214; <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/agentcore.html" target="_blank" class="aws-link">Amazon Bedrock AgentCore ドキュメント</a></li>
+                <li>&#128176; <a href="https://aws.amazon.com/bedrock/pricing/" target="_blank" class="aws-link">Amazon Bedrock 料金ページ</a></li>
+            </ul>
+        </div>
+
+        <!-- Summary -->
+        <div class="section" style="border: 1px solid rgba(255, 153, 0, 0.3); background: linear-gradient(135deg, rgba(255, 153, 0, 0.08), rgba(140, 79, 255, 0.05));">
+            <h2>&#128221; まとめ</h2>
+            <p>Amazon Bedrock AgentCore Runtime の InvokeAgentRuntimeCommand API により、エージェントセッション内でシェルコマンドをプラットフォームレベルで実行できるようになりました。テスト実行、依存関係のインストール、git 操作などの決定論的な操作を、カスタムロジックを構築することなく API 経由で実行でき、HTTP/2 による出力のリアルタイムストリーミングも提供されます。</p>
+            <p style="color: var(--aws-orange); font-weight: 600;">&#128161; 14 リージョン (東京リージョンを含む) で利用可能であり、AI エージェントの開発効率を大幅に向上させるアップデートです。追加の API 料金は発生しないため、既存の AgentCore Runtime ユーザーはすぐに利用を開始できます。</p>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>&#128206; 出典:</p>
+            <ul style="list-style: none; padding: 0; margin-top: 4px;">
+                <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/03/bedrock-agentcore-runtime-shell-command/" target="_blank">https://aws.amazon.com/about-aws/whats-new/2026/03/bedrock-agentcore-runtime-shell-command/</a></li>
+            </ul>
+            <p style="margin-top: 8px; color: rgba(213, 219, 219, 0.6);">Generated on 2026-03-17</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>
