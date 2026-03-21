@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon EKS - Provisioned Control Plane 99.99% SLA と 8XL スケーリングティア</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+        :root {
+            --aws-squid-ink: #232F3E;
+            --aws-dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --aws-white: #FFFFFF;
+            --aws-light-gray: #D5DBDB;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+
+        body {
+            background-color: var(--aws-squid-ink);
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            color: var(--aws-light-gray);
+            font-size: 16px;
+            line-height: 1.6;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header-left {
+            flex: 1;
+            min-width: 280px;
+        }
+
+        .service-badge {
+            display: inline-block;
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            font-size: 13px;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--aws-white);
+            margin: 0 0 8px 0;
+            line-height: 1.3;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: var(--aws-light-gray);
+        }
+
+        .header-right {
+            text-align: right;
+            font-size: 14px;
+            color: var(--aws-light-gray);
+        }
+
+        h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--aws-orange);
+            margin: 0 0 16px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section {
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .highlight {
+            background-color: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        .card {
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+            border: 1px solid rgba(255, 153, 0, 0.3);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            line-height: 1.2;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+            margin-top: 4px;
+        }
+
+        /* Before/After */
+        .before-after {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .before-card {
+            background: rgba(209, 50, 18, 0.1);
+            border: 1px solid rgba(209, 50, 18, 0.4);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .before-card .ba-label {
+            color: var(--aws-red);
+            font-weight: 700;
+            font-size: 13px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .after-card {
+            background: rgba(29, 129, 2, 0.1);
+            border: 1px solid rgba(29, 129, 2, 0.4);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .after-card .ba-label {
+            color: var(--aws-green);
+            font-weight: 700;
+            font-size: 13px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .ba-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .ba-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        /* Feature Cards */
+        .feature-cards {
+            display: grid;
+            gap: 12px;
+        }
+
+        .feature-card {
+            background: var(--aws-dark-squid);
+            border-left: 4px solid var(--aws-orange);
+            border-radius: 0 8px 8px 0;
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .feature-card h3 {
+            color: var(--aws-white);
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+        }
+
+        .feature-card p {
+            color: var(--aws-light-gray);
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .feature-card ul {
+            margin: 8px 0 0 0;
+            padding-left: 20px;
+            font-size: 14px;
+        }
+
+        .feature-card li {
+            margin: 4px 0;
+        }
+
+        /* Tier Table */
+        .tier-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 14px;
+        }
+
+        .tier-table th {
+            background: rgba(255, 153, 0, 0.2);
+            color: var(--aws-orange);
+            font-weight: 600;
+            text-align: left;
+            padding: 12px 16px;
+            border-bottom: 2px solid var(--aws-orange);
+        }
+
+        .tier-table td {
+            padding: 10px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tier-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .tier-table .new-tier {
+            background: rgba(255, 153, 0, 0.1);
+        }
+
+        .tier-table .new-badge {
+            display: inline-block;
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 4px;
+        }
+
+        /* SLA Comparison */
+        .sla-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .sla-card {
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .sla-old {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .sla-new {
+            background: rgba(29, 129, 2, 0.1);
+            border: 2px solid rgba(29, 129, 2, 0.5);
+        }
+
+        .sla-value {
+            font-size: 32px;
+            font-weight: 700;
+        }
+
+        .sla-old .sla-value {
+            color: var(--aws-light-gray);
+        }
+
+        .sla-new .sla-value {
+            color: var(--aws-green);
+        }
+
+        .sla-detail {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+            margin-top: 4px;
+        }
+
+        .sla-label {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .sla-old .sla-label {
+            color: var(--aws-light-gray);
+        }
+
+        .sla-new .sla-label {
+            color: var(--aws-green);
+        }
+
+        /* Usecase */
+        .usecase-cards {
+            display: grid;
+            gap: 16px;
+        }
+
+        .usecase-card {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.08), rgba(255, 153, 0, 0.02));
+            border: 1px solid rgba(255, 153, 0, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .usecase-card h3 {
+            color: var(--aws-orange);
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+        }
+
+        .usecase-card p {
+            font-size: 14px;
+            margin: 0 0 8px 0;
+        }
+
+        .usecase-effect {
+            background: rgba(29, 129, 2, 0.1);
+            border-left: 3px solid var(--aws-green);
+            padding: 8px 12px;
+            border-radius: 0 4px 4px 0;
+            font-size: 13px;
+            margin-top: 12px;
+        }
+
+        .usecase-effect strong {
+            color: var(--aws-green);
+        }
+
+        /* Merits / Demerits */
+        .merit-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .merit-card {
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .merit-card.business {
+            background: rgba(0, 161, 201, 0.08);
+            border: 1px solid rgba(0, 161, 201, 0.3);
+        }
+
+        .merit-card.technical {
+            background: rgba(140, 79, 255, 0.08);
+            border: 1px solid rgba(140, 79, 255, 0.3);
+        }
+
+        .merit-card h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin: 0 0 12px 0;
+        }
+
+        .merit-card.business h3 {
+            color: var(--aws-teal);
+        }
+
+        .merit-card.technical h3 {
+            color: var(--aws-purple);
+        }
+
+        .merit-card li {
+            font-size: 14px;
+            margin: 6px 0;
+        }
+
+        .merit-card ul {
+            padding-left: 20px;
+            margin: 0;
+        }
+
+        /* Limitations */
+        .limitation-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .limitation-icon {
+            color: var(--aws-red);
+            flex-shrink: 0;
+        }
+
+        .consideration-icon {
+            color: var(--aws-smile-orange);
+            flex-shrink: 0;
+        }
+
+        /* Related Services */
+        .related-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+        }
+
+        .related-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 14px;
+        }
+
+        .related-card strong {
+            color: var(--aws-orange);
+        }
+
+        /* Code Block */
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+
+        .code-title {
+            color: var(--aws-light-gray);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        /* Mermaid */
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Arrow connector */
+        .upgrade-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            color: var(--aws-orange);
+            margin: -8px 0;
+        }
+
+        /* Links */
+        .aws-link {
+            color: var(--aws-teal);
+            text-decoration: none;
+        }
+
+        .aws-link:hover {
+            color: var(--aws-smile-orange);
+        }
+
+        footer {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            color: var(--aws-light-gray);
+        }
+
+        footer a {
+            color: var(--aws-teal);
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        footer a:hover {
+            color: var(--aws-smile-orange);
+        }
+
+        /* Responsive */
+        @media (max-width: 700px) {
+            h1 { font-size: 24px; }
+            .before-after,
+            .sla-comparison,
+            .merit-grid { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .header { flex-direction: column; }
+            .header-right { text-align: left; }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <span class="service-badge">Amazon EKS</span>
+                <h1>Provisioned Control Plane の 99.99% SLA と 8XL スケーリングティア</h1>
+                <div class="subtitle">Provisioned Control Plane 99.99% SLA および 8XL スケーリングティア</div>
+            </div>
+            <div class="header-right">
+                2026 年 3 月 20 日
+            </div>
+        </div>
+
+        <!-- Overview -->
+        <div class="section">
+            <h2>📋 概要</h2>
+            <p>Amazon EKS は、Provisioned Control Plane クラスターに対して <span class="highlight">99.99% の SLA</span> を提供開始しました。従来の 99.95% から引き上げられ、<span class="highlight">1 分間隔で測定</span>される高精度な可用性保証を実現しています。</p>
+            <p>また、最大ティアとなる <span class="highlight">8XL スケーリングティア</span>が新たに導入されました。8XL ティアは 4XL の 2 倍の Kubernetes API サーバーリクエスト処理能力を備え、超大規模な AI/ML トレーニング、HPC、大規模データ処理ワークロードに対応します。</p>
+        </div>
+
+        <!-- Stats -->
+        <div class="section">
+            <h2>📊 数字で見るアップデート</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">99.99%</div>
+                    <div class="stat-label">新しい SLA 保証</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">2x</div>
+                    <div class="stat-label">8XL の API 処理能力<br>(4XL 比)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">52 分</div>
+                    <div class="stat-label">年間ダウンタイム許容量</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">1 分</div>
+                    <div class="stat-label">SLA 測定間隔</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Before/After -->
+        <div class="section">
+            <h2>🔄 Before / After</h2>
+            <div class="before-after">
+                <div class="before-card">
+                    <div class="ba-label">Before</div>
+                    <div class="ba-item"><span class="ba-icon">❌</span><span>SLA 99.95% / 年間約 4.38 時間のダウンタイム許容</span></div>
+                    <div class="ba-item"><span class="ba-icon">❌</span><span>最大ティアは 4XL で超大規模ワークロードには不足</span></div>
+                    <div class="ba-item"><span class="ba-icon">❌</span><span>数千ノード規模で API サーバーがボトルネックに</span></div>
+                </div>
+                <div class="after-card">
+                    <div class="ba-label">After</div>
+                    <div class="ba-item"><span class="ba-icon">✅</span><span>SLA 99.99% / 年間約 52 分以下に大幅改善</span></div>
+                    <div class="ba-item"><span class="ba-icon">✅</span><span>8XL ティアで 4XL の 2 倍の API 処理能力</span></div>
+                    <div class="ba-item"><span class="ba-icon">✅</span><span>1 分間隔の精密な SLA 測定を実現</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="section">
+            <h2>🏗️ アーキテクチャ図</h2>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    subgraph EKS["☁️ Amazon EKS Provisioned Control Plane"]
+        subgraph SLA["🛡️ 99.99% SLA 1 分間隔測定"]
+            direction LR
+            APIServer1["🔌 API サーバー&lt;br/&gt;高可用性構成"]
+            etcd1[("📋 etcd&lt;br/&gt;クラスターストア")]
+            APIServer1 --- etcd1
+        end
+
+        subgraph Tiers["📊 スケーリングティア"]
+            direction LR
+            T1["XL"]
+            T2["2XL"]
+            T3["4XL"]
+            T4["⭐ 8XL&lt;br/&gt;最大ティア"]
+            T1 ~~~ T2 ~~~ T3 ~~~ T4
+        end
+    end
+
+    subgraph Workloads["⚙️ 対象ワークロード"]
+        direction LR
+        AI["🤖 AI/ML&lt;br/&gt;トレーニング"]
+        HPC["🖥️ HPC"]
+        Data["📦 大規模&lt;br/&gt;データ処理"]
+        AI ~~~ HPC ~~~ Data
+    end
+
+    SLA --> Tiers
+    T4 -->|"4XL の 2 倍の&lt;br/&gt;API 処理能力"| Workloads
+
+    classDef eks fill:none,stroke:#FF9900,stroke-width:2px,color:#FF9900
+    classDef sla fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#1B5E20
+    classDef tier fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef tierNew fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#E65100
+    classDef workload fill:#F3E5F5,stroke:#CE93D8,stroke-width:2px,color:#4A148C
+
+    class EKS eks
+    class SLA,APIServer1,etcd1 sla
+    class Tiers,T1,T2,T3 tier
+    class T4 tierNew
+    class Workloads,AI,HPC,Data workload
+                </pre>
+            </div>
+            <p style="font-size: 13px; color: var(--aws-light-gray); margin-top: 8px;">EKS Provisioned Control Plane の 99.99% SLA と新しい 8XL スケーリングティアの位置づけ、および対象となるワークロードの関係を示しています。</p>
+        </div>
+
+        <!-- Key Features -->
+        <div class="section">
+            <h2>🚀 主要機能</h2>
+            <div class="feature-cards">
+                <div class="feature-card">
+                    <h3>🛡️ 99.99% SLA の提供</h3>
+                    <ul>
+                        <li>Provisioned Control Plane クラスターの SLA が <strong style="color: var(--aws-green);">99.95% → 99.99%</strong> に向上</li>
+                        <li>SLA は 1 分間隔で測定され、より精密な可用性保証を提供</li>
+                        <li>年間ダウンタイム許容量が約 4.38 時間から約 52 分に大幅改善</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <h3>⚡ 8XL スケーリングティアの導入</h3>
+                    <ul>
+                        <li>Provisioned Control Plane の最大ティアとして新たに追加</li>
+                        <li>4XL ティアの <strong style="color: var(--aws-orange);">2 倍</strong>の Kubernetes API サーバーリクエスト処理能力</li>
+                        <li>超大規模クラスターでの API サーバーのボトルネックを解消</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <h3>🤖 大規模ワークロード対応</h3>
+                    <ul>
+                        <li>AI/ML トレーニングワークロードでの数千ノード規模のクラスター運用をサポート</li>
+                        <li>HPC ワークロードでの高いスループットを実現</li>
+                        <li>大規模データ処理ワークロードでの安定したパフォーマンスを提供</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Specs -->
+        <div class="section">
+            <h2>🔧 技術仕様</h2>
+            <h3 style="color: var(--aws-white); font-size: 16px; margin-bottom: 12px;">Provisioned Control Plane スケーリングティア</h3>
+            <table class="tier-table">
+                <thead>
+                    <tr>
+                        <th>ティア</th>
+                        <th>API サーバー処理能力</th>
+                        <th>主な用途</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>XL</td>
+                        <td>基準</td>
+                        <td>小〜中規模ワークロード</td>
+                    </tr>
+                    <tr>
+                        <td>2XL</td>
+                        <td>XL の 2 倍</td>
+                        <td>中規模ワークロード</td>
+                    </tr>
+                    <tr>
+                        <td>4XL</td>
+                        <td>2XL の 2 倍</td>
+                        <td>大規模ワークロード</td>
+                    </tr>
+                    <tr class="new-tier">
+                        <td><strong>8XL</strong> <span class="new-badge">NEW</span></td>
+                        <td>4XL の 2 倍</td>
+                        <td>超大規模 AI/ML、HPC、データ処理</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="color: var(--aws-white); font-size: 16px; margin: 24px 0 12px 0;">SLA 比較</h3>
+            <div class="sla-comparison">
+                <div class="sla-card sla-old">
+                    <div class="sla-label">従来</div>
+                    <div class="sla-value">99.95%</div>
+                    <div class="sla-detail">年間ダウンタイム: 約 4.38 時間</div>
+                </div>
+                <div class="sla-card sla-new">
+                    <div class="sla-label">新規</div>
+                    <div class="sla-value">99.99%</div>
+                    <div class="sla-detail">年間ダウンタイム: 約 52 分<br>測定間隔: 1 分</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Setup Guide -->
+        <div class="section">
+            <h2>⚙️ 設定方法</h2>
+            <p style="font-size: 14px; margin-bottom: 16px;"><strong style="color: var(--aws-white);">前提条件:</strong> AWS CLI v2、EKS クラスター管理 IAM 権限、Provisioned Control Plane 対応リージョン</p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">ステップ 1: 8XL ティアで Provisioned Control Plane クラスターを作成</span>
+                </div>
+                <pre><code class="language-bash">aws eks create-cluster \
+    --name my-ultra-scale-cluster \
+    --region us-east-1 \
+    --kubernetes-version 1.35 \
+    --compute-config '{
+        "enabled": true
+    }' \
+    --kubernetes-network-config '{
+        "elasticLoadBalancing": {
+            "enabled": true
+        }
+    }' \
+    --upgrade-policy '{
+        "supportType": "STANDARD"
+    }'</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">ステップ 2: 既存クラスターのティアを 8XL にアップグレード</span>
+                </div>
+                <pre><code class="language-bash">aws eks update-cluster-config \
+    --name my-existing-cluster \
+    --region us-east-1 \
+    --compute-config '{
+        "enabled": true
+    }'</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">ステップ 3: クラスターの状態確認</span>
+                </div>
+                <pre><code class="language-bash">aws eks describe-cluster \
+    --name my-ultra-scale-cluster \
+    --region us-east-1 \
+    --query 'cluster.{name:name, status:status, version:version, platformVersion:platformVersion}'</code></pre>
+            </div>
+        </div>
+
+        <!-- Use Cases -->
+        <div class="section">
+            <h2>💡 ユースケース</h2>
+            <div class="usecase-cards">
+                <div class="usecase-card">
+                    <h3>🤖 大規模 AI/ML モデルトレーニング</h3>
+                    <p>数千 GPU ノードを使用した大規模言語モデルのトレーニングを EKS 上で実行し、トレーニングジョブの中断を最小化したいシナリオ。</p>
+                    <div class="usecase-effect">
+                        <strong>効果:</strong> 8XL ティアの高い API サーバー処理能力により、数千ノード規模のクラスターでも安定した Kubernetes API レスポンスを維持し、トレーニングジョブの中断リスクを低減。
+                    </div>
+                </div>
+                <div class="usecase-card">
+                    <h3>🏦 金融系ミッションクリティカルアプリケーション</h3>
+                    <p>金融機関が決済処理や取引システムを EKS 上で運用し、極めて高い可用性が要求されるシナリオ。</p>
+                    <div class="usecase-effect">
+                        <strong>効果:</strong> 99.99% SLA により年間約 52 分以下のダウンタイム保証が得られ、金融規制の可用性要件を充足。1 分間隔の SLA 測定により短時間の障害も検出。
+                    </div>
+                </div>
+                <div class="usecase-card">
+                    <h3>🖥️ HPC バッチ処理</h3>
+                    <p>創薬シミュレーションや気象モデリングなどの HPC ワークロードを大規模 EKS クラスターで実行し、大量の API リクエストが発生するシナリオ。</p>
+                    <div class="usecase-effect">
+                        <strong>効果:</strong> 8XL ティアの API サーバー処理能力により、大量のジョブスケジューリングリクエストを安定的に処理し、HPC ワークロードのスループットを最大化。
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Merits -->
+        <div class="section">
+            <h2>✅ メリット</h2>
+            <div class="merit-grid">
+                <div class="merit-card business">
+                    <h3>💼 ビジネス面</h3>
+                    <ul>
+                        <li><strong>信頼性向上:</strong> 99.99% SLA で金融、医療、公共インフラなどの厳格な可用性要件に対応</li>
+                        <li><strong>大規模 AI/ML 実現:</strong> 数千ノード規模で安定した API パフォーマンスを提供</li>
+                        <li><strong>コスト最適化:</strong> 高い SLA 保証により自前の冗長化設計コストを削減</li>
+                    </ul>
+                </div>
+                <div class="merit-card technical">
+                    <h3>🔬 技術面</h3>
+                    <ul>
+                        <li><strong>スループット向上:</strong> 8XL で 4XL の 2 倍の API リクエスト処理能力</li>
+                        <li><strong>精密測定:</strong> 1 分間隔の SLA 測定で短時間障害も検出可能</li>
+                        <li><strong>スケーラブル:</strong> ワークロード成長に応じてティアをアップグレード可能</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Limitations -->
+        <div class="section">
+            <h2>⚠️ デメリット・制約事項</h2>
+            <h3 style="color: var(--aws-white); font-size: 15px; margin-bottom: 12px;">制限事項</h3>
+            <div class="limitation-item"><span class="limitation-icon">🚫</span><span>8XL ティアは Provisioned Control Plane でのみ利用可能であり、標準のコントロールプレーンでは選択不可</span></div>
+            <div class="limitation-item"><span class="limitation-icon">🚫</span><span>99.99% SLA は Provisioned Control Plane クラスターのみに適用。標準クラスターには従来の SLA が適用</span></div>
+            <div class="limitation-item"><span class="limitation-icon">🚫</span><span>8XL ティアは EKS Provisioned Control Plane が提供されているリージョンでのみ利用可能</span></div>
+
+            <h3 style="color: var(--aws-white); font-size: 15px; margin: 20px 0 12px 0;">考慮すべき点</h3>
+            <div class="limitation-item"><span class="consideration-icon">💡</span><span>8XL ティアはコスト増加を伴うため、ワークロード規模と必要なパフォーマンスに基づいて適切なティアを選択</span></div>
+            <div class="limitation-item"><span class="consideration-icon">💡</span><span>Provisioned Control Plane への移行には、既存クラスターの設定変更が必要となる場合がある</span></div>
+            <div class="limitation-item"><span class="consideration-icon">💡</span><span>SLA クレジットの適用条件や手続きについて、AWS サービスレベルアグリーメントの詳細を事前に確認することを推奨</span></div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="section">
+            <h2>💰 料金</h2>
+            <p>Provisioned Control Plane の料金はティアに応じて異なります。8XL ティアは最大の処理能力を提供するため、他のティアよりも高い料金が設定されています。</p>
+            <p>詳細な料金情報については <a href="https://aws.amazon.com/eks/pricing/" target="_blank" class="aws-link">Amazon EKS 料金ページ</a> を参照してください。</p>
+        </div>
+
+        <!-- Region -->
+        <div class="section">
+            <h2>🌍 利用可能リージョン</h2>
+            <p>EKS Provisioned Control Plane が提供されている全てのリージョンで利用可能です。</p>
+        </div>
+
+        <!-- Related Services -->
+        <div class="section">
+            <h2>🔗 関連サービス・機能</h2>
+            <div class="related-grid">
+                <div class="related-card">
+                    <strong>Amazon EKS Auto Mode</strong><br>
+                    Provisioned Control Plane と組み合わせて、ノードの自動プロビジョニングとスケーリングを実現
+                </div>
+                <div class="related-card">
+                    <strong>Amazon EKS Hybrid Nodes</strong><br>
+                    コントロールプレーンをクラウドで管理しながら、オンプレミスのノードを統合
+                </div>
+                <div class="related-card">
+                    <strong>AWS Fault Injection Service</strong><br>
+                    99.99% SLA の効果を検証するためのカオスエンジニアリングテストを実施
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p><strong>📎 出典:</strong></p>
+            <ul style="list-style: none; padding-left: 0; margin: 8px 0;">
+                <li>- <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/amazon-eks-announces-sla-8xl-scaling-tier/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+                <li>- <a href="https://docs.aws.amazon.com/eks/latest/userguide/" target="_blank" rel="noopener noreferrer">Amazon EKS ドキュメント</a></li>
+                <li>- <a href="https://docs.aws.amazon.com/eks/latest/userguide/provisioned-control-plane.html" target="_blank" rel="noopener noreferrer">EKS Provisioned Control Plane ドキュメント</a></li>
+                <li>- <a href="https://aws.amazon.com/eks/sla/" target="_blank" rel="noopener noreferrer">Amazon EKS SLA</a></li>
+                <li>- <a href="https://aws.amazon.com/eks/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a></li>
+            </ul>
+            <p style="margin-top: 12px; font-size: 11px; color: rgba(213, 219, 219, 0.6);">Generated on 2026-03-21</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

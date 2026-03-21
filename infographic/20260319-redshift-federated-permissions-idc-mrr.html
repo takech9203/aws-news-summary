@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Redshift - IAM Identity Center によるフェデレーション権限のマルチリージョン対応</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .header-left { flex: 1; min-width: 280px; }
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      line-height: 1.3;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+    }
+    .header-date {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      white-space: nowrap;
+      padding-top: 4px;
+    }
+
+    /* Section */
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 10px;
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .before-card, .after-card {
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+    }
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+    }
+    .ba-title {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    .before-card .ba-title { color: var(--aws-red); }
+    .after-card .ba-title { color: var(--aws-green); }
+    .ba-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 6px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .ba-icon { flex-shrink: 0; margin-top: 2px; }
+
+    /* Feature cards */
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 12px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .feature-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+    .feature-desc ul {
+      margin: 6px 0 0 0;
+      padding-left: 18px;
+    }
+    .feature-desc li {
+      margin: 4px 0;
+    }
+
+    /* Spec table */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    .spec-table th, .spec-table td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .spec-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .spec-table td {
+      color: var(--aws-light-gray);
+    }
+    .spec-table tr:hover td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .spec-highlight {
+      color: var(--aws-orange);
+      font-weight: 600;
+    }
+
+    /* Usecase cards */
+    .usecase-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.08), rgba(255, 153, 0, 0.02));
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+    .usecase-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 16px;
+    }
+    .usecase-scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 10px;
+    }
+    .usecase-effect {
+      font-size: 14px;
+      color: var(--aws-green);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    /* Merits/Demerits */
+    .merit-item, .demerit-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+    .merit-icon { color: var(--aws-green); flex-shrink: 0; }
+    .demerit-icon { color: var(--aws-red); flex-shrink: 0; }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Related services */
+    .related-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .related-card {
+      background: rgba(140, 79, 255, 0.08);
+      border: 1px solid rgba(140, 79, 255, 0.2);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .related-card-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--aws-white);
+      margin-bottom: 4px;
+    }
+    .related-card-desc {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Links */
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+    footer a:hover { text-decoration: underline; }
+    .footer-links { margin-top: 8px; }
+    .footer-links li {
+      margin: 4px 0;
+      list-style: none;
+    }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+      h1 { font-size: 24px; }
+      .before-after { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .stat-value { font-size: 28px; }
+    }
+    @media (max-width: 480px) {
+      .stats-row { grid-template-columns: 1fr; }
+      body { padding: 12px; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">Amazon Redshift</span>
+        <h1>IAM Identity Center によるフェデレーション権限のマルチリージョン対応</h1>
+        <div class="subtitle">Workforce Identity / きめ細かなアクセス制御 / マルチリージョン SSO</div>
+      </div>
+      <div class="header-date">2026-03-19</div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">SSO</div>
+        <div class="stat-label">シングルサインオン対応</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">4 &#x5C64;</div>
+        <div class="stat-label">アクセス制御レベル<br>テーブル / カラム / 行 / マスキング</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">Multi-Region</div>
+        <div class="stat-label">フェデレーション権限の拡張</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">&#165;0</div>
+        <div class="stat-label">追加料金なし</div>
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>&#128203; 概要</h2>
+      <p>
+        Amazon Redshift のフェデレーション権限が <span class="highlight">AWS IAM Identity Center</span> を使用して<span class="highlight">複数の AWS リージョン</span>で利用可能になりました。プライマリリージョンで設定した IAM Identity Center の構成を追加リージョンに拡張し、ユーザーの物理的な近さによるパフォーマンス向上と、マルチリージョン構成による信頼性の向上を実現できます。
+      </p>
+      <p style="margin-top: 12px;">
+        既存の <span class="highlight">Workforce Identity</span> を活用して、Redshift のテーブルレベルおよびカラムレベルのきめ細かなアクセス制御を簡素化します。行レベルセキュリティ、カラムレベルセキュリティ、データマスキングポリシーが自動的に適用され、Amazon QuickSight、Redshift Query Editor、サードパーティの SQL ツールからの SSO も利用可能です。
+      </p>
+
+      <h3>Before / After</h3>
+      <div class="before-after">
+        <div class="before-card">
+          <div class="ba-title">&#x274C; Before</div>
+          <div class="ba-item"><span class="ba-icon">&#x2022;</span>IAM Identity Center を使用した Redshift のフェデレーション権限はプライマリリージョンのみで利用可能</div>
+          <div class="ba-item"><span class="ba-icon">&#x2022;</span>地理的に分散したユーザーがプライマリリージョンにアクセスする場合、レイテンシーが発生</div>
+          <div class="ba-item"><span class="ba-icon">&#x2022;</span>マルチリージョンで一貫したアクセス制御ポリシーを維持するために手動での設定同期が必要</div>
+        </div>
+        <div class="after-card">
+          <div class="ba-title">&#x2705; After</div>
+          <div class="ba-item"><span class="ba-icon">&#x2022;</span>フェデレーション権限をプライマリリージョンから追加リージョンに拡張可能</div>
+          <div class="ba-item"><span class="ba-icon">&#x2022;</span>ユーザーに近いリージョンの Redshift クラスターにアクセスしパフォーマンスが向上</div>
+          <div class="ba-item"><span class="ba-icon">&#x2022;</span>複数リージョンで一貫したきめ細かなアクセス制御が自動的に適用</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>&#127959;&#65039; アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph IdC["&#128274; IAM Identity Center"]
+        direction LR
+        IDP["&#127970; 外部 IdP&lt;br/&gt;Okta / Azure AD 等"]
+        IDC_Primary["&#128203; IdC プライマリ"]
+        IDP --> IDC_Primary
+    end
+
+    subgraph PrimaryRegion["&#9729;&#65039; プライマリリージョン"]
+        RS1["&#128202; Redshift クラスター"]
+        Policy1["&#128274; アクセス制御&lt;br/&gt;行/カラム/マスキング"]
+        RS1 --- Policy1
+    end
+
+    subgraph AdditionalRegion1["&#9729;&#65039; 追加リージョン A"]
+        RS2["&#128202; Redshift クラスター"]
+        Policy2["&#128274; アクセス制御&lt;br/&gt;行/カラム/マスキング"]
+        RS2 --- Policy2
+    end
+
+    subgraph AdditionalRegion2["&#9729;&#65039; 追加リージョン B"]
+        RS3["&#128202; Redshift クラスター"]
+        Policy3["&#128274; アクセス制御&lt;br/&gt;行/カラム/マスキング"]
+        RS3 --- Policy3
+    end
+
+    IDC_Primary -.->|フェデレーション| RS1
+    IDC_Primary -.->|フェデレーション| RS2
+    IDC_Primary -.->|フェデレーション| RS3
+
+    User1(["&#128100; ユーザー 東京"]) --> RS2
+    User2(["&#128100; ユーザー 米国"]) --> RS1
+    User3(["&#128100; ユーザー 欧州"]) --> RS3
+
+    subgraph Tools["&#128295; アクセスツール"]
+        direction LR
+        QS["&#128200; QuickSight"]
+        QE["&#128187; Query Editor"]
+        SQL["&#128295; SQL ツール"]
+        QS ~~~ QE ~~~ SQL
+    end
+
+    Tools -.->|SSO| IdC
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef security fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class IdC,PrimaryRegion,AdditionalRegion1,AdditionalRegion2 cloud
+    class Tools layer
+    class RS1,RS2,RS3 compute
+    class Policy1,Policy2,Policy3 security
+    class User1,User2,User3 user
+    class QS,QE,SQL compute
+    class IDP,IDC_Primary security
+        </pre>
+      </div>
+      <p style="font-size:14px; color:var(--aws-light-gray); margin-top:8px;">
+        IAM Identity Center のプライマリリージョンから複数のリージョンにフェデレーション権限を拡張し、各リージョンの Redshift クラスターで一貫したアクセス制御を実現する構成を示しています。
+      </p>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>&#11088; 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="feature-title">&#127760; マルチリージョンフェデレーション権限</div>
+        <div class="feature-desc">
+          <ul>
+            <li>IAM Identity Center のプライマリリージョンから追加リージョンへのフェデレーション権限の拡張</li>
+            <li>各リージョンの Redshift クラスターで同一の Workforce Identity を使用したアクセス制御</li>
+            <li>ユーザーの地理的な近さに基づくリージョン選択によるパフォーマンス向上</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">&#128274; きめ細かなアクセス制御の統合管理</div>
+        <div class="feature-desc">
+          <ul>
+            <li>テーブルレベルおよびカラムレベルのアクセス制御を既存の Workforce Identity で管理</li>
+            <li>行レベルセキュリティ、カラムレベルセキュリティ、データマスキングポリシーが自動的に適用</li>
+            <li>管理者は一元的にアクセスポリシーを設定し、全リージョンで一貫性を維持</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">&#128273; シングルサインオン対応</div>
+        <div class="feature-desc">
+          <ul>
+            <li>Amazon QuickSight からの SSO アクセス</li>
+            <li>Redshift Query Editor v2 からの SSO アクセス</li>
+            <li>サードパーティの SQL ツール (DBeaver、DataGrip 等) からの SSO アクセス</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>&#128203; 技術仕様</h2>
+
+      <h3>フェデレーション権限の構成要素</h3>
+      <table class="spec-table">
+        <thead>
+          <tr><th>項目</th><th>詳細</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>認証方式</td><td class="spec-highlight">IAM Identity Center によるフェデレーション認証</td></tr>
+          <tr><td>サポートする IdP</td><td>Okta、Azure AD、OneLogin など SAML 2.0 対応 IdP</td></tr>
+          <tr><td>アクセス制御レベル</td><td class="spec-highlight">テーブル、カラム、行、データマスキング</td></tr>
+          <tr><td>SSO 対応ツール</td><td>QuickSight、Redshift Query Editor v2、サードパーティ SQL ツール</td></tr>
+          <tr><td>マルチリージョン</td><td class="spec-highlight">プライマリリージョンから追加リージョンへの拡張</td></tr>
+        </tbody>
+      </table>
+
+      <h3>IAM Identity Center 統合の設定例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">マルチリージョン構成</span>
+        </div>
+        <pre><code class="language-json">{
+  "EnabledRegions": [
+    "us-east-1",
+    "ap-northeast-1",
+    "eu-west-1"
+  ],
+  "IdentityCenterConfiguration": {
+    "InstanceArn": "arn:aws:sso:::instance/ssoins-xxxxxxxxx",
+    "ApplicationArn": "arn:aws:sso::123456789012:application/ssoins-xxxxxxxxx/apl-xxxxxxxxx"
+  },
+  "RedshiftIdcApplicationConfiguration": {
+    "IdcDisplayName": "Redshift-MRR",
+    "IdentityNamespace": "default",
+    "AuthorizedTokenIssuers": []
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Setup -->
+    <div class="section">
+      <h2>&#9881;&#65039; 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="merit-item"><span class="merit-icon">&#x2714;</span> AWS IAM Identity Center が有効化されていること</div>
+      <div class="merit-item"><span class="merit-icon">&#x2714;</span> 外部 IdP が IAM Identity Center と統合されていること</div>
+      <div class="merit-item"><span class="merit-icon">&#x2714;</span> Redshift クラスターまたは Serverless ワークグループが対象リージョンに存在すること</div>
+      <div class="merit-item"><span class="merit-icon">&#x2714;</span> IAM Identity Center のマルチリージョン機能が有効化されていること</div>
+
+      <h3>ステップ 1: IAM Identity Center のマルチリージョン有効化</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">追加リージョンを有効化</span>
+        </div>
+        <pre><code class="language-bash"># IAM Identity Center のインスタンスで追加リージョンを有効化
+aws sso-admin update-instance \
+  --instance-arn "arn:aws:sso:::instance/ssoins-xxxxxxxxx" \
+  --name "MyOrganization"
+
+# リージョンのオプトインステータスを確認
+aws sso-admin list-instances</code></pre>
+      </div>
+
+      <h3>ステップ 2: Redshift の IdC 統合を設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Redshift IdC アプリケーション作成</span>
+        </div>
+        <pre><code class="language-bash"># Redshift クラスターで IAM Identity Center 統合を有効化
+aws redshift create-redshift-idc-application \
+  --idc-instance-arn "arn:aws:sso:::instance/ssoins-xxxxxxxxx" \
+  --redshift-idc-application-name "my-redshift-idc-app" \
+  --idc-display-name "Redshift Analytics" \
+  --identity-namespace "default"</code></pre>
+      </div>
+
+      <h3>ステップ 3: きめ細かなアクセス制御の設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">アクセス制御ポリシーの設定</span>
+        </div>
+        <pre><code class="language-sql">-- テーブルレベルのアクセス権限を設定
+GRANT SELECT ON TABLE sales_data TO "IAMR:analyst-group";
+
+-- カラムレベルのアクセス制限
+GRANT SELECT (order_id, product_name, quantity)
+ON TABLE sales_data TO "IAMR:limited-analyst-group";
+
+-- 行レベルセキュリティポリシーの作成
+CREATE RLS POLICY region_filter
+WITH (region VARCHAR(50))
+USING (region = current_namespace);
+
+-- データマスキングポリシーの適用
+CREATE MASKING POLICY mask_email
+WITH (email VARCHAR(256))
+USING ('***@' || SPLIT_PART(email, '@', 2));</code></pre>
+      </div>
+    </div>
+
+    <!-- Merits -->
+    <div class="section">
+      <h2>&#x2705; メリット</h2>
+
+      <h3>&#128188; ビジネス面</h3>
+      <div class="merit-item"><span class="merit-icon">&#x2714;</span><span><strong style="color:var(--aws-white)">グローバル展開の加速</strong>: マルチリージョンでのフェデレーション権限により、世界各地の拠点からのデータアクセスをシームレスに実現</span></div>
+      <div class="merit-item"><span class="merit-icon">&#x2714;</span><span><strong style="color:var(--aws-white)">管理コストの削減</strong>: 一元化された ID 管理により、リージョンごとの個別設定が不要になり、運用オーバーヘッドを削減</span></div>
+      <div class="merit-item"><span class="merit-icon">&#x2714;</span><span><strong style="color:var(--aws-white)">コンプライアンス対応の強化</strong>: データの所在地要件を満たしつつ、一貫したアクセス制御ポリシーを適用可能</span></div>
+
+      <h3>&#128296; 技術面</h3>
+      <div class="merit-item"><span class="merit-icon">&#x2714;</span><span><strong style="color:var(--aws-white)">レイテンシーの低減</strong>: ユーザーに近いリージョンの Redshift クラスターにアクセスすることで、クエリのレスポンスタイムが向上</span></div>
+      <div class="merit-item"><span class="merit-icon">&#x2714;</span><span><strong style="color:var(--aws-white)">高可用性の実現</strong>: マルチリージョン構成により、単一リージョンの障害時にも業務継続性を確保</span></div>
+      <div class="merit-item"><span class="merit-icon">&#x2714;</span><span><strong style="color:var(--aws-white)">セキュリティの一貫性</strong>: 行レベル、カラムレベル、マスキングポリシーが全リージョンで自動適用され、セキュリティギャップを防止</span></div>
+    </div>
+
+    <!-- Demerits -->
+    <div class="section">
+      <h2>&#x26A0;&#xFE0F; 制約事項・考慮点</h2>
+
+      <h3>制限事項</h3>
+      <div class="demerit-item"><span class="demerit-icon">&#x26A0;</span><span>IAM Identity Center のマルチリージョン機能が前提となるため、IAM Identity Center 自体のマルチリージョン設定が必要</span></div>
+      <div class="demerit-item"><span class="demerit-icon">&#x26A0;</span><span>フェデレーション権限のリージョン間同期にはわずかな伝播遅延が発生する可能性がある</span></div>
+      <div class="demerit-item"><span class="demerit-icon">&#x26A0;</span><span>すべてのリージョンで Redshift が利用可能であることが前提</span></div>
+
+      <h3>考慮すべき点</h3>
+      <div class="demerit-item"><span class="demerit-icon">&#128161;</span><span>マルチリージョン構成ではデータの一貫性管理を別途検討する必要がある</span></div>
+      <div class="demerit-item"><span class="demerit-icon">&#128161;</span><span>リージョンごとのデータ配置とアクセスパターンに応じた適切なリージョン選択が重要</span></div>
+      <div class="demerit-item"><span class="demerit-icon">&#128161;</span><span>外部 IdP の可用性がフェデレーション認証全体の可用性に影響する</span></div>
+    </div>
+
+    <!-- Usecases -->
+    <div class="section">
+      <h2>&#127919; ユースケース</h2>
+
+      <div class="usecase-card">
+        <div class="usecase-title">&#127760; グローバル分析チームのデータアクセス</div>
+        <div class="usecase-scenario">日本、米国、欧州に分散した分析チームが、各リージョンの Redshift クラスターにアクセスしてデータ分析を行う。各チームは自身の担当地域のデータのみにアクセスできるよう制御する。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">地域別アクセスポリシー</span>
+          </div>
+          <pre><code class="language-sql">-- 地域別のアクセスポリシーを設定
+CREATE RLS POLICY region_access
+WITH (data_region VARCHAR(50))
+USING (data_region = SESSION_USER_REGION());
+
+-- 分析チームグループにテーブルアクセスを付与
+GRANT SELECT ON TABLE global_sales TO "IAMR:apac-analysts";
+GRANT SELECT ON TABLE global_sales TO "IAMR:americas-analysts";
+GRANT SELECT ON TABLE global_sales TO "IAMR:emea-analysts";</code></pre>
+        </div>
+        <div class="usecase-effect">&#x2714; 各リージョンの分析チームが低レイテンシーでデータにアクセスでき、行レベルセキュリティにより担当地域のデータのみが自動的にフィルタリングされる</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">&#128200; QuickSight ダッシュボードの SSO アクセス</div>
+        <div class="usecase-scenario">経営層が QuickSight ダッシュボードから Redshift のデータにアクセスする際に、企業の既存認証基盤を使用してシームレスにサインインし、機密データは自動的にマスキングされる構成を実現する。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">経営層向けマスキングポリシー</span>
+          </div>
+          <pre><code class="language-sql">-- 経営層向けのマスキングポリシー
+CREATE MASKING POLICY mask_pii
+WITH (customer_name VARCHAR(256))
+USING (LEFT(customer_name, 1) || '***');
+
+-- QuickSight サービスロールに適切な権限を付与
+GRANT SELECT ON TABLE executive_kpis TO "IAMR:executive-group";</code></pre>
+        </div>
+        <div class="usecase-effect">&#x2714; 経営層が企業認証で QuickSight にサインインし、Redshift のデータを安全に可視化できる。PII データは自動マスキングされ、コンプライアンス要件を満たす</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">&#128737;&#65039; 災害復旧時のリージョンフェイルオーバー</div>
+        <div class="usecase-scenario">プライマリリージョンの障害時に、セカンダリリージョンの Redshift クラスターにフェイルオーバーする。フェデレーション権限がマルチリージョンで設定されているため、ユーザーの認証とアクセス制御が即座に利用可能になる。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">Route 53 フェイルオーバー設定</span>
+          </div>
+          <pre><code class="language-bash"># Route 53 によるフェイルオーバー設定
+aws route53 change-resource-record-sets \
+  --hosted-zone-id Z123456789 \
+  --change-batch '{
+    "Changes": [{
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "redshift.example.com",
+        "Type": "CNAME",
+        "SetIdentifier": "secondary",
+        "Failover": "SECONDARY",
+        "TTL": 60,
+        "ResourceRecords": [{"Value": "redshift-secondary.region2.redshift.amazonaws.com"}]
+      }
+    }]
+  }'</code></pre>
+        </div>
+        <div class="usecase-effect">&#x2714; リージョン障害時にも認証基盤が維持され、ユーザーは意識することなくセカンダリリージョンの Redshift にアクセスを継続できる。RTO の大幅な短縮を実現</div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>&#128176; 料金</h2>
+      <p>フェデレーション権限のマルチリージョンサポート自体に<span class="highlight">追加料金は発生しません</span>。ただし、以下の料金が適用されます。</p>
+
+      <table class="spec-table">
+        <thead>
+          <tr><th>項目</th><th>料金</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Amazon Redshift クラスター</td><td>リージョンごとの Redshift 利用料金</td></tr>
+          <tr><td>Amazon Redshift Serverless</td><td>リージョンごとの RPU 使用量に基づく従量課金</td></tr>
+          <tr><td>IAM Identity Center</td><td class="spec-highlight">無料 (AWS Organizations の一部)</td></tr>
+          <tr><td>データ転送</td><td>リージョン間のデータ転送料金が発生する場合あり</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:13px; color:var(--aws-light-gray); margin-top:8px;">
+        &#128221; 最新の正確な料金については <a href="https://aws.amazon.com/redshift/pricing/" target="_blank" class="aws-link">公式料金ページ</a> をご確認ください。
+      </p>
+    </div>
+
+    <!-- Regions -->
+    <div class="section">
+      <h2>&#127758; 利用可能リージョン</h2>
+      <p>IAM Identity Center のマルチリージョン機能が利用可能なすべてのリージョンで利用できます。Redshift がサポートされているリージョンであることが前提条件となります。具体的なリージョンについては、AWS のドキュメントを参照してください。</p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>&#128279; 関連サービス</h2>
+      <div class="related-grid">
+        <div class="related-card">
+          <div class="related-card-title">&#128274; AWS IAM Identity Center</div>
+          <div class="related-card-desc">フェデレーション認証の基盤として使用。マルチリージョン機能が今回の前提</div>
+        </div>
+        <div class="related-card">
+          <div class="related-card-title">&#128200; Amazon QuickSight</div>
+          <div class="related-card-desc">SSO 対応の BI ツール。フェデレーション認証を使用したダッシュボードアクセスが可能</div>
+        </div>
+        <div class="related-card">
+          <div class="related-card-title">&#128187; Redshift Query Editor v2</div>
+          <div class="related-card-desc">SSO 対応のウェブベース SQL エディタ。フェデレーション認証を使用した Redshift へのクエリ実行が可能</div>
+        </div>
+        <div class="related-card">
+          <div class="related-card-title">&#128259; Redshift データ共有</div>
+          <div class="related-card-desc">マルチリージョン構成でリージョン間のデータ共有を実現</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>&#128206; 出典:</p>
+      <ul class="footer-links">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/03/redshift-federated-permissions-idc-mrr/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/redshift/latest/mgmt/redshift-iam-access-control-idp-connect.html" target="_blank" rel="noopener noreferrer">Amazon Redshift と IAM Identity Center の統合ドキュメント</a></li>
+        <li><a href="https://aws.amazon.com/redshift/pricing/" target="_blank" rel="noopener noreferrer">Amazon Redshift 料金ページ</a></li>
+      </ul>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

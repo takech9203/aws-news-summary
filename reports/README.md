@@ -5,6 +5,18 @@
 
 ## 2026 年
 
+- [2026-03-20 - AWS Firewall Manager - アジアパシフィック (ニュージーランド) リージョンでの提供開始](2026/2026-03-20-aws-firewall-manager-launches-ap-nz.md)
+- [2026-03-20 - Kiro CLI - ターミナル UI の刷新](2026/2026-03-20-kiro-changelog-2026-03-20.md)
+- [2026-03-20 - Amazon EKS - Provisioned Control Plane の 99.99% SLA と 8XL スケーリングティア](2026/2026-03-20-amazon-eks-announces-sla-8xl-scaling-tier.md)
+- [2026-03-20 - AWS Neuron - Amazon EKS 向け Dynamic Resource Allocation サポート](2026/2026-03-20-neuron-eks-dra-support.md)
+- [2026-03-20 - Amazon Bedrock AgentCore Runtime - WebRTC によるリアルタイム双方向ストリーミング](2026/2026-03-20-amazon-bedrock-webrtc.md)
+- [2026-03-20 - AWS DataSync - AWS Secrets Manager による全ロケーションタイプの資格情報管理](2026/2026-03-20-aws-datasync-secrets-manager.md)
+- [2026-03-19 - Amazon EC2 - C8gn インスタンスが東京リージョンを含む追加リージョンで利用可能に](2026/2026-03-19-amazon-ec2-c8gn-instances-additional-regions.md)
+- [2026-03-19 - Amazon EC2 Fleet - Interruptible Capacity Reservations のサポート](2026/2026-03-19-amazon-ec2-fleet-interruptible-capacity-reservations.md)
+- [2026-03-19 - Amazon Redshift - IAM Identity Center によるフェデレーション権限のマルチリージョン対応](2026/2026-03-19-redshift-federated-permissions-idc-mrr.md)
+- [2026-03-19 - Amazon RDS Custom for SQL Server - OS アップデートの表示とスケジュール機能](2026/2026-03-19-amazon-rds-custom-sql-server-operating-system-updates.md)
+- [2026-03-19 - Amazon EC2 - NIXL with EFA による LLM 推論の高速化](2026/2026-03-19-aws-support-nixl-with-efa.md)
+- [2026-03-19 - AWS Lambda - Availability Zone メタデータのサポート](2026/2026-03-19-lambda-availability-zone-metadata.md)
 - [2026-03-17 - Amazon Bedrock - アジアパシフィック (ニュージーランド) リージョンでの提供開始](2026/2026-03-17-amazon-bedrock-asia-pacific-new-zealand.md)
 - [2026-03-17 - Amazon MSK - Express Brokers がアフリカ (ケープタウン) およびアジアパシフィック (台北) リージョンに拡大](2026/2026-03-17-amazon-msk-express-2-new-aws-regions.md)
 - [2026-03-17 - Amazon SageMaker AI - Training Plans 延長機能](2026/2026-03-17-amazon-sagemaker-training-plan-extension.md)
