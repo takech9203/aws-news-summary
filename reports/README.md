@@ -5,6 +5,8 @@
 
 ## 2026 年
 
+- [2026-03-23 - Kiro CLI - 新しい UX デザインの導入](2026/2026-03-23-kiro-new-look-for-cli.md)
+- [2026-03-23 - AWS HealthImaging - Europe (London) リージョンでの提供開始](2026/2026-03-23-aws-healthimaging-europe-london.md)
 - [2026-03-20 - AWS Firewall Manager - アジアパシフィック (ニュージーランド) リージョンでの提供開始](2026/2026-03-20-aws-firewall-manager-launches-ap-nz.md)
 - [2026-03-20 - Kiro CLI - ターミナル UI の刷新](2026/2026-03-20-kiro-changelog-2026-03-20.md)
 - [2026-03-20 - Amazon EKS - Provisioned Control Plane の 99.99% SLA と 8XL スケーリングティア](2026/2026-03-20-amazon-eks-announces-sla-8xl-scaling-tier.md)
