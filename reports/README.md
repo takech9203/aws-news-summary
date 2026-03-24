@@ -5,6 +5,7 @@
 
 ## 2026 年
 
+- [2026-03-24 - Kiro - From Copilots to Coworkers: AAAI 2026 パネルディスカッション](2026/2026-03-24-kiro-from-copilots-to-coworkers.md)
 - [2026-03-23 - Kiro CLI - 新しい UX デザインの導入](2026/2026-03-23-kiro-new-look-for-cli.md)
 - [2026-03-23 - AWS HealthImaging - Europe (London) リージョンでの提供開始](2026/2026-03-23-aws-healthimaging-europe-london.md)
 - [2026-03-20 - AWS Firewall Manager - アジアパシフィック (ニュージーランド) リージョンでの提供開始](2026/2026-03-20-aws-firewall-manager-launches-ap-nz.md)
