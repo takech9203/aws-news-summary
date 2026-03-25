@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Batch - SageMaker Training ジョブ向けクォータ管理とプリエンプション</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left { flex: 1; min-width: 280px; }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      text-align: right;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin: 4px 4px 4px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .feature-card {
+      background: rgba(255, 153, 0, 0.05);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 12px 0;
+    }
+
+    .feature-card h3 {
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .feature-card p, .feature-card ul {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    .feature-card ul {
+      padding-left: 20px;
+      margin-top: 6px;
+    }
+
+    .feature-card li {
+      margin-bottom: 4px;
+    }
+
+    /* Before/After */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 600px) {
+      .compare-grid { grid-template-columns: 1fr; }
+    }
+
+    .compare-before {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .compare-after {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .compare-label {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .compare-before .compare-label { color: var(--aws-red); }
+    .compare-after .compare-label { color: var(--aws-green); }
+
+    .compare-before ul, .compare-after ul {
+      padding-left: 18px;
+      font-size: 14px;
+    }
+
+    .compare-before li, .compare-after li {
+      margin-bottom: 6px;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 600px) {
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255,153,0,0.15) 0%, rgba(255,153,0,0.05) 100%);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Use case */
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+
+    .usecase-card h3 {
+      color: var(--aws-orange);
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .usecase-card p {
+      font-size: 14px;
+    }
+
+    /* Table */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    .spec-table th, .spec-table td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .spec-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .spec-table td {
+      color: var(--aws-light-gray);
+    }
+
+    .spec-table code {
+      background: rgba(255, 153, 0, 0.15);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Merits/Demerits */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 600px) {
+      .merit-grid { grid-template-columns: 1fr; }
+    }
+
+    .merit-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .merit-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* Strategy cards */
+    .strategy-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 600px) {
+      .strategy-grid { grid-template-columns: 1fr; }
+    }
+
+    .strategy-card {
+      background: rgba(255, 153, 0, 0.05);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .strategy-card h4 {
+      color: var(--aws-orange);
+      font-size: 15px;
+      margin-bottom: 8px;
+    }
+
+    .strategy-card p {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    .strategy-card .strategy-icon {
+      font-size: 28px;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    /* Links */
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    .related-link-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0;
+      font-size: 14px;
+    }
+
+    /* Region badge */
+    .region-info {
+      background: rgba(0, 161, 201, 0.1);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+      text-align: center;
+      font-size: 15px;
+    }
+
+    /* Pricing */
+    .pricing-highlight {
+      background: linear-gradient(135deg, rgba(29,129,2,0.15), rgba(29,129,2,0.05));
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      margin-top: 12px;
+    }
+
+    .pricing-highlight .stat-value {
+      color: var(--aws-green);
+    }
+
+    /* Caution */
+    .caution-box {
+      background: rgba(209, 50, 18, 0.08);
+      border-left: 4px solid var(--aws-red);
+      border-radius: 0 8px 8px 0;
+      padding: 14px 18px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <h1>📊 AWS Batch - SageMaker Training ジョブ向けクォータ管理とプリエンプション</h1>
+        <div style="margin-top: 8px;">
+          <span class="service-badge">AWS Batch</span>
+          <span class="service-badge">Amazon SageMaker</span>
+          <span class="service-badge">SageMaker Python SDK</span>
+        </div>
+      </div>
+      <div class="subtitle">
+        📅 2026 年 3 月 25 日<br>
+        AWS Service Update
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>AWS Batch が SageMaker Training ジョブ向けに<span class="highlight">クォータ管理</span>と<span class="highlight">ジョブプリエンプション</span>機能をサポート。ジョブキューごとに最大 20 個のクォータシェアを作成し、仮想キューとして専用のキャパシティ制限と設定可能なリソース共有戦略を持たせることが可能に。チームやプロジェクト間で共有コンピュートリソースを効率的に配分し、優先度に基づくプリエンプションを通じてリソースの最適利用を実現する。</p>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="margin-top: 20px;">
+        <div class="stat-card">
+          <span class="stat-value">20</span>
+          <div class="stat-label">最大クォータシェア数<br>ジョブキューあたり</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">3</span>
+          <div class="stat-label">リソース共有戦略<br>RESERVE / LEND / LEND_AND_BORROW</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">6</span>
+          <div class="stat-label">新規 API メソッド<br>クォータシェア管理用</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">$0</span>
+          <div class="stat-label">追加料金<br>標準機能として提供</div>
+        </div>
+      </div>
+
+      <!-- Before/After -->
+      <div class="compare-grid" style="margin-top: 20px;">
+        <div class="compare-before">
+          <div class="compare-label">❌ Before</div>
+          <ul>
+            <li>SageMaker Training ジョブのリソース配分をチーム単位で細かく制御する手段が限定的</li>
+            <li>高優先度ジョブを即座に実行するための自動プリエンプションの仕組みがなかった</li>
+            <li>借用されたキャパシティを自動回復するメカニズムが存在しなかった</li>
+          </ul>
+        </div>
+        <div class="compare-after">
+          <div class="compare-label">✅ After</div>
+          <ul>
+            <li>クォータシェアにより仮想キューとしてチームごとのキャパシティ制限を設定可能</li>
+            <li>クロスシェア/インシェアプリエンプションで自動的なリソース再配分を実現</li>
+            <li>キュー、シェア、ジョブの 3 レベルでキャパシティを監視可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p style="margin-bottom: 12px;">SageMaker Python SDK からジョブを投入し、AWS Batch のクォータシェアを通じてリソース配分とプリエンプションが管理され、SageMaker Training ジョブとして実行される全体の流れを示す。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph SDK["🐍 SageMaker Python SDK"]
+        direction LR
+        Module["aws_batch モジュール"]
+    end
+
+    subgraph BatchQueue["📋 AWS Batch ジョブキュー"]
+        direction LR
+        SP["⚙️ スケジューリングポリシー<br/>quotaSharePolicy"]
+    end
+
+    subgraph QuotaShares["📊 クォータシェア 最大 20 個"]
+        direction LR
+        QS1["🔵 チーム A<br/>LEND_AND_BORROW<br/>maxCapacity: 100"]
+        QS2["🟢 チーム B<br/>RESERVE<br/>maxCapacity: 50"]
+        QS3["🟡 チーム C<br/>LEND<br/>maxCapacity: 30"]
+        QS1 ~~~ QS2 ~~~ QS3
+    end
+
+    subgraph Preemption["⚡ プリエンプション"]
+        direction LR
+        Cross["🔄 クロスシェア<br/>借用キャパシティ回復"]
+        InShare["🔝 インシェア<br/>高優先度ジョブ優先"]
+        Cross ~~~ InShare
+    end
+
+    subgraph SageMaker["🧠 SageMaker Training"]
+        direction LR
+        Job1["トレーニングジョブ 1"]
+        Job2["トレーニングジョブ 2"]
+        Job3["トレーニングジョブ 3"]
+        Job1 ~~~ Job2 ~~~ Job3
+    end
+
+    subgraph Monitoring["📈 モニタリング"]
+        direction LR
+        QueueLevel["キューレベル"]
+        ShareLevel["シェアレベル"]
+        JobLevel["ジョブレベル"]
+        QueueLevel ~~~ ShareLevel ~~~ JobLevel
+    end
+
+    SDK --> BatchQueue
+    BatchQueue --> QuotaShares
+    QuotaShares --> Preemption
+    Preemption --> SageMaker
+    QuotaShares --> Monitoring
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class SDK cloud
+    class BatchQueue compute
+    class QuotaShares internal
+    class Preemption decision
+    class SageMaker input
+    class Monitoring cloud
+        </pre>
+      </div>
+    </div>
+
+    <!-- Resource Sharing Strategies -->
+    <div class="section">
+      <h2>🔀 リソース共有戦略</h2>
+      <div class="strategy-grid">
+        <div class="strategy-card">
+          <span class="strategy-icon">🔒</span>
+          <h4>RESERVE</h4>
+          <p>キャパシティを専有。貸出・借用なし。ミッションクリティカルなワークロードに最適。</p>
+        </div>
+        <div class="strategy-card">
+          <span class="strategy-icon">🤝</span>
+          <h4>LEND</h4>
+          <p>未使用分を他シェアに貸出。借用は不可。柔軟なリソース活用を許容するチーム向け。</p>
+        </div>
+        <div class="strategy-card">
+          <span class="strategy-icon">🔄</span>
+          <h4>LEND_AND_BORROW</h4>
+          <p>貸出と借用の両方が可能。<code style="font-size:12px;background:rgba(255,153,0,0.15);padding:1px 4px;border-radius:3px;color:#FFAD33;">borrowLimit</code> で上限設定。バーストキャパシティが必要なチーム向け。</p>
+        </div>
+      </div>
+
+      <!-- Preemption Flow -->
+      <h3 style="margin-top: 24px;">プリエンプションの仕組み</h3>
+      <div class="compare-grid" style="margin-top: 8px;">
+        <div class="card">
+          <h3 style="font-size: 15px; color: var(--aws-purple);">🔄 クロスシェアプリエンプション</h3>
+          <p style="font-size: 14px;">他のシェアに貸し出されたキャパシティを自動回復。借用者のジョブを停止して元のシェアにキャパシティを返還する。</p>
+        </div>
+        <div class="card">
+          <h3 style="font-size: 15px; color: var(--aws-purple);">🔝 インシェアプリエンプション</h3>
+          <p style="font-size: 14px;">同一シェア内で高優先度ジョブが低優先度ジョブをプリエンプト。<code style="font-size:12px;background:rgba(255,153,0,0.15);padding:1px 4px;border-radius:3px;color:#FFAD33;">preemptionConfiguration</code> で有効化/無効化を切り替え。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>🚀 主要機能</h2>
+
+      <div class="feature-card">
+        <h3>📊 クォータシェアによるリソース配分</h3>
+        <ul>
+          <li>ジョブキューごとに最大 20 個のクォータシェアを作成可能</li>
+          <li>各クォータシェアに専用のキャパシティ制限 <code>maxCapacity</code> を設定</li>
+          <li>仮想キューとして機能し、チームやプロジェクトごとの独立したリソース管理を実現</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>⚡ プリエンプション機能</h3>
+        <ul>
+          <li><strong>クロスシェアプリエンプション:</strong> 借用キャパシティを自動回復し元のシェアに返還</li>
+          <li><strong>インシェアプリエンプション:</strong> 同一シェア内で高優先度ジョブが低優先度ジョブを優先実行</li>
+          <li><strong>プリエンプションリトライ:</strong> <code>preemptionRetriesBeforeTermination</code> でプリエンプトされたジョブの再試行回数を設定可能</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>⚙️ スケジューリングポリシーの拡張</h3>
+        <ul>
+          <li><code>quotaSharePolicy</code> の追加</li>
+          <li><code>idleResourceAssignmentStrategy</code> によるアイドルリソースの割当戦略 (FIFO) を設定可能</li>
+          <li>SageMaker Python SDK の <code>aws_batch</code> モジュールとの統合</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>🔍 技術仕様</h2>
+
+      <h3 style="margin-top: 0;">新規 API</h3>
+      <table class="spec-table">
+        <tr><th>API</th><th>説明</th></tr>
+        <tr><td><code>CreateQuotaShare</code></td><td>クォータシェアを作成。キャパシティ制限、共有戦略、プリエンプション設定を指定</td></tr>
+        <tr><td><code>DescribeQuotaShare</code></td><td>クォータシェアの詳細情報を取得</td></tr>
+        <tr><td><code>UpdateQuotaShare</code></td><td>キャパシティ制限や共有戦略を更新</td></tr>
+        <tr><td><code>DeleteQuotaShare</code></td><td>クォータシェアを削除</td></tr>
+        <tr><td><code>ListQuotaShares</code></td><td>ジョブキューに関連するクォータシェアの一覧を取得</td></tr>
+        <tr><td><code>UpdateServiceJob</code></td><td>サービスジョブのスケジューリング優先度を更新</td></tr>
+      </table>
+
+      <h3 style="margin-top: 20px;">更新された API</h3>
+      <table class="spec-table">
+        <tr><th>API</th><th>変更内容</th></tr>
+        <tr><td><code>CreateSchedulingPolicy</code></td><td><code>quotaSharePolicy</code> パラメータの追加</td></tr>
+        <tr><td><code>UpdateSchedulingPolicy</code></td><td><code>quotaSharePolicy</code> パラメータの追加</td></tr>
+        <tr><td><code>SubmitServiceJob</code></td><td><code>quotaShareName</code>, <code>preemptionConfiguration</code> パラメータの追加</td></tr>
+        <tr><td><code>GetJobQueueSnapshot</code></td><td><code>frontOfQuotaShares</code>, <code>quotaShareUtilization</code> の追加</td></tr>
+      </table>
+
+      <h3 style="margin-top: 20px;">API 変更履歴</h3>
+      <table class="spec-table">
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/03/19</td>
+          <td><a href="https://awsapichanges.com/archive/changes/9a8fcc-batch.html" class="aws-link">AWS Batch</a></td>
+          <td>6 new 7 updated methods - クォータ管理、リソース共有戦略、優先度ベースのプリエンプションをサポート</td>
+        </tr>
+      </table>
+
+      <h3 style="margin-top: 20px;">クォータシェア作成例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">CreateQuotaShare リクエスト例</span>
+        </div>
+        <pre><code class="language-json">{
+  "quotaShareName": "team-ml-training",
+  "jobQueue": "sagemaker-training-queue",
+  "capacityLimits": [
+    {
+      "maxCapacity": 100,
+      "capacityUnit": "VCPU"
+    }
+  ],
+  "resourceSharingConfiguration": {
+    "strategy": "LEND_AND_BORROW",
+    "borrowLimit": 150
+  },
+  "preemptionConfiguration": {
+    "inSharePreemption": "ENABLED"
+  },
+  "state": "ENABLED"
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Setup Steps -->
+    <div class="section">
+      <h2>⚡ 設定方法</h2>
+      <p style="margin-bottom: 12px;"><strong>前提条件:</strong> AWS アカウントと AWS Batch への適切な IAM アクセス権限、SageMaker Training ジョブを実行可能な環境、AWS CLI v2 または SageMaker Python SDK が必要。</p>
+
+      <h3>ステップ 1: スケジューリングポリシーの作成</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">クォータシェアポリシーを含むスケジューリングポリシーを作成</span>
+        </div>
+        <pre><code class="language-bash">aws batch create-scheduling-policy \
+  --name quota-share-scheduling-policy \
+  --quota-share-policy '{
+    "idleResourceAssignmentStrategy": "FIFO"
+  }'</code></pre>
+      </div>
+
+      <h3>ステップ 2: クォータシェアの作成</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">チーム A 用クォータシェアを作成</span>
+        </div>
+        <pre><code class="language-bash">aws batch create-quota-share \
+  --quota-share-name team-a-share \
+  --job-queue sagemaker-training-queue \
+  --capacity-limits '[{"maxCapacity": 100, "capacityUnit": "VCPU"}]' \
+  --resource-sharing-configuration '{
+    "strategy": "LEND_AND_BORROW",
+    "borrowLimit": 150
+  }' \
+  --preemption-configuration '{"inSharePreemption": "ENABLED"}' \
+  --state ENABLED</code></pre>
+      </div>
+
+      <h3>ステップ 3: SageMaker Training ジョブの投入</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">クォータシェアを指定してジョブを投入</span>
+        </div>
+        <pre><code class="language-bash">aws batch submit-service-job \
+  --job-name my-training-job \
+  --job-queue sagemaker-training-queue \
+  --service-job-type SAGEMAKER_TRAINING \
+  --quota-share-name team-a-share \
+  --scheduling-priority 100 \
+  --preemption-configuration '{"preemptionRetriesBeforeTermination": 3}' \
+  --service-request-payload file://training-job-config.json</code></pre>
+      </div>
+
+      <h3>ステップ 4: キャパシティ使用率の確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">クォータシェアごとのキャパシティ使用率を確認</span>
+        </div>
+        <pre><code class="language-bash">aws batch get-job-queue-snapshot \
+  --job-queue sagemaker-training-queue \
+  --query 'queueUtilization.quotaShareUtilization'</code></pre>
+      </div>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <div class="merit-grid">
+        <div>
+          <h3>💼 ビジネス面</h3>
+          <div class="merit-item">
+            <span class="merit-icon">💰</span>
+            <span><strong>コスト最適化:</strong> リソース共有戦略により未使用キャパシティを他チームに貸出可能で、リソースの無駄を削減</span>
+          </div>
+          <div class="merit-item">
+            <span class="merit-icon">⚖️</span>
+            <span><strong>公平なリソース配分:</strong> チームやプロジェクトごとにキャパシティ上限を設定し、特定チームによるリソース占有を防止</span>
+          </div>
+          <div class="merit-item">
+            <span class="merit-icon">🎯</span>
+            <span><strong>SLA の確保:</strong> RESERVE 戦略とプリエンプション機能により、重要なトレーニングジョブの実行を保証</span>
+          </div>
+        </div>
+        <div>
+          <h3>🔧 技術面</h3>
+          <div class="merit-item">
+            <span class="merit-icon">⚙️</span>
+            <span><strong>柔軟なリソース管理:</strong> 3 種類の共有戦略と borrowLimit によるきめ細かなリソース制御</span>
+          </div>
+          <div class="merit-item">
+            <span class="merit-icon">🔄</span>
+            <span><strong>自動リカバリ:</strong> クロスシェアプリエンプションによる借用キャパシティの自動回復</span>
+          </div>
+          <div class="merit-item">
+            <span class="merit-icon">📈</span>
+            <span><strong>多段階モニタリング:</strong> キュー、クォータシェア、ジョブの 3 レベルでのキャパシティ可視化</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <div class="caution-box">
+        <strong>制限事項</strong>
+        <ul style="padding-left: 18px; margin-top: 6px; font-size: 14px;">
+          <li>クォータシェアは現時点で SageMaker Training ジョブキューでのみ利用可能</li>
+          <li>ジョブキューあたり最大 20 個のクォータシェアに制限</li>
+          <li>プリエンプトされたジョブは最初からやり直しとなるため、長時間実行ジョブではチェックポイント設計が重要</li>
+        </ul>
+      </div>
+      <div class="caution-box" style="border-left-color: var(--aws-orange); background: rgba(255,153,0,0.08);">
+        <strong>考慮すべき点</strong>
+        <ul style="padding-left: 18px; margin-top: 6px; font-size: 14px;">
+          <li>プリエンプション設計には、ジョブの優先度設計とチーム間のリソース配分ポリシーの事前合意が必要</li>
+          <li>LEND_AND_BORROW 戦略の borrowLimit 値の設定には、実際のワークロードパターンの分析が前提</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase-card">
+        <h3>👥 ユースケース 1: マルチチーム ML トレーニング環境</h3>
+        <p><strong>シナリオ:</strong> 複数の ML チームが共有の SageMaker Training インフラを利用しており、チームごとにリソース上限を設定しつつ、未使用リソースの有効活用を行いたい。</p>
+        <div class="code-block" style="margin-top: 12px;">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">マルチチーム用クォータシェア設定</span>
+          </div>
+          <pre><code class="language-bash"># チーム A: 大規模モデルトレーニング - 借用可能
+aws batch create-quota-share \
+  --quota-share-name ml-team-a \
+  --job-queue shared-training-queue \
+  --capacity-limits '[{"maxCapacity": 200, "capacityUnit": "VCPU"}]' \
+  --resource-sharing-configuration '{"strategy": "LEND_AND_BORROW", "borrowLimit": 300}'
+
+# チーム B: 推論モデル評価 - 貸出のみ
+aws batch create-quota-share \
+  --quota-share-name ml-team-b \
+  --job-queue shared-training-queue \
+  --capacity-limits '[{"maxCapacity": 100, "capacityUnit": "VCPU"}]' \
+  --resource-sharing-configuration '{"strategy": "LEND"}'</code></pre>
+        </div>
+        <p style="font-size:14px; margin-top: 8px;">→ チーム A はバースト時に最大 300 vCPU まで利用でき、チーム B の未使用リソースを自動的に活用。チーム B がリソースを必要とした場合、クロスシェアプリエンプションにより自動的にキャパシティが回復される。</p>
+      </div>
+
+      <div class="usecase-card">
+        <h3>🏭 ユースケース 2: 本番/実験ワークロードの優先度管理</h3>
+        <p><strong>シナリオ:</strong> 本番モデルの再トレーニングジョブと実験的なトレーニングジョブが混在する環境で、本番ジョブを常に優先実行したい。</p>
+        <div class="code-block" style="margin-top: 12px;">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">本番/実験ワークロード設定</span>
+          </div>
+          <pre><code class="language-bash"># 本番用クォータシェア - リソースを予約
+aws batch create-quota-share \
+  --quota-share-name production \
+  --job-queue training-queue \
+  --capacity-limits '[{"maxCapacity": 150, "capacityUnit": "VCPU"}]' \
+  --resource-sharing-configuration '{"strategy": "RESERVE"}' \
+  --preemption-configuration '{"inSharePreemption": "ENABLED"}'
+
+# 実験用クォータシェア - 余剰リソースを活用
+aws batch create-quota-share \
+  --quota-share-name experiment \
+  --job-queue training-queue \
+  --capacity-limits '[{"maxCapacity": 50, "capacityUnit": "VCPU"}]' \
+  --resource-sharing-configuration '{"strategy": "LEND_AND_BORROW", "borrowLimit": 200}'</code></pre>
+        </div>
+        <p style="font-size:14px; margin-top: 8px;">→ 本番ジョブは 150 vCPU が常に確保され、実験ジョブはアイドル時に最大 200 vCPU まで利用可能。本番側の需要が増加した際は、実験ジョブが自動的にプリエンプトされる。</p>
+      </div>
+
+      <div class="usecase-card">
+        <h3>💰 ユースケース 3: コスト配分とチャージバック</h3>
+        <p><strong>シナリオ:</strong> 組織内の部門ごとに ML トレーニングコストを正確に配分し、使用量ベースのチャージバックを実施したい。</p>
+        <div class="code-block" style="margin-top: 12px;">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">部門ごとの使用量取得</span>
+          </div>
+          <pre><code class="language-bash"># 各部門のクォータシェア使用量を取得
+aws batch get-job-queue-snapshot \
+  --job-queue org-training-queue \
+  --query 'queueUtilization.quotaShareUtilization.topCapacityUtilization[*].{share:quotaShareName,usage:capacityUsage}'</code></pre>
+        </div>
+        <p style="font-size:14px; margin-top: 8px;">→ クォータシェア単位でキャパシティ使用量を定量的に把握し、部門ごとの正確なコスト配分とチャージバックを実現。</p>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <div class="pricing-highlight">
+        <span class="stat-value" style="font-size: 24px;">追加料金なし</span>
+        <p style="margin-top: 8px;">クォータ管理機能は AWS Batch の標準料金に含まれる。AWS Batch 自体には追加料金はなく、ジョブの実行に使用する AWS リソースに対してのみ課金。</p>
+      </div>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <div class="region-info">
+        🌐 <strong>AWS Batch が利用可能なすべての AWS リージョン</strong>で提供
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="card">
+          <div class="merit-item">
+            <span class="merit-icon">🧠</span>
+            <span><strong>Amazon SageMaker Training:</strong> クォータ管理の対象となる ML トレーニングサービス</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="merit-item">
+            <span class="merit-icon">⚖️</span>
+            <span><strong>AWS Batch フェアシェアスケジューリング:</strong> 既存のリソース配分機能。クォータシェアはより細かな制御を提供</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="merit-item">
+            <span class="merit-icon">🐍</span>
+            <span><strong>SageMaker Python SDK:</strong> aws_batch モジュールを通じたプログラマティックなジョブ投入とクォータ管理</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="section" style="border: 1px solid rgba(255, 153, 0, 0.4);">
+      <h2>📝 まとめ</h2>
+      <p>AWS Batch の SageMaker Training ジョブ向けクォータ管理とプリエンプション機能により、マルチチーム環境での ML トレーニングリソースの配分と優先度管理が大幅に改善される。RESERVE、LEND、LEND_AND_BORROW の 3 つの共有戦略とクロスシェア/インシェアプリエンプションを組み合わせることで、リソースの効率的な利用と重要ジョブの実行保証を両立できる。</p>
+      <div style="margin-top: 16px; padding: 12px; background: rgba(255,153,0,0.1); border-radius: 8px;">
+        <strong style="color: var(--aws-orange);">💡 推奨アクション:</strong>
+        <ul style="padding-left: 18px; margin-top: 6px; font-size: 14px;">
+          <li>クォータシェアの設計とプリエンプションポリシーの策定から着手</li>
+          <li>チーム間のリソース配分ポリシーを事前に合意</li>
+          <li>長時間実行ジョブにはチェックポイント設計を導入</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- References -->
+    <div class="section">
+      <h2>📎 参考リンク</h2>
+      <div class="related-link-item">📰 <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/aws-batch-quota-management-preemption-sagemaker/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></div>
+      <div class="related-link-item">📖 <a href="https://docs.aws.amazon.com/batch/latest/userguide/quota-shares.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Batch ドキュメント - Quota Shares</a></div>
+      <div class="related-link-item">🔄 <a href="https://awsapichanges.com/archive/changes/9a8fcc-batch.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴</a></div>
+      <div class="related-link-item">💰 <a href="https://aws.amazon.com/batch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Batch 料金ページ</a></div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典: <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/aws-batch-quota-management-preemption-sagemaker/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/03/aws-batch-quota-management-preemption-sagemaker/</a></p>
+      <p style="margin-top: 4px;">Generated on 2026-03-25 | AWS News Infographic</p>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Batch - AMI ステータス表示と AWS Health 計画済みライフサイクルイベント対応</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left { flex: 1; min-width: 280px; }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      text-align: right;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin: 4px 4px 4px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .feature-card {
+      background: rgba(255, 153, 0, 0.05);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 12px 0;
+    }
+
+    .feature-card h3 {
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .feature-card p, .feature-card ul {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    .feature-card ul {
+      padding-left: 20px;
+      margin-top: 6px;
+    }
+
+    .feature-card li {
+      margin-bottom: 4px;
+    }
+
+    /* Before/After */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 600px) {
+      .compare-grid { grid-template-columns: 1fr; }
+    }
+
+    .compare-before {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .compare-after {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .compare-label {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .compare-before .compare-label { color: var(--aws-red); }
+    .compare-after .compare-label { color: var(--aws-green); }
+
+    .compare-before ul, .compare-after ul {
+      padding-left: 18px;
+      font-size: 14px;
+    }
+
+    .compare-before li, .compare-after li {
+      margin-bottom: 6px;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 600px) {
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255,153,0,0.15) 0%, rgba(255,153,0,0.05) 100%);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Use case */
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+
+    .usecase-card h3 {
+      color: var(--aws-orange);
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .usecase-card p {
+      font-size: 14px;
+    }
+
+    /* Table */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    .spec-table th, .spec-table td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .spec-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .spec-table td {
+      color: var(--aws-light-gray);
+    }
+
+    .spec-table code {
+      background: rgba(255, 153, 0, 0.15);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Merits/Demerits */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 600px) {
+      .merit-grid { grid-template-columns: 1fr; }
+    }
+
+    .merit-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .merit-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* Links */
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    .related-link-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0;
+      font-size: 14px;
+    }
+
+    /* Region badge */
+    .region-info {
+      background: rgba(0, 161, 201, 0.1);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+      text-align: center;
+      font-size: 15px;
+    }
+
+    /* Pricing */
+    .pricing-highlight {
+      background: linear-gradient(135deg, rgba(29,129,2,0.15), rgba(29,129,2,0.05));
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      margin-top: 12px;
+    }
+
+    .pricing-highlight .stat-value {
+      color: var(--aws-green);
+    }
+
+    /* Caution */
+    .caution-box {
+      background: rgba(209, 50, 18, 0.08);
+      border-left: 4px solid var(--aws-red);
+      border-radius: 0 8px 8px 0;
+      padding: 14px 18px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <h1>⚙️ AWS Batch - AMI ステータス表示と AWS Health 計画済みライフサイクルイベント</h1>
+        <div style="margin-top: 8px;">
+          <span class="service-badge">AWS Batch</span>
+          <span class="service-badge">AWS Health</span>
+          <span class="service-badge">Amazon EventBridge</span>
+        </div>
+      </div>
+      <div class="subtitle">
+        📅 2026 年 3 月 25 日<br>
+        AWS Service Update
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>AWS Batch がコンピューティング環境の運用可視性を向上させる <span class="highlight">2 つの新機能</span>を提供開始。AMI ステータスインジケーターにより、使用中の AMI が最新かどうかを API で直接確認可能に。さらに AWS Health Planned Lifecycle Events との統合で、AMI の非推奨化などの変更を事前に把握できるようになった。</p>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="margin-top: 20px;">
+        <div class="stat-card">
+          <span class="stat-value">2</span>
+          <div class="stat-label">新しいステータス値<br><code style="background:rgba(255,153,0,0.15);padding:2px 6px;border-radius:3px;font-size:12px;color:#FFAD33;">LATEST</code> / <code style="background:rgba(255,153,0,0.15);padding:2px 6px;border-radius:3px;font-size:12px;color:#FFAD33;">UPDATE_AVAILABLE</code></div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">3</span>
+          <div class="stat-label">対応 API メソッド<br>Create / Describe / Update</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">$0</span>
+          <div class="stat-label">追加料金<br>標準機能として提供</div>
+        </div>
+      </div>
+
+      <!-- Before/After -->
+      <div class="compare-grid" style="margin-top: 20px;">
+        <div class="compare-before">
+          <div class="compare-label">❌ Before</div>
+          <ul>
+            <li>AMI が最新かどうか確認する標準的な方法がなく、手動でバージョン比較が必要</li>
+            <li>AMI の非推奨化や変更に関する事前通知がなく、予期しない影響の可能性</li>
+            <li>セキュリティパッチを含む新しい AMI のリリースを見逃すリスク</li>
+          </ul>
+        </div>
+        <div class="compare-after">
+          <div class="compare-label">✅ After</div>
+          <ul>
+            <li><code style="font-size:12px;background:rgba(29,129,2,0.2);padding:1px 4px;border-radius:3px;color:#4ade80;">batchImageStatus</code> フィールドで AMI の最新性を即座に判断</li>
+            <li>AWS Health イベントにより変更スケジュールを事前に把握</li>
+            <li>プロアクティブな AMI 管理ワークフローの構築が可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p style="margin-bottom: 12px;">運用担当者は API 経由で AMI ステータスを直接確認でき、AWS Health からの計画済みイベント通知を EventBridge 経由で受け取ることができる。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Operator["👤 運用担当者"]
+        direction LR
+        Console["🖥️ AWS Console"]
+        CLI["⌨️ AWS CLI"]
+        Console ~~~ CLI
+    end
+
+    subgraph Batch["⚙️ AWS Batch"]
+        direction TB
+        CE["📦 Compute Environment"]
+        EC2Config["🔧 EC2 Configuration<br/>batchImageStatus"]
+        CE --> EC2Config
+    end
+
+    subgraph Status["📊 AMI ステータス"]
+        direction LR
+        Latest["✅ LATEST<br/>最新の AMI を使用中"]
+        Update["⚠️ UPDATE_AVAILABLE<br/>更新あり"]
+        Latest ~~~ Update
+    end
+
+    subgraph Health["🏥 AWS Health"]
+        direction TB
+        PLE["📋 Planned Lifecycle Events<br/>AMI 非推奨化の事前通知"]
+        EB["📡 EventBridge<br/>イベント配信"]
+        PLE --> EB
+    end
+
+    subgraph Actions["🔄 対応アクション"]
+        direction LR
+        UpdateCE["🔃 コンピューティング環境更新"]
+        Notify["🔔 通知/アラート"]
+        UpdateCE ~~~ Notify
+    end
+
+    Operator -->|DescribeComputeEnvironments| Batch
+    EC2Config --> Status
+    Health -->|事前通知| Operator
+    EB --> Actions
+    Status -->|UPDATE_AVAILABLE| Actions
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef success fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Operator,Batch,Status,Health,Actions cloud
+    class Console,CLI process
+    class CE,EC2Config internal
+    class Latest success
+    class Update warning
+    class PLE,EB internal
+    class UpdateCE,Notify process
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>🚀 主要機能</h2>
+
+      <div class="feature-card">
+        <h3>📊 AMI ステータスインジケーター</h3>
+        <ul>
+          <li><code>Ec2Configuration</code> に読み取り専用の <code>batchImageStatus</code> フィールドが追加</li>
+          <li>ステータス値は <code>LATEST</code> (最新の AMI を使用中) または <code>UPDATE_AVAILABLE</code> (更新が利用可能) の 2 種類</li>
+          <li><code>DescribeComputeEnvironments</code> API のレスポンスで確認可能</li>
+          <li><code>CreateComputeEnvironment</code> および <code>UpdateComputeEnvironment</code> のレスポンスにも含まれる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>🏥 AWS Health Planned Lifecycle Events</h3>
+        <ul>
+          <li>AWS Batch のリソースに影響する予定された変更の事前通知を提供</li>
+          <li>AMI の非推奨化スケジュールなどのライフサイクルイベントを追跡可能</li>
+          <li>AWS Health Dashboard および EventBridge 経由でイベントを受信可能</li>
+          <li>計画的なメンテナンスウィンドウの設定に活用できる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>🔧 運用ベストプラクティスの支援</h3>
+        <ul>
+          <li>AMI の更新状況を継続的にモニタリングする自動化ワークフローの構築が可能</li>
+          <li>セキュリティパッチ適用の SLA 管理に活用できる</li>
+          <li>コンプライアンス監査のエビデンスとして AMI ステータスを記録できる</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>🔍 技術仕様</h2>
+
+      <h3 style="margin-top: 0;">batchImageStatus フィールド</h3>
+      <table class="spec-table">
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>フィールド名</td><td><code>batchImageStatus</code></td></tr>
+        <tr><td>データ型</td><td>String</td></tr>
+        <tr><td>値</td><td><code>LATEST</code>, <code>UPDATE_AVAILABLE</code></td></tr>
+        <tr><td>格納場所</td><td><code>computeResources.ec2Configuration[].batchImageStatus</code></td></tr>
+        <tr><td>アクセス権限</td><td>読み取り専用</td></tr>
+      </table>
+
+      <h3 style="margin-top: 20px;">API 変更履歴</h3>
+      <table class="spec-table">
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/03/23</td>
+          <td><a href="https://awsapichanges.com/archive/changes/b18efc-batch.html" class="aws-link">AWS Batch</a></td>
+          <td>3 updated methods - <code>Ec2Configuration</code> に <code>batchImageStatus</code> フィールドを追加。対象 API: <code>CreateComputeEnvironment</code>, <code>DescribeComputeEnvironments</code>, <code>UpdateComputeEnvironment</code></td>
+        </tr>
+      </table>
+
+      <h3 style="margin-top: 20px;">必要な IAM 権限</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">IAM ポリシー例</span>
+        </div>
+        <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "batch:DescribeComputeEnvironments"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "health:DescribeEvents",
+                "health:DescribeEventDetails"
+            ],
+            "Resource": "*"
+        }
+    ]
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Setup Steps -->
+    <div class="section">
+      <h2>⚡ 設定方法</h2>
+      <p style="margin-bottom: 12px;"><strong>前提条件:</strong> AWS Batch のマネージド型コンピューティング環境が作成済み、AWS CLI v2 が最新バージョン、必要な IAM 権限が付与済みであること。</p>
+
+      <h3>ステップ 1: AMI ステータスの確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">AMI ステータス確認コマンド</span>
+        </div>
+        <pre><code class="language-bash">aws batch describe-compute-environments \
+    --compute-environments my-compute-env \
+    --query 'computeEnvironments[].computeResources.ec2Configuration[].{imageType:imageType,status:batchImageStatus}' \
+    --output table</code></pre>
+      </div>
+      <p style="font-size:14px; margin-bottom: 16px;"><code>batchImageStatus</code> が <code>UPDATE_AVAILABLE</code> の場合、新しい AMI が利用可能であることを示す。</p>
+
+      <h3>ステップ 2: コンピューティング環境の AMI 更新</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">AMI 更新コマンド</span>
+        </div>
+        <pre><code class="language-bash">aws batch update-compute-environment \
+    --compute-environment my-compute-env \
+    --compute-resources '{"updateToLatestImageVersion": true}'</code></pre>
+      </div>
+      <p style="font-size:14px; margin-bottom: 16px;">次回のインスタンス起動時から新しい AMI が使用される。</p>
+
+      <h3>ステップ 3: AWS Health イベントの EventBridge ルール設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">EventBridge ルール作成</span>
+        </div>
+        <pre><code class="language-bash">aws events put-rule \
+    --name "batch-health-lifecycle-events" \
+    --event-pattern '{
+        "source": ["aws.health"],
+        "detail-type": ["AWS Health Event"],
+        "detail": {
+            "service": ["BATCH"],
+            "eventTypeCategory": ["plannedChange"]
+        }
+    }'</code></pre>
+      </div>
+      <p style="font-size:14px;">AMI の非推奨化などの計画的な変更について事前通知を受け取れるようになる。</p>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <div class="merit-grid">
+        <div>
+          <h3>💼 ビジネス面</h3>
+          <div class="merit-item">
+            <span class="merit-icon">🔒</span>
+            <span><strong>セキュリティコンプライアンスの向上:</strong> AMI のステータスを常に把握し、セキュリティパッチ適用の SLA を遵守</span>
+          </div>
+          <div class="merit-item">
+            <span class="merit-icon">⏱️</span>
+            <span><strong>ダウンタイムの削減:</strong> 計画済みイベントの事前通知で、メンテナンスウィンドウを適切に計画</span>
+          </div>
+          <div class="merit-item">
+            <span class="merit-icon">💰</span>
+            <span><strong>運用コストの削減:</strong> 手動での AMI バージョン追跡が不要に</span>
+          </div>
+        </div>
+        <div>
+          <h3>🔧 技術面</h3>
+          <div class="merit-item">
+            <span class="merit-icon">⚙️</span>
+            <span><strong>自動化の容易さ:</strong> API レスポンスにステータスが含まれ、CI/CD パイプラインへの組み込みが簡単</span>
+          </div>
+          <div class="merit-item">
+            <span class="merit-icon">📡</span>
+            <span><strong>EventBridge 統合:</strong> 柔軟な通知・自動修復ワークフローの構築が可能</span>
+          </div>
+          <div class="merit-item">
+            <span class="merit-icon">🎯</span>
+            <span><strong>追加設定不要:</strong> 既存 API に新フィールドが追加される形のため、別途の有効化手順は不要</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <div class="caution-box">
+        <strong>制限事項</strong>
+        <ul style="padding-left: 18px; margin-top: 6px; font-size: 14px;">
+          <li><code>batchImageStatus</code> は読み取り専用フィールドであり、ユーザーが直接値を設定することはできない</li>
+          <li>AMI ステータスは Batch が提供するデフォルト AMI にのみ適用され、カスタム AMI (<code>imageIdOverride</code> 使用時) のステータスは対象外の可能性がある</li>
+          <li>AWS Health イベントの通知タイミングは AWS 側のスケジュールに依存する</li>
+        </ul>
+      </div>
+      <div class="caution-box" style="border-left-color: var(--aws-orange); background: rgba(255,153,0,0.08);">
+        <strong>考慮すべき点</strong>
+        <ul style="padding-left: 18px; margin-top: 6px; font-size: 14px;">
+          <li><code>UPDATE_AVAILABLE</code> が表示されても実行中のジョブに即座に影響はないが、セキュリティの観点から計画的な更新を推奨</li>
+          <li>コンピューティング環境の更新時にはインスタンスの入れ替えが発生するため、<code>updatePolicy</code> で実行中のジョブへの影響を制御する必要がある</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase-card">
+        <h3>🔍 ユースケース 1: セキュリティパッチの自動検知と通知</h3>
+        <p><strong>シナリオ:</strong> セキュリティチームが全コンピューティング環境の AMI ステータスを定期的に監視し、更新が必要な環境を検知したい。</p>
+        <div class="code-block" style="margin-top: 12px;">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AMI ステータス監視スクリプト</span>
+          </div>
+          <pre><code class="language-bash">#!/bin/bash
+# 全コンピューティング環境の AMI ステータスを確認
+ENVS=$(aws batch describe-compute-environments \
+    --query 'computeEnvironments[?computeResources.ec2Configuration[?batchImageStatus==`UPDATE_AVAILABLE`]].computeEnvironmentName' \
+    --output text)
+
+if [ -n "$ENVS" ]; then
+    echo "AMI update available for: $ENVS"
+    # SNS 通知などの処理を追加
+fi</code></pre>
+        </div>
+        <p style="font-size:14px; margin-top: 8px;">→ セキュリティパッチ適用の遅延を最小限に抑え、コンプライアンス要件を満たす。</p>
+      </div>
+
+      <div class="usecase-card">
+        <h3>🔄 ユースケース 2: 計画的な AMI ローテーション</h3>
+        <p><strong>シナリオ:</strong> 大規模なバッチ処理環境で、ジョブの実行スケジュールに合わせて AMI の更新を計画的に行いたい。</p>
+        <div class="code-block" style="margin-top: 12px;">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <span class="code-title">計画的 AMI 更新スクリプト</span>
+          </div>
+          <pre><code class="language-python">import boto3
+
+batch = boto3.client('batch')
+health = boto3.client('health')
+
+# AMI ステータスの確認
+response = batch.describe_compute_environments(
+    computeEnvironments=['production-ce']
+)
+
+for ce in response['computeEnvironments']:
+    for ec2_config in ce['computeResources']['ec2Configuration']:
+        if ec2_config.get('batchImageStatus') == 'UPDATE_AVAILABLE':
+            # メンテナンスウィンドウ中に更新を実行
+            batch.update_compute_environment(
+                computeEnvironment=ce['computeEnvironmentName'],
+                computeResources={
+                    'updateToLatestImageVersion': True
+                }
+            )</code></pre>
+        </div>
+        <p style="font-size:14px; margin-top: 8px;">→ ジョブの実行に影響を与えることなく、計画的に AMI を最新バージョンに維持。</p>
+      </div>
+
+      <div class="usecase-card">
+        <h3>📡 ユースケース 3: AWS Health イベントによる自動対応ワークフロー</h3>
+        <p><strong>シナリオ:</strong> AMI の非推奨化通知を受けた際に、自動的に対応チケットを作成し、関係者に通知したい。</p>
+        <div class="code-block" style="margin-top: 12px;">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <span class="code-title">EventBridge イベントパターン</span>
+          </div>
+          <pre><code class="language-json">{
+    "source": ["aws.health"],
+    "detail-type": ["AWS Health Event"],
+    "detail": {
+        "service": ["BATCH"],
+        "eventTypeCategory": ["plannedChange"]
+    }
+}</code></pre>
+        </div>
+        <p style="font-size:14px; margin-top: 8px;">→ EventBridge 経由で Lambda に連携し、Jira チケットの自動作成や Slack 通知を実行して対応漏れを防止。</p>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <div class="pricing-highlight">
+        <span class="stat-value" style="font-size: 24px;">追加料金なし</span>
+        <p style="margin-top: 8px;">AMI ステータスインジケーターおよび AWS Health Planned Lifecycle Events は AWS Batch の標準機能として提供</p>
+      </div>
+      <table class="spec-table" style="margin-top: 16px;">
+        <tr><th>項目</th><th>料金</th></tr>
+        <tr><td>AWS Batch</td><td>追加料金なし (コンピューティングリソースの料金のみ)</td></tr>
+        <tr><td>AWS Health</td><td>追加料金なし</td></tr>
+        <tr><td>EventBridge</td><td>カスタムイベントバスを使用する場合、イベント配信料金が発生</td></tr>
+      </table>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <div class="region-info">
+        🌐 <strong>AWS Batch が利用可能なすべての AWS リージョン</strong>で提供
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="card">
+          <div class="merit-item">
+            <span class="merit-icon">🏥</span>
+            <span><strong>AWS Health:</strong> 計画済み変更の通知元サービス</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="merit-item">
+            <span class="merit-icon">📡</span>
+            <span><strong>Amazon EventBridge:</strong> Health イベントの配信とルーティング</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="merit-item">
+            <span class="merit-icon">🔧</span>
+            <span><strong>AWS Systems Manager:</strong> AMI 管理やパッチ適用の自動化</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="merit-item">
+            <span class="merit-icon">🖼️</span>
+            <span><strong>EC2 Image Builder:</strong> カスタム AMI のビルドパイプライン連携</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="section" style="border: 1px solid rgba(255, 153, 0, 0.4);">
+      <h2>📝 まとめ</h2>
+      <p>AWS Batch に AMI ステータスインジケーターと AWS Health Planned Lifecycle Events が追加されたことで、コンピューティング環境の AMI 管理がより透明かつプロアクティブに行えるようになった。特にセキュリティパッチの適用状況を API で直接確認できる点は、コンプライアンス要件の厳しい環境で大きな価値がある。</p>
+      <div style="margin-top: 16px; padding: 12px; background: rgba(255,153,0,0.1); border-radius: 8px;">
+        <strong style="color: var(--aws-orange);">💡 推奨アクション:</strong>
+        <ul style="padding-left: 18px; margin-top: 6px; font-size: 14px;">
+          <li><code>DescribeComputeEnvironments</code> API で現在の AMI ステータスを確認</li>
+          <li>EventBridge ルールを設定して計画済みイベントの通知を受け取る</li>
+          <li>AMI 更新の自動化ワークフローを構築する</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- References -->
+    <div class="section">
+      <h2>📎 参考リンク</h2>
+      <div class="related-link-item">📰 <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/aws-batch-ami-status-aws-health/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></div>
+      <div class="related-link-item">📖 <a href="https://docs.aws.amazon.com/batch/latest/userguide/compute_environment_parameters.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Batch ドキュメント - Compute environment parameters</a></div>
+      <div class="related-link-item">🏥 <a href="https://docs.aws.amazon.com/health/latest/ug/what-is-aws-health.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Health ドキュメント</a></div>
+      <div class="related-link-item">💰 <a href="https://aws.amazon.com/batch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Batch 料金ページ</a></div>
+      <div class="related-link-item">🔄 <a href="https://awsapichanges.com/archive/changes/b18efc-batch.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 - AWS Batch AMI Visibility</a></div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典: <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/aws-batch-ami-status-aws-health/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/03/aws-batch-ami-status-aws-health/</a></p>
+      <p style="margin-top: 4px;">Generated on 2026-03-25 | AWS News Infographic</p>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
