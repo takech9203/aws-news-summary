@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS ParallelCluster 3.15 - P6-B300 サポートと Slurm 25.11 アップグレード</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+        :root {
+            --aws-squid-ink: #232F3E;
+            --aws-dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --aws-white: #FFFFFF;
+            --aws-light-gray: #D5DBDB;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--aws-squid-ink);
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            color: var(--aws-light-gray);
+            font-size: 16px;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .header-left { flex: 1; min-width: 280px; }
+        .service-badge {
+            display: inline-block;
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            font-size: 13px;
+            font-weight: 700;
+            padding: 4px 14px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+        }
+        h1 {
+            font-size: 34px;
+            font-weight: 700;
+            color: var(--aws-white);
+            line-height: 1.3;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            font-size: 16px;
+            color: var(--aws-light-gray);
+        }
+        .header-date {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            text-align: right;
+            white-space: nowrap;
+            padding-top: 8px;
+        }
+
+        /* Section */
+        .section {
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--aws-orange);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--aws-white);
+            margin: 16px 0 10px;
+        }
+
+        p { margin-bottom: 12px; }
+
+        .highlight {
+            background-color: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        /* Before / After */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+        @media (max-width: 640px) {
+            .comparison-grid { grid-template-columns: 1fr; }
+        }
+        .comparison-card {
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid;
+        }
+        .comparison-card.before {
+            background: rgba(209, 50, 18, 0.08);
+            border-color: rgba(209, 50, 18, 0.4);
+        }
+        .comparison-card.after {
+            background: rgba(29, 129, 2, 0.08);
+            border-color: rgba(29, 129, 2, 0.4);
+        }
+        .comparison-label {
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .comparison-card.before .comparison-label { color: var(--aws-red); }
+        .comparison-card.after .comparison-label { color: var(--aws-green); }
+        .comparison-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        .comparison-card li {
+            padding: 4px 0;
+            padding-left: 20px;
+            position: relative;
+            font-size: 14px;
+        }
+        .comparison-card.before li::before {
+            content: "\2717";
+            position: absolute;
+            left: 0;
+            color: var(--aws-red);
+        }
+        .comparison-card.after li::before {
+            content: "\2713";
+            position: absolute;
+            left: 0;
+            color: var(--aws-green);
+        }
+
+        /* Stats */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin: 20px 0;
+        }
+        @media (max-width: 640px) {
+            .stats-row { grid-template-columns: 1fr 1fr; }
+        }
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255,153,0,0.15), rgba(255,153,0,0.05));
+            border: 1px solid rgba(255,153,0,0.3);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            line-height: 1.2;
+        }
+        .stat-label {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+            margin-top: 6px;
+        }
+
+        /* Mermaid */
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+        .diagram-caption {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+            margin-top: 12px;
+            font-style: italic;
+        }
+
+        /* Feature cards */
+        .feature-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .feature-card {
+            background: var(--aws-dark-squid);
+            border-left: 4px solid var(--aws-orange);
+            border-radius: 0 8px 8px 0;
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            border-right: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .feature-card-title {
+            font-weight: 600;
+            color: var(--aws-white);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .feature-card p {
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        .feature-card ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .feature-card li {
+            font-size: 14px;
+            padding: 3px 0;
+            padding-left: 16px;
+            position: relative;
+        }
+        .feature-card li::before {
+            content: "\2192";
+            position: absolute;
+            left: 0;
+            color: var(--aws-orange);
+        }
+
+        /* Table */
+        .spec-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+        .spec-table th, .spec-table td {
+            padding: 10px 14px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .spec-table th {
+            color: var(--aws-orange);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        /* Code block */
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+        .code-title {
+            color: var(--aws-light-gray);
+        }
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+        }
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        /* Use case */
+        .usecase-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .usecase-card {
+            background: rgba(255,153,0,0.06);
+            border: 1px solid rgba(255,153,0,0.25);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .usecase-title {
+            font-weight: 600;
+            font-size: 16px;
+            color: var(--aws-white);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .usecase-scenario {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            margin-bottom: 10px;
+        }
+        .usecase-effect {
+            font-size: 14px;
+            color: var(--aws-green);
+            margin-top: 8px;
+        }
+
+        /* Merits / Demerits */
+        .merit-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+        @media (max-width: 640px) {
+            .merit-grid { grid-template-columns: 1fr; }
+        }
+        .merit-col h3 {
+            margin-bottom: 12px;
+        }
+        .merit-item {
+            padding: 8px 0;
+            font-size: 14px;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+        .merit-icon { flex-shrink: 0; }
+
+        /* Constraints */
+        .constraint-list {
+            list-style: none;
+            padding: 0;
+        }
+        .constraint-list li {
+            padding: 6px 0 6px 20px;
+            position: relative;
+            font-size: 14px;
+        }
+        .constraint-list li::before {
+            content: "\26A0";
+            position: absolute;
+            left: 0;
+        }
+
+        /* Related Services */
+        .related-services {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .related-service {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            font-size: 14px;
+        }
+        .related-service strong {
+            color: var(--aws-white);
+            white-space: nowrap;
+        }
+
+        /* Links */
+        .link-list {
+            list-style: none;
+            padding: 0;
+        }
+        .link-list li {
+            padding: 6px 0;
+        }
+        .link-list a {
+            color: var(--aws-teal);
+            text-decoration: none;
+            font-size: 14px;
+            word-break: break-all;
+        }
+        .link-list a:hover {
+            color: var(--aws-smile-orange);
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            color: var(--aws-light-gray);
+        }
+        footer a {
+            color: var(--aws-teal);
+            text-decoration: none;
+            word-break: break-all;
+        }
+        footer a:hover {
+            color: var(--aws-smile-orange);
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <span class="service-badge">AWS ParallelCluster</span>
+                <h1>ParallelCluster 3.15 - P6-B300 サポートと Slurm 25.11</h1>
+                <div class="subtitle">NVIDIA Blackwell GPU 搭載の最新インスタンスと Slurm アップグレードで AI/ML・HPC ワークロードを強化</div>
+            </div>
+            <div class="header-date">2026-03-25</div>
+        </div>
+
+        <!-- Overview -->
+        <div class="section">
+            <h2>📋 概要</h2>
+            <p>AWS ParallelCluster 3.15 が一般提供開始されました。今回のリリースでは、<span class="highlight">NVIDIA Blackwell GPU</span> アーキテクチャを搭載した <span class="highlight">P6-B300 インスタンスタイプ</span>のサポートが追加され、Slurm ワークロードマネージャーが <span class="highlight">バージョン 25.11</span> にアップグレードされています。</p>
+            <p>AWS ParallelCluster は、AWS 上で HPC クラスターを運用するためのオープンソースのクラスター管理ツールです。研究開発部門や IT 管理者が、科学技術計算やエンジニアリングワークロードを大規模に実行するための弾力的にスケーリングする HPC クラスターを自動的かつ安全にプロビジョニングできます。</p>
+
+            <!-- Stats -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-value">v3.15</div>
+                    <div class="stat-label">ParallelCluster<br>最新バージョン</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">P6-B300</div>
+                    <div class="stat-label">新規サポート<br>インスタンスタイプ</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">Slurm 25.11</div>
+                    <div class="stat-label">アップグレード済み<br>ワークロードマネージャー</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">EFA</div>
+                    <div class="stat-label">ネットワーク設定<br>デフォルト最適化</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Before / After -->
+        <div class="section">
+            <h2>🔄 Before / After 比較</h2>
+            <div class="comparison-grid">
+                <div class="comparison-card before">
+                    <div class="comparison-label">❌ アップデート前</div>
+                    <ul>
+                        <li>P6-B300 が ParallelCluster で未サポート、最新 NVIDIA Blackwell GPU を HPC クラスターで利用不可</li>
+                        <li>Slurm 旧バージョンではジョブの迅速な再キューイング機能が利用不可</li>
+                        <li>EFA ネットワーク設定のデフォルト値が最適化されておらず、手動調整が必要</li>
+                        <li>大規模クラスターでの密結合ワークロードのパフォーマンスに改善の余地</li>
+                    </ul>
+                </div>
+                <div class="comparison-card after">
+                    <div class="comparison-label">✅ アップデート後</div>
+                    <ul>
+                        <li>P6-B300 が利用可能になり、NVIDIA Blackwell GPU 上で AI/ML・HPC ワークロードを実行可能</li>
+                        <li>Slurm 25.11 の迅速なジョブ再キューイングで障害時の復旧が高速化</li>
+                        <li>EFA ネットワーク設定のデフォルト値が改善、カスタマイズもサポート</li>
+                        <li>クラスター更新の信頼性向上、タグの中断なし更新が可能に</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="section">
+            <h2>🏗️ アーキテクチャ図</h2>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    User(["👤 ユーザー"])
+    CLI["🔧 pcluster CLI<br/>ParallelCluster 3.15"]
+
+    subgraph Cluster["☁️ HPC クラスター"]
+        direction TB
+        subgraph HeadNode["🎛️ ヘッドノード"]
+            Slurm["📋 Slurm 25.11<br/>迅速なジョブ再キューイング"]
+        end
+
+        subgraph ComputeNodes["⚙️ コンピュートノード"]
+            direction LR
+            P6["🚀 P6-B300<br/>NVIDIA Blackwell GPU"]
+            Other["💻 その他の<br/>インスタンスタイプ"]
+            P6 ~~~ Other
+        end
+
+        subgraph Network["🔌 ネットワーク"]
+            direction LR
+            EFA["📡 EFA<br/>最適化デフォルト設定"]
+            NIC["🔗 ネットワーク<br/>インターフェース<br/>カスタマイズ"]
+            EFA ~~~ NIC
+        end
+
+        HeadNode --> ComputeNodes
+        ComputeNodes --> Network
+    end
+
+    subgraph Storage["🗄️ ストレージ"]
+        direction LR
+        EBS[("💾 Amazon EBS")]
+        FSx[("📂 Amazon FSx")]
+        S3[("🪣 Amazon S3")]
+        EBS ~~~ FSx ~~~ S3
+    end
+
+    User --> CLI
+    CLI -->|"クラスター作成・更新"| Cluster
+    Cluster --> Storage
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef network fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class Cluster cloud
+    class HeadNode,ComputeNodes,Network,Storage layer
+    class P6,Other compute
+    class EBS,FSx,S3 storage
+    class User user
+    class CLI,Slurm process
+    class EFA,NIC network
+                </pre>
+            </div>
+            <p class="diagram-caption">AWS ParallelCluster 3.15 のアーキテクチャ。ユーザーは pcluster CLI を通じてクラスターを作成・管理し、ヘッドノード上の Slurm 25.11 が P6-B300 を含むコンピュートノードのジョブスケジューリングを行います。EFA による最適化されたネットワーク設定がノード間通信を高速化します。</p>
+        </div>
+
+        <!-- Key Features -->
+        <div class="section">
+            <h2>⚙️ 主要機能</h2>
+            <div class="feature-cards">
+                <div class="feature-card">
+                    <div class="feature-card-title">🚀 P6-B300 インスタンスタイプサポート</div>
+                    <ul>
+                        <li>NVIDIA Blackwell GPU アーキテクチャを搭載した最新のインスタンスタイプを HPC クラスターで利用可能</li>
+                        <li>高度な AI/ML トレーニングおよび推論ワークロードに対応</li>
+                        <li>大規模な科学技術シミュレーションやエンジニアリング計算にも活用可能</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">📋 Slurm 25.11 へのアップグレード</div>
+                    <ul>
+                        <li>迅速なジョブ再キューイング機能の追加により、ノード障害時のジョブ復旧が高速化</li>
+                        <li>ジョブスケジューリングの効率が向上</li>
+                        <li>最新の Slurm エコシステムとの互換性を確保</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">📡 EFA ネットワーク設定の改善</div>
+                    <ul>
+                        <li>ネットワーク設定のデフォルト値が最適化され、初期設定での性能が向上</li>
+                        <li>ネットワークインターフェースのカスタマイズがサポートされ、柔軟な設定が可能</li>
+                        <li>密結合ワークロードのノード間通信性能が改善</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">🔧 クラスター管理の改善</div>
+                    <ul>
+                        <li>クラスター更新の信頼性が向上し、更新時のエラーリスクが低減</li>
+                        <li>クラスタータグの更新が中断なしで実行可能になり、運用中のタグ管理が容易に</li>
+                        <li>大規模クラスターでの密結合ワークロードのパフォーマンスが全体的に向上</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Specs -->
+        <div class="section">
+            <h2>📐 技術仕様</h2>
+            <h3>P6-B300 インスタンスタイプ</h3>
+            <table class="spec-table">
+                <tbody>
+                    <tr><th>GPU アーキテクチャ</th><td>NVIDIA Blackwell</td></tr>
+                    <tr><th>主な用途</th><td>AI/ML トレーニング・推論、HPC</td></tr>
+                    <tr><th>ネットワーク</th><td>EFA 対応</td></tr>
+                    <tr><th>ParallelCluster バージョン</th><td>3.15 以降</td></tr>
+                </tbody>
+            </table>
+
+            <h3>Slurm バージョン比較</h3>
+            <table class="spec-table">
+                <thead>
+                    <tr><th>項目</th><th>旧バージョン</th><th>Slurm 25.11</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>ジョブ再キューイング</td><td>標準速度</td><td style="color: var(--aws-green); font-weight: 600;">迅速な再キューイング対応</td></tr>
+                    <tr><td>ParallelCluster 対応</td><td>3.14 以前</td><td style="color: var(--aws-green); font-weight: 600;">3.15 以降</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Setup Steps -->
+        <div class="section">
+            <h2>🛠️ 設定方法</h2>
+
+            <h3>前提条件</h3>
+            <ul class="constraint-list" style="margin-bottom: 16px;">
+                <li>AWS ParallelCluster CLI 3.15 以降がインストールされていること</li>
+                <li>適切な IAM 権限を持つ AWS アカウントがあること</li>
+                <li>P6-B300 インスタンスが利用可能なリージョンであること</li>
+                <li>VPC、サブネット、キーペアが事前に設定されていること</li>
+            </ul>
+
+            <h3>ステップ 1: ParallelCluster CLI のアップグレード</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">CLI を最新バージョンにアップグレード</span>
+                </div>
+                <pre><code class="language-bash"># ParallelCluster CLI を最新バージョンにアップグレード
+pip install aws-parallelcluster --upgrade
+
+# バージョンを確認
+pcluster version</code></pre>
+            </div>
+            <p style="font-size: 14px;">ParallelCluster CLI をバージョン 3.15 以降にアップグレードします。<code>pcluster version</code> コマンドでインストールされたバージョンを確認できます。</p>
+
+            <h3>ステップ 2: クラスター設定ファイルの作成</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">YAML</span>
+                    <span class="code-title">P6-B300 を使用するクラスター設定</span>
+                </div>
+                <pre><code class="language-yaml">Region: us-east-1
+Image:
+  Os: alinux2023
+HeadNode:
+  InstanceType: m6i.xlarge
+  Networking:
+    SubnetId: subnet-xxxxxxxx
+  Ssh:
+    KeyName: my-key-pair
+Scheduling:
+  Scheduler: slurm
+  SlurmQueues:
+    - Name: gpu-queue
+      ComputeResources:
+        - Name: p6-b300
+          InstanceType: p6-b300.48xlarge
+          MinCount: 0
+          MaxCount: 16
+          Efa:
+            Enabled: true
+      Networking:
+        SubnetIds:
+          - subnet-xxxxxxxx
+        PlacementGroup:
+          Enabled: true</code></pre>
+            </div>
+            <p style="font-size: 14px;">P6-B300 インスタンスタイプを使用するコンピュートキューを定義します。EFA を有効化し、プレイスメントグループを設定することで、密結合ワークロードのパフォーマンスを最適化します。</p>
+
+            <h3>ステップ 3: クラスターの作成と確認</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">クラスターの作成と状態確認</span>
+                </div>
+                <pre><code class="language-bash"># クラスターを作成
+pcluster create-cluster --cluster-name my-hpc-cluster \
+  --cluster-configuration cluster-config.yaml
+
+# クラスターの状態を確認
+pcluster describe-cluster --cluster-name my-hpc-cluster
+
+# クラスターのインスタンス一覧を確認
+pcluster describe-compute-fleet --cluster-name my-hpc-cluster</code></pre>
+            </div>
+            <p style="font-size: 14px;"><code>pcluster create-cluster</code> コマンドでクラスターを作成します。作成が完了すると、Slurm 25.11 が自動的にセットアップされ、P6-B300 インスタンスが利用可能になります。</p>
+        </div>
+
+        <!-- Merits & Demerits -->
+        <div class="section">
+            <h2>⚖️ メリットと制約事項</h2>
+            <div class="merit-grid">
+                <div class="merit-col">
+                    <h3 style="color: var(--aws-green);">✅ メリット</h3>
+                    <div class="merit-item">
+                        <span class="merit-icon">💼</span>
+                        <span><strong style="color: var(--aws-white);">最新 GPU による競争力向上</strong>: NVIDIA Blackwell GPU を活用し、AI/ML モデルのトレーニング時間を短縮、研究開発サイクルを加速</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">⚡</span>
+                        <span><strong style="color: var(--aws-white);">運用の簡素化</strong>: EFA ネットワーク設定のデフォルト最適化やタグの中断なし更新により、クラスター管理の運用負荷が軽減</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🔄</span>
+                        <span><strong style="color: var(--aws-white);">障害復旧の迅速化</strong>: Slurm 25.11 の迅速なジョブ再キューイングにより、ノード障害時のダウンタイムが短縮</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🚀</span>
+                        <span><strong style="color: var(--aws-white);">高性能コンピューティングの強化</strong>: P6-B300 により、大規模な分散トレーニングやシミュレーションのスループットが向上</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">📡</span>
+                        <span><strong style="color: var(--aws-white);">ネットワーク性能の最適化</strong>: EFA 設定のデフォルト改善とカスタマイズサポートにより、ノード間通信のレイテンシが低減</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🔧</span>
+                        <span><strong style="color: var(--aws-white);">クラスター更新の信頼性向上</strong>: 更新プロセスの信頼性改善により、本番環境のクラスター更新がより安全に実行可能</span>
+                    </div>
+                </div>
+                <div class="merit-col">
+                    <h3 style="color: var(--aws-red);">⚠️ 制約事項・考慮点</h3>
+                    <div class="merit-item">
+                        <span class="merit-icon">🌍</span>
+                        <span>P6-B300 インスタンスは利用可能なリージョンが限定されている可能性がある</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">📊</span>
+                        <span>P6-B300 インスタンスのキャパシティは需要が高く、確保が困難な場合がある</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🔄</span>
+                        <span>Slurm 25.11 へのアップグレードに伴い、既存のカスタム Slurm 設定の互換性確認が必要</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🧪</span>
+                        <span>既存クラスターを 3.15 にアップグレードする場合、Slurm バージョン変更の影響を事前にテスト環境で確認することを推奨</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">💰</span>
+                        <span>P6-B300 インスタンスの料金は高額であるため、ワークロードの要件に応じたインスタンスタイプの選択が重要</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">📡</span>
+                        <span>ネットワークインターフェースのカスタマイズは EFA の動作に影響する可能性があるため、変更前にドキュメントの確認が必要</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Use Cases -->
+        <div class="section">
+            <h2>💡 ユースケース</h2>
+            <div class="usecase-cards">
+                <div class="usecase-card">
+                    <div class="usecase-title">🧠 ユースケース 1: 大規模言語モデルの分散トレーニング</div>
+                    <p class="usecase-scenario">数十億パラメータの大規模言語モデルを、最新の GPU インフラストラクチャ上で効率的にトレーニングしたい。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">YAML</span>
+                            <span class="code-title">LLM トレーニング用キュー設定</span>
+                        </div>
+                        <pre><code class="language-yaml">Scheduling:
+  Scheduler: slurm
+  SlurmQueues:
+    - Name: llm-training
+      ComputeResources:
+        - Name: p6-b300-nodes
+          InstanceType: p6-b300.48xlarge
+          MinCount: 0
+          MaxCount: 64
+          Efa:
+            Enabled: true
+      Networking:
+        SubnetIds:
+          - subnet-xxxxxxxx
+        PlacementGroup:
+          Enabled: true</code></pre>
+                    </div>
+                    <p class="usecase-effect">✅ NVIDIA Blackwell GPU の高い演算性能と EFA による低レイテンシ通信により、分散トレーニングのスループットが大幅に向上。Slurm 25.11 の迅速な再キューイングにより、ノード障害時のトレーニング再開も高速化。</p>
+                </div>
+
+                <div class="usecase-card">
+                    <div class="usecase-title">🌊 ユースケース 2: 計算流体力学シミュレーション</div>
+                    <p class="usecase-scenario">大規模な CFD シミュレーションを密結合ワークロードとして実行し、高いノード間通信性能が必要。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">YAML</span>
+                            <span class="code-title">CFD シミュレーション用キュー設定</span>
+                        </div>
+                        <pre><code class="language-yaml">Scheduling:
+  Scheduler: slurm
+  SlurmQueues:
+    - Name: cfd-simulation
+      ComputeResources:
+        - Name: gpu-compute
+          InstanceType: p6-b300.48xlarge
+          MinCount: 8
+          MaxCount: 32
+          Efa:
+            Enabled: true
+      Networking:
+        SubnetIds:
+          - subnet-xxxxxxxx
+        PlacementGroup:
+          Enabled: true</code></pre>
+                    </div>
+                    <p class="usecase-effect">✅ 改善された EFA ネットワークデフォルト設定と大規模クラスターでの密結合ワークロード性能向上により、シミュレーション実行時間が短縮。</p>
+                </div>
+
+                <div class="usecase-card">
+                    <div class="usecase-title">🤖 ユースケース 3: AI 推論パイプラインの構築</div>
+                    <p class="usecase-scenario">複数の AI モデルを使用した推論パイプラインを HPC クラスター上で運用し、必要に応じてスケールしたい。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">YAML</span>
+                            <span class="code-title">推論パイプライン用キュー設定</span>
+                        </div>
+                        <pre><code class="language-yaml">Scheduling:
+  Scheduler: slurm
+  SlurmQueues:
+    - Name: inference-queue
+      ComputeResources:
+        - Name: p6-b300-inference
+          InstanceType: p6-b300.48xlarge
+          MinCount: 0
+          MaxCount: 8
+          Efa:
+            Enabled: true
+      Networking:
+        SubnetIds:
+          - subnet-xxxxxxxx
+Tags:
+  - Key: Environment
+    Value: production
+  - Key: Team
+    Value: ml-inference</code></pre>
+                    </div>
+                    <p class="usecase-effect">✅ P6-B300 の高い推論性能により、複雑な AI モデルの推論レイテンシが低減。クラスタータグの中断なし更新により、運用中のリソース管理やコスト配分の変更も容易に実行可能。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="section">
+            <h2>💰 料金</h2>
+            <p>AWS ParallelCluster 自体は<span class="highlight">無料のオープンソースツール</span>であり、追加料金は発生しません。料金は、クラスターで使用する AWS リソースに対して発生します。</p>
+            <table class="spec-table">
+                <tbody>
+                    <tr><th>ParallelCluster</th><td>無料</td></tr>
+                    <tr><th>EC2 インスタンス</th><td>使用するインスタンスタイプに応じた料金</td></tr>
+                    <tr><th>EBS ボリューム</th><td>使用量に応じた料金</td></tr>
+                    <tr><th>S3 ストレージ</th><td>使用量に応じた料金</td></tr>
+                </tbody>
+            </table>
+            <p style="font-size: 14px;">P6-B300 インスタンスの料金は、リージョンと使用形態によって異なります。詳細については <a href="https://aws.amazon.com/ec2/pricing/" target="_blank" rel="noopener noreferrer" style="color: var(--aws-teal);">Amazon EC2 料金ページ</a>を参照してください。</p>
+        </div>
+
+        <!-- Region -->
+        <div class="section">
+            <h2>🌍 利用可能リージョン</h2>
+            <p>AWS ParallelCluster 3.15 は、ParallelCluster がサポートされているすべてのリージョンで利用可能です。ただし、P6-B300 インスタンスタイプの利用可能性はリージョンによって異なります。最新のリージョン情報については <a href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer" style="color: var(--aws-teal);">AWS リージョンとサービス</a>を参照してください。</p>
+        </div>
+
+        <!-- Related Services -->
+        <div class="section">
+            <h2>🔗 関連サービス・機能</h2>
+            <div class="related-services">
+                <div class="related-service">
+                    <span>🚀</span>
+                    <span><strong>Amazon EC2 P6-B300 インスタンス</strong>: NVIDIA Blackwell GPU を搭載した最新の GPU インスタンスタイプ</span>
+                </div>
+                <div class="related-service">
+                    <span>📡</span>
+                    <span><strong>Elastic Fabric Adapter</strong>: HPC および ML ワークロード向けの高性能ネットワークインターフェース</span>
+                </div>
+                <div class="related-service">
+                    <span>📂</span>
+                    <span><strong>Amazon FSx for Lustre</strong>: HPC ワークロード向けの高性能ファイルシステム</span>
+                </div>
+                <div class="related-service">
+                    <span>⚙️</span>
+                    <span><strong>AWS Batch</strong>: バッチコンピューティングジョブの実行と管理を行うフルマネージドサービス</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reference Links -->
+        <div class="section">
+            <h2>📎 参考リンク</h2>
+            <ul class="link-list">
+                <li>📢 <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/aws-parallelcluster-p6-b300-slurm/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+                <li>📖 <a href="https://docs.aws.amazon.com/parallelcluster/latest/ug/what-is-aws-parallelcluster.html" target="_blank" rel="noopener noreferrer">AWS ParallelCluster ドキュメント</a></li>
+                <li>💲 <a href="https://aws.amazon.com/ec2/pricing/" target="_blank" rel="noopener noreferrer">Amazon EC2 料金ページ</a></li>
+            </ul>
+        </div>
+
+        <!-- Summary -->
+        <div class="section" style="border: 1px solid rgba(255,153,0,0.4); background: linear-gradient(135deg, rgba(255,153,0,0.1), var(--aws-dark-squid));">
+            <h2>📝 まとめ</h2>
+            <p>AWS ParallelCluster 3.15 は、<span class="highlight">P6-B300 インスタンスタイプ</span>のサポートと <span class="highlight">Slurm 25.11</span> へのアップグレードにより、AI/ML および HPC ワークロードの実行基盤を大幅に強化するアップデートです。NVIDIA Blackwell GPU の最新性能を HPC クラスターで活用したい組織や、密結合ワークロードのパフォーマンス向上を求めるユーザーにとって、ParallelCluster CLI を 3.15 にアップグレードし、新機能を検証することを推奨します。</p>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>📎 出典: <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/aws-parallelcluster-p6-b300-slurm/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/03/aws-parallelcluster-p6-b300-slurm/</a></p>
+            <p style="margin-top: 8px;">Generated on 2026-03-26</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

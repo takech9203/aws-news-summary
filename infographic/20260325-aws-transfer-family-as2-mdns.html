@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Transfer Family - AS2 非同期 MDN サポート</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+        :root {
+            --aws-squid-ink: #232F3E;
+            --aws-dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --aws-white: #FFFFFF;
+            --aws-light-gray: #D5DBDB;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--aws-squid-ink);
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            color: var(--aws-light-gray);
+            font-size: 16px;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .header-left { flex: 1; min-width: 280px; }
+        .service-badge {
+            display: inline-block;
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            font-size: 13px;
+            font-weight: 700;
+            padding: 4px 14px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+        }
+        h1 {
+            font-size: 34px;
+            font-weight: 700;
+            color: var(--aws-white);
+            line-height: 1.3;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            font-size: 16px;
+            color: var(--aws-light-gray);
+        }
+        .header-date {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            text-align: right;
+            white-space: nowrap;
+            padding-top: 8px;
+        }
+
+        /* Section */
+        .section {
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--aws-orange);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--aws-white);
+            margin: 16px 0 10px;
+        }
+
+        p { margin-bottom: 12px; }
+
+        .highlight {
+            background-color: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        /* Before / After */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+        @media (max-width: 640px) {
+            .comparison-grid { grid-template-columns: 1fr; }
+        }
+        .comparison-card {
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid;
+        }
+        .comparison-card.before {
+            background: rgba(209, 50, 18, 0.08);
+            border-color: rgba(209, 50, 18, 0.4);
+        }
+        .comparison-card.after {
+            background: rgba(29, 129, 2, 0.08);
+            border-color: rgba(29, 129, 2, 0.4);
+        }
+        .comparison-label {
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .comparison-card.before .comparison-label { color: var(--aws-red); }
+        .comparison-card.after .comparison-label { color: var(--aws-green); }
+        .comparison-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        .comparison-card li {
+            padding: 4px 0;
+            padding-left: 20px;
+            position: relative;
+            font-size: 14px;
+        }
+        .comparison-card.before li::before {
+            content: "\2717";
+            position: absolute;
+            left: 0;
+            color: var(--aws-red);
+        }
+        .comparison-card.after li::before {
+            content: "\2713";
+            position: absolute;
+            left: 0;
+            color: var(--aws-green);
+        }
+
+        /* Stats */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin: 20px 0;
+        }
+        @media (max-width: 640px) {
+            .stats-row { grid-template-columns: 1fr; }
+        }
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255,153,0,0.15), rgba(255,153,0,0.05));
+            border: 1px solid rgba(255,153,0,0.3);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            line-height: 1.2;
+        }
+        .stat-label {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+            margin-top: 6px;
+        }
+
+        /* Mermaid */
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+        .diagram-caption {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+            margin-top: 12px;
+            font-style: italic;
+        }
+
+        /* Feature cards */
+        .feature-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .feature-card {
+            background: var(--aws-dark-squid);
+            border-left: 4px solid var(--aws-orange);
+            border-radius: 0 8px 8px 0;
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            border-right: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .feature-card-title {
+            font-weight: 600;
+            color: var(--aws-white);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .feature-card p {
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        .feature-card ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .feature-card li {
+            font-size: 14px;
+            padding: 3px 0;
+            padding-left: 16px;
+            position: relative;
+        }
+        .feature-card li::before {
+            content: "\2192";
+            position: absolute;
+            left: 0;
+            color: var(--aws-orange);
+        }
+
+        /* Table */
+        .spec-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+        .spec-table th, .spec-table td {
+            padding: 10px 14px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .spec-table th {
+            color: var(--aws-orange);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .spec-table thead th {
+            border-bottom: 2px solid rgba(255,153,0,0.3);
+        }
+
+        /* Code block */
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+        .code-title {
+            color: var(--aws-light-gray);
+        }
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+        }
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        /* Use case */
+        .usecase-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .usecase-card {
+            background: rgba(255,153,0,0.06);
+            border: 1px solid rgba(255,153,0,0.25);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .usecase-title {
+            font-weight: 600;
+            font-size: 16px;
+            color: var(--aws-white);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .usecase-scenario {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            margin-bottom: 10px;
+        }
+        .usecase-steps {
+            list-style: none;
+            padding: 0;
+            margin: 8px 0;
+        }
+        .usecase-steps li {
+            font-size: 14px;
+            padding: 3px 0 3px 20px;
+            position: relative;
+        }
+        .usecase-steps li::before {
+            content: attr(data-step);
+            position: absolute;
+            left: 0;
+            color: var(--aws-orange);
+            font-weight: 600;
+        }
+        .usecase-effect {
+            font-size: 14px;
+            color: var(--aws-green);
+            margin-top: 8px;
+        }
+
+        /* Merit grid */
+        .merit-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+        @media (max-width: 640px) {
+            .merit-grid { grid-template-columns: 1fr; }
+        }
+        .merit-col h3 {
+            margin-bottom: 12px;
+        }
+        .merit-item {
+            padding: 8px 0;
+            font-size: 14px;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+        .merit-icon { flex-shrink: 0; }
+
+        /* Constraint list */
+        .constraint-list {
+            list-style: none;
+            padding: 0;
+        }
+        .constraint-list li {
+            padding: 6px 0 6px 20px;
+            position: relative;
+            font-size: 14px;
+        }
+        .constraint-list li::before {
+            content: "\26A0";
+            position: absolute;
+            left: 0;
+        }
+
+        /* Related services */
+        .related-services {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .related-service {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            font-size: 14px;
+        }
+        .related-service strong {
+            color: var(--aws-white);
+            white-space: nowrap;
+        }
+
+        /* Links */
+        .link-list {
+            list-style: none;
+            padding: 0;
+        }
+        .link-list li {
+            padding: 6px 0;
+        }
+        .link-list a {
+            color: var(--aws-teal);
+            text-decoration: none;
+            font-size: 14px;
+            word-break: break-all;
+        }
+        .link-list a:hover {
+            color: var(--aws-smile-orange);
+        }
+
+        /* Flow diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+        .flow-step {
+            background: var(--aws-dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 100px;
+        }
+        .flow-arrow {
+            color: var(--aws-orange);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            color: var(--aws-light-gray);
+        }
+        footer a {
+            color: var(--aws-teal);
+            text-decoration: none;
+            word-break: break-all;
+        }
+        footer a:hover {
+            color: var(--aws-smile-orange);
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <span class="service-badge">AWS Transfer Family</span>
+                <h1>AS2 非同期 MDN サポート</h1>
+                <div class="subtitle">処理時間の長い取引先や高レイテンシー環境との AS2 通信を実現する非同期 MDN 受信機能</div>
+            </div>
+            <div class="header-date">2026-03-25</div>
+        </div>
+
+        <!-- Overview -->
+        <div class="section">
+            <h2>📋 概要</h2>
+            <p>AWS Transfer Family が AS2 プロトコルで送信されたメッセージに対する <span class="highlight">Message Disposition Notification (MDN) の非同期受信</span>をサポートしました。これにより、取引先のメッセージ処理時間やネットワーク要件に関係なく、AS2 ワークフローを Transfer Family に移行しながら取引先との相互運用性を維持できます。</p>
+            <p>ヘルスケア、ライフサイエンス、小売、製造、サプライチェーンなどの業界では、取引先や規制機関との安全な AS2 ベースのデータ交換に Transfer Family を活用しています。今回のアップデートにより、<span class="highlight">別の TLS 接続を介して非同期 MDN をリクエスト</span>しながら AS2 メッセージを送信できるようになりました。</p>
+
+            <!-- Stats -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-value">2 種類</div>
+                    <div class="stat-label">MDN タイプをサポート<br>同期 + 非同期</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">追加料金なし</div>
+                    <div class="stat-label">非同期 MDN サポートの<br>追加コストは不要</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">全リージョン</div>
+                    <div class="stat-label">AS2 が利用可能な<br>すべてのリージョンで対応</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Before / After -->
+        <div class="section">
+            <h2>🔄 Before / After 比較</h2>
+            <div class="comparison-grid">
+                <div class="comparison-card before">
+                    <div class="comparison-label">❌ アップデート前</div>
+                    <ul>
+                        <li>AS2 コネクタは同期 MDN のみサポート</li>
+                        <li>MDN を即時返送できない取引先との通信に制約</li>
+                        <li>処理時間の長い取引先でタイムアウト発生の可能性</li>
+                        <li>非同期 MDN を必要とするワークフローの移行が不可</li>
+                    </ul>
+                </div>
+                <div class="comparison-card after">
+                    <div class="comparison-label">✅ アップデート後</div>
+                    <ul>
+                        <li>非同期 MDN を別の TLS 接続で受信可能に</li>
+                        <li>同期/非同期 MDN の両方をサポートし柔軟に選択可能</li>
+                        <li>パートナー統合に影響なしで AWS へ移行可能</li>
+                        <li>幅広い業界の AS2 通信ニーズに対応</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="section">
+            <h2>🏗️ アーキテクチャ図</h2>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+sequenceDiagram
+    participant Sender as 📤 送信側<br/>Transfer Family
+    participant Partner as 🤝 取引先<br/>AS2 システム
+
+    Note over Sender,Partner: 同期 MDN フロー
+    Sender->>Partner: AS2 メッセージ送信
+    Partner-->>Sender: 同期 MDN 即時返送
+
+    Note over Sender,Partner: 非同期 MDN フロー
+    Sender->>Partner: AS2 メッセージ送信<br/>+ 非同期 MDN リクエスト
+    Note over Partner: メッセージ処理<br/>時間がかかる場合あり
+    Partner->>Sender: 別の TLS 接続で<br/>非同期 MDN を返送
+                </pre>
+            </div>
+            <p class="diagram-caption">同期 MDN では即時に確認応答が返されますが、非同期 MDN では取引先が処理完了後に別の TLS 接続を介して MDN を返送します。これにより、処理時間の長いシステムとの相互運用性が向上します。</p>
+        </div>
+
+        <!-- Key Features -->
+        <div class="section">
+            <h2>⚙️ 主要機能</h2>
+            <div class="feature-cards">
+                <div class="feature-card">
+                    <div class="feature-card-title">📨 非同期 MDN の受信サポート</div>
+                    <ul>
+                        <li>AS2 メッセージ送信時に非同期 MDN をリクエスト可能</li>
+                        <li>取引先は別の TLS 接続を使用して MDN を返送</li>
+                        <li>処理時間の長い取引先システムとの互換性を確保</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">🔀 同期・非同期 MDN の両方をサポート</div>
+                    <ul>
+                        <li>取引先の要件に応じて MDN タイプを選択可能</li>
+                        <li>同期 MDN: 即時応答が必要な場合に使用</li>
+                        <li>非同期 MDN: 処理時間が長い、またはレイテンシーが高い場合に使用</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">🔄 既存ワークフローの移行互換性</div>
+                    <ul>
+                        <li>オンプレミスの AS2 システムからの移行が容易に</li>
+                        <li>パートナー側の変更なしで移行可能</li>
+                        <li>業界標準の AS2 プロトコルに準拠</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Specs -->
+        <div class="section">
+            <h2>📐 技術仕様</h2>
+            <h3>MDN タイプの比較</h3>
+            <table class="spec-table">
+                <thead>
+                    <tr><th>項目</th><th>同期 MDN</th><th>非同期 MDN</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>レスポンス方式</td><td>同一 HTTP セッションで即時返送</td><td>別の TLS 接続で後から返送</td></tr>
+                    <tr><td>適用シナリオ</td><td>低レイテンシー環境</td><td>高レイテンシー、長時間処理</td></tr>
+                    <tr><td>接続方式</td><td>元の HTTP 接続を使用</td><td>新しい TLS 接続を確立</td></tr>
+                    <tr><td>タイムアウトリスク</td><td>処理時間が長い場合にリスクあり</td><td>タイムアウトリスクが低い</td></tr>
+                </tbody>
+            </table>
+
+            <h3>AS2 コネクタ設定パラメータ</h3>
+            <table class="spec-table">
+                <tbody>
+                    <tr><th>MdnResponse</th><td>MDN のレスポンスタイプ (SYNC / NONE / <span class="highlight">ASYNC</span>)</td></tr>
+                    <tr><th>MdnSigningAlgorithm</th><td>MDN 署名アルゴリズム (SHA256, SHA384, SHA512 など)</td></tr>
+                    <tr><th>MessageSubject</th><td>AS2 メッセージの件名</td></tr>
+                    <tr><th>Compression</th><td>メッセージ圧縮 (ZLIB / DISABLED)</td></tr>
+                    <tr><th>EncryptionAlgorithm</th><td>暗号化アルゴリズム</td></tr>
+                    <tr><th>SigningAlgorithm</th><td>署名アルゴリズム</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Setup Steps -->
+        <div class="section">
+            <h2>🛠️ 設定方法</h2>
+
+            <h3>前提条件</h3>
+            <ul class="constraint-list" style="margin-bottom: 16px;">
+                <li>AWS Transfer Family サーバー (AS2 プロトコルが有効)</li>
+                <li>AS2 コネクタの設定</li>
+                <li>取引先の AS2 プロファイル情報</li>
+                <li>非同期 MDN を受信するための TLS 証明書</li>
+            </ul>
+
+            <h3>ステップ 1: AS2 コネクタを作成 (非同期 MDN 有効)</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">非同期 MDN をリクエストする AS2 コネクタの作成</span>
+                </div>
+                <pre><code class="language-bash">aws transfer create-connector \
+  --url "https://partner-as2-endpoint.example.com" \
+  --as2-config '{
+    "LocalProfileId": "p-1234567890abcdef0",
+    "PartnerProfileId": "p-0987654321fedcba0",
+    "MessageSubject": "AS2 Message from Transfer Family",
+    "Compression": "ZLIB",
+    "EncryptionAlgorithm": "AES256_CBC",
+    "SigningAlgorithm": "SHA256",
+    "MdnSigningAlgorithm": "SHA256",
+    "MdnResponse": "ASYNC"
+  }' \
+  --access-role "arn:aws:iam::123456789012:role/TransferAS2Role"</code></pre>
+            </div>
+            <p style="font-size: 14px;"><code>MdnResponse</code> を <span class="highlight">ASYNC</span> に設定することで、取引先に非同期 MDN を要求します。</p>
+
+            <h3>ステップ 2: AS2 メッセージを送信</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">ファイル送信</span>
+                </div>
+                <pre><code class="language-bash">aws transfer start-file-transfer \
+  --connector-id "c-1234567890abcdef0" \
+  --send-file-paths "/mybucket/outbound/invoice.edi"</code></pre>
+            </div>
+            <p style="font-size: 14px;">コネクタの設定に基づき、非同期 MDN が自動的にリクエストされます。</p>
+
+            <h3>ステップ 3: MDN の受信状況を確認</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">送信履歴と MDN 受信状況の確認</span>
+                </div>
+                <pre><code class="language-bash">aws transfer list-executions \
+  --connector-id "c-1234567890abcdef0" \
+  --max-results 10</code></pre>
+            </div>
+            <p style="font-size: 14px;">非同期 MDN の場合、MDN の受信には時間がかかる場合があります。</p>
+        </div>
+
+        <!-- Merits & Demerits -->
+        <div class="section">
+            <h2>⚖️ メリットと制約事項</h2>
+            <div class="merit-grid">
+                <div class="merit-col">
+                    <h3 style="color: var(--aws-green);">✅ メリット</h3>
+                    <h4 style="color: var(--aws-light-gray); font-size: 14px; margin: 8px 0 4px; font-weight: 600;">ビジネス面</h4>
+                    <div class="merit-item">
+                        <span class="merit-icon">💼</span>
+                        <span><strong style="color: var(--aws-white);">完全な AWS 移行</strong>: 非同期 MDN を必要とする取引先も含め、すべての AS2 ワークフローを移行可能</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🤝</span>
+                        <span><strong style="color: var(--aws-white);">パートナー影響なし</strong>: 取引先側の変更なしで AWS への移行が可能</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🏭</span>
+                        <span><strong style="color: var(--aws-white);">幅広い業界対応</strong>: ヘルスケア、小売、製造、サプライチェーンなどの EDI 通信ニーズに対応</span>
+                    </div>
+                    <h4 style="color: var(--aws-light-gray); font-size: 14px; margin: 12px 0 4px; font-weight: 600;">技術面</h4>
+                    <div class="merit-item">
+                        <span class="merit-icon">⏱️</span>
+                        <span><strong style="color: var(--aws-white);">タイムアウト回避</strong>: 処理時間の長い取引先との通信でタイムアウトが発生しない</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🌐</span>
+                        <span><strong style="color: var(--aws-white);">ネットワーク互換性向上</strong>: 高レイテンシー環境の取引先との AS2 通信が可能に</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🔒</span>
+                        <span><strong style="color: var(--aws-white);">セキュア通信</strong>: 非同期 MDN も TLS 接続で暗号化</span>
+                    </div>
+                </div>
+                <div class="merit-col">
+                    <h3 style="color: var(--aws-red);">⚠️ 制約事項・考慮点</h3>
+                    <h4 style="color: var(--aws-light-gray); font-size: 14px; margin: 8px 0 4px; font-weight: 600;">制限事項</h4>
+                    <div class="merit-item">
+                        <span class="merit-icon">🔗</span>
+                        <span>非同期 MDN の受信には追加の TLS 接続が必要であり、ネットワーク設定の確認が必要</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">⏰</span>
+                        <span>非同期 MDN の受信タイミングは取引先の処理速度に依存</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">📏</span>
+                        <span>AS2 プロトコル固有の制約 (メッセージサイズ制限など) は引き続き適用</span>
+                    </div>
+                    <h4 style="color: var(--aws-light-gray); font-size: 14px; margin: 12px 0 4px; font-weight: 600;">考慮すべき点</h4>
+                    <div class="merit-item">
+                        <span class="merit-icon">🔧</span>
+                        <span>非同期 MDN 受信用のエンドポイントが適切に設定されていることを確認する必要がある</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🛡️</span>
+                        <span>ファイアウォールやセキュリティグループで受信接続を許可する設定が必要</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">📐</span>
+                        <span>メッセージ送信と MDN 受信のタイミングにずれが生じるため、ワークフロー設計に考慮が必要</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Use Cases -->
+        <div class="section">
+            <h2>💡 ユースケース</h2>
+            <div class="usecase-cards">
+                <div class="usecase-card">
+                    <div class="usecase-title">🏥 ユースケース 1: ヘルスケア業界の EDI データ交換</div>
+                    <p class="usecase-scenario">医療機関が保険請求データを保険会社に AS2 で送信しています。保険会社のシステムは請求データの検証に時間がかかるため、非同期 MDN が必要です。</p>
+                    <ul class="usecase-steps">
+                        <li data-step="1.">Transfer Family で AS2 コネクタを作成し、MdnResponse を ASYNC に設定</li>
+                        <li data-step="2.">請求データファイルを S3 バケットに配置</li>
+                        <li data-step="3.">start-file-transfer API でファイルを送信</li>
+                        <li data-step="4.">保険会社が処理完了後、非同期 MDN を返送</li>
+                    </ul>
+                    <p class="usecase-effect">✅ 保険会社の処理時間に関係なく、AS2 メッセージを確実に送信でき、MDN による配信確認も受信できます。</p>
+                </div>
+
+                <div class="usecase-card">
+                    <div class="usecase-title">🛒 ユースケース 2: 小売業のサプライチェーン統合</div>
+                    <p class="usecase-scenario">大手小売業者が複数のサプライヤーと注文書や請求書を AS2 で交換しています。一部のサプライヤーは処理能力が限られており、同期 MDN を返送できません。</p>
+                    <ul class="usecase-steps">
+                        <li data-step="1.">サプライヤーごとに AS2 コネクタを作成</li>
+                        <li data-step="2.">同期 MDN 対応のサプライヤーには MdnResponse: SYNC を設定</li>
+                        <li data-step="3.">非同期 MDN が必要なサプライヤーには MdnResponse: ASYNC を設定</li>
+                        <li data-step="4.">EventBridge で MDN 受信イベントを監視し、後続処理を自動化</li>
+                    </ul>
+                    <p class="usecase-effect">✅ すべてのサプライヤーとの AS2 通信を 1 つのプラットフォームで管理でき、サプライヤーの処理能力に応じた柔軟な MDN 設定が可能になります。</p>
+                </div>
+
+                <div class="usecase-card">
+                    <div class="usecase-title">🏭 ユースケース 3: 製造業のオンプレミス AS2 システムからの移行</div>
+                    <p class="usecase-scenario">製造企業がオンプレミスの AS2 システムを運用しており、クラウドに移行したい場合です。既存の取引先の一部は非同期 MDN を要求しています。</p>
+                    <ul class="usecase-steps">
+                        <li data-step="1.">既存の AS2 コネクタ設定を Transfer Family に移行</li>
+                        <li data-step="2.">取引先ごとの MDN タイプ (同期/非同期) を維持</li>
+                        <li data-step="3.">S3 バケットをストレージとして設定</li>
+                        <li data-step="4.">段階的にオンプレミスシステムから Transfer Family に切り替え</li>
+                    </ul>
+                    <p class="usecase-effect">✅ 取引先に影響を与えることなく、AS2 システムを AWS に移行でき、インフラの運用負荷を大幅に削減できます。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="section">
+            <h2>💰 料金</h2>
+            <p>AWS Transfer Family の AS2 コネクタの料金は以下の要素で構成されます。</p>
+            <table class="spec-table">
+                <tbody>
+                    <tr><th>AS2 コネクタ料金</th><td>コネクタが有効化されている時間に対する時間単位の料金</td></tr>
+                    <tr><th>メッセージ料金</th><td>送受信されるメッセージ数に対する料金</td></tr>
+                    <tr><th>データ転送料金</th><td>転送されるデータ量に対する料金</td></tr>
+                </tbody>
+            </table>
+            <p style="font-size: 14px; margin-top: 12px;"><span class="highlight">非同期 MDN のサポートに追加料金は発生しません。</span>詳細な料金については <a href="https://aws.amazon.com/aws-transfer-family/pricing/" target="_blank" rel="noopener noreferrer" style="color: var(--aws-teal);">AWS Transfer Family Pricing</a> をご確認ください。</p>
+        </div>
+
+        <!-- Region -->
+        <div class="section">
+            <h2>🌍 利用可能リージョン</h2>
+            <p>AWS Transfer Family AS2 が利用可能なすべてのリージョンでこの機能を使用できます。利用可能なリージョンの最新情報については、<a href="https://docs.aws.amazon.com/general/latest/gr/transfer-service.html" target="_blank" rel="noopener noreferrer" style="color: var(--aws-teal);">AWS Transfer Family エンドポイントとクォータ</a>をご確認ください。</p>
+        </div>
+
+        <!-- Related Services -->
+        <div class="section">
+            <h2>🔗 関連サービス・機能</h2>
+            <div class="related-services">
+                <div class="related-service">
+                    <span>📡</span>
+                    <span><strong>AWS Transfer Family AS2</strong>: AS2 プロトコルによるセキュアな B2B データ交換</span>
+                </div>
+                <div class="related-service">
+                    <span>🪣</span>
+                    <span><strong>Amazon S3</strong>: AS2 で送受信されるファイルのストレージ</span>
+                </div>
+                <div class="related-service">
+                    <span>🔔</span>
+                    <span><strong>Amazon EventBridge</strong>: MDN 受信イベントの監視と後続ワークフローの自動化</span>
+                </div>
+                <div class="related-service">
+                    <span>🔍</span>
+                    <span><strong>AWS CloudTrail</strong>: AS2 メッセージ送受信のセキュリティ監査</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reference Links -->
+        <div class="section">
+            <h2>📎 参考リンク</h2>
+            <ul class="link-list">
+                <li>📢 <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/aws-transfer-family-as2-mdns/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+                <li>📖 <a href="https://docs.aws.amazon.com/transfer/latest/userguide/as2-config-workflow.html" target="_blank" rel="noopener noreferrer">AWS Transfer Family AS2 ドキュメント</a></li>
+                <li>💲 <a href="https://aws.amazon.com/aws-transfer-family/pricing/" target="_blank" rel="noopener noreferrer">AWS Transfer Family 料金ページ</a></li>
+            </ul>
+        </div>
+
+        <!-- Summary -->
+        <div class="section" style="border: 1px solid rgba(255,153,0,0.4); background: linear-gradient(135deg, rgba(255,153,0,0.1), var(--aws-dark-squid));">
+            <h2>📝 まとめ</h2>
+            <p>AWS Transfer Family の AS2 非同期 MDN サポートにより、処理時間が長い取引先や高レイテンシー環境にある取引先との AS2 通信が可能になりました。<span class="highlight">同期 MDN と非同期 MDN の両方をサポート</span>することで、既存の AS2 ワークフローをパートナー統合に影響を与えることなく AWS に移行できます。</p>
+            <p>AS2 ベースの B2B データ交換を行っている組織は、コネクタの <code style="background: rgba(255,153,0,0.15); padding: 2px 6px; border-radius: 4px;">MdnResponse</code> 設定を確認し、取引先の要件に応じて非同期 MDN の活用を検討してください。</p>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>📎 出典: <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/aws-transfer-family-as2-mdns/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/03/aws-transfer-family-as2-mdns/</a></p>
+            <p style="margin-top: 8px;">Generated on 2026-03-26</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

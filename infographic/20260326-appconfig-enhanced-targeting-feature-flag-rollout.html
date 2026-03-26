@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS AppConfig - 段階的ロールアウト中の拡張ターゲティング機能</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+        :root {
+            --aws-squid-ink: #232F3E;
+            --aws-dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --aws-white: #FFFFFF;
+            --aws-light-gray: #D5DBDB;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--aws-squid-ink);
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            color: var(--aws-light-gray);
+            font-size: 16px;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .header-left { flex: 1; min-width: 280px; }
+        .service-badge {
+            display: inline-block;
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            font-size: 13px;
+            font-weight: 700;
+            padding: 4px 14px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+        }
+        h1 {
+            font-size: 34px;
+            font-weight: 700;
+            color: var(--aws-white);
+            line-height: 1.3;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            font-size: 16px;
+            color: var(--aws-light-gray);
+        }
+        .header-date {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            text-align: right;
+            white-space: nowrap;
+            padding-top: 8px;
+        }
+
+        /* Section */
+        .section {
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--aws-orange);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--aws-white);
+            margin: 16px 0 10px;
+        }
+
+        p { margin-bottom: 12px; }
+
+        .highlight {
+            background-color: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        /* Before / After */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+        @media (max-width: 640px) {
+            .comparison-grid { grid-template-columns: 1fr; }
+        }
+        .comparison-card {
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid;
+        }
+        .comparison-card.before {
+            background: rgba(209, 50, 18, 0.08);
+            border-color: rgba(209, 50, 18, 0.4);
+        }
+        .comparison-card.after {
+            background: rgba(29, 129, 2, 0.08);
+            border-color: rgba(29, 129, 2, 0.4);
+        }
+        .comparison-label {
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .comparison-card.before .comparison-label { color: var(--aws-red); }
+        .comparison-card.after .comparison-label { color: var(--aws-green); }
+        .comparison-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        .comparison-card li {
+            padding: 4px 0;
+            padding-left: 20px;
+            position: relative;
+            font-size: 14px;
+        }
+        .comparison-card.before li::before {
+            content: "\2717";
+            position: absolute;
+            left: 0;
+            color: var(--aws-red);
+        }
+        .comparison-card.after li::before {
+            content: "\2713";
+            position: absolute;
+            left: 0;
+            color: var(--aws-green);
+        }
+
+        /* Stats */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin: 20px 0;
+        }
+        @media (max-width: 640px) {
+            .stats-row { grid-template-columns: 1fr; }
+        }
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255,153,0,0.15), rgba(255,153,0,0.05));
+            border: 1px solid rgba(255,153,0,0.3);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            line-height: 1.2;
+        }
+        .stat-label {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+            margin-top: 6px;
+        }
+
+        /* Mermaid */
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+        .diagram-caption {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+            margin-top: 12px;
+            font-style: italic;
+        }
+
+        /* Feature cards */
+        .feature-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .feature-card {
+            background: var(--aws-dark-squid);
+            border-left: 4px solid var(--aws-orange);
+            border-radius: 0 8px 8px 0;
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            border-right: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .feature-card-title {
+            font-weight: 600;
+            color: var(--aws-white);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .feature-card p {
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        .feature-card ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .feature-card li {
+            font-size: 14px;
+            padding: 3px 0;
+            padding-left: 16px;
+            position: relative;
+        }
+        .feature-card li::before {
+            content: "\2192";
+            position: absolute;
+            left: 0;
+            color: var(--aws-orange);
+        }
+
+        /* Table */
+        .spec-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+        .spec-table th, .spec-table td {
+            padding: 10px 14px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .spec-table th {
+            color: var(--aws-orange);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .spec-table thead th {
+            border-bottom: 2px solid rgba(255,153,0,0.3);
+        }
+
+        /* Code block */
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+        .code-title {
+            color: var(--aws-light-gray);
+        }
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+        }
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        /* Use case */
+        .usecase-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .usecase-card {
+            background: rgba(255,153,0,0.06);
+            border: 1px solid rgba(255,153,0,0.25);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .usecase-title {
+            font-weight: 600;
+            font-size: 16px;
+            color: var(--aws-white);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .usecase-scenario {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            margin-bottom: 10px;
+        }
+        .usecase-steps {
+            list-style: none;
+            padding: 0;
+            margin: 8px 0;
+        }
+        .usecase-steps li {
+            font-size: 14px;
+            padding: 3px 0 3px 20px;
+            position: relative;
+        }
+        .usecase-steps li::before {
+            content: attr(data-step);
+            position: absolute;
+            left: 0;
+            color: var(--aws-orange);
+            font-weight: 600;
+        }
+        .usecase-effect {
+            font-size: 14px;
+            color: var(--aws-green);
+            margin-top: 8px;
+        }
+
+        /* Merit grid */
+        .merit-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+        @media (max-width: 640px) {
+            .merit-grid { grid-template-columns: 1fr; }
+        }
+        .merit-col h3 {
+            margin-bottom: 12px;
+        }
+        .merit-item {
+            padding: 8px 0;
+            font-size: 14px;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+        .merit-icon { flex-shrink: 0; }
+
+        /* Constraint list */
+        .constraint-list {
+            list-style: none;
+            padding: 0;
+        }
+        .constraint-list li {
+            padding: 6px 0 6px 20px;
+            position: relative;
+            font-size: 14px;
+        }
+        .constraint-list li::before {
+            content: "\26A0";
+            position: absolute;
+            left: 0;
+        }
+
+        /* Related services */
+        .related-services {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .related-service {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            font-size: 14px;
+        }
+        .related-service strong {
+            color: var(--aws-white);
+            white-space: nowrap;
+        }
+
+        /* Links */
+        .link-list {
+            list-style: none;
+            padding: 0;
+        }
+        .link-list li {
+            padding: 6px 0;
+        }
+        .link-list a {
+            color: var(--aws-teal);
+            text-decoration: none;
+            font-size: 14px;
+            word-break: break-all;
+        }
+        .link-list a:hover {
+            color: var(--aws-smile-orange);
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            color: var(--aws-light-gray);
+        }
+        footer a {
+            color: var(--aws-teal);
+            text-decoration: none;
+            word-break: break-all;
+        }
+        footer a:hover {
+            color: var(--aws-smile-orange);
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <span class="service-badge">AWS AppConfig</span>
+                <h1>段階的ロールアウト中の拡張ターゲティング機能</h1>
+                <div class="subtitle">フィーチャーフラグや設定データを特定セグメント・個別ユーザーにスティッキーにターゲティング</div>
+            </div>
+            <div class="header-date">2026-03-26</div>
+        </div>
+
+        <!-- Overview -->
+        <div class="section">
+            <h2>📋 概要</h2>
+            <p>AWS AppConfig が段階的ロールアウトのライフサイクル中に、フィーチャーフラグおよび設定データの値を特定のセグメントや個々のユーザーにターゲティングできる<span class="highlight">拡張ターゲティング機能</span>を追加しました。AppConfig Agent を使用してエンティティ識別子に基づき、フィーチャーフラグや動的設定データを個々のターゲットセグメントに「スティッキー」に割り当てることで、デプロイ中の一貫性のある体験を保証します。</p>
+
+            <!-- Stats -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-value">スティッキー</div>
+                    <div class="stat-label">ロールアウト中の一貫した<br>フラグ値割り当て</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">追加料金なし</div>
+                    <div class="stat-label">ターゲティング機能の<br>追加コストは不要</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">全リージョン</div>
+                    <div class="stat-label">GovCloud を含む<br>すべてのリージョンで利用可能</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Before / After -->
+        <div class="section">
+            <h2>🔄 Before / After 比較</h2>
+            <div class="comparison-grid">
+                <div class="comparison-card before">
+                    <div class="comparison-label">❌ アップデート前</div>
+                    <ul>
+                        <li>段階的ロールアウト中に特定ユーザーやセグメントへのターゲティング手段がなかった</li>
+                        <li>同一ユーザーが異なるフラグ値を受け取り、一貫性のない体験が発生</li>
+                        <li>個々のユーザー ID でのフィーチャーフラグ制御のネイティブ機能が不足</li>
+                    </ul>
+                </div>
+                <div class="comparison-card after">
+                    <div class="comparison-label">✅ アップデート後</div>
+                    <ul>
+                        <li>段階的ロールアウト中に特定セグメント・個別ユーザーへのターゲティングが可能に</li>
+                        <li>エンティティ識別子によるスティッキー割り当てでユーザー体験の一貫性を確保</li>
+                        <li>AppConfig Agent で個々のユーザー ID レベルのきめ細かな制御が可能に</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="section">
+            <h2>🏗️ アーキテクチャ図</h2>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    subgraph Operator["👤 オペレーター"]
+        Deploy["📋 デプロイ開始<br/>段階的ロールアウト"]
+    end
+
+    subgraph AppConfig["⚙️ AWS AppConfig"]
+        direction LR
+        FF["🚩 フィーチャーフラグ<br/>設定プロファイル"]
+        DS["📊 デプロイ戦略<br/>段階的ロールアウト"]
+        Target["🎯 ターゲティング<br/>ルール"]
+        FF ~~~ DS ~~~ Target
+    end
+
+    subgraph Agent["🔌 AppConfig Agent"]
+        direction LR
+        EntityID["🆔 エンティティ識別子<br/>ユーザー ID / セグメント"]
+        Sticky["📌 スティッキー割り当て"]
+        EntityID ~~~ Sticky
+    end
+
+    subgraph Users["👥 ターゲットユーザー"]
+        direction LR
+        SegA["🟢 セグメント A<br/>新機能 ON"]
+        SegB["🔵 セグメント B<br/>新機能 OFF"]
+        IndUser["🟣 個別ユーザー<br/>指定値"]
+        SegA ~~~ SegB ~~~ IndUser
+    end
+
+    Deploy --> FF
+    FF --> DS
+    DS --> Target
+    Target --> Agent
+    Agent --> EntityID
+    EntityID --> Sticky
+    Sticky --> SegA
+    Sticky --> SegB
+    Sticky --> IndUser
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class AppConfig cloud
+    class Agent cloud
+    class Users cloud
+    class Operator cloud
+    class Deploy input
+    class FF,DS,Target compute
+    class EntityID,Sticky internal
+    class SegA,SegB,IndUser user
+                </pre>
+            </div>
+            <p class="diagram-caption">オペレーターがデプロイを開始すると、AppConfig Agent がエンティティ識別子に基づいてスティッキーな割り当てを行い、各セグメントや個別ユーザーに一貫したフィーチャーフラグ値を配信します。</p>
+        </div>
+
+        <!-- Key Features -->
+        <div class="section">
+            <h2>⚙️ 主要機能</h2>
+            <div class="feature-cards">
+                <div class="feature-card">
+                    <div class="feature-card-title">🆔 エンティティ識別子ベースのターゲティング</div>
+                    <ul>
+                        <li>ユーザー提供のエンティティ識別子でフィーチャーフラグや動的設定データを特定ターゲットに割り当て</li>
+                        <li>個々のユーザー ID、ユーザーグループ、セグメントなど柔軟な識別子を使用可能</li>
+                        <li>段階的ロールアウトのライフサイクル全体を通じてターゲティングの一貫性を維持</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">📌 スティッキーな設定割り当て</div>
+                    <ul>
+                        <li>フィーチャーフラグや動的設定データが個々のターゲットセグメントに「スティッキー」に固定</li>
+                        <li>ロールアウトの進行状況に関わらず同一ユーザーは常に同じフラグ値を受け取る</li>
+                        <li>プログレッシブデリバリー中のユーザー体験の一貫性を保証</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">🔌 AppConfig Agent を活用したきめ細かな制御</div>
+                    <ul>
+                        <li>AppConfig Agent がエンティティ識別子の解決とターゲティングロジックを実行</li>
+                        <li>個々のユーザー ID レベルでのターゲティングが可能</li>
+                        <li>デプロイ中のリアルタイムなターゲット制御を実現</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">🔗 段階的ロールアウトとの統合</div>
+                    <ul>
+                        <li>既存の段階的デプロイ戦略との完全な互換性</li>
+                        <li>数分から数時間かけたプログレッシブデリバリーにターゲティング機能を追加</li>
+                        <li>安全ガードレールとターゲティングの組み合わせによりリスクを最小化</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Specs -->
+        <div class="section">
+            <h2>📐 技術仕様</h2>
+            <h3>ターゲティング機能の概要</h3>
+            <table class="spec-table">
+                <tbody>
+                    <tr><th>ターゲティング単位</th><td>セグメント、個々のユーザー ID</td></tr>
+                    <tr><th>識別子タイプ</th><td>エンティティ識別子</td></tr>
+                    <tr><th>割り当て方式</th><td><span class="highlight">スティッキー</span></td></tr>
+                    <tr><th>実行基盤</th><td>AppConfig Agent</td></tr>
+                    <tr><th>対象設定タイプ</th><td>フィーチャーフラグ、動的設定データ</td></tr>
+                    <tr><th>デプロイ方式</th><td>段階的ロールアウト</td></tr>
+                </tbody>
+            </table>
+
+            <h3>ターゲティング設定例</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">JSON</span>
+                    <span class="code-title">AppConfig Agent でのターゲティング設定</span>
+                </div>
+                <pre><code class="language-json">{
+    "flags": {
+        "new_checkout_flow": {
+            "enabled": true,
+            "targeting": {
+                "segments": [
+                    {
+                        "name": "beta_users",
+                        "value": {
+                            "enabled": true,
+                            "variant": "new_flow"
+                        }
+                    },
+                    {
+                        "name": "internal_testers",
+                        "value": {
+                            "enabled": true,
+                            "variant": "new_flow"
+                        }
+                    }
+                ],
+                "individual_targets": [
+                    {
+                        "entity_id": "user-12345",
+                        "value": {
+                            "enabled": true,
+                            "variant": "new_flow"
+                        }
+                    }
+                ],
+                "default_value": {
+                    "enabled": false,
+                    "variant": "legacy_flow"
+                }
+            }
+        }
+    }
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- Setup Steps -->
+        <div class="section">
+            <h2>🛠️ 設定方法</h2>
+
+            <h3>前提条件</h3>
+            <ul class="constraint-list" style="margin-bottom: 16px;">
+                <li>AWS アカウントと AWS AppConfig の設定</li>
+                <li>AppConfig Agent のインストールおよび設定</li>
+                <li>フィーチャーフラグまたは動的設定プロファイルの作成</li>
+                <li>段階的デプロイ戦略の定義</li>
+            </ul>
+
+            <h3>ステップ 1: フィーチャーフラグの設定プロファイルを作成</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">フィーチャーフラグ型設定プロファイルの作成</span>
+                </div>
+                <pre><code class="language-bash">aws appconfig create-configuration-profile \
+    --application-id MyApp \
+    --name "FeatureFlagsWithTargeting" \
+    --location-uri "hosted" \
+    --type "AWS.AppConfig.FeatureFlags"</code></pre>
+            </div>
+            <p style="font-size: 14px;"><code style="background: rgba(255,153,0,0.15); padding: 2px 6px; border-radius: 4px;">--type</code> パラメータでフィーチャーフラグ型を指定しています。</p>
+
+            <h3>ステップ 2: 段階的デプロイ戦略を作成</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">段階的デプロイ戦略の定義</span>
+                </div>
+                <pre><code class="language-bash">aws appconfig create-deployment-strategy \
+    --name "GradualRolloutWithTargeting" \
+    --deployment-duration-in-minutes 60 \
+    --growth-factor 10 \
+    --growth-type LINEAR \
+    --replicate-to NONE</code></pre>
+            </div>
+            <p style="font-size: 14px;">60 分間で 10% ずつリニアに展開する段階的デプロイ戦略を作成します。</p>
+
+            <h3>ステップ 3: AppConfig Agent でエンティティ識別子を指定して設定を取得</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">ターゲティングされた設定の取得</span>
+                </div>
+                <pre><code class="language-bash"># AppConfig Agent エンドポイントからターゲティングされた設定を取得
+curl "http://localhost:2772/applications/MyApp/environments/Production/configurations/FeatureFlagsWithTargeting?entity_id=user-12345"</code></pre>
+            </div>
+            <p style="font-size: 14px;"><code style="background: rgba(255,153,0,0.15); padding: 2px 6px; border-radius: 4px;">entity_id</code> パラメータでユーザー ID を指定し、スティッキーなターゲティングが適用されます。</p>
+
+            <h3>ステップ 4: デプロイを開始</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">段階的デプロイの開始</span>
+                </div>
+                <pre><code class="language-bash">aws appconfig start-deployment \
+    --application-id MyApp \
+    --environment-id Production \
+    --deployment-strategy-id GradualRolloutWithTargeting \
+    --configuration-profile-id FeatureFlagsWithTargeting \
+    --configuration-version 1</code></pre>
+            </div>
+            <p style="font-size: 14px;">ロールアウト中、ターゲティングされたセグメントや個別ユーザーにはスティッキーな値が配信されます。</p>
+        </div>
+
+        <!-- Merits & Demerits -->
+        <div class="section">
+            <h2>⚖️ メリットと制約事項</h2>
+            <div class="merit-grid">
+                <div class="merit-col">
+                    <h3 style="color: var(--aws-green);">✅ メリット</h3>
+                    <h4 style="color: var(--aws-light-gray); font-size: 14px; margin: 8px 0 4px; font-weight: 600;">ビジネス面</h4>
+                    <div class="merit-item">
+                        <span class="merit-icon">🔄</span>
+                        <span><strong style="color: var(--aws-white);">ユーザー体験の一貫性</strong>: スティッキー割り当てによりロールアウト中も同一ユーザーが一貫した体験を取得</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🛡️</span>
+                        <span><strong style="color: var(--aws-white);">段階的リリースの安全性向上</strong>: 特定セグメントに限定したリリースで問題の影響範囲を限定</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🧪</span>
+                        <span><strong style="color: var(--aws-white);">ベータプログラムの効率化</strong>: 特定ユーザーグループへの先行リリースを容易に実現</span>
+                    </div>
+                    <h4 style="color: var(--aws-light-gray); font-size: 14px; margin: 12px 0 4px; font-weight: 600;">技術面</h4>
+                    <div class="merit-item">
+                        <span class="merit-icon">🎯</span>
+                        <span><strong style="color: var(--aws-white);">きめ細かなターゲット制御</strong>: 個々のユーザー ID レベルでのフィーチャーフラグ制御が可能</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">⚙️</span>
+                        <span><strong style="color: var(--aws-white);">ネイティブ機能</strong>: 追加インフラなしで AppConfig Agent のターゲティングを実現</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🔗</span>
+                        <span><strong style="color: var(--aws-white);">既存ワークフロー互換</strong>: 段階的デプロイ戦略やロールバック機能との完全な統合</span>
+                    </div>
+                </div>
+                <div class="merit-col">
+                    <h3 style="color: var(--aws-red);">⚠️ 制約事項・考慮点</h3>
+                    <h4 style="color: var(--aws-light-gray); font-size: 14px; margin: 8px 0 4px; font-weight: 600;">制限事項</h4>
+                    <div class="merit-item">
+                        <span class="merit-icon">🔌</span>
+                        <span>AppConfig Agent の使用が前提条件であり、直接 API 呼び出しではターゲティング機能を利用できない可能性がある</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🆔</span>
+                        <span>エンティティ識別子の設計と管理はユーザー側の責任であり、適切な識別子スキーマの策定が必要</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">📏</span>
+                        <span>大量のターゲティングルール設定時、設定サイズの制限に抵触する可能性がある</span>
+                    </div>
+                    <h4 style="color: var(--aws-light-gray); font-size: 14px; margin: 12px 0 4px; font-weight: 600;">考慮すべき点</h4>
+                    <div class="merit-item">
+                        <span class="merit-icon">📋</span>
+                        <span>ターゲティングルールの複雑化に伴い、設定の可読性と保守性が低下するリスク</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🔧</span>
+                        <span>段階的ロールアウトとターゲティングの組み合わせでデバッグが複雑になる場合がある</span>
+                    </div>
+                    <div class="merit-item">
+                        <span class="merit-icon">🏷️</span>
+                        <span>アプリケーション全体で統一したエンティティ識別子スキーマの使用が必要</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Use Cases -->
+        <div class="section">
+            <h2>💡 ユースケース</h2>
+            <div class="usecase-cards">
+                <div class="usecase-card">
+                    <div class="usecase-title">🧪 ユースケース 1: ベータユーザーへの新機能先行リリース</div>
+                    <p class="usecase-scenario">SaaS アプリケーションで新しいダッシュボード機能をリリースする際、まずベータプログラム参加ユーザーグループに対してのみ機能を有効化し、フィードバック収集後に全ユーザーへ展開したい。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">JSON</span>
+                            <span class="code-title">ベータユーザーセグメントへのターゲティング</span>
+                        </div>
+                        <pre><code class="language-json">{
+    "flags": {
+        "new_dashboard": {
+            "enabled": true,
+            "targeting": {
+                "segments": [
+                    {"name": "beta_users", "value": {"enabled": true}}
+                ],
+                "default_value": {"enabled": false}
+            }
+        }
+    }
+}</code></pre>
+                    </div>
+                    <p class="usecase-effect">✅ ベータユーザーセグメントに対してのみ新ダッシュボードを有効化し、段階的ロールアウト中もスティッキーな割り当てにより一貫した体験を提供。問題発生時はベータユーザーのみに影響が限定されます。</p>
+                </div>
+
+                <div class="usecase-card">
+                    <div class="usecase-title">📊 ユースケース 2: A/B テストの安定的な実施</div>
+                    <p class="usecase-scenario">EC サイトで新しいチェックアウトフローの A/B テストを実施する際、段階的ロールアウト中に同一ユーザーが常に同じバリアントを体験するようにしたい。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">JSON</span>
+                            <span class="code-title">個別ユーザーへのバリアント割り当て</span>
+                        </div>
+                        <pre><code class="language-json">{
+    "flags": {
+        "checkout_variant": {
+            "enabled": true,
+            "targeting": {
+                "individual_targets": [
+                    {"entity_id": "user-001", "value": {"variant": "A"}},
+                    {"entity_id": "user-002", "value": {"variant": "B"}}
+                ],
+                "default_value": {"variant": "control"}
+            }
+        }
+    }
+}</code></pre>
+                    </div>
+                    <p class="usecase-effect">✅ エンティティ識別子に基づくスティッキーな割り当てにより、A/B テストの統計的有意性を維持しながら段階的にテスト対象を拡大可能。</p>
+                </div>
+
+                <div class="usecase-card">
+                    <div class="usecase-title">🏢 ユースケース 3: 特定テナントへのカスタム設定配信</div>
+                    <p class="usecase-scenario">マルチテナント SaaS プラットフォームで、特定の大口顧客テナントに対して動的設定値をカスタマイズしながら、段階的にプラットフォーム全体へ変更を展開したい。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">JSON</span>
+                            <span class="code-title">テナントティア別の設定ターゲティング</span>
+                        </div>
+                        <pre><code class="language-json">{
+    "flags": {
+        "rate_limit_config": {
+            "enabled": true,
+            "targeting": {
+                "segments": [
+                    {"name": "enterprise_tier", "value": {"requests_per_second": 10000}},
+                    {"name": "standard_tier", "value": {"requests_per_second": 1000}}
+                ],
+                "default_value": {"requests_per_second": 500}
+            }
+        }
+    }
+}</code></pre>
+                    </div>
+                    <p class="usecase-effect">✅ テナントティアに基づくターゲティングにより、段階的ロールアウト中も各テナントに適切な設定値を安定的に配信。ロールアウト完了後も同じターゲティングルールで運用を継続可能。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="section">
+            <h2>💰 料金</h2>
+            <p>AWS AppConfig のターゲティング機能自体に<span class="highlight">追加料金はありません</span>。以下の標準料金が適用されます。</p>
+            <table class="spec-table">
+                <thead>
+                    <tr><th>項目</th><th>料金</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>設定リクエスト (API コール)</td><td>$0.0000002 / リクエスト</td></tr>
+                    <tr><td>設定受信</td><td>$0.0008 / 受信</td></tr>
+                </tbody>
+            </table>
+            <p style="font-size: 14px; margin-top: 12px;">AppConfig Agent を使用した設定取得もリクエスト数に基づいて課金されます。詳細は <a href="https://aws.amazon.com/systems-manager/pricing/" target="_blank" rel="noopener noreferrer" style="color: var(--aws-teal);">AWS Systems Manager 料金ページ</a>を参照してください。</p>
+        </div>
+
+        <!-- Region -->
+        <div class="section">
+            <h2>🌍 利用可能リージョン</h2>
+            <p>AWS GovCloud (US) リージョンを含む、<span class="highlight">すべての AWS リージョン</span>で利用可能です。</p>
+        </div>
+
+        <!-- Related Services -->
+        <div class="section">
+            <h2>🔗 関連サービス・機能</h2>
+            <div class="related-services">
+                <div class="related-service">
+                    <span>⚙️</span>
+                    <span><strong>AWS AppConfig</strong>: フィーチャーフラグと動的設定の管理・デプロイサービス</span>
+                </div>
+                <div class="related-service">
+                    <span>🔌</span>
+                    <span><strong>AppConfig Agent</strong>: アプリケーションサイドカーとして動作し、設定の取得とキャッシュを管理するエージェント</span>
+                </div>
+                <div class="related-service">
+                    <span>🧩</span>
+                    <span><strong>AWS AppConfig Extensions</strong>: デプロイワークフローにカスタムアクションを追加する拡張機能</span>
+                </div>
+                <div class="related-service">
+                    <span>📈</span>
+                    <span><strong>Amazon CloudWatch</strong>: デプロイ中のアプリケーション健全性監視とアラーム連携</span>
+                </div>
+                <div class="related-service">
+                    <span>⚡</span>
+                    <span><strong>AWS Lambda</strong>: AppConfig Agent のサーバーレス環境での実行基盤</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reference Links -->
+        <div class="section">
+            <h2>📎 参考リンク</h2>
+            <ul class="link-list">
+                <li>📢 <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/appconfig-enhanced-targeting-feature-flag-rollout/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+                <li>📖 <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/getting-started-with-appconfig.html" target="_blank" rel="noopener noreferrer">AWS AppConfig ユーザーガイド</a></li>
+                <li>🔌 <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-integration-ec2.html" target="_blank" rel="noopener noreferrer">AWS AppConfig Agent ドキュメント</a></li>
+                <li>💲 <a href="https://aws.amazon.com/systems-manager/pricing/" target="_blank" rel="noopener noreferrer">AWS Systems Manager 料金ページ</a></li>
+            </ul>
+        </div>
+
+        <!-- Summary -->
+        <div class="section" style="border: 1px solid rgba(255,153,0,0.4); background: linear-gradient(135deg, rgba(255,153,0,0.1), var(--aws-dark-squid));">
+            <h2>📝 まとめ</h2>
+            <p>AWS AppConfig の拡張ターゲティング機能により、段階的ロールアウト中にフィーチャーフラグや動的設定データを特定のセグメントや個々のユーザーにターゲティングできるようになりました。<span class="highlight">AppConfig Agent とエンティティ識別子を使用したスティッキーな割り当て</span>により、プログレッシブデリバリーの安全性を維持しながらきめ細かなターゲット制御が可能になります。</p>
+            <p>ベータユーザーへの先行リリース、A/B テスト、テナント別設定配信など、多様なユースケースでデプロイの安全性とユーザー体験の一貫性を両立させる機能です。</p>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>📎 出典: <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/appconfig-enhanced-targeting-feature-flag-rollout/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/03/appconfig-enhanced-targeting-feature-flag-rollout/</a></p>
+            <p style="margin-top: 8px;">Generated on 2026-03-26</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

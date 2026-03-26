@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Advanced JDBC Wrapper - Valkey による自動クエリキャッシュ</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+        :root {
+            --aws-squid-ink: #232F3E;
+            --aws-dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --aws-white: #FFFFFF;
+            --aws-light-gray: #D5DBDB;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--aws-squid-ink);
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            color: var(--aws-light-gray);
+            font-size: 16px;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .header-left { flex: 1; min-width: 280px; }
+        .service-badge {
+            display: inline-block;
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            font-size: 13px;
+            font-weight: 700;
+            padding: 4px 14px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+            margin-right: 6px;
+        }
+        h1 {
+            font-size: 34px;
+            font-weight: 700;
+            color: var(--aws-white);
+            line-height: 1.3;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            font-size: 16px;
+            color: var(--aws-light-gray);
+        }
+        .header-date {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            text-align: right;
+            white-space: nowrap;
+            padding-top: 8px;
+        }
+
+        /* Section */
+        .section {
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--aws-orange);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--aws-white);
+            margin: 16px 0 10px;
+        }
+
+        p { margin-bottom: 12px; }
+
+        .highlight {
+            background-color: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        /* Before / After */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+        @media (max-width: 640px) {
+            .comparison-grid { grid-template-columns: 1fr; }
+        }
+        .comparison-card {
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid;
+        }
+        .comparison-card.before {
+            background: rgba(209, 50, 18, 0.08);
+            border-color: rgba(209, 50, 18, 0.4);
+        }
+        .comparison-card.after {
+            background: rgba(29, 129, 2, 0.08);
+            border-color: rgba(29, 129, 2, 0.4);
+        }
+        .comparison-label {
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .comparison-card.before .comparison-label { color: var(--aws-red); }
+        .comparison-card.after .comparison-label { color: var(--aws-green); }
+        .comparison-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        .comparison-card ul li {
+            padding: 4px 0;
+            font-size: 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
+        .comparison-card.before ul li::before {
+            content: "✗";
+            color: var(--aws-red);
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .comparison-card.after ul li::before {
+            content: "✓";
+            color: var(--aws-green);
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* Feature cards */
+        .feature-card {
+            background: rgba(255, 153, 0, 0.05);
+            border-left: 4px solid var(--aws-orange);
+            border-radius: 0 8px 8px 0;
+            padding: 16px 20px;
+            margin: 12px 0;
+        }
+        .feature-card-title {
+            font-weight: 700;
+            color: var(--aws-white);
+            font-size: 16px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .feature-card p {
+            font-size: 14px;
+            margin-bottom: 4px;
+            color: var(--aws-light-gray);
+        }
+        .feature-card ul {
+            list-style: none;
+            padding: 0;
+            margin-top: 6px;
+        }
+        .feature-card ul li {
+            font-size: 14px;
+            padding: 2px 0;
+            padding-left: 16px;
+            position: relative;
+        }
+        .feature-card ul li::before {
+            content: "→";
+            color: var(--aws-orange);
+            position: absolute;
+            left: 0;
+        }
+
+        /* Use case cards */
+        .usecase-card {
+            background: rgba(255, 153, 0, 0.08);
+            border: 1px solid rgba(255, 153, 0, 0.25);
+            border-radius: 8px;
+            padding: 18px;
+            margin: 12px 0;
+        }
+        .usecase-card-title {
+            font-weight: 700;
+            color: var(--aws-orange);
+            font-size: 16px;
+            margin-bottom: 6px;
+        }
+        .usecase-card p {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            margin-bottom: 6px;
+        }
+        .usecase-effect {
+            font-size: 14px;
+            color: var(--aws-green);
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        /* Table */
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+        .info-table th, .info-table td {
+            padding: 10px 14px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .info-table th {
+            color: var(--aws-orange);
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .info-table td {
+            color: var(--aws-light-gray);
+        }
+        .info-table tr:last-child td { border-bottom: none; }
+
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin: 16px 0;
+        }
+        @media (max-width: 640px) {
+            .stats-grid { grid-template-columns: 1fr; }
+        }
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            border-radius: 8px;
+            padding: 18px;
+            text-align: center;
+        }
+        .stat-icon {
+            font-size: 28px;
+            margin-bottom: 6px;
+        }
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--aws-orange);
+        }
+        .stat-label {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+            margin-top: 4px;
+        }
+
+        /* Merit / Demerit */
+        .merit-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+        @media (max-width: 640px) {
+            .merit-grid { grid-template-columns: 1fr; }
+        }
+        .merit-card {
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .merit-card.pro {
+            background: rgba(29, 129, 2, 0.08);
+            border: 1px solid rgba(29, 129, 2, 0.3);
+        }
+        .merit-card.con {
+            background: rgba(209, 50, 18, 0.06);
+            border: 1px solid rgba(209, 50, 18, 0.25);
+        }
+        .merit-card h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .merit-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        .merit-card ul li {
+            font-size: 14px;
+            padding: 4px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        .merit-card.pro ul li::before {
+            content: "✓";
+            color: var(--aws-green);
+            position: absolute;
+            left: 0;
+            font-weight: 700;
+        }
+        .merit-card.con ul li::before {
+            content: "!";
+            color: var(--aws-red);
+            position: absolute;
+            left: 2px;
+            font-weight: 700;
+        }
+
+        /* Pricing table */
+        .pricing-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+        .pricing-table th, .pricing-table td {
+            padding: 10px 14px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .pricing-table th {
+            color: var(--aws-orange);
+            font-weight: 600;
+        }
+        .pricing-free {
+            color: var(--aws-green);
+            font-weight: 700;
+        }
+
+        /* Mermaid */
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Code block */
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+        .code-title {
+            color: var(--aws-light-gray);
+        }
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+        }
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        /* Setup steps */
+        .step {
+            display: flex;
+            gap: 16px;
+            margin: 16px 0;
+            align-items: flex-start;
+        }
+        .step-number {
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            font-weight: 700;
+            font-size: 14px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .step-content {
+            flex: 1;
+        }
+        .step-content h4 {
+            color: var(--aws-white);
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .step-content p {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            margin-bottom: 6px;
+        }
+
+        /* Flow diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+        .flow-step {
+            background: var(--aws-dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 100px;
+        }
+        .flow-arrow {
+            color: var(--aws-orange);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        /* Related services */
+        .related-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+        @media (max-width: 640px) {
+            .related-grid { grid-template-columns: 1fr; }
+        }
+        .related-item {
+            background: rgba(0, 161, 201, 0.06);
+            border: 1px solid rgba(0, 161, 201, 0.2);
+            border-radius: 8px;
+            padding: 14px;
+        }
+        .related-item strong {
+            color: var(--aws-teal);
+            font-size: 14px;
+        }
+        .related-item p {
+            font-size: 13px;
+            margin-bottom: 0;
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            color: var(--aws-light-gray);
+        }
+        footer a {
+            color: var(--aws-teal);
+            text-decoration: none;
+            word-break: break-all;
+        }
+        footer a:hover { color: var(--aws-smile-orange); }
+        footer ul {
+            list-style: none;
+            padding: 0;
+            margin-top: 8px;
+        }
+        footer ul li {
+            padding: 3px 0;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <span class="service-badge">AWS Advanced JDBC Wrapper</span>
+                <span class="service-badge">ElastiCache for Valkey</span>
+                <h1>Valkey による自動クエリキャッシュ</h1>
+                <div class="subtitle">JDBC クエリ結果を自動キャッシュし、データベース読み取り負荷を軽減</div>
+            </div>
+            <div class="header-date">2026 年 3 月 26 日</div>
+        </div>
+
+        <!-- Overview -->
+        <div class="section">
+            <h2>📋 概要</h2>
+            <p>AWS Advanced JDBC Wrapper が、<span class="highlight">Valkey を使用した JDBC クエリの自動キャッシュ</span>に対応しました。Aurora および RDS の PostgreSQL、MySQL、MariaDB データベースのクエリ結果セットを、数ステップの設定で自動的に Valkey キャッシュに保存・取得できるようになります。</p>
+            <p>Hibernate や Spring Data などの一般的な永続化フレームワークからのアノテーションベースのキャッシュ指定、および手動のクエリヒントにも対応しています。</p>
+
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">☕</div>
+                    <div class="stat-value">Java / JDBC</div>
+                    <div class="stat-label">対応アプリケーション</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🗄️</div>
+                    <div class="stat-value">3 エンジン</div>
+                    <div class="stat-label">PostgreSQL / MySQL / MariaDB</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⚡</div>
+                    <div class="stat-value">数ステップ</div>
+                    <div class="stat-label">簡素な導入設定</div>
+                </div>
+            </div>
+
+            <!-- Before / After -->
+            <div class="comparison-grid">
+                <div class="comparison-card before">
+                    <div class="comparison-label">❌ Before</div>
+                    <ul>
+                        <li>各クエリに対してキャッシュ保存・取得コードを手動で記述</li>
+                        <li>キャッシュロジックとビジネスロジックが混在し保守性低下</li>
+                        <li>キャッシュ有効期限管理やキーの設計を個別に実装</li>
+                    </ul>
+                </div>
+                <div class="comparison-card after">
+                    <div class="comparison-label">✅ After</div>
+                    <ul>
+                        <li>プラグイン有効化 + エンドポイント設定で自動キャッシュ</li>
+                        <li>アノテーションベースでキャッシュ対象クエリを指定可能</li>
+                        <li>手動コード不要、アプリケーションの簡素化と保守性向上</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="section">
+            <h2>🏗️ アーキテクチャ図</h2>
+            <p>アプリケーションが JDBC クエリを実行すると、Query Cache Plugin がまず Valkey キャッシュを確認します。キャッシュヒットの場合はデータベースアクセスなしで結果を返却し、キャッシュミスの場合はデータベースにクエリを実行して結果をキャッシュに保存します。</p>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    subgraph App["☕ Java アプリケーション"]
+        direction LR
+        Code["📝 アプリケーションコード<br/>Hibernate / Spring Data"]
+        Wrapper["🔌 AWS Advanced<br/>JDBC Wrapper<br/>Query Cache Plugin"]
+        Code ~~~ Wrapper
+    end
+
+    subgraph DataLayer["🗄️ データレイヤー"]
+        direction LR
+        DB[("📋 Aurora / RDS<br/>PostgreSQL / MySQL<br/>/ MariaDB")]
+        Cache[("⚡ ElastiCache<br/>for Valkey")]
+        DB ~~~ Cache
+    end
+
+    Wrapper -->|"1. キャッシュ確認"| Cache
+    Cache -->|"2a. キャッシュヒット:<br/>結果を返却"| Wrapper
+    Wrapper -->|"2b. キャッシュミス:<br/>DB クエリ実行"| DB
+    DB -->|"3. クエリ結果"| Wrapper
+    Wrapper -->|"4. 結果をキャッシュに保存"| Cache
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class App compute
+    class DataLayer cloud
+    class DB database
+    class Cache storage
+                </pre>
+            </div>
+        </div>
+
+        <!-- Key Features -->
+        <div class="section">
+            <h2>🔧 主要機能</h2>
+
+            <div class="feature-card">
+                <div class="feature-card-title">⚡ 自動クエリキャッシュ</div>
+                <ul>
+                    <li>JDBC クエリの結果セットを自動的に Valkey キャッシュに保存・取得</li>
+                    <li>データベースへの読み取りリクエスト数を削減し、読み取りレイテンシを低減</li>
+                    <li>手動でのキャッシュコード記述が不要</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-card-title">🔌 フレームワーク統合</div>
+                <ul>
+                    <li>Hibernate からのクエリキャッシュアノテーションに対応</li>
+                    <li>Spring Data からのクエリキャッシュアノテーションに対応</li>
+                    <li>手動のクエリヒントによるキャッシュ制御もサポート</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-card-title">🗄️ 複数データベースエンジン対応</div>
+                <ul>
+                    <li>Amazon Aurora PostgreSQL / MySQL</li>
+                    <li>Amazon RDS for PostgreSQL / MySQL</li>
+                    <li>Amazon RDS for MariaDB</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Technical Specs -->
+        <div class="section">
+            <h2>📊 技術仕様</h2>
+
+            <h3>対応データベースエンジン</h3>
+            <table class="info-table">
+                <thead>
+                    <tr><th>データベース</th><th>サービス</th><th>対応状況</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>PostgreSQL</td><td>Aurora, RDS</td><td style="color: var(--aws-green);">✓ 対応</td></tr>
+                    <tr><td>MySQL</td><td>Aurora, RDS</td><td style="color: var(--aws-green);">✓ 対応</td></tr>
+                    <tr><td>MariaDB</td><td>RDS</td><td style="color: var(--aws-green);">✓ 対応</td></tr>
+                </tbody>
+            </table>
+
+            <h3>対応フレームワークと API</h3>
+            <table class="info-table">
+                <thead>
+                    <tr><th>フレームワーク / API</th><th>キャッシュ指定方法</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Hibernate</td><td>アノテーションベースのキャッシュ指定</td></tr>
+                    <tr><td>Spring Data</td><td>アノテーションベースのキャッシュ指定</td></tr>
+                    <tr><td>手動 JDBC</td><td>クエリヒントによるキャッシュ指定</td></tr>
+                </tbody>
+            </table>
+
+            <p style="font-size: 14px; color: rgba(213, 219, 219, 0.7); margin-top: 12px;">※ AWS Advanced JDBC Wrapper (クライアントサイドライブラリ) の機能追加であり、AWS API レベルの変更は含まれていません。</p>
+        </div>
+
+        <!-- Setup Guide -->
+        <div class="section">
+            <h2>🚀 設定方法</h2>
+
+            <h3>前提条件</h3>
+            <div class="flow-diagram" style="justify-content: flex-start; gap: 16px; margin-bottom: 20px;">
+                <div class="flow-step" style="min-width: auto; padding: 10px 16px; font-size: 14px;">☕ Java + JDBC</div>
+                <div class="flow-step" style="min-width: auto; padding: 10px 16px; font-size: 14px;">🗄️ Aurora / RDS</div>
+                <div class="flow-step" style="min-width: auto; padding: 10px 16px; font-size: 14px;">⚡ ElastiCache for Valkey</div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h4>AWS Advanced JDBC Wrapper の依存関係を追加</h4>
+                    <p>プロジェクトのビルドファイルに依存関係を追加します。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">XML</span>
+                            <span class="code-title">Maven の場合</span>
+                        </div>
+                        <pre><code class="language-xml">&lt;!-- Maven の場合 --&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;software.amazon.jdbc&lt;/groupId&gt;
+    &lt;artifactId&gt;aws-advanced-jdbc-wrapper&lt;/artifactId&gt;
+    &lt;version&gt;LATEST_VERSION&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h4>クエリキャッシュプラグインの有効化</h4>
+                    <p>JDBC Wrapper の設定でプラグインを有効化し、Valkey エンドポイントを指定します。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">Properties</span>
+                            <span class="code-title">JDBC 接続プロパティ</span>
+                        </div>
+                        <pre><code class="language-properties">wrapperPlugins=queryCache
+queryCacheUrl=valkey://your-elasticache-endpoint:6379</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h4>キャッシュ対象クエリの指定</h4>
+                    <p>Hibernate / Spring Data ではアノテーションで、素の JDBC ではクエリヒントで指定します。</p>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">4</div>
+                <div class="step-content">
+                    <h4>データベースエンドポイントの設定</h4>
+                    <p>AWS Advanced JDBC Wrapper を経由する接続 URL を設定します。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">Properties</span>
+                            <span class="code-title">データベース接続 URL</span>
+                        </div>
+                        <pre><code class="language-properties">jdbc:aws-wrapper:postgresql://your-aurora-endpoint:5432/your-database</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Merits / Demerits -->
+        <div class="section">
+            <h2>⚖️ メリットと制約事項</h2>
+
+            <div class="merit-grid">
+                <div class="merit-card pro">
+                    <h3 style="color: var(--aws-green);">✅ メリット</h3>
+                    <p style="font-size: 13px; font-weight: 600; color: var(--aws-light-gray); margin: 8px 0 4px;">ビジネス面</p>
+                    <ul>
+                        <li>データベース読み取りリクエスト削減によるコスト低減</li>
+                        <li>読み取りレイテンシ改善によるエンドユーザー体験向上</li>
+                        <li>手動キャッシュコード不要で開発者がビジネスロジックに集中</li>
+                    </ul>
+                    <p style="font-size: 13px; font-weight: 600; color: var(--aws-light-gray); margin: 12px 0 4px;">技術面</p>
+                    <ul>
+                        <li>数ステップの設定のみで導入可能</li>
+                        <li>Hibernate / Spring Data とネイティブに統合</li>
+                        <li>データベース負荷急増時のアプリケーション安定性向上</li>
+                    </ul>
+                </div>
+                <div class="merit-card con">
+                    <h3 style="color: var(--aws-red);">⚠️ 制約事項・注意点</h3>
+                    <p style="font-size: 13px; font-weight: 600; color: var(--aws-light-gray); margin: 8px 0 4px;">制限事項</p>
+                    <ul>
+                        <li>対応は PostgreSQL / MySQL / MariaDB のみ</li>
+                        <li>Java / JDBC アプリケーション限定</li>
+                        <li>キャッシュ対象クエリは明示的な指定が必要</li>
+                    </ul>
+                    <p style="font-size: 13px; font-weight: 600; color: var(--aws-light-gray); margin: 12px 0 4px;">考慮すべき点</p>
+                    <ul>
+                        <li>キャッシュ有効期限の適切な設定が必要</li>
+                        <li>ElastiCache for Valkey の追加コストが発生</li>
+                        <li>書き込みが多いワークロードでは効果が限定的</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Use Cases -->
+        <div class="section">
+            <h2>💡 ユースケース</h2>
+
+            <div class="usecase-card">
+                <div class="usecase-card-title">🛒 読み取り頻度の高い Web アプリケーション</div>
+                <p>E コマースサイトの商品カタログページで、商品情報や価格情報が頻繁に参照されるが更新頻度は低い場合に、クエリキャッシュを活用してデータベース負荷を軽減します。</p>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Java</span>
+                        <span class="code-title">Spring Data の場合</span>
+                    </div>
+                    <pre><code class="language-java">@Repository
+public interface ProductRepository extends JpaRepository&lt;Product, Long&gt; {
+    // クエリキャッシュプラグインにより自動的にキャッシュされる
+    List&lt;Product&gt; findByCategoryId(Long categoryId);
+}</code></pre>
+                </div>
+                <div class="usecase-effect">→ 商品カタログの読み取りレイテンシが大幅に低減。セール時のアクセス急増にも対応可能</div>
+            </div>
+
+            <div class="usecase-card">
+                <div class="usecase-card-title">📊 ダッシュボード・レポーティングシステム</div>
+                <p>集計クエリやレポートクエリの結果をキャッシュし、複数ユーザーが同じレポートを参照する際のデータベース負荷を削減します。</p>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Java</span>
+                        <span class="code-title">Hibernate でのクエリヒント使用例</span>
+                    </div>
+                    <pre><code class="language-java">Query query = session.createQuery(
+    "SELECT department, SUM(sales) FROM Orders " +
+    "GROUP BY department"
+);
+// JDBC Wrapper のクエリキャッシュプラグインが自動的にキャッシュ</code></pre>
+                </div>
+                <div class="usecase-effect">→ 同一レポートへの複数回アクセスでデータベースクエリが 1 回のみとなりレスポンス時間を短縮</div>
+            </div>
+
+            <div class="usecase-card">
+                <div class="usecase-card-title">🔗 マイクロサービス間の共有データ参照</div>
+                <p>複数のマイクロサービスが共通のマスターデータを参照する環境で、各サービスのデータベースアクセスを Valkey キャッシュ経由に集約します。</p>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Properties</span>
+                        <span class="code-title">各マイクロサービスの JDBC 設定</span>
+                    </div>
+                    <pre><code class="language-properties">wrapperPlugins=queryCache
+queryCacheUrl=valkey://shared-elasticache-endpoint:6379</code></pre>
+                </div>
+                <div class="usecase-effect">→ 共通データへのアクセスが Valkey で処理され、データベースの接続数とクエリ負荷を大幅に削減</div>
+            </div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="section">
+            <h2>💰 料金</h2>
+            <p>AWS Advanced JDBC Wrapper はオープンソースのクライアントライブラリであり、Wrapper 自体の利用料金は無料です。</p>
+            <table class="info-table">
+                <thead>
+                    <tr><th>コスト項目</th><th>料金</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>AWS Advanced JDBC Wrapper</td><td><span class="pricing-free">無料 (オープンソース)</span></td></tr>
+                    <tr><td>Amazon ElastiCache for Valkey</td><td>ノードタイプとリージョンに応じた時間課金</td></tr>
+                    <tr><td>Aurora / RDS データベース</td><td>通常のデータベース料金 (キャッシュにより読み取り負荷が軽減)</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Region -->
+        <div class="section">
+            <h2>🌍 利用可能リージョン</h2>
+            <p>AWS Advanced JDBC Wrapper はクライアントサイドライブラリであるため、<span class="highlight">Amazon ElastiCache for Valkey および Aurora / RDS が利用可能なすべてのリージョン</span>で使用できます。</p>
+        </div>
+
+        <!-- Related Services -->
+        <div class="section">
+            <h2>🔗 関連サービス</h2>
+            <div class="related-grid">
+                <div class="related-item">
+                    <strong>⚡ Amazon ElastiCache for Valkey</strong>
+                    <p>クエリ結果のキャッシュ先として使用される、フルマネージドの Valkey キャッシュサービス</p>
+                </div>
+                <div class="related-item">
+                    <strong>🗄️ Amazon Aurora</strong>
+                    <p>高性能なクラウドネイティブリレーショナルデータベース。PostgreSQL / MySQL 互換</p>
+                </div>
+                <div class="related-item">
+                    <strong>📋 Amazon RDS</strong>
+                    <p>PostgreSQL、MySQL、MariaDB を含むマネージドリレーショナルデータベースサービス</p>
+                </div>
+                <div class="related-item">
+                    <strong>🔌 AWS Advanced JDBC Wrapper</strong>
+                    <p>AWS データベースサービスとの統合機能を提供する JDBC ドライバーラッパー</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>📎 出典:</p>
+            <ul>
+                <li>📰 <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/aws-jdbc-caching-with-valkey/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+                <li>💻 <a href="https://github.com/aws/aws-advanced-jdbc-wrapper" target="_blank" rel="noopener noreferrer">AWS Advanced JDBC Wrapper GitHub リポジトリ</a></li>
+                <li>⚡ <a href="https://aws.amazon.com/elasticache/valkey/" target="_blank" rel="noopener noreferrer">Amazon ElastiCache for Valkey 製品ページ</a></li>
+                <li>💰 <a href="https://aws.amazon.com/elasticache/pricing/" target="_blank" rel="noopener noreferrer">Amazon ElastiCache 料金ページ</a></li>
+            </ul>
+        </footer>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>
