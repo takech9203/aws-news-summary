@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Lambda - LMI File Descriptors 4,096</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .header-left { flex: 1; min-width: 280px; }
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      line-height: 1.3;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+    .header-date {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      white-space: nowrap;
+      padding-top: 8px;
+    }
+
+    /* Sections */
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+    .stat-label {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* Before / After */
+    .ba-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: stretch;
+      margin: 16px 0;
+    }
+    .ba-card {
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .ba-before {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+    }
+    .ba-after {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+    }
+    .ba-label {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .ba-before .ba-label { color: var(--aws-red); }
+    .ba-after .ba-label { color: var(--aws-green); }
+    .ba-arrow {
+      display: flex;
+      align-items: center;
+      font-size: 32px;
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+    .ba-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+    @media (max-width: 640px) {
+      .ba-grid {
+        grid-template-columns: 1fr;
+      }
+      .ba-arrow {
+        justify-content: center;
+        transform: rotate(90deg);
+      }
+    }
+
+    /* Feature cards */
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 12px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .feature-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+    .feature-desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Use case cards */
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+    .usecase-title {
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+    .usecase-desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 8px;
+    }
+    .usecase-effect {
+      font-size: 13px;
+      color: var(--aws-green);
+      margin-top: 8px;
+    }
+
+    /* Table */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+    .spec-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+      font-weight: 600;
+    }
+    .spec-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--aws-light-gray);
+    }
+    .spec-table tr:last-child td { border-bottom: none; }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Pros / Cons */
+    .pros-cons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 12px 0;
+    }
+    @media (max-width: 640px) {
+      .pros-cons { grid-template-columns: 1fr; }
+    }
+    .pros-card, .cons-card {
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .pros-card {
+      background: rgba(29, 129, 2, 0.08);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+    }
+    .cons-card {
+      background: rgba(209, 50, 18, 0.08);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+    }
+    .pros-card h3 { color: var(--aws-green); font-size: 16px; margin-bottom: 10px; }
+    .cons-card h3 { color: var(--aws-red); font-size: 16px; margin-bottom: 10px; }
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 6px 0;
+      font-size: 14px;
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Related services */
+    .related-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin: 12px 0;
+    }
+    .related-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 14px;
+    }
+    .related-item strong {
+      color: var(--aws-teal);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+    footer a:hover { color: var(--aws-smile-orange); }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">AWS Lambda</span>
+        <h1>Lambda Managed Instances のファイルディスクリプタ上限を 4,096 に引き上げ</h1>
+        <div class="subtitle">I/O 集約型ワークロードの制約を大幅に緩和する 4 倍のリソース増加</div>
+      </div>
+      <div class="header-date">2026 年 3 月 26 日</div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">4x</div>
+        <div class="stat-label">ファイルディスクリプタ増加倍率</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">1,024 <span style="font-size:20px;">&#8594;</span> 4,096</div>
+        <div class="stat-label">FD 上限の変更</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0</div>
+        <div class="stat-label">追加設定・追加料金</div>
+      </div>
+    </div>
+
+    <!-- Overview + Before/After -->
+    <div class="section">
+      <h2>&#x1F4CB; 概要</h2>
+      <p>AWS Lambda が <span class="highlight">Lambda Managed Instances (LMI)</span> 上で実行される関数のファイルディスクリプタ上限を <span class="highlight">1,024 から 4,096</span> に引き上げました。LMI はマネージドな Amazon EC2 インスタンス上で Lambda 関数を実行する機能で、ルーティング、ロードバランシング、オートスケーリングが組み込まれています。複数のリクエストを同時に処理するため、各リクエストが開くファイル、ネットワークソケット、内部リソースがそれぞれファイルディスクリプタを消費します。今回の上限引き上げにより、高並行性の Web サービスやファイル集約型のデータ処理パイプラインなどのワークロードを、制限に悩まされることなく実行できるようになりました。</p>
+
+      <h2 style="margin-top:24px;">&#x1F504; Before / After</h2>
+      <div class="ba-grid">
+        <div class="ba-card ba-before">
+          <div class="ba-label">&#x274C; Before</div>
+          <div class="ba-item"><span>&#x2022;</span><span>FD 上限が 1,024 に制限</span></div>
+          <div class="ba-item"><span>&#x2022;</span><span>高並行性 Web サービスで同時接続数が不足する可能性</span></div>
+          <div class="ba-item"><span>&#x2022;</span><span>ファイル集約型データ処理で "Too many open files" エラーのリスク</span></div>
+        </div>
+        <div class="ba-arrow">&#8594;</div>
+        <div class="ba-card ba-after">
+          <div class="ba-label">&#x2705; After</div>
+          <div class="ba-item"><span>&#x2022;</span><span>FD 上限が 4,096 に引き上げ (4 倍)</span></div>
+          <div class="ba-item"><span>&#x2022;</span><span>FD 制限を気にせず高並行性 Web サービスを実行可能</span></div>
+          <div class="ba-item"><span>&#x2022;</span><span>より多くのファイルやソケットを同時に扱える</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram (Mermaid) -->
+    <div class="section">
+      <h2>&#x1F3D7;&#xFE0F; アーキテクチャ図</h2>
+      <p style="margin-bottom:12px;">LMI 上で複数のリクエストが同時に処理される際、各リクエストがファイルやネットワークソケットなどのファイルディスクリプタを消費します。今回の上限引き上げにより、従来の 4 倍のリソースを利用できるようになりました。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    Client(["&#x1F464; クライアント"])
+
+    subgraph LMI["&#x1F5A5;&#xFE0F; Lambda Managed Instances"]
+        direction TB
+        subgraph EC2["&#x2699;&#xFE0F; マネージド EC2 インスタンス"]
+            direction LR
+            Router["&#x1F500; ルーティング&lt;br/&gt;ロードバランシング"]
+            AutoScale["&#x1F4C8; オートスケーリング"]
+            Router ~~~ AutoScale
+        end
+
+        subgraph Functions["&#x26A1; Lambda 関数の同時処理"]
+            direction LR
+            Req1["&#x1F4CB; リクエスト 1&lt;br/&gt;FD: ファイル + ソケット"]
+            Req2["&#x1F4CB; リクエスト 2&lt;br/&gt;FD: ファイル + ソケット"]
+            Req3["&#x1F4CB; リクエスト 3&lt;br/&gt;FD: ファイル + ソケット"]
+            Req1 ~~~ Req2 ~~~ Req3
+        end
+
+        subgraph Limit["&#x1F4CA; ファイルディスクリプタ上限"]
+            direction LR
+            Before["&#x274C; 以前: 1,024"]
+            After["&#x2705; 現在: 4,096"]
+            Before ~~~ After
+        end
+    end
+
+    subgraph Backend["&#x1F5C4;&#xFE0F; バックエンドリソース"]
+        direction LR
+        DB[("&#x1F4CB; データベース")]
+        S3[("&#x1FAA3; S3")]
+        API["&#x1F50C; 外部 API"]
+        DB ~~~ S3 ~~~ API
+    end
+
+    Client --> EC2
+    EC2 --> Functions
+    Functions --> Limit
+    Functions --> Backend
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef success fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef warning fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class LMI cloud
+    class EC2,Functions,Limit,Backend cloud
+    class Router,AutoScale compute
+    class Req1,Req2,Req3 internal
+    class Before warning
+    class After success
+    class DB,S3 storage
+    class API process
+    class Client user
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>&#x1F527; 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="feature-title">&#x1F4C8; ファイルディスクリプタ上限の 4 倍引き上げ</div>
+        <div class="feature-desc">LMI 上の Lambda 関数で利用可能なファイルディスクリプタ上限が 1,024 から 4,096 に増加。追加設定は不要で自動的に新しい上限が適用されます。開いたファイル、ネットワークソケット、内部リソースの全てに適用されます。</div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">&#x26A1; 高並行性ワークロードのサポート強化</div>
+        <div class="feature-desc">LMI は複数のリクエストを 1 つのインスタンス上で同時処理するため、従来よりも多くの並行接続を維持可能に。Web サービスでの同時接続数の実質的な上限が大幅に拡大しました。</div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">&#x1F4BE; I/O 集約型パイプラインへの対応</div>
+        <div class="feature-desc">ファイル集約型のデータ処理パイプラインで同時に開くことができるファイル数が増加。データ変換やバッチ処理などの ETL ワークロードでの柔軟性が向上しました。</div>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>&#x1F4D0; 技術仕様</h2>
+
+      <h3 style="color:var(--aws-white);font-size:16px;margin-bottom:12px;">ファイルディスクリプタの仕様比較</h3>
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>変更前</th>
+            <th>変更後</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>ファイルディスクリプタ上限</td><td>1,024</td><td style="color:var(--aws-orange);font-weight:600;">4,096</td></tr>
+          <tr><td>対象環境</td><td>Lambda Managed Instances</td><td>Lambda Managed Instances</td></tr>
+          <tr><td>増加倍率</td><td>-</td><td style="color:var(--aws-orange);font-weight:600;">4 倍</td></tr>
+          <tr><td>設定変更の要否</td><td>-</td><td style="color:var(--aws-green);">不要 (自動適用)</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color:var(--aws-white);font-size:16px;margin:20px 0 12px;">ファイルディスクリプタの消費要因</h3>
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>リソースタイプ</th>
+            <th>消費するファイルディスクリプタ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>開いたファイル</td><td>1 ファイルにつき 1 FD</td></tr>
+          <tr><td>ネットワークソケット</td><td>1 ソケットにつき 1 FD</td></tr>
+          <tr><td>内部リソース</td><td>ランタイムやフレームワークの内部利用分</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color:var(--aws-white);font-size:16px;margin:20px 0 12px;">Lambda Managed Instances の特徴</h3>
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>詳細</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>実行基盤</td><td>マネージドな Amazon EC2 インスタンス</td></tr>
+          <tr><td>ルーティング</td><td>組み込みのリクエストルーティング</td></tr>
+          <tr><td>スケーリング</td><td>自動スケーリング対応</td></tr>
+          <tr><td>ロードバランシング</td><td>組み込みのロードバランシング</td></tr>
+          <tr><td>リクエスト処理</td><td>複数リクエストの同時処理が可能</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Setup -->
+    <div class="section">
+      <h2>&#x2699;&#xFE0F; 設定方法</h2>
+
+      <p style="margin-bottom:16px;">前提条件: AWS アカウント、LMI を使用する Lambda 関数、AWS CLI v2 がインストールされていること。</p>
+
+      <h3 style="color:var(--aws-white);font-size:16px;margin-bottom:8px;">Step 1: 現在のファイルディスクリプタ上限を確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">FD 上限確認</span>
+        </div>
+        <pre><code class="language-python">import resource
+import os
+
+def lambda_handler(event, context):
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    return {
+        'soft_limit': soft,
+        'hard_limit': hard,
+        'current_open_fds': len(os.listdir('/proc/self/fd'))
+    }</code></pre>
+      </div>
+      <p style="font-size:14px;margin-bottom:16px;color:var(--aws-light-gray);">LMI 上で実行されている場合、上限が 4,096 と表示されます。</p>
+
+      <h3 style="color:var(--aws-white);font-size:16px;margin-bottom:8px;">Step 2: Lambda Managed Instances で関数を設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">LMI 設定</span>
+        </div>
+        <pre><code class="language-bash"># Lambda 関数を LMI で実行するよう設定
+aws lambda update-function-configuration \
+  --function-name my-function \
+  --compute-platform ManagedInstances</code></pre>
+      </div>
+      <p style="font-size:14px;margin-bottom:16px;color:var(--aws-light-gray);">設定後、ファイルディスクリプタの上限は自動的に 4,096 に引き上げられます。</p>
+
+      <h3 style="color:var(--aws-white);font-size:16px;margin-bottom:8px;">Step 3: ファイルディスクリプタの使用状況をモニタリング</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">FD モニタリング</span>
+        </div>
+        <pre><code class="language-python">import os
+
+def lambda_handler(event, context):
+    open_fds = len(os.listdir('/proc/self/fd'))
+    print(f"Currently open file descriptors: {open_fds}/4096")
+
+    # ファイルディスクリプタの使用率をチェック
+    usage_percent = (open_fds / 4096) * 100
+    if usage_percent > 80:
+        print(f"WARNING: FD usage is at {usage_percent:.1f}%")
+
+    return {'fd_usage': open_fds}</code></pre>
+      </div>
+      <p style="font-size:14px;color:var(--aws-light-gray);">本番環境では FD 使用状況のモニタリングを推奨します。使用率が高い場合はアラートを設定し、リソースリークを早期に検出できるようにします。</p>
+    </div>
+
+    <!-- Merits / Demerits -->
+    <div class="section">
+      <h2>&#x2696;&#xFE0F; メリット・デメリット</h2>
+      <div class="pros-cons">
+        <div class="pros-card">
+          <h3>&#x2705; メリット</h3>
+          <div style="font-size:13px;color:var(--aws-green);margin-bottom:6px;font-weight:600;">ビジネス面</div>
+          <div class="check-item"><span style="color:var(--aws-green);">&#x2713;</span><span>I/O 集約型アプリをサーバーレスで実行可能に</span></div>
+          <div class="check-item"><span style="color:var(--aws-green);">&#x2713;</span><span>EC2 直接管理が不要で運用コスト削減</span></div>
+          <div class="check-item"><span style="color:var(--aws-green);">&#x2713;</span><span>追加料金なし</span></div>
+          <div style="font-size:13px;color:var(--aws-green);margin:12px 0 6px;font-weight:600;">技術面</div>
+          <div class="check-item"><span style="color:var(--aws-green);">&#x2713;</span><span>同時に多数のネットワーク接続やファイル操作を処理可能</span></div>
+          <div class="check-item"><span style="color:var(--aws-green);">&#x2713;</span><span>設定不要で自動的に適用</span></div>
+          <div class="check-item"><span style="color:var(--aws-green);">&#x2713;</span><span>"Too many open files" エラーのリスクが大幅に低減</span></div>
+        </div>
+        <div class="cons-card">
+          <h3>&#x26A0;&#xFE0F; 制限事項・注意点</h3>
+          <div class="check-item"><span style="color:var(--aws-red);">&#x2717;</span><span>LMI 上の関数のみが対象。標準 Lambda 実行環境には適用されない</span></div>
+          <div class="check-item"><span style="color:var(--aws-red);">&#x2717;</span><span>上限は 4,096。超える場合は別アーキテクチャの検討が必要</span></div>
+          <div class="check-item"><span style="color:var(--aws-red);">&#x2717;</span><span>LMI は通常の Lambda と異なる料金体系</span></div>
+          <div style="font-size:13px;color:var(--aws-red);margin:12px 0 6px;font-weight:600;">考慮すべき点</div>
+          <div class="check-item"><span style="color:var(--aws-orange);">&#x25B6;</span><span>FD リークがある場合、上限引き上げは根本的な解決にならない</span></div>
+          <div class="check-item"><span style="color:var(--aws-orange);">&#x25B6;</span><span>高並行処理では FD 以外のリソース (メモリ、CPU) も考慮が必要</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>&#x1F4A1; ユースケース</h2>
+
+      <div class="usecase-card">
+        <div class="usecase-title">&#x1F310; ユースケース 1: 高並行性 Web サービス</div>
+        <div class="usecase-desc">REST API を提供する Lambda 関数が LMI 上で多数のクライアントからの同時リクエストを処理。各リクエストがデータベース接続やキャッシュへの接続でファイルディスクリプタを消費するシナリオ。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <span class="code-title">高並行性 Web サービス例</span>
+          </div>
+          <pre><code class="language-python">import urllib3
+
+http = urllib3.PoolManager(maxsize=50)
+
+def lambda_handler(event, context):
+    # 複数のバックエンドサービスに同時接続
+    responses = []
+    for endpoint in event['endpoints']:
+        resp = http.request('GET', endpoint)
+        responses.append(resp.data)
+    return {'results': len(responses)}</code></pre>
+        </div>
+        <div class="usecase-effect">&#x2192; 従来の 1,024 では制約されていた同時接続数が、4,096 への引き上げで大幅に安定して維持可能に</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">&#x1F4C2; ユースケース 2: ファイル集約型データ処理パイプライン</div>
+        <div class="usecase-desc">大量の CSV / JSON ファイルを同時に読み込み、変換して S3 にアップロードする ETL パイプライン。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <span class="code-title">ETL パイプライン例</span>
+          </div>
+          <pre><code class="language-python">import boto3
+import concurrent.futures
+
+s3 = boto3.client('s3')
+
+def lambda_handler(event, context):
+    files = event['files']
+    results = []
+
+    # 同時に多数のファイルを処理
+    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
+        futures = {
+            executor.submit(process_file, f): f for f in files
+        }
+        for future in concurrent.futures.as_completed(futures):
+            results.append(future.result())
+
+    return {'processed': len(results)}</code></pre>
+        </div>
+        <div class="usecase-effect">&#x2192; 同時に開くファイル数の上限が 4 倍に増加し、バッチサイズを大きくできスループットが向上</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">&#x1F517; ユースケース 3: マイクロサービス間通信の集約 (BFF パターン)</div>
+        <div class="usecase-desc">API Gateway の背後で動作する Lambda 関数が複数のマイクロサービスに対して同時にリクエストを送信し、結果を集約する Backend for Frontend パターン。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <span class="code-title">BFF パターン例</span>
+          </div>
+          <pre><code class="language-python">import asyncio
+import aiohttp
+
+async def fetch_all(endpoints):
+    async with aiohttp.ClientSession() as session:
+        tasks = [session.get(url) for url in endpoints]
+        return await asyncio.gather(*tasks)
+
+def lambda_handler(event, context):
+    endpoints = [
+        'https://service-a.internal/api/data',
+        'https://service-b.internal/api/data',
+        'https://service-c.internal/api/data',
+        # ... 多数のサービスエンドポイント
+    ]
+    results = asyncio.run(fetch_all(endpoints))
+    return {'aggregated': len(results)}</code></pre>
+        </div>
+        <div class="usecase-effect">&#x2192; 多数のマイクロサービスへの同時接続が可能になり、レスポンス集約のレイテンシが改善</div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>&#x1F4B0; 料金情報</h2>
+      <p>今回のファイルディスクリプタ上限の引き上げに伴う<span class="highlight">追加料金は発生しません</span>。料金は Lambda Managed Instances の通常の利用料金に従います。LMI の料金は使用する EC2 インスタンスタイプと実行時間に基づいて課金されます。</p>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>&#x1F30D; 利用可能リージョン</h2>
+      <p>Lambda Managed Instances が利用可能な<span class="highlight">すべてのリージョン</span>でこのアップデートが適用されます。最新のリージョン対応状況については、AWS Lambda のドキュメントを参照してください。</p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>&#x1F517; 関連サービス</h2>
+      <div class="related-grid">
+        <div class="related-item">
+          <strong>&#x26A1; AWS Lambda</strong>
+          サーバーレスコンピューティングサービス。コードの実行基盤を提供。
+        </div>
+        <div class="related-item">
+          <strong>&#x1F5A5;&#xFE0F; Lambda Managed Instances</strong>
+          マネージドな EC2 インスタンス上で Lambda 関数を実行。ルーティング、LB、オートスケーリングを内蔵。
+        </div>
+        <div class="related-item">
+          <strong>&#x2699;&#xFE0F; Amazon EC2</strong>
+          LMI の基盤となるコンピューティングサービス。
+        </div>
+        <div class="related-item">
+          <strong>&#x1F4CA; Amazon CloudWatch</strong>
+          Lambda 関数のモニタリングとメトリクス収集に使用。
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>&#x1F4CE; 出典:</p>
+      <ul style="list-style:none;margin-top:6px;">
+        <li style="margin:4px 0;"><a href="https://aws.amazon.com/about-aws/whats-new/2026/03/aws-Lambda-file-descriptors-increase-4096/" target="_blank" rel="noopener noreferrer">AWS What's New - Lambda File Descriptors Increase</a></li>
+        <li style="margin:4px 0;"><a href="https://docs.aws.amazon.com/lambda/" target="_blank" rel="noopener noreferrer">AWS Lambda Documentation</a></li>
+        <li style="margin:4px 0;"><a href="https://aws.amazon.com/lambda/pricing/" target="_blank" rel="noopener noreferrer">AWS Lambda Pricing</a></li>
+      </ul>
+      <p style="margin-top:12px;font-size:11px;color:rgba(213,219,219,0.6);">Generated on 2026-03-27</p>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

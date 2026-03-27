@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS PCS - slurmdbd / cgroups 設定サポート</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <style>
+        :root {
+            --aws-squid-ink: #232F3E;
+            --aws-dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --aws-white: #FFFFFF;
+            --aws-light-gray: #D5DBDB;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background: var(--aws-squid-ink);
+            color: var(--aws-light-gray);
+            line-height: 1.8;
+            padding: 40px 20px;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 24px;
+            background: linear-gradient(135deg, var(--aws-dark-squid) 0%, var(--aws-squid-ink) 100%);
+            border-radius: 12px;
+            border: 3px solid var(--aws-orange);
+        }
+        .service-badge {
+            display: inline-block;
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            padding: 8px 24px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 16px;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--aws-white);
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+        .header .subtitle { font-size: 16px; color: var(--aws-light-gray); }
+        .release-date {
+            font-size: 14px;
+            color: var(--aws-orange);
+            margin-top: 16px;
+            font-weight: 600;
+        }
+        .section {
+            background: var(--aws-dark-squid);
+            padding: 24px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .section h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--aws-orange);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        @media (max-width: 768px) {
+            .comparison { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: 1fr !important; }
+            .feature-grid { grid-template-columns: 1fr !important; }
+            .tech-grid { grid-template-columns: 1fr !important; }
+        }
+        .comparison-card {
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 5px solid;
+        }
+        .comparison-card.before {
+            background: rgba(209, 50, 18, 0.15);
+            border-left-color: var(--aws-red);
+        }
+        .comparison-card.after {
+            background: rgba(29, 129, 2, 0.15);
+            border-left-color: var(--aws-green);
+        }
+        .comparison-card h4 { font-size: 16px; margin-bottom: 12px; font-weight: 600; }
+        .comparison-card.before h4 { color: var(--aws-red); }
+        .comparison-card.after h4 { color: var(--aws-green); }
+        .comparison-card ul { list-style: none; padding-left: 0; }
+        .comparison-card li {
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .comparison-card.before li::before { content: "\2715"; position: absolute; left: 0; color: var(--aws-red); font-weight: bold; }
+        .comparison-card.after li::before { content: "\2713"; position: absolute; left: 0; color: var(--aws-green); font-weight: bold; }
+        .card {
+            background: var(--aws-dark-squid);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            margin-bottom: 16px;
+        }
+        .card h3 {
+            font-size: 18px;
+            color: var(--aws-orange);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card p, .card ul { font-size: 15px; color: var(--aws-light-gray); }
+        .card ul { list-style: none; padding-left: 0; margin-top: 8px; }
+        .card ul li {
+            padding-left: 20px;
+            position: relative;
+            margin-bottom: 6px;
+            line-height: 1.6;
+        }
+        .card ul li::before { content: "\2192"; position: absolute; left: 0; color: var(--aws-orange); }
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+        .flow-step {
+            background: var(--aws-dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 120px;
+        }
+        .flow-arrow { color: var(--aws-orange); font-size: 24px; font-weight: bold; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+        .stats-card {
+            background: linear-gradient(135deg, var(--aws-orange) 0%, #FF6B00 100%);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            color: var(--aws-white);
+        }
+        .stats-card .number { font-size: 36px; font-weight: bold; line-height: 1; }
+        .stats-card .label { font-size: 13px; margin-top: 8px; }
+        .usecase {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.15) 0%, rgba(255, 153, 0, 0.05) 100%);
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            margin-bottom: 16px;
+        }
+        .usecase h3 { font-size: 18px; color: var(--aws-orange); margin-bottom: 8px; }
+        .usecase p { font-size: 15px; color: #EEEEEE; }
+        .usecase .effect {
+            margin-top: 12px;
+            padding: 10px 16px;
+            background: rgba(29, 129, 2, 0.15);
+            border-left: 3px solid var(--aws-green);
+            border-radius: 4px;
+            font-size: 14px;
+            color: var(--aws-light-gray);
+        }
+        .highlight {
+            background: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+        a { color: var(--aws-teal); text-decoration: none; }
+        a:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+        .mermaid { display: flex; justify-content: center; }
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        .code-lang { color: var(--aws-orange); font-weight: bold; }
+        .code-title { color: var(--aws-light-gray); }
+        .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+        .tech-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 14px;
+        }
+        .tech-table th {
+            background: rgba(255, 153, 0, 0.2);
+            color: var(--aws-orange);
+            padding: 10px 16px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--aws-orange);
+        }
+        .tech-table td {
+            padding: 10px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--aws-light-gray);
+        }
+        .tech-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 16px;
+        }
+        .merit-card {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+        .merit-card.positive {
+            background: rgba(29, 129, 2, 0.1);
+            border-left: 4px solid var(--aws-green);
+        }
+        .merit-card.caution {
+            background: rgba(255, 153, 0, 0.1);
+            border-left: 4px solid var(--aws-orange);
+        }
+        .merit-card h4 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+        .merit-card.positive h4 { color: var(--aws-green); }
+        .merit-card.caution h4 { color: var(--aws-orange); }
+        .merit-card p { font-size: 14px; color: var(--aws-light-gray); line-height: 1.6; }
+        .pricing-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 14px;
+        }
+        .pricing-table th {
+            background: rgba(255, 153, 0, 0.2);
+            color: var(--aws-orange);
+            padding: 10px 16px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--aws-orange);
+        }
+        .pricing-table td {
+            padding: 10px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--aws-light-gray);
+        }
+        .note-box {
+            background: rgba(140, 79, 255, 0.1);
+            border-left: 4px solid var(--aws-purple);
+            border-radius: 4px;
+            padding: 12px 16px;
+            margin-top: 12px;
+            font-size: 13px;
+            color: var(--aws-light-gray);
+        }
+        .related-services {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 16px;
+        }
+        @media (max-width: 768px) { .related-services { grid-template-columns: 1fr; } }
+        .related-service {
+            background: rgba(0, 161, 201, 0.1);
+            border: 1px solid rgba(0, 161, 201, 0.3);
+            border-radius: 8px;
+            padding: 14px;
+        }
+        .related-service h4 { font-size: 14px; color: var(--aws-teal); margin-bottom: 4px; }
+        .related-service p { font-size: 13px; color: var(--aws-light-gray); }
+        footer {
+            margin-top: 32px;
+            padding: 24px;
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            border-top: 3px solid var(--aws-orange);
+        }
+        footer h3 { font-size: 18px; color: var(--aws-orange); margin-bottom: 16px; }
+        footer a {
+            display: block;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: rgba(255, 153, 0, 0.1);
+            border-radius: 6px;
+            word-break: break-all;
+        }
+        .footer-note {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #333;
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            mermaid.initialize({
+                startOnLoad: true,
+                theme: 'base',
+                themeVariables: {
+                    primaryColor: '#FF9900',
+                    primaryTextColor: '#232F3E',
+                    primaryBorderColor: '#FF9900',
+                    lineColor: '#FF9900',
+                    secondaryColor: '#F5F5F5',
+                    tertiaryColor: '#FAFAFA',
+                    background: '#FFFFFF',
+                    mainBkg: '#FFF3E0',
+                    nodeBorder: '#FF9900',
+                    clusterBkg: '#FFF8E1',
+                    clusterBorder: '#FF9900',
+                    edgeLabelBackground: '#FFFFFF',
+                    textColor: '#232F3E'
+                }
+            });
+            hljs.highlightAll();
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <div class="header">
+            <div class="service-badge">AWS Parallel Computing Service</div>
+            <h1>&#9881;&#65039; slurmdbd / cgroups 設定のネイティブサポート</h1>
+            <div class="subtitle">HPC 環境のアカウンティング管理とリソース分離をマネージドサービス上で直接制御</div>
+            <div class="release-date">&#128197; リリース日: 2026 年 3 月 26 日</div>
+        </div>
+
+        <!-- Overview -->
+        <div class="section">
+            <h2>&#128202; 概要</h2>
+            <p>AWS Parallel Computing Service (AWS PCS) が Slurm の <span class="highlight">slurmdbd</span> および <span class="highlight">cgroups</span> に関する追加設定をサポートしました。AWS PCS コンソール、CLI、SDK を通じて、アカウンティング動作やリソース分離を直接設定できるようになり、本番環境向け HPC 環境の構築が大幅に簡素化されます。</p>
+            <div class="comparison">
+                <div class="comparison-card before">
+                    <h4>&#9888;&#65039; アップデート前</h4>
+                    <ul>
+                        <li>slurmdbd の設定をコンソールや CLI から直接管理できず、アカウンティングの細かな制御が困難</li>
+                        <li>cgroups の設定を AWS PCS 上で直接行う手段がなく、カスタム構成が必要</li>
+                        <li>CPU コアバインディングやメモリ制限などのリソース管理に追加の手順が必要</li>
+                    </ul>
+                </div>
+                <div class="comparison-card after">
+                    <h4>&#10024; アップデート後</h4>
+                    <ul>
+                        <li>コンソール、CLI、SDK から slurmdbd 設定を直接構成でき、アカウンティング動作の柔軟な制御が可能</li>
+                        <li>cgroups 設定で CPU コアバインディング、メモリ制限、デバイスアクセス制御をネイティブにサポート</li>
+                        <li>新規 / 既存クラスターの両方に設定を適用でき、本番環境向けの HPC 構成が容易</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="section">
+            <h2>&#127959;&#65039; アーキテクチャ図</h2>
+            <p>AWS PCS の管理インターフェースから slurmdbd と cgroups の設定を行い、Slurm クラスター上のアカウンティングとリソース分離を制御する構成を示しています。</p>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    subgraph Console["&#9729;&#65039; AWS PCS 管理インターフェース"]
+        direction LR
+        UI["&#128421;&#65039; コンソール"]
+        CLI["&#9000;&#65039; CLI"]
+        SDK["&#128295; SDK"]
+        UI ~~~ CLI ~~~ SDK
+    end
+
+    subgraph PCS["&#9881;&#65039; AWS Parallel Computing Service"]
+        direction TB
+        Cluster["&#128424; Slurm クラスター"]
+        subgraph Config["&#128203; 設定管理"]
+            direction LR
+            SlurmdbdConf["&#128452;&#65039; slurmdbd 設定&lt;br/&gt;アカウンティング制御&lt;br/&gt;プライバシー / データ保持"]
+            CgroupsConf["&#128230; cgroups 設定&lt;br/&gt;CPU バインディング&lt;br/&gt;メモリ制限 / デバイス制御"]
+            SlurmdbdConf ~~~ CgroupsConf
+        end
+        Cluster --> Config
+    end
+
+    subgraph Resources["&#128421;&#65039; コンピュートリソース"]
+        direction LR
+        Node1["&#128187; ノード 1&lt;br/&gt;CPU / メモリ分離"]
+        Node2["&#128187; ノード 2&lt;br/&gt;CPU / メモリ分離"]
+        Node3["&#128187; ノード N&lt;br/&gt;CPU / メモリ分離"]
+        Node1 ~~~ Node2 ~~~ Node3
+    end
+
+    Console --> Cluster
+    CgroupsConf -->|リソース制限適用| Resources
+    SlurmdbdConf -->|アカウンティング記録| Cluster
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef interface fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef config fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef resource fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+
+    class Console,PCS cloud
+    class Config cloud
+    class UI,CLI,SDK interface
+    class Cluster process
+    class SlurmdbdConf,CgroupsConf config
+    class Resources cloud
+    class Node1,Node2,Node3 resource
+                </pre>
+            </div>
+        </div>
+
+        <!-- Key Features -->
+        <div class="section">
+            <h2>&#127919; 主要機能</h2>
+            <div class="card">
+                <h3>&#128452;&#65039; slurmdbd 設定管理</h3>
+                <p>Slurm アカウンティングデーモンの動作をコンソール、CLI、SDK から直接設定できます。</p>
+                <ul>
+                    <li>プライバシー制御: ユーザーやジョブのアカウンティング情報の可視性を管理</li>
+                    <li>データ保持ポリシー: アカウンティングデータの保存期間を制御</li>
+                    <li>ワークロード追跡: ジョブの実行状況を詳細に記録</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>&#128230; cgroups リソース分離</h3>
+                <p>Linux cgroups を活用したリソース分離を AWS PCS 上でネイティブに設定できます。</p>
+                <ul>
+                    <li>CPU コアバインディング: ジョブが指定された CPU コアのみを使用するよう制限</li>
+                    <li>メモリ制限の強制: ノードの安定性を維持しオーバーサブスクリプションを防止</li>
+                    <li>デバイスアクセス制御: GPU 等のデバイスへのアクセスを定義された境界内に制限</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>&#128260; 柔軟な適用タイミング</h3>
+                <p>新規クラスター作成時および既存クラスターの変更時に設定を適用でき、コンソール、CLI、SDK のいずれからでも実行可能です。</p>
+            </div>
+        </div>
+
+        <!-- Technical Specifications -->
+        <div class="section">
+            <h2>&#128295; 技術仕様</h2>
+            <div class="tech-grid">
+                <div>
+                    <h3 style="font-size: 16px; color: var(--aws-orange); margin-bottom: 12px;">slurmdbd 設定パラメータ</h3>
+                    <table class="tech-table">
+                        <thead>
+                            <tr><th>項目</th><th>詳細</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>プライバシー制御</td><td>ユーザーやジョブのアカウンティング情報の可視性を設定</td></tr>
+                            <tr><td>データ保持ポリシー</td><td>アカウンティングデータの保存期間と削除ポリシーを定義</td></tr>
+                            <tr><td>ワークロード追跡</td><td>ジョブの実行状況、リソース使用量などの記録設定</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h3 style="font-size: 16px; color: var(--aws-orange); margin-bottom: 12px;">cgroups 設定パラメータ</h3>
+                    <table class="tech-table">
+                        <thead>
+                            <tr><th>項目</th><th>詳細</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>CPU バインディング</td><td>特定の CPU コアへのジョブの固定</td></tr>
+                            <tr><td>メモリ制限</td><td>プロセスごとまたはジョブごとのメモリ使用量上限の設定</td></tr>
+                            <tr><td>デバイスアクセス制御</td><td>GPU やその他のデバイスへのアクセス許可の管理</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <h3 style="font-size: 16px; color: var(--aws-orange); margin: 20px 0 12px;">設定インターフェース</h3>
+            <table class="tech-table">
+                <thead>
+                    <tr><th>方法</th><th>詳細</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>AWS マネジメントコンソール</td><td>AWS PCS コンソールから GUI で設定</td></tr>
+                    <tr><td>AWS CLI</td><td><code>aws pcs</code> コマンドで設定を管理</td></tr>
+                    <tr><td>AWS SDK</td><td>プログラムからの設定変更に対応</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Configuration Examples -->
+        <div class="section">
+            <h2>&#128221; 設定方法</h2>
+            <p style="margin-bottom: 16px;">AWS PCS クラスターの slurmdbd / cgroups 設定は、AWS CLI から以下のように適用します。</p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">ステップ 1: クラスターの確認</span>
+                </div>
+                <pre><code class="language-bash"># AWS PCS クラスターの一覧を取得
+aws pcs list-clusters</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">ステップ 2: slurmdbd 設定の適用</span>
+                </div>
+                <pre><code class="language-bash"># クラスターの slurmdbd 設定を更新
+aws pcs update-cluster \
+  --cluster-identifier &lt;cluster-id&gt; \
+  --slurm-configuration '{
+    "slurmdbdSettings": {
+      "privacySettings": {
+        "jobPrivacy": "enabled"
+      },
+      "dataRetention": {
+        "purgeAfterDays": 90
+      }
+    }
+  }'</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">ステップ 3: cgroups 設定の適用</span>
+                </div>
+                <pre><code class="language-bash"># クラスターの cgroups 設定を更新
+aws pcs update-cluster \
+  --cluster-identifier &lt;cluster-id&gt; \
+  --slurm-configuration '{
+    "cgroupsSettings": {
+      "constrainCores": true,
+      "constrainRAMSpace": true,
+      "constrainDevices": true
+    }
+  }'</code></pre>
+            </div>
+
+            <div class="note-box">
+                &#128161; 具体的なパラメータ名は公式ドキュメントを参照してください。設定変更の反映にはクラスターの状態によって時間がかかる場合があります。
+            </div>
+        </div>
+
+        <!-- Benefits -->
+        <div class="section">
+            <h2>&#10004;&#65039; メリット</h2>
+            <div class="tech-grid">
+                <div>
+                    <h3 style="font-size: 16px; color: var(--aws-orange); margin-bottom: 12px;">&#128188; ビジネス面</h3>
+                    <div class="merit-card positive">
+                        <h4>運用コストの削減</h4>
+                        <p>マネージドサービス上で直接設定を管理できるため、カスタム構成スクリプトの開発・保守が不要に</p>
+                    </div>
+                    <div class="merit-card positive">
+                        <h4>本番環境品質の向上</h4>
+                        <p>プライバシー制御やデータ保持ポリシーにより、コンプライアンス要件に対応した HPC 環境を構築可能</p>
+                    </div>
+                    <div class="merit-card positive">
+                        <h4>リソース効率の最適化</h4>
+                        <p>cgroups によるリソース分離でノードの使用効率が向上し、コスト最適化が可能</p>
+                    </div>
+                </div>
+                <div>
+                    <h3 style="font-size: 16px; color: var(--aws-orange); margin-bottom: 12px;">&#9881;&#65039; 技術面</h3>
+                    <div class="merit-card positive">
+                        <h4>オーバーサブスクリプション防止</h4>
+                        <p>cgroups による CPU コアバインディングとメモリ制限で、ワークロード間のリソース競合を解消</p>
+                    </div>
+                    <div class="merit-card positive">
+                        <h4>ノード安定性の向上</h4>
+                        <p>メモリ制限の強制により、OOM によるノード障害のリスクが低減</p>
+                    </div>
+                    <div class="merit-card positive">
+                        <h4>統一的な設定管理</h4>
+                        <p>コンソール、CLI、SDK のいずれからでも設定を管理でき、Infrastructure as Code との統合が容易</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Limitations -->
+        <div class="section">
+            <h2>&#9888;&#65039; 制限事項・注意点</h2>
+            <div class="merit-card caution">
+                <h4>設定可能なパラメータの範囲</h4>
+                <p>AWS PCS がサポートする範囲に限定されており、Slurm のすべての slurmdbd/cgroups パラメータが設定できるわけではない可能性があります。</p>
+            </div>
+            <div class="merit-card caution">
+                <h4>設定反映の所要時間</h4>
+                <p>設定変更の反映にはクラスターの状態によって時間がかかる場合があります。</p>
+            </div>
+            <div class="merit-card caution">
+                <h4>cgroups 制限の影響</h4>
+                <p>制限設定が厳しすぎると、正常なジョブが制限に抵触して失敗する可能性があります。既存ワークロードへの影響を事前にテストすることを推奨します。</p>
+            </div>
+            <div class="merit-card caution">
+                <h4>プライバシー設定変更の影響</h4>
+                <p>slurmdbd のプライバシー設定を変更すると、ユーザーが参照できるアカウンティング情報の範囲が変わるため、チーム内での合意が必要です。</p>
+            </div>
+        </div>
+
+        <!-- Use Cases -->
+        <div class="section">
+            <h2>&#128161; ユースケース</h2>
+            <div class="usecase">
+                <h3>&#127981; マルチテナント HPC 環境のリソース分離</h3>
+                <p>複数の研究チームが共有する HPC クラスターで、各チームのジョブが他チームのリソースに影響を与えないようにしたい。CPU コアバインディングとメモリ制限を有効化して、リソースのオーバーサブスクリプションを防止します。</p>
+                <div class="effect">&#10004; <strong>効果</strong>: 各ジョブが割り当てられたリソースのみを使用し、ノイジーネイバー問題を防止</div>
+            </div>
+            <div class="usecase">
+                <h3>&#128203; コンプライアンス要件に対応したアカウンティング管理</h3>
+                <p>規制業界で HPC を利用しており、ジョブの実行履歴やリソース使用量のデータ保持期間を規制要件に合わせて管理する必要がある。slurmdbd のプライバシー制御とデータ保持ポリシーを設定します。</p>
+                <div class="effect">&#10004; <strong>効果</strong>: 機密ジョブ情報へのアクセスを制限し、規制要件に準拠したデータライフサイクル管理を実現</div>
+            </div>
+            <div class="usecase">
+                <h3>&#129302; GPU ワークロードのデバイスアクセス制御</h3>
+                <p>機械学習トレーニングジョブを実行するクラスターで、各ジョブが割り当てられた GPU のみにアクセスするよう制限したい。デバイスアクセス制御と CPU コアバインディングを組み合わせます。</p>
+                <div class="effect">&#10004; <strong>効果</strong>: GPU リソースの競合を防止し、一貫したパフォーマンスを確保</div>
+            </div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="section">
+            <h2>&#128176; 料金</h2>
+            <p>AWS PCS 自体には追加料金はなく、使用する基盤の EC2 インスタンスやその他の AWS リソースに対してのみ課金されます。<span class="highlight">slurmdbd / cgroups 設定機能の利用に追加料金は発生しません。</span></p>
+            <table class="pricing-table" style="margin-top: 16px;">
+                <thead>
+                    <tr><th>構成</th><th>月額料金 (概算)</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>c5.xlarge x 10 ノード (オンデマンド、us-east-1)</td><td>約 $1,224</td></tr>
+                    <tr><td>c5.xlarge x 10 ノード (Spot、us-east-1)</td><td>約 $367 - $490 (最大 70% 割引)</td></tr>
+                </tbody>
+            </table>
+            <div class="note-box" style="margin-top: 12px;">
+                &#128712; 料金は EC2 インスタンスの使用料のみです。実際の料金はリージョンや使用状況により異なります。
+            </div>
+        </div>
+
+        <!-- Region -->
+        <div class="section">
+            <h2>&#127758; 利用可能リージョン</h2>
+            <p>AWS PCS が利用可能なすべての AWS リージョンで利用可能です。対応リージョンについては <a href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer">AWS リージョン別サービス一覧</a> を参照してください。</p>
+        </div>
+
+        <!-- Related Services -->
+        <div class="section">
+            <h2>&#128279; 関連サービス</h2>
+            <div class="related-services">
+                <div class="related-service">
+                    <h4>&#9881;&#65039; AWS Parallel Computing Service</h4>
+                    <p>Slurm ベースの HPC ワークロードを実行・スケーリングするためのマネージドサービス</p>
+                </div>
+                <div class="related-service">
+                    <h4>&#128187; Amazon EC2</h4>
+                    <p>AWS PCS クラスターのコンピュートノードとして使用される仮想サーバー</p>
+                </div>
+                <div class="related-service">
+                    <h4>&#128190; Amazon FSx for Lustre</h4>
+                    <p>HPC ワークロード向けの高性能ファイルシステムで、AWS PCS クラスターのストレージとして利用可能</p>
+                </div>
+                <div class="related-service">
+                    <h4>&#9889; AWS Batch</h4>
+                    <p>代替の HPC ジョブスケジューリングサービスで、Slurm を必要としないバッチ処理に適用</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <h3>&#128206; 参考リンク</h3>
+            <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/aws-pcs-manages-slurmdbd-cgroups-settings/" target="_blank" rel="noopener noreferrer">&#128240; 公式発表 (What's New)</a>
+            <a href="https://docs.aws.amazon.com/pcs/" target="_blank" rel="noopener noreferrer">&#128214; AWS PCS ドキュメント</a>
+            <a href="https://aws.amazon.com/pcs/pricing/" target="_blank" rel="noopener noreferrer">&#128176; AWS PCS 料金ページ</a>
+            <div class="footer-note">
+                &#128197; 作成日: 2026-03-27 | &#128196; 出典: AWS What's New
+            </div>
+        </footer>
+
+    </div>
+</body>
+</html>
