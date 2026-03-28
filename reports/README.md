@@ -6,13 +6,16 @@
 ## 2026 年
 
 - [2026-03-27 - AWS Lambda - Managed Instances で最大 32 GB メモリと 16 vCPU をサポート](2026/2026-03-27-lambda-32-gb-memory-16-vcpus.md)
+- [2026-03-27 - Amazon CloudWatch Logs - Infrequent Access ログクラスでデータ保護と OpenSearch PPL/SQL をサポート](2026/2026-03-27-amazon-cloudwatch-infrequent-access-log-class.md)
 - [2026-03-27 - AWS Management Console - サービスとリージョンの表示制御設定](2026/2026-03-27-account-customizations-console.md)
 - [2026-03-27 - AWS HealthImaging - スタディレベルのきめ細かなアクセス制御](2026/2026-03-27-aws-healthimaging-study-level-access-control.md)
 - [2026-03-27 - Kiro Console - サブスクリプションデータの CSV ダウンロード](2026/2026-03-27-kiro-changelog-2026-03-27.md)
+- [2026-03-27 - Amazon Timestream for InfluxDB - Advanced Metrics による包括的なデータベース監視](2026/2026-03-27-amazon-timestream-for-influxdb-advanced-metrics.md)
 - [2026-03-26 - AWS Parallel Computing Service - slurmdbd および cgroups 設定のサポート](2026/2026-03-26-aws-pcs-manages-slurmdbd-cgroups-settings.md)
 - [2026-03-26 - AWS Storage Gateway - Terraform モジュールが Amazon Linux 2023 をサポート](2026/2026-03-26-storage-gateway-terraform-al2023.md)
 - [2026-03-26 - Amazon ECS Managed Instances - GovCloud での FIPS 準拠ワークロードが Graviton および GPU インスタンスに対応](2026/2026-03-26-amazon-ecs-mi-supports-fips-graviron-gpu.md)
 - [2026-03-26 - Amazon EC2 High Memory U7i インスタンス - ヨーロッパ (ミラノ) リージョンで利用可能に](2026/2026-03-26-ec2-u7i-europe-milan.md)
+- [2026-03-26 - Amazon Bedrock - Writer Palmyra Vision 7B モデルが利用可能に](2026/2026-03-26-palmyra-vision-7b-writer-bedrock.md)
 - [2026-03-26 - AWS Lambda - Lambda Managed Instances のファイルディスクリプタ上限を 4,096 に引き上げ](2026/2026-03-26-aws-Lambda-file-descriptors-increase-4096.md)
 - [2026-03-26 - Kiro - エージェント型 AI をシリコン開発に適用](2026/2026-03-26-kiro-bringing-agentic-ai-to-silicon-development.md)
 - [2026-03-26 - AWS Advanced JDBC Wrapper - Valkey による自動クエリキャッシュ](2026/2026-03-26-aws-jdbc-caching-with-valkey.md)
