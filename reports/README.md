@@ -5,6 +5,9 @@
 
 ## 2026 年
 
+- [2026-03-30 - AWS Direct Connect - CloudWatch BGP モニタリングメトリクス](2026/2026-03-30-aws-direct-connect-cloudwatch-bgp-monitoring.md)
+- [2026-03-30 - AWS Elemental MediaTailor - Europe (London) リージョンでの提供開始](2026/2026-03-30-aws-elemental-mediatailor-london-region.md)
+- [2026-03-30 - Amazon OpenSearch Service - Cluster Insights の AWS マネジメントコンソールおよび Amazon EventBridge 対応](2026/2026-03-30-access-cluster-insights-opensearch.md)
 - [2026-03-27 - AWS Lambda - Managed Instances で最大 32 GB メモリと 16 vCPU をサポート](2026/2026-03-27-lambda-32-gb-memory-16-vcpus.md)
 - [2026-03-27 - Amazon CloudWatch Logs - Infrequent Access ログクラスでデータ保護と OpenSearch PPL/SQL をサポート](2026/2026-03-27-amazon-cloudwatch-infrequent-access-log-class.md)
 - [2026-03-27 - AWS Management Console - サービスとリージョンの表示制御設定](2026/2026-03-27-account-customizations-console.md)
