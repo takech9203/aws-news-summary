@@ -5,6 +5,21 @@
 
 ## 2026 年
 
+- [2026-04-03 - Amazon EMR - Apache Spark トラブルシューティングおよびアップグレードエージェントが Kiro パワーとして利用可能に](2026/2026-04-03-amazon-emr-spark-troubleshooting-upgrade-kiro-power.md)
+- [2026-04-03 - Amazon Bedrock Guardrails - クロスアカウントセーフガードの一般提供開始](2026/2026-04-03-bedrock-guardrails-cross-account-safeguards.md)
+- [2026-04-03 - Amazon SageMaker - Data Agent にチャート機能とマテリアライズドビューのサポートを追加](2026/2026-04-03-amazon-sgmkr-dataagent-chart-mv.md)
+- [2026-04-03 - AWS Secrets Manager - コンソールでのカスタム AWS KMS キー入力サポート](2026/2026-04-03-aws-secrets-manager-console-custom-kms-key-input.md)
+- [2026-04-03 - Amazon CloudWatch - Query Studio パブリックプレビュー](2026/2026-04-03-amazon-cloudwatch-query-studio-preview.md)
+- [2026-04-03 - Partner Revenue Measurement - User Agent 文字列サポート](2026/2026-04-03-partner-revenue-measurement-user-agent-support.md)
+- [2026-04-03 - Partner Revenue Measurement - AWS Marketplace Metering 対応](2026/2026-04-03-partner-revenue-supports-mp-metering.md)
+- [2026-04-02 - Amazon WorkSpaces Applications - マルチセッションフリートのドレインモード](2026/2026-04-02-amazon-workspaces-applications-drain-mode.md)
+- [2026-04-02 - Amazon CloudWatch - OpenTelemetry メトリクスのネイティブサポート](2026/2026-04-02-amazon-cloudwatch-opentelemetry-metrics.md)
+- [2026-04-02 - Kiro - MiniMax M2.5 および GLM-5 モデルの追加](2026/2026-04-02-kiro-minimax-m25-glm5.md)
+- [2026-04-02 - Amazon Lightsail - コンピューティング最適化インスタンスバンドル](2026/2026-04-02-lightsail-compute-optimized-instances.md)
+- [2026-04-02 - AWS Deadline Cloud - キューのジョブスケジューリングモード設定](2026/2026-04-02-deadline-cloud-job-scheduling.md)
+- [2026-04-02 - Amazon CloudWatch - テレメトリ自動有効化の対象リソース拡大](2026/2026-04-02-amazon-cloudwatch-cloudfront-enablement.md)
+- [2026-04-02 - Amazon ElastiCache Serverless - IPv6 およびデュアルスタック接続のサポート](2026/2026-04-02-amazon-elasticache-serverless-ipv6-dual-stack.md)
+- [2026-04-02 - Amazon CloudWatch - OTel Container Insights for Amazon EKS](2026/2026-04-02-cloudwatch-otel-container-insights-eks.md)
 - [2026-03-30 - AWS Direct Connect - CloudWatch BGP モニタリングメトリクス](2026/2026-03-30-aws-direct-connect-cloudwatch-bgp-monitoring.md)
 - [2026-03-30 - AWS Elemental MediaTailor - Europe (London) リージョンでの提供開始](2026/2026-03-30-aws-elemental-mediatailor-london-region.md)
 - [2026-03-30 - Amazon OpenSearch Service - Cluster Insights の AWS マネジメントコンソールおよび Amazon EventBridge 対応](2026/2026-03-30-access-cluster-insights-opensearch.md)

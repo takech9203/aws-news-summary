@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon SageMaker Data Agent - チャート機能とマテリアライズドビューのサポート</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 3px solid var(--aws-orange);
+    }
+    .header-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .service-badge {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 16px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .date-badge {
+      color: var(--aws-light-gray);
+      font-size: 14px;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-top: 12px;
+      line-height: 1.3;
+    }
+    h1 .accent { color: var(--aws-orange); }
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* Section */
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 12px;
+      margin-top: 16px;
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+    @media (max-width: 640px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .before-card .label {
+      color: var(--aws-red);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .after-card .label {
+      color: var(--aws-green);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .before-card ul, .after-card ul {
+      list-style: none;
+      padding: 0;
+    }
+    .before-card li, .after-card li {
+      padding: 4px 0;
+      font-size: 14px;
+    }
+    .before-card li::before { content: "❌ "; }
+    .after-card li::before { content: "✅ "; }
+
+    /* Feature Cards */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .feature-card .feature-title {
+      color: var(--aws-white);
+      font-weight: 600;
+      font-size: 17px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-card .feature-desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+    .feature-card ul {
+      list-style: none;
+      padding: 0;
+      margin-top: 8px;
+    }
+    .feature-card li {
+      font-size: 14px;
+      padding: 3px 0;
+      color: var(--aws-light-gray);
+    }
+    .feature-card li::before {
+      content: "→ ";
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    /* Spec Table */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    .spec-table th, .spec-table td {
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .spec-table th {
+      color: var(--aws-orange);
+      font-weight: 600;
+      background: rgba(255, 153, 0, 0.08);
+    }
+    .spec-table td {
+      color: var(--aws-light-gray);
+    }
+
+    /* Usecase Cards */
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.06);
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .usecase-card .usecase-title {
+      color: var(--aws-orange);
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    .usecase-card .usecase-scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 8px;
+    }
+    .usecase-card .usecase-prompt {
+      background: var(--aws-dark-squid);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+      font-family: 'Courier New', monospace;
+      margin: 8px 0;
+    }
+    .usecase-card .usecase-effect {
+      font-size: 14px;
+      color: var(--aws-green);
+      margin-top: 8px;
+    }
+
+    /* Flow Diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+      font-size: 14px;
+    }
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Highlight */
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Steps */
+    .step-list {
+      counter-reset: step-counter;
+      list-style: none;
+      padding: 0;
+    }
+    .step-list li {
+      counter-increment: step-counter;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      background: rgba(255, 153, 0, 0.04);
+      border-left: 3px solid var(--aws-orange);
+      border-radius: 0 6px 6px 0;
+      font-size: 14px;
+    }
+    .step-list li::before {
+      content: "Step " counter(step-counter) ": ";
+      color: var(--aws-orange);
+      font-weight: 700;
+    }
+    .step-list li .step-detail {
+      display: block;
+      margin-top: 4px;
+      color: var(--aws-light-gray);
+      font-size: 13px;
+    }
+
+    /* Merit / Demerit */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    @media (max-width: 640px) {
+      .merit-grid { grid-template-columns: 1fr; }
+    }
+    .merit-card {
+      background: rgba(29, 129, 2, 0.06);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .merit-card .merit-title {
+      color: var(--aws-green);
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+    .merit-card p {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+    .demerit-card {
+      background: rgba(209, 50, 18, 0.06);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .demerit-card .demerit-title {
+      color: var(--aws-red);
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+    .demerit-card p, .demerit-card li {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+    .demerit-card ul {
+      list-style: none;
+      padding: 0;
+    }
+    .demerit-card li {
+      padding: 3px 0;
+    }
+    .demerit-card li::before {
+      content: "⚠ ";
+    }
+
+    /* Info box */
+    .info-box {
+      background: rgba(0, 161, 201, 0.08);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+      font-size: 14px;
+    }
+    .info-box .info-title {
+      color: var(--aws-teal);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    /* Related services */
+    .related-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+    }
+    @media (max-width: 640px) {
+      .related-grid { grid-template-columns: 1fr; }
+    }
+    .related-item {
+      background: rgba(255, 153, 0, 0.06);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+    }
+    .related-item .related-icon {
+      font-size: 28px;
+      display: block;
+      margin-bottom: 6px;
+    }
+    .related-item .related-name {
+      color: var(--aws-white);
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .related-item .related-desc {
+      color: var(--aws-light-gray);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-meta">
+        <span class="service-badge">Amazon SageMaker</span>
+        <span class="date-badge">2026 年 4 月 3 日</span>
+      </div>
+      <h1>🤖 Data Agent に<span class="accent">チャート機能</span>と<span class="accent">マテリアライズドビュー</span>のサポートを追加</h1>
+      <p class="subtitle">自然言語プロンプトだけでデータ探索、可視化、クエリ最適化を一気通貫で実行</p>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon SageMaker Data Agent に、<span class="highlight">インタラクティブなチャート生成機能</span>、<span class="highlight">Snowflake データソースに対する SQL アナリティクス</span>、および SageMaker Unified Studio ノートブック上での<span class="highlight">マテリアライズドビュー管理機能</span>が追加されました。</p>
+      <p style="margin-top: 12px;">例えば「2025 年のリージョン別月次売上トレンドをプロットして」と指示するだけで、ノートブック上にインタラクティブなチャートが生成されます。データアナリスト、データサイエンティスト、BI 担当者など、日常的にデータ分析と可視化を行うユーザーを主な対象としています。</p>
+
+      <h3>Before / After</h3>
+      <div class="before-after">
+        <div class="before-card">
+          <div class="label">❌ BEFORE</div>
+          <ul>
+            <li>分析結果の可視化には別途チャートライブラリを手動で設定する必要があった</li>
+            <li>Snowflake と AWS の結合分析に複数ツールやコネクタの設定が必要だった</li>
+            <li>マテリアライズドビューの設計と管理を手動で行う必要があった</li>
+          </ul>
+        </div>
+        <div class="after-card">
+          <div class="label">✅ AFTER</div>
+          <ul>
+            <li>自然言語プロンプトだけでインタラクティブなチャートを直接生成</li>
+            <li>Snowflake と AWS Glue Data Catalog のデータを 1 つのプロンプトで結合</li>
+            <li>マテリアライズドビューの推奨、作成、リフレッシュスケジュールを自動実行</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>Data Agent が自然言語プロンプトを受け取り、チャート生成、SQL クエリ実行、マテリアライズドビュー管理の 3 つのワークフローを統合的に処理する全体像を示しています。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    User(["👤 ユーザー"]) -->|自然言語プロンプト| DA["🤖 SageMaker Data Agent"]
+
+    subgraph Studio["🖥️ SageMaker Unified Studio"]
+        DA
+        NB["📓 ノートブック"]
+    end
+
+    DA --> Analyze{"🔍 リクエスト分析"}
+
+    Analyze -->|チャート生成| Chart["📊 インタラクティブチャート"]
+    Analyze -->|データクエリ| Query["🔎 SQL クエリ実行"]
+    Analyze -->|最適化提案| MV["⚡ マテリアライズドビュー管理"]
+
+    subgraph DataSources["🗄️ データソース"]
+        direction LR
+        Glue[("📋 AWS Glue<br/>Data Catalog")]
+        SF[("❄️ Snowflake<br/>外部接続")]
+        Glue ~~~ SF
+    end
+
+    Query --> Glue
+    Query --> SF
+
+    Chart --> NB
+    MV -->|作成/リフレッシュ設定| Glue
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+
+    class Studio cloud
+    class DataSources cloud
+    class DA internal
+    class NB process
+    class Analyze decision
+    class Chart,Query,MV compute
+    class Glue,SF storage
+    class User user
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>🚀 主要機能</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-title">📊 インタラクティブチャート生成</div>
+          <div class="feature-desc">自然言語で指示するだけで、ノートブック内にインタラクティブなチャートを生成。コード生成だけでなく、チャートの描画まで自動で実行します。</div>
+          <ul>
+            <li>「2025 年のリージョン別月次売上トレンドをプロットして」のように自然言語で指示</li>
+            <li>データ探索と可視化をシームレスに統合</li>
+            <li>分析ワークフロー全体を自然言語で操作可能</li>
+          </ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">❄️ Snowflake データソースの SQL アナリティクス</div>
+          <div class="feature-desc">外部接続を通じて Snowflake テーブルに対する SQL クエリを実行し、AWS Glue Data Catalog のデータとの結合も 1 つのプロンプトで完結。</div>
+          <ul>
+            <li>Snowflake テーブルへの SQL クエリを実行可能</li>
+            <li>AWS と Snowflake のクロスプラットフォーム分析</li>
+            <li>マルチデータソースにまたがる結合を自然言語で実現</li>
+          </ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">⚡ マテリアライズドビュー管理</div>
+          <div class="feature-desc">クエリパターンに基づいた最適化の推奨を自動実行。マテリアライズドビューの作成とリフレッシュスケジュール設定を Data Agent が実施します。</div>
+          <ul>
+            <li>「ノートブックを分析して、マテリアライズドビューの恩恵を受けるクエリを提案して」と指示可能</li>
+            <li>クエリパターンの分析と最適化推奨</li>
+            <li>作成からリフレッシュスケジュール設定までを自動化</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <table class="spec-table">
+        <tr>
+          <th>項目</th>
+          <th>詳細</th>
+        </tr>
+        <tr>
+          <td>チャート生成</td>
+          <td>ノートブック内でインタラクティブチャートを直接レンダリング</td>
+        </tr>
+        <tr>
+          <td>データソース</td>
+          <td>AWS Glue Data Catalog、Snowflake (外部接続)</td>
+        </tr>
+        <tr>
+          <td>クエリ言語</td>
+          <td>SQL (自然言語からの自動生成)</td>
+        </tr>
+        <tr>
+          <td>マテリアライズドビュー</td>
+          <td>自動推奨、作成、リフレッシュスケジュール設定</td>
+        </tr>
+        <tr>
+          <td>インターフェース</td>
+          <td>SageMaker Unified Studio ノートブック</td>
+        </tr>
+        <tr>
+          <td>操作方法</td>
+          <td>自然言語プロンプト</td>
+        </tr>
+      </table>
+
+      <div class="info-box" style="margin-top: 20px;">
+        <div class="info-title">💡 API 変更について</div>
+        <p>今回の機能アップデートに直接関連する API 変更は確認されていません。Data Agent はノートブック上の自然言語インターフェースを通じて動作するため、SDK レベルでの新規 API 追加ではなく、サービス内部の機能拡張として提供されています。</p>
+      </div>
+    </div>
+
+    <!-- Setup Steps -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+      <h3>前提条件</h3>
+      <div style="margin-bottom: 16px; font-size: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 4px 0;">
+          <span style="color: var(--aws-orange);">1.</span> Amazon SageMaker Unified Studio へのアクセス権限
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 4px 0;">
+          <span style="color: var(--aws-orange);">2.</span> SageMaker Unified Studio ノートブックの利用環境
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 4px 0;">
+          <span style="color: var(--aws-orange);">3.</span> Snowflake を使用する場合は外部接続の設定が完了していること
+        </div>
+      </div>
+
+      <h3>手順</h3>
+      <ol class="step-list">
+        <li>
+          <strong style="color: var(--aws-white);">SageMaker Unified Studio でノートブックを開く</strong>
+          <span class="step-detail">SageMaker Unified Studio にログインし、ノートブック環境を起動します。Data Agent 機能はノートブック内で自動的に利用可能です。</span>
+        </li>
+        <li>
+          <strong style="color: var(--aws-white);">チャート生成を試す</strong>
+          <span class="step-detail">ノートブック内で Data Agent に自然言語プロンプトを入力します。例: 「2025 年のリージョン別月次売上トレンドをプロットして」</span>
+        </li>
+        <li>
+          <strong style="color: var(--aws-white);">Snowflake データとの結合クエリを実行する</strong>
+          <span class="step-detail">例: 「Snowflake の顧客テーブルと Glue カタログの注文データを結合して、地域別の売上サマリーを表示して」</span>
+        </li>
+        <li>
+          <strong style="color: var(--aws-white);">マテリアライズドビューの最適化を依頼する</strong>
+          <span class="step-detail">例: 「ノートブックを分析して、マテリアライズドビューの恩恵を受けるクエリを提案して」</span>
+        </li>
+      </ol>
+    </div>
+
+    <!-- Merits / Demerits -->
+    <div class="section">
+      <h2>✅ メリット / ⚠️ 制約事項</h2>
+      <div class="merit-grid">
+        <div>
+          <h3 style="color: var(--aws-green);">ビジネス面のメリット</h3>
+          <div class="merit-card" style="margin-bottom: 12px;">
+            <div class="merit-title">🎯 分析の民主化</div>
+            <p>SQL やチャートライブラリの専門知識がなくても、自然言語でデータ分析と可視化が可能</p>
+          </div>
+          <div class="merit-card" style="margin-bottom: 12px;">
+            <div class="merit-title">⚡ 意思決定の迅速化</div>
+            <p>データ探索からチャート生成までをシームレスに実行でき、インサイト獲得までの時間を短縮</p>
+          </div>
+          <div class="merit-card">
+            <div class="merit-title">🔗 クロスプラットフォーム分析</div>
+            <p>AWS と Snowflake のデータを統合的に分析でき、データサイロの解消に貢献</p>
+          </div>
+        </div>
+        <div>
+          <h3 style="color: var(--aws-green);">技術面のメリット</h3>
+          <div class="merit-card" style="margin-bottom: 12px;">
+            <div class="merit-title">🔄 ワークフロー統合</div>
+            <p>コード生成、クエリ実行、チャート描画、パフォーマンス最適化を 1 つのインターフェースで完結</p>
+          </div>
+          <div class="merit-card" style="margin-bottom: 12px;">
+            <div class="merit-title">🚀 クエリパフォーマンス最適化</div>
+            <p>マテリアライズドビューの自動推奨により、手動チューニングの工数を削減</p>
+          </div>
+          <div class="merit-card">
+            <div class="merit-title">☁️ 外部データソース連携</div>
+            <p>Snowflake との外部接続を活用し、マルチクラウドデータ分析基盤を構築可能</p>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="color: var(--aws-red); margin-top: 24px;">制限事項・考慮点</h3>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+        <div class="demerit-card">
+          <div class="demerit-title">制限事項</div>
+          <ul>
+            <li>SageMaker Unified Studio ノートブック環境でのみ利用可能</li>
+            <li>Snowflake 以外の外部データソースへの対応状況は公式ドキュメントで確認が必要</li>
+            <li>十分なクエリ履歴がない場合、マテリアライズドビューの最適な提案が得られない可能性あり</li>
+          </ul>
+        </div>
+        <div class="demerit-card">
+          <div class="demerit-title">考慮すべき点</div>
+          <ul>
+            <li>マテリアライズドビューのリフレッシュにはコンピューティングリソースが消費されるため、コストへの影響を確認</li>
+            <li>Snowflake との外部接続にはネットワーク設定とクレデンシャル管理が必要</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+      <div class="usecase-card">
+        <div class="usecase-title">🛒 ユースケース 1: マルチソースの売上分析ダッシュボード</div>
+        <div class="usecase-scenario"><strong>シナリオ:</strong> EC サイトの売上データが AWS に、顧客 CRM データが Snowflake に格納されている。ビジネスアナリストが両方のデータを組み合わせてリージョン別の売上傾向を可視化したい。</div>
+        <div class="usecase-prompt">Snowflake の顧客マスタと Glue カタログの売上トランザクションを<br/>リージョンキーで結合して、2025 年の四半期別リージョン別売上を<br/>棒グラフで表示して</div>
+        <div class="usecase-effect">✅ 従来は ETL パイプラインの構築やデータ移行が必要だった分析を、自然言語プロンプト 1 つで即座に実行可能に。</div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-title">📈 ユースケース 2: レポート用チャートの迅速な生成</div>
+        <div class="usecase-scenario"><strong>シナリオ:</strong> データサイエンティストが週次の経営レポート用に複数のチャートを作成する必要がある。これまでは matplotlib や plotly のコードを毎回記述していた。</div>
+        <div class="usecase-prompt">過去 12 ヶ月のサービス利用率を折れ線グラフで表示して、<br/>月別のトレンドと前年同月比を含めて</div>
+        <div class="usecase-effect">✅ チャートライブラリのコード記述が不要になり、レポート作成時間を大幅に短縮。</div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-title">⚡ ユースケース 3: クエリパフォーマンスの自動最適化</div>
+        <div class="usecase-scenario"><strong>シナリオ:</strong> データエンジニアがノートブック内で繰り返し実行される重いクエリのパフォーマンスを改善したい。</div>
+        <div class="usecase-prompt">このノートブック内のクエリパターンを分析して、<br/>マテリアライズドビューで最適化できるものを提案して</div>
+        <div class="usecase-effect">✅ クエリパターンの分析からマテリアライズドビューの作成、リフレッシュスケジュールの設定まで自動化され、DBA の作業負荷を軽減。</div>
+      </div>
+    </div>
+
+    <!-- Pricing & Region -->
+    <div class="section">
+      <h2>💰 料金・リージョン情報</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div class="info-box">
+          <div class="info-title">💰 料金</div>
+          <p>SageMaker Data Agent の料金は SageMaker Unified Studio の利用料金に含まれます。マテリアライズドビューのリフレッシュやクエリ実行に伴うコンピューティングコスト、および Snowflake 側のクエリ実行コストは別途発生します。</p>
+        </div>
+        <div class="info-box">
+          <div class="info-title">🌍 利用可能リージョン</div>
+          <p>SageMaker Unified Studio が利用可能なリージョンで Data Agent のチャート機能およびマテリアライズドビューサポートを利用できます。具体的な対応リージョンの最新情報は公式ドキュメントを参照してください。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div class="related-grid">
+        <div class="related-item">
+          <span class="related-icon">🖥️</span>
+          <div class="related-name">SageMaker Unified Studio</div>
+          <div class="related-desc">Data Agent が動作するノートブック環境を提供する統合開発プラットフォーム</div>
+        </div>
+        <div class="related-item">
+          <span class="related-icon">📋</span>
+          <div class="related-name">AWS Glue Data Catalog</div>
+          <div class="related-desc">Data Agent がクエリ対象とする AWS 側のデータカタログ</div>
+        </div>
+        <div class="related-item">
+          <span class="related-icon">❄️</span>
+          <div class="related-name">Snowflake</div>
+          <div class="related-desc">外部接続を通じて Data Agent からクエリ可能な外部データウェアハウス</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>Amazon SageMaker Data Agent のチャート機能とマテリアライズドビューサポートの追加により、データ分析のワークフローが大幅に簡素化されました。自然言語だけでデータ探索、可視化、クエリ最適化を一気通貫で実行できるようになったことで、技術的なスキルレベルに関わらず、より多くのユーザーがデータドリブンな意思決定を加速できます。</p>
+      <p style="margin-top: 12px;">SageMaker Unified Studio を利用中の組織は、ノートブック環境でこの新機能を試し、分析業務の効率化を検討することを推奨します。</p>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul style="list-style: none; padding: 0; margin-top: 4px;">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/03/amazon-sgmkr-dataagent-chart-mv/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/sagemaker-unified-studio/latest/userguide/" target="_blank" rel="noopener noreferrer">Amazon SageMaker Unified Studio ドキュメント</a></li>
+        <li><a href="https://aws.amazon.com/sagemaker/pricing/" target="_blank" rel="noopener noreferrer">Amazon SageMaker 料金ページ</a></li>
+      </ul>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+</body>
+</html>

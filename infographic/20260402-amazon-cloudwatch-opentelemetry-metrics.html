@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon CloudWatch - OpenTelemetry メトリクスのネイティブサポート</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 3px solid var(--aws-orange);
+    }
+    .header-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .service-badge {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 16px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .date-badge {
+      color: var(--aws-light-gray);
+      font-size: 14px;
+    }
+    .preview-badge {
+      display: inline-block;
+      background: rgba(140, 79, 255, 0.2);
+      color: var(--aws-purple);
+      border: 1px solid var(--aws-purple);
+      padding: 2px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-top: 12px;
+      line-height: 1.3;
+    }
+    h1 .accent { color: var(--aws-orange); }
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* Section */
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 640px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+    .before-card, .after-card {
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+    }
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+    }
+    .ba-title {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .before-card .ba-title { color: var(--aws-red); }
+    .after-card .ba-title { color: var(--aws-green); }
+    .ba-list { list-style: none; padding: 0; }
+    .ba-list li {
+      font-size: 14px;
+      margin-bottom: 6px;
+      padding-left: 16px;
+      position: relative;
+    }
+    .ba-list li::before {
+      position: absolute;
+      left: 0;
+    }
+    .before-card .ba-list li::before { content: "✗ "; color: var(--aws-red); }
+    .after-card .ba-list li::before { content: "✓ "; color: var(--aws-green); }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Feature cards */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 640px) {
+      .feature-grid { grid-template-columns: 1fr; }
+    }
+    .feature-card {
+      background: rgba(255, 153, 0, 0.05);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px;
+    }
+    .feature-card h3 {
+      color: var(--aws-white);
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .feature-card p {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      line-height: 1.5;
+    }
+
+    /* Tech spec table */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+    .spec-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+    .spec-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--aws-light-gray);
+    }
+    .spec-table tr:hover td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .spec-table code {
+      background: rgba(255, 153, 0, 0.1);
+      color: var(--aws-smile-orange);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Use case cards */
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .usecase-card h3 {
+      color: var(--aws-orange);
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .usecase-card .scenario {
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .usecase-card .effect {
+      font-size: 14px;
+      background: rgba(29, 129, 2, 0.1);
+      border-left: 3px solid var(--aws-green);
+      padding: 8px 12px;
+      border-radius: 0 4px 4px 0;
+      margin-top: 8px;
+    }
+
+    /* Stats */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 640px) {
+      .stats-row { grid-template-columns: 1fr; }
+    }
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255,153,0,0.15), rgba(255,153,0,0.05));
+      border: 1px solid rgba(255,153,0,0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-orange);
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* Region list */
+    .region-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+    }
+    .region-item {
+      background: rgba(0, 161, 201, 0.08);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 13px;
+    }
+    .region-item .region-name { color: var(--aws-white); font-weight: 500; }
+    .region-item .region-code { color: var(--aws-teal); font-family: monospace; font-size: 12px; }
+
+    /* Pricing */
+    .pricing-badge {
+      display: inline-block;
+      background: rgba(29, 129, 2, 0.15);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      color: var(--aws-green);
+      padding: 4px 14px;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* Highlight */
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Merit/Demerit */
+    .merit-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 640px) {
+      .merit-section { grid-template-columns: 1fr; }
+    }
+    .merit-card {
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .merit-card.business {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+    .merit-card.technical {
+      background: rgba(0, 161, 201, 0.08);
+      border: 1px solid rgba(0, 161, 201, 0.2);
+    }
+    .merit-card h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .merit-card.business h3 { color: var(--aws-orange); }
+    .merit-card.technical h3 { color: var(--aws-teal); }
+    .merit-card ul {
+      list-style: none;
+      padding: 0;
+    }
+    .merit-card li {
+      font-size: 14px;
+      margin-bottom: 6px;
+      padding-left: 18px;
+      position: relative;
+    }
+    .merit-card li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: var(--aws-green);
+      font-weight: bold;
+    }
+
+    /* Limitations */
+    .limitation-list {
+      list-style: none;
+      padding: 0;
+    }
+    .limitation-list li {
+      font-size: 14px;
+      margin-bottom: 8px;
+      padding-left: 20px;
+      position: relative;
+    }
+    .limitation-list li::before {
+      content: "⚠";
+      position: absolute;
+      left: 0;
+    }
+
+    /* Related services */
+    .related-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 640px) {
+      .related-grid { grid-template-columns: 1fr; }
+    }
+    .related-item {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 14px;
+    }
+    .related-item strong { color: var(--aws-white); }
+
+    /* Links */
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+    footer a:hover { text-decoration: underline; }
+    footer ul {
+      list-style: none;
+      padding: 0;
+      margin-top: 8px;
+    }
+    footer li { margin-bottom: 4px; }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-meta">
+        <span class="service-badge">Amazon CloudWatch</span>
+        <span class="date-badge">2026 年 4 月 2 日</span>
+      </div>
+      <h1>📊 <span class="accent">OpenTelemetry</span> メトリクスの<br>ネイティブサポート <span class="preview-badge">Public Preview</span></h1>
+      <p class="subtitle">OTLP で OTel メトリクスを直接 CloudWatch に送信。70+ AWS サービスのベンダードメトリクスと統合し PromQL で横断クエリ。</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">70+</div>
+        <div class="stat-label">AWS サービスの<br>ベンダードメトリクスと統合</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">5</div>
+        <div class="stat-label">対応リージョン<br>(プレビュー)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0 円</div>
+        <div class="stat-label">プレビュー期間中<br>追加料金なし</div>
+      </div>
+    </div>
+
+    <!-- Overview: Before / After -->
+    <div class="section">
+      <h2>🔄 概要: Before / After</h2>
+      <div class="before-after">
+        <div class="before-card">
+          <div class="ba-title">❌ アップデート前の課題</div>
+          <ul class="ba-list">
+            <li>OTel メトリクスの送信にカスタム変換ロジックやサードパーティエクスポーターが必要</li>
+            <li>OTel メトリクスと AWS ベンダードメトリクスの統合クエリ手段がなく監視環境が分断</li>
+            <li>マルチ環境のメトリクス統合に複数の監視ツールを併用</li>
+            <li>PromQL の CloudWatch 上でのネイティブ使用手段が限定的</li>
+          </ul>
+        </div>
+        <div class="after-card">
+          <div class="ba-title">✅ アップデート後の改善</div>
+          <ul class="ba-list">
+            <li>OTLP エンドポイントで OTel メトリクスを直接送信、変換ロジック不要</li>
+            <li>カスタム OTel と 70+ AWS ベンダードメトリクスを PromQL で統合クエリ</li>
+            <li>CloudWatch 異常検知が OTel メトリクスに対応、ML ベースの異常検出を活用</li>
+            <li>Query Studio で PromQL 向けの新しいコンソール体験を提供</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p style="font-size:14px; margin-bottom:12px;">アプリケーションから OTel SDK で計装されたメトリクスが OTLP エンドポイントを通じて CloudWatch に送信され、AWS ベンダードメトリクスと統合して PromQL でクエリ・分析されるフローを示しています。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Sources["📡 メトリクスソース"]
+        direction LR
+        EKS["⚙️ Amazon EKS<br/>マイクロサービス"]
+        OnPrem["🏢 オンプレミス<br/>サーバー"]
+        Lambda["⚡ Lambda<br/>関数"]
+        EKS ~~~ OnPrem ~~~ Lambda
+    end
+
+    subgraph OTel["🔄 OpenTelemetry"]
+        direction LR
+        SDK["📦 OTel SDK"]
+        OTLP["📤 OTLP エンドポイント"]
+        SDK --> OTLP
+    end
+
+    subgraph CW["☁️ Amazon CloudWatch"]
+        direction TB
+        subgraph Metrics["📊 メトリクスストア"]
+            direction LR
+            OTelMetrics["🆕 OTel メトリクス"]
+            VendedMetrics["📈 AWS ベンダード<br/>メトリクス 70+ サービス"]
+            OTelMetrics ~~~ VendedMetrics
+        end
+
+        subgraph Enrichment["🔧 OTel エンリッチメント"]
+            direction LR
+            ARN["🏷️ リソース ARN"]
+            Tags["🏷️ タグラベル"]
+            ARN ~~~ Tags
+        end
+
+        subgraph Analysis["🔍 分析・可視化"]
+            direction LR
+            PromQL["📝 PromQL クエリ"]
+            QueryStudio["🖥️ Query Studio"]
+            Anomaly["🤖 異常検知"]
+            Dashboard["📋 ダッシュボード"]
+            PromQL ~~~ QueryStudio ~~~ Anomaly ~~~ Dashboard
+        end
+
+        subgraph Alerting["🔔 アラート"]
+            direction LR
+            PromQLAlarm["⏰ PromQL アラーム"]
+        end
+
+        Metrics --> Enrichment
+        Enrichment --> Analysis
+        Analysis --> Alerting
+    end
+
+    Sources -->|"OTel SDK 計装"| OTel
+    OTLP -->|"OTLP 送信"| Metrics
+
+    Ops(["👤 運用チーム"]) --> QueryStudio
+    PromQLAlarm -->|"通知"| Ops
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef newfeature fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef success fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class CW cloud
+    class Sources,OTel,Metrics,Enrichment,Analysis,Alerting layer
+    class EKS,OnPrem,Lambda compute
+    class SDK,OTLP process
+    class OTelMetrics,VendedMetrics newfeature
+    class ARN,Tags success
+    class PromQL,QueryStudio,Dashboard storage
+    class Anomaly,PromQLAlarm warning
+    class Ops user
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>🚀 主要機能</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h3>📤 OTLP ネイティブ取り込み</h3>
+          <p>OTLP を使用してメトリクスを直接 CloudWatch に送信。カスタム変換ロジックや追加のエクスポーター、エージェント、コード変更が不要。</p>
+        </div>
+        <div class="feature-card">
+          <h3>📈 AWS ベンダードメトリクス統合</h3>
+          <p>カスタム OTel メトリクスと 70 以上の AWS サービスのベンダードメトリクスを PromQL で統合クエリ。リソース ARN やタグラベルによるエンリッチメント機能。</p>
+        </div>
+        <div class="feature-card">
+          <h3>📝 PromQL サポートと Query Studio</h3>
+          <p>PromQL でメトリクスをクエリし統合ダッシュボードを構築。Query Studio が PromQL 向けの新しいコンソール体験を提供。PromQL ベースのアラーム設定に対応。</p>
+        </div>
+        <div class="feature-card">
+          <h3>🤖 異常検知との統合</h3>
+          <p>CloudWatch 異常検知が OTel メトリクスに対応。機械学習ベースのベースライン自動構築で手動しきい値設定を補完。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3 style="color:var(--aws-white); font-size:16px; margin-bottom:12px;">OTel エンリッチメント API</h3>
+      <table class="spec-table">
+        <thead>
+          <tr><th>メソッド名</th><th>説明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>StartOTelEnrichment</code></td><td>OTel エンリッチメントを有効化し、AWS リソースの ARN やタグラベルで OTel メトリクスをエンリッチ</td></tr>
+          <tr><td><code>StopOTelEnrichment</code></td><td>OTel エンリッチメントを停止</td></tr>
+          <tr><td><code>GetOTelEnrichment</code></td><td>OTel エンリッチメントの現在のステータス (Running/Stopped) を取得</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color:var(--aws-white); font-size:16px; margin: 20px 0 12px;">PromQL アラーム拡張パラメータ</h3>
+      <table class="spec-table">
+        <thead>
+          <tr><th>パラメータ</th><th>型</th><th>説明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>PromQLCriteria.Query</code></td><td>string</td><td>PromQL クエリ文字列</td></tr>
+          <tr><td><code>PromQLCriteria.PendingPeriod</code></td><td>integer</td><td>アラーム状態に遷移するまでの待機期間</td></tr>
+          <tr><td><code>PromQLCriteria.RecoveryPeriod</code></td><td>integer</td><td>正常状態に回復するまでの期間</td></tr>
+          <tr><td><code>EvaluationInterval</code></td><td>integer</td><td>評価間隔</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color:var(--aws-white); font-size:16px; margin: 20px 0 12px;">サポートされるメトリクスタイプ</h3>
+      <table class="spec-table">
+        <thead>
+          <tr><th>OTel メトリクスタイプ</th><th>説明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>Gauge</code></td><td>特定時点の値を記録</td></tr>
+          <tr><td><code>Counter</code></td><td>単調増加するカウンター</td></tr>
+          <tr><td><code>Histogram</code></td><td>値の分布を記録</td></tr>
+          <tr><td><code>Summary</code></td><td>事前計算されたパーセンタイル</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color:var(--aws-white); font-size:16px; margin: 20px 0 12px;">API 変更履歴</h3>
+      <table class="spec-table">
+        <thead>
+          <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>2026/04/02</td><td>Amazon CloudWatch</td><td>3 new 3 updated api methods - OTel エンリッチメント API の追加と PromQL アラーム対応</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Setup Guide -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+
+      <h3 style="color:var(--aws-white); font-size:15px; margin-bottom:8px;">前提条件</h3>
+      <ul style="font-size:14px; padding-left:20px; margin-bottom:20px;">
+        <li>AWS アカウントとプレビュー対応リージョンへのアクセス</li>
+        <li>OpenTelemetry SDK で計装されたアプリケーション</li>
+        <li>CloudWatch への書き込み権限 (<code>cloudwatch:PutMetricData</code> 等) と OTel エンリッチメント権限</li>
+      </ul>
+
+      <h3 style="color:var(--aws-white); font-size:15px; margin-bottom:8px;">Step 1: OTel エンリッチメントの有効化</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">OTel エンリッチメント有効化</span>
+        </div>
+        <pre><code class="language-bash">aws cloudwatch start-o-tel-enrichment</code></pre>
+      </div>
+      <p style="font-size:14px; margin-bottom:16px;">OTLP で取り込まれたメトリクスに AWS リソースの ARN やタグラベルが自動付与され、PromQL でリソース単位のクエリが可能になります。</p>
+
+      <h3 style="color:var(--aws-white); font-size:15px; margin-bottom:8px;">Step 2: OpenTelemetry Collector の設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">YAML</span>
+          <span class="code-title">otel-collector-config.yaml</span>
+        </div>
+        <pre><code class="language-yaml">exporters:
+  otlphttp:
+    endpoint: "https://xray.us-east-1.amazonaws.com/v1/traces"
+    headers:
+      # AWS SigV4 認証を使用
+    compression: gzip
+
+processors:
+  batch:
+    timeout: 60s
+    send_batch_size: 1000
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp]</code></pre>
+      </div>
+
+      <h3 style="color:var(--aws-white); font-size:15px; margin: 16px 0 8px;">Step 3: PromQL でのクエリ実行</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">PromQL</span>
+          <span class="code-title">EKS Pod の CPU 使用率と OTel カスタムメトリクスの相関分析</span>
+        </div>
+        <pre><code class="language-promql">rate(http_server_request_duration_seconds_sum[5m])
+  / rate(http_server_request_duration_seconds_count[5m])</code></pre>
+      </div>
+
+      <h3 style="color:var(--aws-white); font-size:15px; margin: 16px 0 8px;">Step 4: PromQL ベースのアラーム設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">PromQL アラーム設定</span>
+        </div>
+        <pre><code class="language-bash">aws cloudwatch put-metric-alarm \
+  --alarm-name "high-latency-otel" \
+  --alarm-description "OTel metrics: High request latency" \
+  --evaluation-criteria '{
+    "PromQLCriteria": {
+      "Query": "rate(http_server_request_duration_seconds_sum[5m]) / rate(http_server_request_duration_seconds_count[5m]) > 0.5",
+      "PendingPeriod": 300,
+      "RecoveryPeriod": 300
+    }
+  }' \
+  --evaluation-interval 60 \
+  --alarm-actions arn:aws:sns:us-east-1:123456789012:latency-alerts</code></pre>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+
+      <div class="usecase-card">
+        <h3>🌐 ユースケース 1: マルチ環境マイクロサービスの統合監視</h3>
+        <p class="scenario"><strong>シナリオ:</strong> Amazon EKS 上とオンプレミスサーバー上でマイクロサービスを運用しているチームが、両方の環境のメトリクスを統合的に監視したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">PromQL</span>
+            <span class="code-title">EKS とオンプレミスのサービスレイテンシー比較</span>
+          </div>
+          <pre><code class="language-promql">avg by (service_name, deployment_environment) (
+  rate(http_server_request_duration_seconds_sum[5m])
+  / rate(http_server_request_duration_seconds_count[5m])
+)</code></pre>
+        </div>
+        <div class="effect">✅ クラウドとオンプレミスのメトリクスを CloudWatch に統合し、PromQL で横断分析することで環境間のパフォーマンス差異を即座に把握。</div>
+      </div>
+
+      <div class="usecase-card">
+        <h3>🔗 ユースケース 2: アプリケーションと AWS インフラメトリクスの相関分析</h3>
+        <p class="scenario"><strong>シナリオ:</strong> OTel で計装したアプリケーションのレスポンスタイム悪化の原因を、EKS Pod の CPU 使用率や ALB リクエスト数と相関させて特定したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">PromQL</span>
+            <span class="code-title">エラーレートと Pod リソース使用率の相関</span>
+          </div>
+          <pre><code class="language-promql">rate(http_server_request_total{http_status_code=~"5.."}[5m])
+  / rate(http_server_request_total[5m])</code></pre>
+        </div>
+        <div class="effect">✅ カスタム OTel メトリクスと AWS ベンダードメトリクスを統合ダッシュボードで可視化し、インフラとアプリの両面から根本原因分析を効率化。</div>
+      </div>
+
+      <div class="usecase-card">
+        <h3>🔔 ユースケース 3: PromQL ベースの高度なアラート設定</h3>
+        <p class="scenario"><strong>シナリオ:</strong> 複数のマイクロサービスにまたがるリクエストの成功率を PromQL で計算し、サービス全体の健全性に基づいたアラートを設定したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">サービス成功率ベースのアラーム</span>
+          </div>
+          <pre><code class="language-bash">aws cloudwatch put-metric-alarm \
+  --alarm-name "service-success-rate-low" \
+  --evaluation-criteria '{
+    "PromQLCriteria": {
+      "Query": "sum(rate(http_server_request_total{http_status_code=~\"2..\"}[10m])) / sum(rate(http_server_request_total[10m])) < 0.995",
+      "PendingPeriod": 600,
+      "RecoveryPeriod": 300
+    }
+  }' \
+  --evaluation-interval 60 \
+  --alarm-actions arn:aws:sns:us-east-1:123456789012:service-alerts</code></pre>
+        </div>
+        <div class="effect">✅ 従来の単一メトリクスしきい値アラームでは困難だった、複数メトリクスの集約・計算に基づく高度なアラート条件を PromQL で実現。</div>
+      </div>
+    </div>
+
+    <!-- Merits -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <div class="merit-section">
+        <div class="merit-card business">
+          <h3>💼 ビジネス面</h3>
+          <ul>
+            <li>OTel メトリクスと AWS ネイティブメトリクスを CloudWatch に統合し、複数の監視プラットフォームへの投資を削減</li>
+            <li>カスタム変換ロジックやエクスポーターの構築・維持が不要になり、運用チームの負担を軽減</li>
+            <li>パブリックプレビュー中は追加料金なしで機能を評価可能</li>
+            <li>OpenTelemetry 標準に準拠しているため、クラウドとオンプレミスの両方からメトリクスを統合可能</li>
+          </ul>
+        </div>
+        <div class="merit-card technical">
+          <h3>🔧 技術面</h3>
+          <ul>
+            <li>OTLP によるネイティブ取り込みで、OpenTelemetry エコシステムとのシームレスな統合</li>
+            <li>Prometheus 互換の PromQL で既存の知識を活用可能</li>
+            <li>OTel メトリクスに AWS リソース ARN やタグラベルが自動付与されリソース単位の分析が容易</li>
+            <li>ML ベースの CloudWatch 異常検知が OTel メトリクスに対応し手動しきい値設定を補完</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <h3 style="color:var(--aws-white); font-size:15px; margin-bottom:10px;">制限事項</h3>
+      <ul class="limitation-list">
+        <li>パブリックプレビューの段階であり、本番ワークロードでの使用については慎重な評価が必要</li>
+        <li>利用可能リージョンが 5 リージョンに限定</li>
+        <li>プレビュー期間中の SLA は提供されない可能性がある</li>
+      </ul>
+      <h3 style="color:var(--aws-white); font-size:15px; margin: 16px 0 10px;">考慮すべき点</h3>
+      <ul class="limitation-list">
+        <li>GA 後の料金体系について、プレビュー期間中に評価と見積もりを行うことを推奨</li>
+        <li>既存の Prometheus サーバーや Grafana による監視環境からの移行は段階的に計画する必要がある</li>
+        <li>OTel Collector の設定と AWS SigV4 認証の統合には初期セットアップが必要</li>
+      </ul>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金情報</h2>
+      <p style="margin-bottom:12px;"><span class="pricing-badge">プレビュー期間中は追加料金なし</span></p>
+      <table class="spec-table">
+        <thead>
+          <tr><th>項目</th><th>プレビュー期間中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>OTel メトリクスの取り込み</td><td style="color:var(--aws-green); font-weight:600;">無料</td></tr>
+          <tr><td>PromQL クエリ</td><td style="color:var(--aws-green); font-weight:600;">無料</td></tr>
+          <tr><td>OTel エンリッチメント</td><td style="color:var(--aws-green); font-weight:600;">無料</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:13px; margin-top:10px; color: rgba(213,219,219,0.7);">※ GA 後の料金体系については、プレビュー期間中にアナウンスされる見込みです。CloudWatch メトリクスの標準料金が適用される可能性があります。</p>
+    </div>
+
+    <!-- Regions -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <div class="region-grid">
+        <div class="region-item">
+          <div class="region-name">US East (N. Virginia)</div>
+          <div class="region-code">us-east-1</div>
+        </div>
+        <div class="region-item">
+          <div class="region-name">US West (Oregon)</div>
+          <div class="region-code">us-west-2</div>
+        </div>
+        <div class="region-item">
+          <div class="region-name">Asia Pacific (Sydney)</div>
+          <div class="region-code">ap-southeast-2</div>
+        </div>
+        <div class="region-item">
+          <div class="region-name">Asia Pacific (Singapore)</div>
+          <div class="region-code">ap-southeast-1</div>
+        </div>
+        <div class="region-item">
+          <div class="region-name">Europe (Ireland)</div>
+          <div class="region-code">eu-west-1</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="related-grid">
+        <div class="related-item"><strong>Amazon CloudWatch Query Studio</strong><br>PromQL 向けの新しいコンソール体験を提供するクエリインターフェース</div>
+        <div class="related-item"><strong>CloudWatch Anomaly Detection</strong><br>OTel メトリクスに対応した ML ベースの異常検知機能</div>
+        <div class="related-item"><strong>AWS Distro for OpenTelemetry</strong><br>AWS がサポートする OpenTelemetry ディストリビューション。OTel Collector として利用可能</div>
+        <div class="related-item"><strong>Amazon EKS</strong><br>OTel メトリクスの主要な送信元の 1 つ。コンテナ環境のメトリクスを CloudWatch に統合</div>
+        <div class="related-item"><strong>Prometheus</strong><br>CloudWatch の PromQL サポートにより、Prometheus 互換のクエリ体験を提供</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/04/amazon-cloudwatch-opentelemetry-metrics/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/" target="_blank" rel="noopener noreferrer">ドキュメント - Amazon CloudWatch</a></li>
+        <li><a href="https://aws-otel.github.io/docs/introduction" target="_blank" rel="noopener noreferrer">ドキュメント - AWS Distro for OpenTelemetry</a></li>
+        <li><a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer">料金ページ - Amazon CloudWatch</a></li>
+        <li><a href="https://awsapichanges.com/archive/changes/d3423d-monitoring.html" target="_blank" rel="noopener noreferrer">API 変更履歴 - monitoring</a></li>
+      </ul>
+      <p style="margin-top: 12px; color: rgba(213,219,219,0.5);">Generated on 2026-04-04</p>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
