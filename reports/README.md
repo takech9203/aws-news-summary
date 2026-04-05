@@ -7,6 +7,7 @@
 
 - [2026-04-03 - Amazon EMR - Apache Spark トラブルシューティングおよびアップグレードエージェントが Kiro パワーとして利用可能に](2026/2026-04-03-amazon-emr-spark-troubleshooting-upgrade-kiro-power.md)
 - [2026-04-03 - Amazon Bedrock Guardrails - クロスアカウントセーフガードの一般提供開始](2026/2026-04-03-bedrock-guardrails-cross-account-safeguards.md)
+- [2026-04-03 - AWS Glue Schema Registry - 3 つの新リージョンで利用可能に](2026/2026-04-03-aws-gsr-3-more-regions.md)
 - [2026-04-03 - Amazon SageMaker - Data Agent にチャート機能とマテリアライズドビューのサポートを追加](2026/2026-04-03-amazon-sgmkr-dataagent-chart-mv.md)
 - [2026-04-03 - AWS Secrets Manager - コンソールでのカスタム AWS KMS キー入力サポート](2026/2026-04-03-aws-secrets-manager-console-custom-kms-key-input.md)
 - [2026-04-03 - Amazon CloudWatch - Query Studio パブリックプレビュー](2026/2026-04-03-amazon-cloudwatch-query-studio-preview.md)
