@@ -5,6 +5,11 @@
 
 ## 2026 年
 
+- [2026-04-06 - Amazon RDS for Oracle - Oracle Management Agent 24.1.0.0.v1 のサポート](2026/2026-04-06-amazon-rds-oracle-supports-oracle-management-agent-version-for-oracle-enterprise-manager.md)
+- [2026-04-06 - Amazon WorkSpaces Personal - PrivateLink 向け一意の DNS 名サポート](2026/2026-04-06-amazon-workspaces-personal-privatelink.md)
+- [2026-04-06 - Smithy-Java - オープンソース Java クライアントフレームワークの一般提供開始](2026/2026-04-06-smithy-java-client-framework.md)
+- [2026-04-06 - Amazon Verified Permissions - ポリシーストアエイリアスと名前付きポリシー/ポリシーテンプレートのサポート](2026/2026-04-06-amazon-verified-permissions-policy-store.md)
+- [2026-04-06 - Amazon FSx for OpenZFS - アジアパシフィック (メルボルン) リージョンで利用可能に](2026/2026-04-06-amazon-fsx-openzfs-melbourne-region.md)
 - [2026-04-03 - Amazon EMR - Apache Spark トラブルシューティングおよびアップグレードエージェントが Kiro パワーとして利用可能に](2026/2026-04-03-amazon-emr-spark-troubleshooting-upgrade-kiro-power.md)
 - [2026-04-03 - Amazon Bedrock Guardrails - クロスアカウントセーフガードの一般提供開始](2026/2026-04-03-bedrock-guardrails-cross-account-safeguards.md)
 - [2026-04-03 - AWS Glue Schema Registry - 3 つの新リージョンで利用可能に](2026/2026-04-03-aws-gsr-3-more-regions.md)
