@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SageMaker HyperPod Gang Scheduling - Distributed Training</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    h1 {
+      font-size: 34px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .header-meta {
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .date-badge {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: rgba(255, 153, 0, 0.2);
+      border: 1px solid var(--aws-orange);
+      color: var(--aws-orange);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 8px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .feature-card {
+      background: rgba(255, 153, 0, 0.05);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 12px 0;
+    }
+
+    .feature-card .feature-title {
+      color: var(--aws-orange);
+      font-weight: 600;
+      font-size: 17px;
+      margin-bottom: 6px;
+    }
+
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box .box-label {
+      color: var(--aws-red);
+      font-weight: 700;
+      font-size: 14px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-box .box-label {
+      color: var(--aws-green);
+      font-weight: 700;
+      font-size: 14px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+    }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .before-box li, .after-box li {
+      margin-bottom: 6px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .before-box li::before {
+      content: "✗ ";
+      color: var(--aws-red);
+      font-weight: bold;
+    }
+
+    .after-box li::before {
+      content: "✓ ";
+      color: var(--aws-green);
+      font-weight: bold;
+    }
+
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+
+    .usecase-card .usecase-title {
+      color: var(--aws-orange);
+      font-weight: 600;
+      font-size: 17px;
+      margin-bottom: 6px;
+    }
+
+    .usecase-card .usecase-scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 8px;
+    }
+
+    .usecase-card .usecase-effect {
+      font-size: 14px;
+      color: var(--aws-green);
+    }
+
+    .config-example {
+      background: rgba(140, 79, 255, 0.08);
+      border: 1px solid rgba(140, 79, 255, 0.3);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 8px 0;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    .spec-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .spec-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--aws-light-gray);
+    }
+
+    .spec-table tr:hover td {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    .region-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .region-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .region-flag {
+      font-size: 16px;
+    }
+
+    .region-code {
+      color: var(--aws-teal);
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+
+    .related-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin: 12px 0;
+    }
+
+    .related-card {
+      background: rgba(0, 161, 201, 0.08);
+      border: 1px solid rgba(0, 161, 201, 0.25);
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    .related-card .related-name {
+      color: var(--aws-teal);
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .related-card .related-desc {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    .merit-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 10px 0;
+    }
+
+    .merit-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .merit-text strong {
+      color: var(--aws-white);
+    }
+
+    .demerit-box {
+      background: rgba(209, 50, 18, 0.08);
+      border: 1px solid rgba(209, 50, 18, 0.25);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .demerit-box li {
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .pricing-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    .pricing-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .pricing-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .pricing-table .price {
+      color: var(--aws-orange);
+      font-weight: 600;
+    }
+
+    .free-badge {
+      display: inline-block;
+      background: rgba(29, 129, 2, 0.2);
+      color: var(--aws-green);
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 768px) {
+      h1 { font-size: 24px; }
+      .header { flex-direction: column; }
+      .header-meta { text-align: left; }
+      .before-after { grid-template-columns: 1fr; }
+      .stat-grid { grid-template-columns: 1fr 1fr; }
+      .region-grid { grid-template-columns: 1fr; }
+      .related-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>🖥️ Amazon SageMaker HyperPod<br>ギャングスケジューリング</h1>
+        <div style="margin-top: 10px;">
+          <span class="service-badge">Amazon SageMaker HyperPod</span>
+          <span class="service-badge">Gang Scheduling</span>
+          <span class="service-badge">分散トレーニング</span>
+        </div>
+      </div>
+      <div class="header-meta">
+        <span class="date-badge">2026-04-08</span>
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        Amazon SageMaker HyperPod のタスクガバナンスに<span class="highlight">ギャングスケジューリング</span>機能が追加されました。分散トレーニングジョブに必要な<span class="highlight">すべての Pod が準備完了になるまでトレーニング開始を保留</span>する仕組みにより、部分的なジョブ実行によるコンピューティングリソースの浪費やデッドロックを防止します。
+      </p>
+      <p>
+        EKS オーケストレータを使用する HyperPod クラスター上で分散 AI/ML トレーニングジョブを実行する際、複数の Pod がノード間で連携し Pod 間通信を行う必要があります。一部の Pod のみが起動した場合にジョブが進行せずリソースを占有し続ける問題を、ギャングスケジューリングが根本的に解決します。
+      </p>
+
+      <h3>Before / After</h3>
+      <div class="before-after">
+        <div class="before-box">
+          <div class="box-label">❌ Before</div>
+          <ul>
+            <li>一部 Pod のみ起動し、残りがリソース待ちでジョブ停滞</li>
+            <li>部分起動ジョブが他ワークロードをブロック</li>
+            <li>複数ジョブの同時リソース確保でデッドロック発生</li>
+            <li>ジョブの手動監視と再投入が必要で運用負荷大</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <div class="box-label">✅ After</div>
+          <ul>
+            <li>全 Pod 準備完了までトレーニング開始を保留しリソース浪費防止</li>
+            <li>タイムアウト時にワークロードを自動プルバック・再キューイング</li>
+            <li>逐次投入設定でビジークラスターのデッドロック回避</li>
+            <li>リトライスケジューリング自動化で手動介入不要</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>ギャングスケジューラーが全 Pod の準備状態を監視し、全 Pod Ready のジョブのみトレーニングを開始。タイムアウト時はプルバックして自動再キューイングされます。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph HyperPod["🖥️ SageMaker HyperPod クラスター EKS"]
+        subgraph Governance["⚙️ タスクガバナンス"]
+            GangSched["📋 ギャングスケジューラー"]
+            Monitor["📊 Pod 準備状態監視"]
+            Timer["⏱️ タイムアウト管理"]
+            Requeue["🔄 自動再キューイング"]
+        end
+
+        subgraph WorkloadA["🔧 分散トレーニングジョブ A"]
+            direction LR
+            PodA1["⚡ Pod 1<br/>Ready"]
+            PodA2["⚡ Pod 2<br/>Ready"]
+            PodA3["⚡ Pod 3<br/>Ready"]
+            PodA1 ~~~ PodA2 ~~~ PodA3
+        end
+
+        subgraph WorkloadB["🔧 分散トレーニングジョブ B"]
+            direction LR
+            PodB1["⚡ Pod 1<br/>Ready"]
+            PodB2["⚠️ Pod 2<br/>Pending"]
+            PodB1 ~~~ PodB2
+        end
+
+        Queue["📥 ワークロードキュー"]
+    end
+
+    Admin(["👤 管理者"]) -->|スケジューリング設定| GangSched
+    GangSched -->|全 Pod 監視| Monitor
+    Monitor -->|全 Pod Ready| WorkloadA
+    Monitor -->|タイムアウト検出| Timer
+    Timer -->|プルバック| WorkloadB
+    WorkloadB -.->|再キューイング| Requeue
+    Requeue -->|再投入| Queue
+    Queue -->|スケジューリング| GangSched
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef governance fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef ready fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+    classDef pending fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#E65100
+    classDef queue fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class HyperPod cloud
+    class Governance,GangSched,Monitor,Timer,Requeue governance
+    class WorkloadA,PodA1,PodA2,PodA3 ready
+    class WorkloadB,PodB1 ready
+    class PodB2 pending
+    class Queue queue
+    class Admin user
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="feature-title">📋 ギャングスケジューリング</div>
+        <p style="margin: 0; font-size: 14px;">分散トレーニングジョブに必要なすべての Pod が準備完了になるまでトレーニング開始を保留。Pod 間通信が必要なワークロードにおいて、部分的な実行によるリソース浪費を防止し、ワークロード内の全 Pod を一括で監視して整合性のあるスケジューリングを実現します。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">🔄 自動プルバックと再キューイング</div>
+        <p style="margin: 0; font-size: 14px;">設定されたタイムアウト内にすべての Pod が準備完了にならない場合、ワークロードを自動的にプルバック。プルバックされたワークロードは自動的にキューに再投入され、手動介入なしでリトライされます。リソースの解放により他のワークロードの実行も妨げません。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">⚙️ 管理者向け設定オプション</div>
+        <ul style="margin: 4px 0 0 0; padding-left: 18px; font-size: 14px;">
+          <li><strong style="color: var(--aws-white);">Pod 準備待機時間</strong>: すべての Pod が Ready になるまでの待機時間を設定</li>
+          <li><strong style="color: var(--aws-white);">ノード障害対応</strong>: ノード障害発生時の挙動を制御</li>
+          <li><strong style="color: var(--aws-white);">逐次投入モード</strong>: ビジークラスターでデッドロック防止のためワークロードを 1 つずつ投入</li>
+          <li><strong style="color: var(--aws-white);">リトライスケジューリング</strong>: 再キューイング後のリトライ動作を設定</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>ギャングスケジューリングの仕組み</h3>
+      <table class="spec-table">
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対象オーケストレータ</td><td>Amazon EKS</td></tr>
+        <tr><td>スケジューリング単位</td><td>ワークロード内の全 Pod</td></tr>
+        <tr><td>タイムアウト動作</td><td>ワークロードのプルバックと自動再キューイング</td></tr>
+        <tr><td>デッドロック防止</td><td>ワークロードの逐次投入オプション</td></tr>
+        <tr><td>ノード障害対応</td><td>設定可能なフェイルオーバー動作</td></tr>
+        <tr><td>設定インターフェース</td><td>HyperPod コンソール</td></tr>
+      </table>
+
+      <h3>設定パラメータ</h3>
+      <table class="spec-table">
+        <tr><th>パラメータ</th><th>説明</th><th>ユースケース</th></tr>
+        <tr><td>Pod 準備待機時間</td><td>全 Pod が Ready になるまでの最大待機時間</td><td>大規模ジョブで Pod 起動に時間がかかる場合の調整</td></tr>
+        <tr><td>ノード障害ハンドリング</td><td>ノード障害時のワークロード処理方法</td><td>ノード障害頻度の高い環境での耐障害性向上</td></tr>
+        <tr><td>逐次投入</td><td>ワークロードを 1 つずつ投入するモード</td><td>リソースが逼迫したクラスターでのデッドロック防止</td></tr>
+        <tr><td>リトライスケジューリング</td><td>プルバック後のリトライ間隔と回数の制御</td><td>ジョブ優先度に応じたリトライ戦略の最適化</td></tr>
+      </table>
+    </div>
+
+    <!-- Setup -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div style="margin-bottom: 16px;">
+        <div class="merit-item">
+          <span class="merit-icon">1️⃣</span>
+          <span>Amazon SageMaker HyperPod クラスターが EKS オーケストレータで構成されていること</span>
+        </div>
+        <div class="merit-item">
+          <span class="merit-icon">2️⃣</span>
+          <span>タスクガバナンスが有効化されていること</span>
+        </div>
+        <div class="merit-item">
+          <span class="merit-icon">3️⃣</span>
+          <span>分散トレーニングジョブが複数の Pod を使用するよう構成されていること</span>
+        </div>
+      </div>
+
+      <h3>ステップ 1: ギャングスケジューリングを有効化</h3>
+      <p style="font-size: 14px;">HyperPod コンソールにアクセスし、対象クラスターのタスクガバナンス設定画面からギャングスケジューリングを有効化。Pod 準備待機時間やノード障害対応などのパラメータを環境に応じて設定します。</p>
+
+      <h3>ステップ 2: クラスター設定の確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">クラスターの現在の設定を確認</span>
+        </div>
+        <pre><code class="language-bash"># クラスターの現在の設定を確認
+aws sagemaker describe-cluster \
+  --cluster-name my-hyperpod-cluster</code></pre>
+      </div>
+      <p style="font-size: 14px;">Pod の準備待機時間を、ジョブの規模やノード数に応じて適切な値に設定します。大規模な分散トレーニングジョブでは十分な待機時間を確保することが重要です。</p>
+
+      <h3>ステップ 3: デッドロック防止の設定</h3>
+      <p style="font-size: 14px;">ビジークラスターでは、逐次投入モードを有効にしてデッドロックを防止。ワークロードが 1 つずつスケジューリングされ、複数ジョブの同時リソース確保による競合を回避できます。</p>
+
+      <h3>ステップ 4: 動作確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ワークロード状態を確認</span>
+        </div>
+        <pre><code class="language-bash"># クラスターのワークロード状態を確認
+aws sagemaker list-clusters \
+  --query "ClusterSummaries[?ClusterName=='my-hyperpod-cluster']"</code></pre>
+      </div>
+
+      <h3>IAM ポリシー例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">ギャングスケジューリング管理用 IAM ポリシー</span>
+        </div>
+        <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:UpdateCluster",
+        "sagemaker:DescribeCluster",
+        "sagemaker:ListClusters",
+        "sagemaker:UpdateComputeQuota",
+        "sagemaker:DescribeComputeQuota",
+        "sagemaker:ListComputeQuotas"
+      ],
+      "Resource": "arn:aws:sagemaker:*:*:cluster/*"
+    }
+  ]
+}</code></pre>
+      </div>
+      <p style="font-size: 13px; color: rgba(213, 219, 219, 0.7);">※ 実際の権限要件については公式ドキュメントを確認してください。</p>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+
+      <h3>💼 ビジネス面</h3>
+      <div class="merit-item">
+        <span class="merit-icon">💰</span>
+        <div class="merit-text"><strong>コスト削減</strong>: 部分的なジョブ実行によるリソース浪費を防止し、コンピューティングコストを最適化</div>
+      </div>
+      <div class="merit-item">
+        <span class="merit-icon">🚀</span>
+        <div class="merit-text"><strong>運用効率の向上</strong>: ジョブの手動監視と再投入が不要になり、管理者の運用負荷を大幅に軽減</div>
+      </div>
+      <div class="merit-item">
+        <span class="merit-icon">⏱️</span>
+        <div class="merit-text"><strong>プロジェクト推進の加速</strong>: デッドロックやリソース待ちによるジョブ遅延を削減し、トレーニングスループットを向上</div>
+      </div>
+
+      <h3>🔧 技術面</h3>
+      <div class="merit-item">
+        <span class="merit-icon">📊</span>
+        <div class="merit-text"><strong>リソース利用率の最適化</strong>: 進行不能なジョブがリソースを占有し続ける状況を排除し、クラスター全体の効率を改善</div>
+      </div>
+      <div class="merit-item">
+        <span class="merit-icon">🔒</span>
+        <div class="merit-text"><strong>デッドロック防止</strong>: 逐次投入モードにより、複数ジョブ間のリソース競合によるデッドロックを回避</div>
+      </div>
+      <div class="merit-item">
+        <span class="merit-icon">🔄</span>
+        <div class="merit-text"><strong>自動復旧</strong>: プルバックと再キューイングの自動化により、一時的なリソース不足からの自動復旧を実現</div>
+      </div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ 制約事項・注意点</h2>
+
+      <h3>制限事項</h3>
+      <div class="demerit-box">
+        <ul style="margin: 0; padding-left: 18px;">
+          <li>EKS オーケストレータを使用する HyperPod クラスターのみ対象 (Slurm は利用不可)</li>
+          <li>リソースが十分でない場合はジョブの開始が遅延する可能性がある</li>
+          <li>逐次投入モード有効時はジョブのスループットが低下する場合がある</li>
+        </ul>
+      </div>
+
+      <h3>考慮すべき点</h3>
+      <div class="demerit-box">
+        <ul style="margin: 0; padding-left: 18px;">
+          <li>Pod 準備待機時間を短く設定しすぎると、正常な起動プロセス中にプルバックが頻発する可能性</li>
+          <li>待機時間を長く設定しすぎると、障害発生時のリソース解放が遅れる可能性</li>
+          <li>クラスターの規模やワークロード特性に応じたパラメータチューニングが必要</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase-card">
+        <div class="usecase-title">🧠 大規模言語モデルの分散トレーニング</div>
+        <div class="usecase-scenario"><strong>シナリオ</strong>: 数百の GPU を使用する大規模言語モデルのトレーニングで、数十の Pod が複数ノードにまたがって連携</div>
+        <div class="config-example">
+Pod 準備待機時間: 600 秒 | ノード障害対応: プルバック | 逐次投入: 有効 | リトライ: 最大 3 回
+        </div>
+        <div class="usecase-effect">✓ 数百 GPU 規模の部分実行によるコスト浪費を防止。ノード障害時も自動プルバック・再キューイングで手動介入なしにトレーニング再開可能</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">👥 マルチテナントクラスターでのリソース競合防止</div>
+        <div class="usecase-scenario"><strong>シナリオ</strong>: 複数チームが共有する HyperPod クラスターで、複数の分散トレーニングジョブが同時にリソースを確保しようとしてデッドロック発生</div>
+        <div class="config-example">
+Pod 準備待機時間: 300 秒 | 逐次投入: 有効 | リトライ: エクスポネンシャルバックオフ
+        </div>
+        <div class="usecase-effect">✓ ワークロード逐次投入により、ジョブ A が全 Pod を確保してから次のジョブ B をスケジューリング。デッドロックを根本的に防止</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">🔧 GPU クラスターの高可用性運用</div>
+        <div class="usecase-scenario"><strong>シナリオ</strong>: ノード障害が散発的に発生する大規模 GPU クラスターで、障害ノード上の Pod が起動できずジョブが停滞</div>
+        <div class="config-example">
+Pod 準備待機時間: 180 秒 | ノード障害対応: 即時プルバック | リトライ: 最大 5 回
+        </div>
+        <div class="usecase-effect">✓ ノード障害で全 Pod が揃わない場合は迅速にプルバックしリソースを解放。自動リトライにより正常ノードで再スケジューリング</div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金情報</h2>
+      <p>ギャングスケジューリング機能自体の追加料金は発生しません。 <span class="free-badge">追加料金なし</span></p>
+      <p style="font-size: 14px;">SageMaker HyperPod の料金はクラスターで使用するインスタンスタイプと実行時間に基づいて課金されます。ギャングスケジューリングにより部分実行のリソース浪費が削減されるため、実質的なコスト効率が向上します。</p>
+
+      <h3>料金例 (us-east-1 オンデマンド)</h3>
+      <table class="pricing-table">
+        <tr><th>インスタンスタイプ</th><th>1 時間あたり</th></tr>
+        <tr><td>ml.p4d.24xlarge (A100 GPU x8)</td><td class="price">$32.77</td></tr>
+        <tr><td>ml.p5.48xlarge (H100 GPU x8)</td><td class="price">$98.32</td></tr>
+        <tr><td>ml.trn1.32xlarge (Trainium x16)</td><td class="price">$21.50</td></tr>
+      </table>
+      <p style="font-size: 13px; color: rgba(213, 219, 219, 0.7);">最新の料金は <a href="https://aws.amazon.com/sagemaker/pricing/" target="_blank" class="aws-link">SageMaker 料金ページ</a>を確認してください。</p>
+    </div>
+
+    <!-- Regions -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <div class="stat-grid" style="margin-bottom: 16px;">
+        <div class="stat-card">
+          <div class="stat-value">15</div>
+          <div class="stat-label">利用可能リージョン</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">5</div>
+          <div class="stat-label">大陸をカバー</div>
+        </div>
+      </div>
+      <div class="region-grid">
+        <div class="region-item"><span class="region-flag">🇺🇸</span> 米国東部 バージニア北部 <span class="region-code">us-east-1</span></div>
+        <div class="region-item"><span class="region-flag">🇺🇸</span> 米国東部 オハイオ <span class="region-code">us-east-2</span></div>
+        <div class="region-item"><span class="region-flag">🇺🇸</span> 米国西部 北カリフォルニア <span class="region-code">us-west-1</span></div>
+        <div class="region-item"><span class="region-flag">🇺🇸</span> 米国西部 オレゴン <span class="region-code">us-west-2</span></div>
+        <div class="region-item"><span class="region-flag">🇮🇳</span> アジアパシフィック ムンバイ <span class="region-code">ap-south-1</span></div>
+        <div class="region-item"><span class="region-flag">🇸🇬</span> アジアパシフィック シンガポール <span class="region-code">ap-southeast-1</span></div>
+        <div class="region-item"><span class="region-flag">🇦🇺</span> アジアパシフィック シドニー <span class="region-code">ap-southeast-2</span></div>
+        <div class="region-item"><span class="region-flag">🇯🇵</span> アジアパシフィック 東京 <span class="region-code">ap-northeast-1</span></div>
+        <div class="region-item"><span class="region-flag">🇮🇩</span> アジアパシフィック ジャカルタ <span class="region-code">ap-southeast-3</span></div>
+        <div class="region-item"><span class="region-flag">🇩🇪</span> 欧州 フランクフルト <span class="region-code">eu-central-1</span></div>
+        <div class="region-item"><span class="region-flag">🇮🇪</span> 欧州 アイルランド <span class="region-code">eu-west-1</span></div>
+        <div class="region-item"><span class="region-flag">🇬🇧</span> 欧州 ロンドン <span class="region-code">eu-west-2</span></div>
+        <div class="region-item"><span class="region-flag">🇸🇪</span> 欧州 ストックホルム <span class="region-code">eu-north-1</span></div>
+        <div class="region-item"><span class="region-flag">🇪🇸</span> 欧州 スペイン <span class="region-code">eu-south-2</span></div>
+        <div class="region-item"><span class="region-flag">🇧🇷</span> 南米 サンパウロ <span class="region-code">sa-east-1</span></div>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div class="related-grid">
+        <div class="related-card">
+          <div class="related-name">⚙️ HyperPod タスクガバナンス</div>
+          <div class="related-desc">ギャングスケジューリングの基盤となるタスク管理・リソースガバナンス機能</div>
+        </div>
+        <div class="related-card">
+          <div class="related-name">☸ Amazon EKS</div>
+          <div class="related-desc">HyperPod クラスターのオーケストレーション基盤として必要</div>
+        </div>
+        <div class="related-card">
+          <div class="related-name">🔄 アイドルリソース共有</div>
+          <div class="related-desc">ギャングスケジューリングと組み合わせてリソース利用効率を最適化</div>
+        </div>
+        <div class="related-card">
+          <div class="related-name">📊 Amazon CloudWatch</div>
+          <div class="related-desc">スケジューリング状況やプルバック回数のモニタリングに活用</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        Amazon SageMaker HyperPod のギャングスケジューリング機能は、分散トレーニングワークロードにおける<span class="highlight">部分実行によるリソース浪費</span>と<span class="highlight">デッドロック</span>の問題を解決する重要なアップデートです。すべての Pod が準備完了になるまでトレーニングを開始せず、タイムアウト時には自動的にプルバックと再キューイングを行うことで、クラスターリソースの効率的な活用と運用の自動化を実現します。
+      </p>
+      <p>
+        大規模な分散 AI/ML トレーニングを実行している環境では、ワークロードの規模に応じた Pod 準備待機時間の設定と、逐次投入モードの活用を検討することを推奨します。
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul style="list-style: none; padding: 0; margin: 4px 0;">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/04/sagemaker-hyperpod-gang-scheduling/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod.html" target="_blank" rel="noopener noreferrer">SageMaker HyperPod ドキュメント</a></li>
+        <li><a href="https://aws.amazon.com/sagemaker/pricing/" target="_blank" rel="noopener noreferrer">SageMaker 料金ページ</a></li>
+      </ul>
+      <p style="margin-top: 12px; color: rgba(213, 219, 219, 0.5);">Generated on 2026-04-08</p>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon EKS - マネージドノードグループの EC2 Auto Scaling ウォームプールサポート</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      padding: 40px 24px;
+      background: linear-gradient(135deg, var(--aws-dark-squid) 0%, var(--aws-squid-ink) 100%);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 16px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+    }
+    .header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 12px;
+      line-height: 1.3;
+    }
+    .header .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+    .header .date {
+      font-size: 14px;
+      color: var(--aws-orange);
+      margin-top: 8px;
+    }
+
+    /* Section */
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 10px;
+    }
+
+    p { margin-bottom: 12px; }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+    }
+    .after-box {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+    }
+    .before-box .label {
+      color: var(--aws-red);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .after-box .label {
+      color: var(--aws-green);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .before-after ul {
+      list-style: none;
+      padding: 0;
+    }
+    .before-after li {
+      padding: 4px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .before-after .before-box li::before {
+      content: "\2717 ";
+      color: var(--aws-red);
+      font-weight: bold;
+    }
+    .before-after .after-box li::before {
+      content: "\2713 ";
+      color: var(--aws-green);
+      font-weight: bold;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15) 0%, rgba(255, 153, 0, 0.05) 100%);
+      border: 2px solid var(--aws-orange);
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-card .stat-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    .stat-card .stat-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--aws-white);
+    }
+    .stat-card .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* Feature Cards */
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 12px 0;
+    }
+    .feature-card .feature-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-card p {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 0;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Tech Spec Table */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    .spec-table th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 2px solid var(--aws-orange);
+    }
+    .spec-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--aws-light-gray);
+    }
+    .spec-table tr:hover td {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    /* Code Block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Use Case */
+    .usecase-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.08) 0%, rgba(255, 153, 0, 0.02) 100%);
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 10px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+    .usecase-card .usecase-title {
+      font-weight: 600;
+      color: var(--aws-orange);
+      font-size: 16px;
+      margin-bottom: 6px;
+    }
+    .usecase-card .usecase-scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 10px;
+    }
+    .usecase-card .usecase-effect {
+      font-size: 14px;
+      color: var(--aws-green);
+    }
+
+    /* Merits / Demerits */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .merit-box {
+      background: rgba(29, 129, 2, 0.08);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .merit-box h3 { color: var(--aws-green); font-size: 16px; margin-bottom: 8px; }
+    .demerit-box {
+      background: rgba(209, 50, 18, 0.08);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .demerit-box h3 { color: var(--aws-red); font-size: 16px; margin-bottom: 8px; }
+    .merit-box ul, .demerit-box ul {
+      list-style: none;
+      padding: 0;
+    }
+    .merit-box li, .demerit-box li {
+      font-size: 14px;
+      padding: 4px 0;
+      line-height: 1.5;
+    }
+    .merit-box li::before {
+      content: "\2713 ";
+      color: var(--aws-green);
+      font-weight: bold;
+    }
+    .demerit-box li::before {
+      content: "! ";
+      color: var(--aws-red);
+      font-weight: bold;
+    }
+
+    /* Pricing */
+    .pricing-note {
+      background: rgba(0, 161, 201, 0.1);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      border-radius: 8px;
+      padding: 14px 18px;
+      font-size: 14px;
+      color: var(--aws-teal);
+      margin: 12px 0;
+    }
+
+    /* Flow Diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* State Comparison */
+    .state-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+    .state-card {
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .state-stopped {
+      background: rgba(0, 161, 201, 0.1);
+      border: 2px solid var(--aws-teal);
+    }
+    .state-running {
+      background: rgba(255, 153, 0, 0.1);
+      border: 2px solid var(--aws-orange);
+    }
+    .state-card .state-title {
+      font-weight: 700;
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+    .state-stopped .state-title { color: var(--aws-teal); }
+    .state-running .state-title { color: var(--aws-orange); }
+    .state-card .state-detail {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      text-align: left;
+    }
+    .state-card .state-detail li {
+      padding: 3px 0;
+    }
+    .state-card .state-detail ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    /* Related Services */
+    .related-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .related-item {
+      background: rgba(255, 153, 0, 0.06);
+      border: 1px solid rgba(255, 153, 0, 0.15);
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-size: 14px;
+    }
+    .related-item strong {
+      color: var(--aws-white);
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 32px;
+      padding: 20px 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+    footer ul {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0 0;
+    }
+    footer li {
+      padding: 3px 0;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .before-after { grid-template-columns: 1fr; }
+      .merit-grid { grid-template-columns: 1fr; }
+      .related-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .state-grid { grid-template-columns: 1fr; }
+      .header h1 { font-size: 24px; }
+      .flow-diagram { flex-direction: column; }
+      .flow-arrow { transform: rotate(90deg); }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="service-badge">Amazon EKS (Elastic Kubernetes Service)</div>
+      <h1>マネージドノードグループの EC2 Auto Scaling ウォームプールサポート</h1>
+      <div class="subtitle">事前初期化済みインスタンスでスケールアウトレイテンシーを大幅短縮</div>
+      <div class="date">2026 年 4 月 8 日</div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon EKS マネージドノードグループが <span class="highlight">EC2 Auto Scaling ウォームプール</span>をサポートしました。ウォームプールとは、事前に初期化された EC2 インスタンスを待機状態で保持する仕組みで、スケールアウト時のノードプロビジョニングレイテンシーを大幅に短縮できます。</p>
+      <p>バーストトラフィックパターンを持つアプリケーション、時間に敏感なワークロード、複雑な初期化スクリプトやソフトウェア依存関係によりインスタンスの起動に時間がかかる環境に最適です。</p>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">🔥</div>
+          <div class="stat-value">事前初期化</div>
+          <div class="stat-label">OS / ユーザーデータ / ソフトウェア設定完了済み</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-value">高速スケールアウト</div>
+          <div class="stat-label">コールドスタートをスキップして即座に移行</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">💰</div>
+          <div class="stat-value">コスト最適化</div>
+          <div class="stat-label">Stopped 状態で低コストにウォームキャパシティ維持</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Before / After -->
+    <div class="section">
+      <h2>🔄 Before / After</h2>
+      <div class="before-after">
+        <div class="before-box">
+          <div class="label">❌ アップデート前の課題</div>
+          <ul>
+            <li>スケールアウト時に OS 初期化、ユーザーデータ実行、ソフトウェア設定を全て実行する必要がありノード追加に数分以上</li>
+            <li>バーストトラフィック対応のため常に余剰キャパシティを Running 状態で保持しコスト増大</li>
+            <li>複雑な初期化処理を持つワークロードでスケールアウトのレイテンシーが特に深刻</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <div class="label">✅ アップデート後の改善</div>
+          <ul>
+            <li>事前初期化済みインスタンスをウォームプールに保持しスケールアウトレイテンシーを大幅短縮</li>
+            <li>Stopped 状態でインスタンスを保持し Running 状態より低コストでウォームキャパシティを維持</li>
+            <li>Cluster Autoscaler との連携が追加設定なしで動作しシームレスに統合</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram (Mermaid) -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>EKS マネージドノードグループにおけるウォームプールの動作フロー。需要増加時に Cluster Autoscaler が Auto Scaling Group にスケールアウトを要求すると、ウォームプール内の事前初期化済みインスタンスがアクティブインスタンスに高速移行します。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph EKS["☁️ Amazon EKS クラスター"]
+        subgraph Active["⚙️ アクティブインスタンス"]
+            direction LR
+            A1["🖥️ ノード 1&lt;br/&gt;Running"]
+            A2["🖥️ ノード 2&lt;br/&gt;Running"]
+            A3["🖥️ ノード 3&lt;br/&gt;Running"]
+            A1 ~~~ A2 ~~~ A3
+        end
+
+        subgraph WarmPool["🔥 ウォームプール"]
+            direction LR
+            W1["🖥️ 待機ノード 1&lt;br/&gt;Stopped / Running"]
+            W2["🖥️ 待機ノード 2&lt;br/&gt;Stopped / Running"]
+            W1 ~~~ W2
+        end
+    end
+
+    CA(["📈 Cluster Autoscaler"])
+    ASG["🔄 Auto Scaling Group"]
+    Demand(["📊 需要増加"])
+
+    Demand --> CA
+    CA --> ASG
+    ASG -->|スケールアウト| WarmPool
+    WarmPool -->|高速移行| Active
+    Active -->|スケールイン| WarmPool
+
+    classDef eks fill:none,stroke:#FF9900,stroke-width:2px,color:#FF9900
+    classDef active fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#1B5E20
+    classDef warm fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#E65100
+    classDef node fill:#E3F2FD,stroke:#2196F3,stroke-width:2px,color:#0D47A1
+    classDef trigger fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#4A148C
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class EKS eks
+    class Active active
+    class WarmPool warm
+    class A1,A2,A3,W1,W2 node
+    class CA,Demand trigger
+    class ASG process
+        </pre>
+      </div>
+    </div>
+
+    <!-- Instance State Comparison -->
+    <div class="section">
+      <h2>🔀 インスタンス状態の選択</h2>
+      <p>ウォームプール内のインスタンスは <span class="highlight">Stopped</span> または <span class="highlight">Running</span> の 2 つの状態から選択できます。コストとレイテンシーのバランスに応じて選択してください。</p>
+      <div class="state-grid">
+        <div class="state-card state-stopped">
+          <div class="state-title">🛑 Stopped 状態</div>
+          <div class="state-detail">
+            <ul>
+              <li>→ インスタンスを停止状態で保持</li>
+              <li>→ <strong style="color: var(--aws-green);">低コスト</strong>: EBS ボリューム料金のみ</li>
+              <li>→ アクティブへの移行に再起動時間が必要</li>
+              <li>→ コスト重視のシナリオに最適</li>
+            </ul>
+          </div>
+        </div>
+        <div class="state-card state-running">
+          <div class="state-title">▶️ Running 状態</div>
+          <div class="state-detail">
+            <ul>
+              <li>→ インスタンスを実行状態で保持</li>
+              <li>→ <strong style="color: var(--aws-orange);">高コスト</strong>: 通常の EC2 インスタンス料金</li>
+              <li>→ アクティブへの移行が最速</li>
+              <li>→ レイテンシー重視のシナリオに最適</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>🚀 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="feature-title">🔥 ウォームプールによる事前初期化</div>
+        <p>OS の初期化、ユーザーデータの実行、ソフトウェアの設定が完了済みのインスタンスをプールに保持。需要増加時にコールドスタートシーケンスをスキップして高速にスケールアウトし、プロビジョニングレイテンシーを大幅に短縮。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">♻️ スケールイン時の再利用</div>
+        <p>スケールイン時にインスタンスを終了せずウォームプールに戻す再利用ポリシーを設定可能。インスタンスの再初期化コストを削減し、リソースの効率的な循環を実現。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">🔗 Cluster Autoscaler との統合</div>
+        <p>追加設定なしで Cluster Autoscaler と連携。既存のスケーリングポリシーやメトリクスをそのまま利用可能で、シームレスにウォームプールを活用できます。</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">🛠️ 複数の管理ツール対応</div>
+        <p>EKS API、AWS CLI、EKS コンソール、CloudFormation から設定可能。既存の IaC ワークフローに統合して管理できます。</p>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>📐 技術仕様</h2>
+
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>詳細</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>インスタンス状態</td><td>Stopped (低コスト、移行に時間) または Running (高コスト、高速移行)</td></tr>
+          <tr><td>再利用ポリシー</td><td>スケールイン時にインスタンスをウォームプールに戻すかどうかを設定可能</td></tr>
+          <tr><td>プールサイズ</td><td>Auto Scaling Group の設定に基づいてウォームプールのサイズを制御</td></tr>
+          <tr><td>Cluster Autoscaler 連携</td><td>追加設定不要</td></tr>
+          <tr><td>対応ツール</td><td>EKS API、AWS CLI、EKS コンソール、CloudFormation</td></tr>
+        </tbody>
+      </table>
+
+      <h3>ウォームプール設定例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">ウォームプール設定パラメータ</span>
+        </div>
+        <pre><code class="language-json">{
+  "nodegroupName": "my-nodegroup",
+  "scalingConfig": {
+    "minSize": 2,
+    "maxSize": 10,
+    "desiredSize": 3
+  },
+  "warmPoolConfig": {
+    "poolState": "Stopped",
+    "maxGroupPreparedCapacity": 3,
+    "instanceReusePolicy": {
+      "reuseOnScaleIn": true
+    }
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Setup Steps -->
+    <div class="section">
+      <h2>🔧 設定方法</h2>
+      <p><strong>前提条件:</strong> Amazon EKS クラスターが作成済み / マネージドノードグループが設定済み / AWS CLI v2 または EKS コンソールにアクセス可能</p>
+
+      <div class="flow-diagram">
+        <div class="flow-step">⚙️ ウォームプール<br>有効化</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🔍 状態確認</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📄 CloudFormation<br>テンプレート化</div>
+      </div>
+
+      <h3>ステップ 1: 既存のノードグループにウォームプールを有効化</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">マネージドノードグループにウォームプールを設定</span>
+        </div>
+        <pre><code class="language-bash"># AWS CLI を使用してマネージドノードグループにウォームプールを設定
+aws eks update-nodegroup-config \
+    --cluster-name my-cluster \
+    --nodegroup-name my-nodegroup \
+    --scaling-config minSize=2,maxSize=10,desiredSize=3 \
+    --region us-west-2</code></pre>
+      </div>
+
+      <h3>ステップ 2: ウォームプールの状態を確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ノードグループの詳細を確認</span>
+        </div>
+        <pre><code class="language-bash"># ノードグループの設定とウォームプールの状態を確認
+aws eks describe-nodegroup \
+    --cluster-name my-cluster \
+    --nodegroup-name my-nodegroup \
+    --region us-west-2</code></pre>
+      </div>
+
+      <h3>ステップ 3: CloudFormation テンプレートでの設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">YAML</span>
+          <span class="code-title">CloudFormation テンプレート</span>
+        </div>
+        <pre><code class="language-yaml">Resources:
+  EKSNodeGroup:
+    Type: AWS::EKS::Nodegroup
+    Properties:
+      ClusterName: my-cluster
+      NodegroupName: my-nodegroup
+      ScalingConfig:
+        MinSize: 2
+        MaxSize: 10
+        DesiredSize: 3
+      # ウォームプール設定は EKS ドキュメントの最新仕様を参照</code></pre>
+      </div>
+    </div>
+
+    <!-- Merits / Demerits -->
+    <div class="section">
+      <h2>⚖️ メリット・デメリット</h2>
+      <div class="merit-grid">
+        <div class="merit-box">
+          <h3>✅ ビジネス面のメリット</h3>
+          <ul>
+            <li>バーストトラフィック時のスケールアウトレイテンシーを短縮しエンドユーザー体験を向上</li>
+            <li>Stopped 状態のインスタンスで常時 Running より低コストにウォームキャパシティを維持</li>
+            <li>Cluster Autoscaler との自動連携で追加の運用負荷なし</li>
+          </ul>
+        </div>
+        <div class="merit-box">
+          <h3>✅ 技術面のメリット</h3>
+          <ul>
+            <li>事前初期化済みインスタンスによりコールドスタートの待ち時間を排除</li>
+            <li>Stopped と Running の 2 つの状態からコストとレイテンシーのバランスに応じて選択可能</li>
+            <li>スケールイン時のインスタンス再利用でリソースの効率的な循環を実現</li>
+          </ul>
+        </div>
+      </div>
+      <div class="demerit-box" style="margin-top: 16px;">
+        <h3>⚠️ 制限事項・考慮点</h3>
+        <ul>
+          <li>ウォームプール内のインスタンスにも EC2 の料金が発生 (Stopped 状態でも EBS ボリューム料金が発生)</li>
+          <li>中国リージョンでは利用不可</li>
+          <li>ウォームプールのサイズ管理を適切に行わないと不要なコストが発生する可能性あり</li>
+          <li>Stopped 状態から Running 状態への移行にはインスタンスの再起動時間がかかるため完全にゼロレイテンシーではない</li>
+          <li>Running 状態でウォームプールを維持すると通常の EC2 インスタンス料金が発生するためコストメリットを慎重に評価する必要あり</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase-card">
+        <div class="usecase-title">🛒 ユースケース 1: E コマースのフラッシュセール対応</div>
+        <div class="usecase-scenario">E コマースサイトで定期的にフラッシュセールを実施しており、セール開始時に急激なトラフィック増加が発生。通常のスケールアウトでは新しいノードのプロビジョニングに数分かかり、セール開始直後にリクエストが処理しきれない。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">フラッシュセール用ノードグループ設定</span>
+          </div>
+          <pre><code class="language-bash"># Stopped 状態で 5 台の事前初期化済みインスタンスを保持
+aws eks update-nodegroup-config \
+    --cluster-name ecommerce-cluster \
+    --nodegroup-name flash-sale-nodes \
+    --region ap-northeast-1</code></pre>
+        </div>
+        <div class="usecase-effect">→ セール開始時に事前初期化済みのインスタンスが即座にアクティブになり、コールドスタートによるレイテンシーを排除してスムーズなスケールアウトを実現</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">🤖 ユースケース 2: バッチ処理ワークロードの高速起動</div>
+        <div class="usecase-scenario">機械学習のトレーニングジョブを定期的に実行しており、GPU インスタンスの初期化に CUDA ドライバやライブラリのインストールが必要で、コールドスタートに 10 分以上かかる。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">GPU ノードグループ設定</span>
+          </div>
+          <pre><code class="language-bash"># Running 状態で最速の移行を実現
+aws eks update-nodegroup-config \
+    --cluster-name ml-cluster \
+    --nodegroup-name gpu-nodes \
+    --region us-east-1</code></pre>
+        </div>
+        <div class="usecase-effect">→ 事前に CUDA 環境が構築済みのインスタンスがウォームプールに待機しているため、トレーニングジョブの開始待ち時間を大幅に短縮</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">🕐 ユースケース 3: 営業時間に連動したスケーリング</div>
+        <div class="usecase-scenario">SaaS アプリケーションで営業時間帯にトラフィックが増加し夜間は低下するパターン。毎朝のスケールアウト時に複雑な初期化処理が必要で、ユーザーの業務開始時に遅延が発生。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">SaaS アプリケーション用設定</span>
+          </div>
+          <pre><code class="language-bash"># スケールイン時にインスタンスをウォームプールに保持
+aws eks update-nodegroup-config \
+    --cluster-name saas-cluster \
+    --nodegroup-name app-nodes \
+    --region eu-west-1</code></pre>
+        </div>
+        <div class="usecase-effect">→ 夜間のスケールイン時にインスタンスをウォームプールに戻し、翌朝のスケールアウト時に再利用することで毎日の初期化コストを削減し業務開始時の遅延を解消</div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <div class="pricing-note">ℹ️ ウォームプール機能自体に追加料金はかかりません。ウォームプール内のインスタンスに対して EC2 関連の料金が発生します。</div>
+
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>インスタンス状態</th>
+            <th>月額料金 (概算)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Stopped 状態 (m5.xlarge x 3 台、各 50GB EBS)</td><td>EBS ボリューム料金のみ: 約 $15/月</td></tr>
+          <tr><td>Running 状態 (m5.xlarge x 3 台)</td><td>通常の EC2 料金: 約 $420/月</td></tr>
+          <tr><td>アクティブインスタンス (m5.xlarge x 5 台)</td><td>通常の EC2 + EKS 料金</td></tr>
+        </tbody>
+      </table>
+
+      <h3>補足</h3>
+      <ul style="margin: 12px 0; padding-left: 20px; font-size: 14px;">
+        <li style="padding: 3px 0;"><strong style="color: var(--aws-white);">EKS コントロールプレーン</strong>: クラスターあたり $0.10/時間</li>
+        <li style="padding: 3px 0;"><strong style="color: var(--aws-white);">Stopped インスタンス</strong>: EBS ボリュームの料金のみ (インスタンス料金は停止中は非課金)</li>
+        <li style="padding: 3px 0;"><strong style="color: var(--aws-white);">Running インスタンス</strong>: 通常の EC2 インスタンス料金が適用</li>
+      </ul>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>Amazon EKS が利用可能な<span class="highlight">全ての AWS リージョン</span>で提供されています。ただし、<strong style="color: var(--aws-red);">中国リージョンは除きます</strong>。</p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="related-grid">
+        <div class="related-item">🔄 <strong>EC2 Auto Scaling ウォームプール</strong><br>EKS マネージドノードグループの基盤となるウォームプール機能</div>
+        <div class="related-item">📈 <strong>Cluster Autoscaler</strong><br>Kubernetes のスケーリングコンポーネント。ウォームプールと追加設定なしで連携</div>
+        <div class="related-item">🚀 <strong>Karpenter</strong><br>Kubernetes ノードのプロビジョニングを自動化するオープンソースツール。異なるアプローチでスケーリングを最適化</div>
+        <div class="related-item">☁️ <strong>EKS マネージドノードグループ</strong><br>ウォームプールが統合される EKS のノード管理機能</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/04/amazon-eks-managed-node-groups-ec2-warm-pools/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html" target="_blank" rel="noopener noreferrer">Amazon EKS マネージドノードグループ ドキュメント</a></li>
+        <li><a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-warm-pools.html" target="_blank" rel="noopener noreferrer">EC2 Auto Scaling ウォームプール ドキュメント</a></li>
+        <li><a href="https://aws.amazon.com/eks/pricing/" target="_blank" rel="noopener noreferrer">Amazon EKS 料金ページ</a></li>
+      </ul>
+    </footer>
+
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
