@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon RDS - Blue/Green Deployments の RDS Proxy サポート</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left { flex: 1; min-width: 280px; }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    .header-sub {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .header-right {
+      text-align: right;
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    .header-right .date {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Sections */
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 10px 0;
+    }
+
+    p {
+      margin-bottom: 12px;
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* Before/After */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-card .card-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--aws-red);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-card .card-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--aws-green);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .before-card ul, .after-card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .before-card li, .after-card li {
+      font-size: 14px;
+      margin-bottom: 8px;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .before-card li::before {
+      content: '\2717';
+      position: absolute;
+      left: 0;
+      color: var(--aws-red);
+      font-weight: 700;
+    }
+
+    .after-card li::before {
+      content: '\2713';
+      position: absolute;
+      left: 0;
+      color: var(--aws-green);
+      font-weight: 700;
+    }
+
+    /* Feature Cards */
+    .feature-cards {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      border-right: 1px solid rgba(255, 255, 255, 0.06);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .feature-card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feature-card p, .feature-card ul {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 4px;
+    }
+
+    .feature-card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .feature-card li {
+      margin-bottom: 4px;
+      padding-left: 18px;
+      position: relative;
+    }
+
+    .feature-card li::before {
+      content: '>';
+      position: absolute;
+      left: 0;
+      color: var(--aws-orange);
+      font-weight: 700;
+    }
+
+    /* Use case cards */
+    .usecase-cards {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .usecase-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.08), rgba(255, 153, 0, 0.02));
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .usecase-card-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .usecase-card p {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    .usecase-card .scenario {
+      margin-bottom: 10px;
+    }
+
+    .usecase-card .effect {
+      background: rgba(29, 129, 2, 0.1);
+      border-left: 3px solid var(--aws-green);
+      padding: 8px 12px;
+      border-radius: 0 6px 6px 0;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+
+    .usecase-card .effect strong {
+      color: var(--aws-green);
+    }
+
+    /* Tables */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      vertical-align: top;
+    }
+
+    tr:hover td {
+      background: rgba(255, 153, 0, 0.04);
+    }
+
+    code {
+      background: rgba(255, 153, 0, 0.12);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Mermaid container */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Pros / Cons */
+    .pros-cons-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .pros-card {
+      background: rgba(29, 129, 2, 0.08);
+      border: 1px solid rgba(29, 129, 2, 0.25);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .cons-card {
+      background: rgba(209, 50, 18, 0.08);
+      border: 1px solid rgba(209, 50, 18, 0.25);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .pros-card h3 {
+      color: var(--aws-green);
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .cons-card h3 {
+      color: var(--aws-red);
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .pros-card ul, .cons-card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .pros-card li, .cons-card li {
+      font-size: 14px;
+      margin-bottom: 8px;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .pros-card li::before {
+      content: '\2713';
+      position: absolute;
+      left: 0;
+      color: var(--aws-green);
+      font-weight: 700;
+    }
+
+    .cons-card li::before {
+      content: '!';
+      position: absolute;
+      left: 2px;
+      color: var(--aws-red);
+      font-weight: 700;
+    }
+
+    /* Region badges */
+    .region-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .region-badge {
+      background: rgba(0, 161, 201, 0.12);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      border-radius: 6px;
+      padding: 10px 18px;
+      text-align: center;
+    }
+
+    .region-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--aws-teal);
+    }
+
+    .region-code {
+      font-size: 12px;
+      color: var(--aws-light-gray);
+      margin-top: 2px;
+    }
+
+    /* Related services */
+    .related-card {
+      background: rgba(140, 79, 255, 0.08);
+      border: 1px solid rgba(140, 79, 255, 0.25);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .related-card-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--aws-purple);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .related-card p {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 0;
+    }
+
+    /* Links list */
+    .links-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .links-list li {
+      margin-bottom: 10px;
+    }
+
+    .links-list a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      font-size: 14px;
+      word-break: break-all;
+    }
+
+    .links-list a:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    /* Pricing table highlight */
+    .pricing-note {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+      font-size: 14px;
+    }
+
+    .pricing-note li {
+      margin-bottom: 6px;
+      padding-left: 18px;
+      position: relative;
+      list-style: none;
+    }
+
+    .pricing-note li::before {
+      content: '\203A';
+      position: absolute;
+      left: 0;
+      color: var(--aws-orange);
+      font-weight: 700;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 { font-size: 24px; }
+      .comparison-grid, .pros-cons-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .header { flex-direction: column; }
+      .header-right { text-align: left; }
+    }
+
+    @media (max-width: 480px) {
+      body { padding: 12px; }
+      .section { padding: 16px; }
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">Amazon RDS</span>
+        <h1>Blue/Green Deployments の RDS Proxy サポート</h1>
+        <div class="header-sub">DNS 伝播遅延を排除し、スイッチオーバー時のアプリケーション復旧時間を大幅に短縮</div>
+      </div>
+      <div class="header-right">
+        <div class="date">2026-04-09</div>
+        <div>AWS What's New</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">0</div>
+        <div class="stat-label">アプリケーション設定変更</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">5</div>
+        <div class="stat-label">対応 DB エンジン</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">17+</div>
+        <div class="stat-label">利用可能リージョン</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">本機能の追加料金</div>
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon RDS Blue/Green Deployments が <span class="highlight">Amazon RDS Proxy</span> をサポートしました。これにより、Blue/Green Deployments のスイッチオーバー時に <span class="highlight">DNS 伝播の遅延を排除</span> し、アプリケーションの復旧時間を大幅に短縮できます。</p>
+      <p>Blue/Green Deployments は、本番環境 (Blue) を安全に保ちながら、フルマネージドのステージング環境 (Green) を作成してデータベースの変更をテスト・検証できる機能です。今回のアップデートにより、RDS Proxy がスイッチオーバー時に Green 環境が新しい本番環境になったことを自動的に検知し、接続を迅速にリダイレクトします。ドライバーの変更やアプリケーションの設定変更は一切不要です。</p>
+    </div>
+
+    <!-- Before/After -->
+    <div class="section">
+      <h2>🔄 Before / After</h2>
+      <div class="comparison-grid">
+        <div class="before-card">
+          <div class="card-label">❌ Before</div>
+          <ul>
+            <li>スイッチオーバー後、DNS 伝播に時間がかかり、アプリケーションが新しい本番環境に接続するまでに遅延が発生</li>
+            <li>DNS キャッシュの影響で、一部のアプリケーションが古い Blue 環境への接続を維持し続ける可能性があった</li>
+            <li>ダウンタイム最小化のために、アプリケーション側で DNS TTL の調整や接続リトライロジックの実装が必要</li>
+          </ul>
+        </div>
+        <div class="after-card">
+          <div class="card-label">✅ After</div>
+          <ul>
+            <li>RDS Proxy がデータベースインスタンスを能動的に監視し、Green 環境への切り替えを自動検知して接続を即座にリダイレクト</li>
+            <li>DNS 伝播の遅延に依存しないため、アプリケーションの復旧時間が大幅に短縮</li>
+            <li>ドライバーの変更やアプリケーションの設定変更が不要で、既存の環境にそのまま適用可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram (Mermaid - from source) -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>RDS Proxy を使用した Blue/Green Deployments のスイッチオーバーフローを示しています。RDS Proxy が Green 環境への切り替えを自動検知し、アプリケーションからの接続を即座にリダイレクトすることで、DNS 伝播の遅延を排除します。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+sequenceDiagram
+    participant App as 👤 アプリケーション
+    participant Proxy as 🔌 RDS Proxy
+    participant Blue as 🔵 Blue 環境
+    participant Green as 🟢 Green 環境
+
+    Note over Blue,Green: スイッチオーバー前
+    App->>Proxy: DB 接続リクエスト
+    Proxy->>Blue: 接続転送
+    Blue-->>Proxy: レスポンス
+    Proxy-->>App: レスポンス
+
+    Note over Blue,Green: スイッチオーバー実行
+    rect rgb(255,243,224)
+        Note over Proxy: Green 環境が新本番に<br/>なったことを自動検知
+        Proxy->>Green: 接続を即座にリダイレクト
+    end
+
+    Note over Blue,Green: スイッチオーバー後
+    App->>Proxy: DB 接続リクエスト
+    Proxy->>Green: 接続転送
+    Green-->>Proxy: レスポンス
+    Proxy-->>App: レスポンス
+    Note over App: DNS 伝播待ち不要<br/>設定変更不要
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="feature-cards">
+        <div class="feature-card">
+          <div class="feature-card-title">🔄 自動接続リダイレクト</div>
+          <ul>
+            <li>RDS Proxy がデータベースインスタンスを能動的に監視</li>
+            <li>Green 環境が新しい本番環境になったことを自動検知</li>
+            <li>アプリケーションの接続を Green 環境に即座にリダイレクト</li>
+          </ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">⚡ DNS 伝播遅延の排除</div>
+          <ul>
+            <li>従来の Blue/Green Deployments では DNS エンドポイントの変更に伴う伝播遅延が発生</li>
+            <li>RDS Proxy 経由の接続では DNS に依存しない接続管理により遅延を排除</li>
+            <li>アプリケーションの復旧時間を大幅に短縮</li>
+          </ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">🛠️ ゼロ設定変更での導入</div>
+          <ul>
+            <li>既存のドライバーやアプリケーション設定の変更が不要</li>
+            <li>RDS Proxy エンドポイントに接続しているアプリケーションは自動的に恩恵を受ける</li>
+            <li>追加のコード変更やデプロイメントが不要</li>
+          </ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">🌐 シングルリージョン構成のサポート</div>
+          <ul>
+            <li>シングルリージョン構成の Blue/Green Deployments でスイッチオーバー時の高速リダイレクトを提供</li>
+            <li>RDS Proxy が利用可能な全ての商用 AWS リージョンで利用可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specs: DB Engines -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>対応データベースエンジン</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>データベースエンジン</th>
+              <th>サポート状況</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Amazon Aurora MySQL 互換</td>
+              <td style="color: var(--aws-green); font-weight: 600;">✓ 対応</td>
+            </tr>
+            <tr>
+              <td>Amazon Aurora PostgreSQL 互換</td>
+              <td style="color: var(--aws-green); font-weight: 600;">✓ 対応</td>
+            </tr>
+            <tr>
+              <td>Amazon RDS for MySQL</td>
+              <td style="color: var(--aws-green); font-weight: 600;">✓ 対応</td>
+            </tr>
+            <tr>
+              <td>Amazon RDS for PostgreSQL</td>
+              <td style="color: var(--aws-green); font-weight: 600;">✓ 対応</td>
+            </tr>
+            <tr>
+              <td>Amazon RDS for MariaDB</td>
+              <td style="color: var(--aws-green); font-weight: 600;">✓ 対応</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>RDS Proxy の主要仕様</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>項目</th>
+              <th>詳細</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>接続管理方式</td>
+              <td>RDS Proxy による能動的なデータベースインスタンス監視</td>
+            </tr>
+            <tr>
+              <td>スイッチオーバー検知</td>
+              <td>自動検知 (手動操作不要)</td>
+            </tr>
+            <tr>
+              <td>対応構成</td>
+              <td>シングルリージョン構成</td>
+            </tr>
+            <tr>
+              <td>アプリケーション変更</td>
+              <td>不要 (ドライバー変更不要)</td>
+            </tr>
+            <tr>
+              <td>追加料金</td>
+              <td>RDS Proxy の既存料金のみ (本機能の追加料金なし)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>API 変更履歴</h3>
+      <p style="font-size: 14px;">本アップデートに関連する API 変更は、調査時点では AWS API Changes フィードに記録されていませんでした。RDS Proxy が Blue/Green Deployments のスイッチオーバーを自動的に処理するため、新しい API パラメータの追加なしで機能する可能性があります。</p>
+
+      <h3>RDS Proxy 設定例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">RDS Proxy 設定</span>
+        </div>
+        <pre><code class="language-json">{
+  "DBProxyName": "my-rds-proxy",
+  "EngineFamily": "MYSQL",
+  "Auth": [
+    {
+      "AuthScheme": "SECRETS",
+      "SecretArn": "arn:aws:secretsmanager:us-east-1:123456789012:secret:my-db-secret",
+      "IAMAuth": "REQUIRED"
+    }
+  ],
+  "RoleArn": "arn:aws:iam::123456789012:role/rds-proxy-role",
+  "VpcSubnetIds": ["subnet-01234567", "subnet-89abcdef"]
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Setup -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="flow-diagram">
+        <div class="flow-step">🗄️ RDS/Aurora<br/>インスタンス</div>
+        <span class="flow-arrow">+</span>
+        <div class="flow-step">🔌 RDS Proxy<br/>設定済み</div>
+        <span class="flow-arrow">+</span>
+        <div class="flow-step">📱 アプリが<br/>Proxy 経由接続</div>
+      </div>
+
+      <h3>ステップ 1: RDS Proxy の作成と設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">RDS Proxy を作成</span>
+        </div>
+        <pre><code class="language-bash"># RDS Proxy を作成
+aws rds create-db-proxy \
+    --db-proxy-name my-rds-proxy \
+    --engine-family MYSQL \
+    --auth '[{"AuthScheme":"SECRETS","SecretArn":"arn:aws:secretsmanager:us-east-1:123456789012:secret:my-db-secret","IAMAuth":"REQUIRED"}]' \
+    --role-arn arn:aws:iam::123456789012:role/rds-proxy-role \
+    --vpc-subnet-ids subnet-01234567 subnet-89abcdef \
+    --region us-east-1</code></pre>
+      </div>
+
+      <h3>ステップ 2: ターゲットグループの登録</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ターゲットグループに DB インスタンスを登録</span>
+        </div>
+        <pre><code class="language-bash"># RDS Proxy のターゲットグループにデータベースインスタンスを登録
+aws rds register-db-proxy-targets \
+    --db-proxy-name my-rds-proxy \
+    --db-instance-identifiers my-blue-db-instance \
+    --region us-east-1</code></pre>
+      </div>
+
+      <h3>ステップ 3: Blue/Green Deployments の作成とスイッチオーバー</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Blue/Green Deployment の作成とスイッチオーバー</span>
+        </div>
+        <pre><code class="language-bash"># Blue/Green Deployment を作成
+aws rds create-blue-green-deployment \
+    --blue-green-deployment-name my-blue-green-deployment \
+    --source arn:aws:rds:us-east-1:123456789012:db:my-blue-db-instance \
+    --region us-east-1
+
+# Green 環境の準備完了後、スイッチオーバーを実行
+aws rds switchover-blue-green-deployment \
+    --blue-green-deployment-identifier my-blue-green-deployment \
+    --region us-east-1</code></pre>
+      </div>
+      <p style="font-size: 13px;">RDS Proxy が自動的に接続を Green 環境にリダイレクトします。アプリケーション側の変更は不要です。</p>
+    </div>
+
+    <!-- Merits / Demerits -->
+    <div class="section">
+      <h2>⚖️ メリット / デメリット</h2>
+      <div class="pros-cons-grid">
+        <div class="pros-card">
+          <h3>✅ メリット</h3>
+          <p style="font-size:13px; font-weight:600; color:var(--aws-green); margin-bottom:8px;">ビジネス面</p>
+          <ul>
+            <li>DNS 伝播遅延を排除し、データベース切り替えに伴うダウンタイムを最小限に抑制</li>
+            <li>Blue/Green Deployments と RDS Proxy の組み合わせにより、本番環境への変更リスクを大幅に低減</li>
+            <li>アプリケーション側の設定変更やドライバー更新が不要で、運用コストを削減</li>
+          </ul>
+          <p style="font-size:13px; font-weight:600; color:var(--aws-green); margin: 12px 0 8px 0;">技術面</p>
+          <ul>
+            <li>RDS Proxy の能動的な監視により、DNS 伝播を待たずに接続を即座にリダイレクト</li>
+            <li>RDS Proxy のコネクションプーリング機能と Blue/Green Deployments の切り替え機能が統合され、接続管理が最適化</li>
+            <li>既存のアプリケーションコードやドライバー設定を変更せずに復旧高速化を実現</li>
+          </ul>
+        </div>
+        <div class="cons-card">
+          <h3>⚠️ 制限事項・考慮点</h3>
+          <p style="font-size:13px; font-weight:600; color:var(--aws-red); margin-bottom:8px;">制限事項</p>
+          <ul>
+            <li>シングルリージョン構成のみサポート (マルチリージョン構成は対象外)</li>
+            <li>RDS Proxy の利用に追加料金が発生 (vCPU あたりの時間課金)</li>
+            <li>RDS Proxy がサポートする DB エンジンに限定</li>
+          </ul>
+          <p style="font-size:13px; font-weight:600; color:var(--aws-red); margin: 12px 0 8px 0;">考慮すべき点</p>
+          <ul>
+            <li>RDS Proxy を経由しない直接接続のアプリケーションは従来通り DNS 伝播の遅延が発生</li>
+            <li>RDS Proxy エンドポイントを使用するようアプリケーションの接続先を事前に変更しておく必要がある</li>
+            <li>スイッチオーバー中は短時間のダウンタイムが発生する可能性がある (完全にゼロではない)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+      <div class="usecase-cards">
+        <div class="usecase-card">
+          <div class="usecase-card-title">🔄 データベースメジャーバージョンアップグレード</div>
+          <p class="scenario">本番環境の MySQL 5.7 から MySQL 8.0 へのメジャーバージョンアップグレードを実施。アプリケーションのダウンタイムを最小限に抑えつつ、安全にアップグレードを完了したいケース。</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">MySQL メジャーバージョンアップグレード</span>
+            </div>
+            <pre><code class="language-bash"># Blue/Green Deployment で MySQL 8.0 の Green 環境を作成
+aws rds create-blue-green-deployment \
+    --blue-green-deployment-name mysql-upgrade \
+    --source arn:aws:rds:us-east-1:123456789012:db:prod-mysql57 \
+    --target-engine-version 8.0.35 \
+    --region us-east-1
+
+# Green 環境でのテスト完了後にスイッチオーバー
+aws rds switchover-blue-green-deployment \
+    --blue-green-deployment-identifier mysql-upgrade \
+    --region us-east-1</code></pre>
+          </div>
+          <div class="effect"><strong>効果:</strong> RDS Proxy が接続を即座にリダイレクトするため、メジャーバージョンアップグレードのスイッチオーバー時のアプリケーション復旧時間を大幅に短縮。DNS 伝播待ちが不要になり、ダウンタイムを数秒レベルに抑制。</div>
+        </div>
+
+        <div class="usecase-card">
+          <div class="usecase-card-title">⚙️ パラメータグループの変更適用</div>
+          <p class="scenario">パフォーマンスチューニングのために、本番データベースのパラメータグループを変更する必要がある。直接変更はリスクが高いため、Blue/Green Deployments でテストしてから適用したいケース。</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">パラメータグループの変更適用</span>
+            </div>
+            <pre><code class="language-bash"># 新しいパラメータグループを指定して Green 環境を作成
+aws rds create-blue-green-deployment \
+    --blue-green-deployment-name param-update \
+    --source arn:aws:rds:us-east-1:123456789012:db:prod-db \
+    --target-db-parameter-group-name optimized-params \
+    --region us-east-1
+
+# パフォーマンステスト後にスイッチオーバー
+aws rds switchover-blue-green-deployment \
+    --blue-green-deployment-identifier param-update \
+    --region us-east-1</code></pre>
+          </div>
+          <div class="effect"><strong>効果:</strong> パラメータ変更を安全にテストし、問題がなければ即座にスイッチオーバー。RDS Proxy により接続の中断を最小限に抑え、ユーザーへの影響をほぼゼロに。</div>
+        </div>
+
+        <div class="usecase-card">
+          <div class="usecase-card-title">📝 スキーマ変更のゼロダウンタイムデプロイ</div>
+          <p class="scenario">アプリケーションの新機能リリースに伴い、テーブルスキーマの変更が必要。大規模なテーブルに対する ALTER TABLE は長時間のロックが発生するため、Blue/Green Deployments で事前にスキーマ変更を適用した Green 環境を準備するケース。</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">スキーマ変更のデプロイ</span>
+            </div>
+            <pre><code class="language-bash"># Green 環境を作成
+aws rds create-blue-green-deployment \
+    --blue-green-deployment-name schema-migration \
+    --source arn:aws:rds:us-east-1:123456789012:db:prod-db \
+    --region us-east-1
+
+# Green 環境でスキーマ変更を実行後、スイッチオーバー
+aws rds switchover-blue-green-deployment \
+    --blue-green-deployment-identifier schema-migration \
+    --region us-east-1</code></pre>
+          </div>
+          <div class="effect"><strong>効果:</strong> スキーマ変更が事前に適用された Green 環境へ RDS Proxy 経由で即座に切り替え。アプリケーションは接続先の変更を意識することなく、新しいスキーマを使用するデータベースにシームレスに接続。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💲 料金</h2>
+      <p>RDS Proxy と Blue/Green Deployments の統合自体に追加料金はかかりませんが、それぞれのサービス利用に対して料金が発生します。</p>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>項目</th>
+              <th>月額料金 (概算)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>RDS Proxy (db.m5.large, 2 vCPU)</td>
+              <td>約 $21.60/月 ($0.015/vCPU/時間 x 2 vCPU x 720 時間)</td>
+            </tr>
+            <tr>
+              <td>Green 環境 (db.m5.large, スイッチオーバーまで)</td>
+              <td>Blue 環境と同等のインスタンス料金</td>
+            </tr>
+            <tr>
+              <td>Blue/Green Deployment 作成</td>
+              <td>追加料金なし (Green 環境のリソース料金のみ)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pricing-note">
+        <ul>
+          <li><strong>RDS Proxy</strong>: vCPU あたり $0.015/時間 (リージョンにより異なる)</li>
+          <li><strong>Green 環境</strong>: スイッチオーバーまでの期間、Blue 環境と同等のインスタンスおよびストレージ料金が発生</li>
+          <li><strong>スイッチオーバー後の Blue 環境</strong>: 不要になった場合は削除してコストを削減</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Regions -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>RDS Proxy が利用可能な全ての商用 AWS リージョンで提供されています。主なリージョンは以下の通りです。</p>
+      <div class="region-badges">
+        <div class="region-badge">
+          <div class="region-name">🇺🇸 米国東部 バージニア北部</div>
+          <div class="region-code">us-east-1</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇺🇸 米国東部 オハイオ</div>
+          <div class="region-code">us-east-2</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇺🇸 米国西部 北カリフォルニア</div>
+          <div class="region-code">us-west-1</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇺🇸 米国西部 オレゴン</div>
+          <div class="region-code">us-west-2</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇯🇵 東京</div>
+          <div class="region-code">ap-northeast-1</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇰🇷 ソウル</div>
+          <div class="region-code">ap-northeast-2</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇯🇵 大阪</div>
+          <div class="region-code">ap-northeast-3</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇸🇬 シンガポール</div>
+          <div class="region-code">ap-southeast-1</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇦🇺 シドニー</div>
+          <div class="region-code">ap-southeast-2</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇮🇳 ムンバイ</div>
+          <div class="region-code">ap-south-1</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇮🇪 アイルランド</div>
+          <div class="region-code">eu-west-1</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇬🇧 ロンドン</div>
+          <div class="region-code">eu-west-2</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇫🇷 パリ</div>
+          <div class="region-code">eu-west-3</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇩🇪 フランクフルト</div>
+          <div class="region-code">eu-central-1</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇸🇪 ストックホルム</div>
+          <div class="region-code">eu-north-1</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇨🇦 カナダ 中部</div>
+          <div class="region-code">ca-central-1</div>
+        </div>
+        <div class="region-badge">
+          <div class="region-name">🇧🇷 サンパウロ</div>
+          <div class="region-code">sa-east-1</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div class="related-card">
+        <div class="related-card-title">🔵🟢 Amazon RDS Blue/Green Deployments</div>
+        <p>本番環境に影響を与えずにデータベース変更をテスト・検証するためのフルマネージドなステージング環境機能。</p>
+      </div>
+      <div class="related-card">
+        <div class="related-card-title">🔌 Amazon RDS Proxy</div>
+        <p>データベース接続のプーリングと管理を行うフルマネージドプロキシ。接続の効率化、フェイルオーバー時間の短縮に貢献。</p>
+      </div>
+      <div class="related-card">
+        <div class="related-card-title">⚡ Amazon Aurora</div>
+        <p>MySQL および PostgreSQL 互換のクラウドネイティブリレーショナルデータベース。Blue/Green Deployments と RDS Proxy の両方をサポート。</p>
+      </div>
+      <div class="related-card">
+        <div class="related-card-title">🔐 AWS Secrets Manager</div>
+        <p>RDS Proxy の認証情報管理に使用。データベースのクレデンシャルを安全に保存・ローテーション。</p>
+      </div>
+    </div>
+
+    <!-- Reference Links -->
+    <div class="section">
+      <h2>📚 参考リンク</h2>
+      <ul class="links-list">
+        <li>📎 <a href="https://aws.amazon.com/about-aws/whats-new/2026/04/rds-proxy-blue-green/" target="_blank" rel="noopener noreferrer">公式発表 - What's New</a></li>
+        <li>📖 <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/blue-green-deployments.html" target="_blank" rel="noopener noreferrer">Amazon RDS Blue/Green Deployments ドキュメント</a></li>
+        <li>📖 <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy.html" target="_blank" rel="noopener noreferrer">Amazon RDS Proxy ドキュメント</a></li>
+        <li>💲 <a href="https://aws.amazon.com/rds/proxy/pricing/" target="_blank" rel="noopener noreferrer">Amazon RDS Proxy 料金ページ</a></li>
+        <li>💲 <a href="https://aws.amazon.com/rds/pricing/" target="_blank" rel="noopener noreferrer">Amazon RDS 料金ページ</a></li>
+      </ul>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典: <a href="https://aws.amazon.com/about-aws/whats-new/2026/04/rds-proxy-blue-green/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/04/rds-proxy-blue-green/</a></p>
+      <p style="margin-top:6px;">Generated on 2026-04-09 | AWS News Infographic</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
