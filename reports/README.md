@@ -5,11 +5,18 @@
 
 ## 2026 年
 
+- [2026-04-10 - AWS Backup - Amazon FSx サポートの 5 リージョン追加およびクロスリージョン・クロスアカウントコピーの 14 リージョン拡張](2026/2026-04-10-backup-extends-fsx-support.md)
+- [2026-04-10 - AWS Billing and Cost Management Dashboards - スケジュールメール配信](2026/2026-04-10-aws-billing-and-cost-management-dashboards-scheduled-email-delivery.md)
+- [2026-04-10 - Amazon FSx for NetApp ONTAP - 第 2 世代ファイルシステムが 4 つの追加リージョンで利用可能に](2026/2026-04-10-second-gen-amazon-fsx-ontap-regions.md)
+- [2026-04-09 - Amazon OpenSearch Serverless - Zstandard (zstd) インデックス圧縮サポート](2026/2026-04-09-amazon-opensearch-serverless-supports-zstandard-index-compression.md)
+- [2026-04-09 - Amazon Timestream for InfluxDB - カスタマー定義メンテナンスウィンドウのサポート](2026/2026-04-09-timestream-influxdb-maintenance-windows.md)
+- [2026-04-09 - AWS Private CA - AWS RAM カスタマーマネージドアクセス許可のサポート](2026/2026-04-09-aws-private-ca-customer-managed-permissions.md)
 - [2026-04-09 - Amazon Bedrock AgentCore - AWS Agent Registry のプレビュー提供開始](2026/2026-04-09-aws-agent-registry-in-agentcore-preview.md)
 - [2026-04-09 - Amazon EC2 Capacity Manager - タグベースディメンションのサポート](2026/2026-04-09-ec2-capacity-manager-tag-based-dimensions.md)
 - [2026-04-09 - Amazon RDS - Blue/Green Deployments の Amazon RDS Proxy サポート](2026/2026-04-09-rds-proxy-blue-green.md)
 - [2026-04-09 - Amazon S3 Lifecycle - レプリケーション失敗オブジェクトに対するアクションの一時停止](2026/2026-04-09-s3-lifecycle-pauses-actions-on-objects.md)
 - [2026-04-09 - AWS Marketplace - Discovery API](2026/2026-04-09-aws-marketplace-discovery-api.md)
+- [2026-04-09 - Amazon Bedrock - IAM ユーザー・ロール別のコスト配分が可能に](2026/2026-04-09-bedrock-iam-cost-allocation.md)
 - [2026-04-09 - Amazon OpenSearch Service - Managed Prometheus 統合とエージェントトレーシング](2026/2026-04-09-opensearch-managed-prometheus-agent-tracing.md)
 - [2026-04-08 - Amazon SageMaker HyperPod - 分散トレーニング向けギャングスケジューリング](2026/2026-04-08-sagemaker-hyperpod-gang-scheduling.md)
 - [2026-04-08 - Oracle Database@AWS - 12 AWS リージョンでの提供](2026/2026-04-08-oracle-database-aws-available-twelve-regions.md)

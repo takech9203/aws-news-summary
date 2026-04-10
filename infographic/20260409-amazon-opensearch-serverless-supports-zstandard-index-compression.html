@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon OpenSearch Serverless - Zstandard (zstd) インデックス圧縮サポート</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      margin-bottom: 32px;
+      border-bottom: 3px solid var(--aws-orange);
+      padding-bottom: 24px;
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      line-height: 1.3;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .date-badge {
+      background: var(--aws-dark-squid);
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      color: var(--aws-orange);
+      white-space: nowrap;
+    }
+
+    /* Section */
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 12px;
+      margin-top: 20px;
+    }
+
+    p {
+      margin-bottom: 12px;
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-card, .after-card {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+    }
+
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+    }
+
+    .before-card .ba-label {
+      color: var(--aws-red);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .after-card .ba-label {
+      color: var(--aws-green);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .ba-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .ba-icon {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* Feature Cards */
+    .feature-cards {
+      display: grid;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .feature-card-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      font-size: 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    /* Tables */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    thead th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      font-weight: 600;
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 2px solid var(--aws-orange);
+      white-space: nowrap;
+    }
+
+    tbody td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--aws-light-gray);
+    }
+
+    tbody tr:hover {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    /* Use Case Cards */
+    .usecase-cards {
+      display: grid;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .usecase-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.08), rgba(255, 153, 0, 0.02));
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .usecase-title {
+      font-weight: 600;
+      color: var(--aws-orange);
+      font-size: 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .usecase-scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 12px;
+    }
+
+    .usecase-effect {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      background: rgba(29, 129, 2, 0.08);
+      border-left: 3px solid var(--aws-green);
+      padding: 10px 14px;
+      border-radius: 0 6px 6px 0;
+      margin-top: 12px;
+    }
+
+    .usecase-config {
+      font-size: 13px;
+      color: var(--aws-teal);
+      margin-top: 8px;
+    }
+
+    /* Merit / Demerit */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .merit-card {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .merit-card.positive {
+      background: rgba(29, 129, 2, 0.08);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+    }
+
+    .merit-card.negative {
+      background: rgba(209, 50, 18, 0.08);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+    }
+
+    .merit-title {
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .merit-card.positive .merit-title { color: var(--aws-green); }
+    .merit-card.negative .merit-title { color: var(--aws-red); }
+
+    .merit-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .merit-icon {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* Pricing */
+    .pricing-note {
+      background: rgba(0, 161, 201, 0.1);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .pricing-note strong {
+      color: var(--aws-teal);
+    }
+
+    /* Related Services */
+    .related-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .related-item {
+      background: var(--aws-dark-squid);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 14px;
+    }
+
+    .related-item strong {
+      color: var(--aws-white);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    /* Region badge */
+    .region-badge {
+      display: inline-block;
+      background: rgba(140, 79, 255, 0.15);
+      border: 1px solid rgba(140, 79, 255, 0.3);
+      padding: 8px 20px;
+      border-radius: 20px;
+      color: var(--aws-purple);
+      font-weight: 600;
+      font-size: 15px;
+      margin-top: 8px;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code blocks */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    .source-list {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0;
+    }
+
+    .source-list li {
+      margin: 6px 0;
+    }
+
+    /* Check/Cross items */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .check-icon { color: var(--aws-green); flex-shrink: 0; }
+    .cross-icon { color: var(--aws-red); flex-shrink: 0; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 { font-size: 24px; }
+      .before-after, .merit-grid, .related-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .stat-number { font-size: 28px; }
+    }
+
+    @media (max-width: 480px) {
+      body { padding: 12px; }
+      .section { padding: 16px; }
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-top">
+        <div>
+          <span class="service-badge">Amazon OpenSearch Serverless</span>
+          <h1>Zstandard (zstd) インデックス圧縮サポート</h1>
+          <p class="subtitle">データ集約型ワークロードのストレージコストを最大 32% 削減する新しい圧縮コーデック</p>
+        </div>
+        <span class="date-badge">2026-04-09</span>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number">32%</div>
+        <div class="stat-label">最大インデックスサイズ削減</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">2</div>
+        <div class="stat-label">圧縮モード (zstd / zstd_no_dict)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">1-6</div>
+        <div class="stat-label">調整可能な圧縮レベル</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">$0</div>
+        <div class="stat-label">追加料金なし</div>
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon OpenSearch Serverless で <span class="highlight">Zstandard (zstd)</span> コーデックによるインデックス圧縮がサポートされました。デフォルトの LZ4 コーデックと比較して最大 32% のインデックスサイズ削減が可能となり、大規模なログ分析、オブザーバビリティパイプライン、時系列ワークロードにおけるマネージドストレージコストを低減できます。</p>
+      <p><span class="highlight">zstd</span> と <span class="highlight">zstd_no_dict</span> の 2 つのモードが提供され、圧縮レベルを調整することでストレージ効率とパフォーマンスのトレードオフを柔軟に制御できます。</p>
+
+      <h3>Before / After</h3>
+      <div class="before-after">
+        <div class="before-card">
+          <div class="ba-label">&#10060; アップデート前</div>
+          <div class="ba-item"><span class="ba-icon">&#10060;</span><span>デフォルトの LZ4 コーデックのみ使用可能で、インデックス圧縮方式を選択できなかった</span></div>
+          <div class="ba-item"><span class="ba-icon">&#10060;</span><span>大規模ログ / 時系列ワークロードでインデックスサイズがストレージコストの主要因</span></div>
+          <div class="ba-item"><span class="ba-icon">&#10060;</span><span>ストレージコストとクエリパフォーマンスのトレードオフを細かく制御する手段がなかった</span></div>
+        </div>
+        <div class="after-card">
+          <div class="ba-label">&#9989; アップデート後</div>
+          <div class="ba-item"><span class="ba-icon">&#9989;</span><span>Zstandard コーデックで LZ4 比最大 32% のインデックスサイズ削減が可能に</span></div>
+          <div class="ba-item"><span class="ba-icon">&#9989;</span><span>zstd / zstd_no_dict の 2 モードから用途に応じた圧縮方式を選択可能</span></div>
+          <div class="ba-item"><span class="ba-icon">&#9989;</span><span>圧縮レベル調整でストレージ効率とパフォーマンスのバランスを柔軟に制御</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>&#128396; アーキテクチャ図</h2>
+      <p>データ取り込みからコーデック選択、圧縮レベル調整、インデックスストレージへの保存、そしてクエリ処理までのデータフローを示しています。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Ingestion["&#128225; データ取り込み"]
+        direction LR
+        Logs["&#128203; ログデータ"]
+        TimeSeries["&#128200; 時系列データ"]
+        Observability["&#128269; オブザーバビリティ<br/>パイプライン"]
+        Logs ~~~ TimeSeries ~~~ Observability
+    end
+
+    subgraph Serverless["&#9729;&#65039; Amazon OpenSearch Serverless"]
+        direction LR
+        subgraph CodecSelection["&#9881;&#65039; コーデック選択"]
+            direction LR
+            LZ4["&#128309; LZ4<br/>デフォルト<br/>高速圧縮 / 展開"]
+            Zstd["&#128994; zstd<br/>辞書ベース圧縮<br/>最大 32% 削減"]
+            ZstdNoDict["&#128993; zstd_no_dict<br/>辞書なし圧縮"]
+            LZ4 ~~~ Zstd ~~~ ZstdNoDict
+        end
+
+        subgraph CompressionLevel["&#128202; 圧縮レベル調整"]
+            direction LR
+            Low["レベル 1<br/>高速 / 適度な圧縮"]
+            High["レベル 6<br/>低速 / 最大圧縮"]
+            Low ~~~ High
+        end
+
+        Index[("&#128452;&#65039; インデックス<br/>ストレージ")]
+    end
+
+    subgraph Query["&#128270; クエリ処理"]
+        Search["&#128269; 検索クエリ"]
+        Analytics["&#128202; 分析クエリ"]
+    end
+
+    Ingestion -->|データ取り込み| CodecSelection
+    CodecSelection --> CompressionLevel
+    CompressionLevel -->|圧縮済みデータ| Index
+    Index -->|展開 / 検索| Query
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class Serverless cloud
+    class Ingestion,Query cloud
+    class CodecSelection,CompressionLevel layer
+    class LZ4,Zstd,ZstdNoDict compute
+    class Low,High internal
+    class Index database
+    class Logs,TimeSeries,Observability input
+    class Search,Analytics process
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>&#9889; 主要機能</h2>
+      <div class="feature-cards">
+        <div class="feature-card">
+          <div class="feature-card-title">&#128230; Zstandard コーデックサポート</div>
+          <p>デフォルトの LZ4 コーデックに加え、Zstandard (zstd) コーデックによるインデックス圧縮が利用可能に。LZ4 と比較して<span class="highlight">最大 32% のインデックスサイズ削減</span>を実現し、データ集約型ワークロードにおけるマネージドストレージコストの低減に寄与します。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">&#128256; 2 つの圧縮モード</div>
+          <p><strong style="color: var(--aws-white);">zstd</strong>: 辞書ベースの Zstandard 圧縮。繰り返しパターンの多いデータに対して高い圧縮効率を発揮します。</p>
+          <p><strong style="color: var(--aws-white);">zstd_no_dict</strong>: 辞書を使用しない Zstandard 圧縮。辞書構築のオーバーヘッドを回避しつつ Zstandard の圧縮効率を活用します。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">&#128295; 圧縮レベルの柔軟な調整</div>
+          <p><strong style="color: var(--aws-white);">低い圧縮レベル (レベル 1)</strong>: インデクシングスループットとクエリレイテンシーへの影響を最小限に抑えつつ、有意なストレージ削減を実現します。</p>
+          <p><strong style="color: var(--aws-white);">高い圧縮レベル (レベル 6)</strong>: インデクシング速度は低下するが、圧縮率を最大化。ワークロードの特性に応じたバランス制御が可能です。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>&#128736; 技術仕様</h2>
+
+      <h3>圧縮コーデック比較</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>項目</th>
+              <th>LZ4 (デフォルト)</th>
+              <th>zstd</th>
+              <th>zstd_no_dict</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>圧縮方式</td>
+              <td>ブロック圧縮</td>
+              <td>辞書ベース Zstandard 圧縮</td>
+              <td>辞書なし Zstandard 圧縮</td>
+            </tr>
+            <tr>
+              <td>インデックスサイズ削減</td>
+              <td>基準値</td>
+              <td><span class="highlight">最大 32% 削減</span></td>
+              <td>LZ4 より削減</td>
+            </tr>
+            <tr>
+              <td>圧縮速度</td>
+              <td>高速</td>
+              <td>レベルに依存</td>
+              <td>レベルに依存</td>
+            </tr>
+            <tr>
+              <td>展開速度</td>
+              <td>高速</td>
+              <td>LZ4 に近い</td>
+              <td>LZ4 に近い</td>
+            </tr>
+            <tr>
+              <td>推奨用途</td>
+              <td>汎用 / 低レイテンシー重視</td>
+              <td>大規模ログ / 時系列データ</td>
+              <td>辞書構築オーバーヘッド回避</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>圧縮レベルの特性</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>圧縮レベル</th>
+              <th>圧縮率</th>
+              <th>インデクシング速度</th>
+              <th>クエリレイテンシー</th>
+              <th>推奨シナリオ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="highlight">レベル 1</span></td>
+              <td>適度</td>
+              <td>高速</td>
+              <td>低影響</td>
+              <td>リアルタイムログ取り込み</td>
+            </tr>
+            <tr>
+              <td><span class="highlight">レベル 3</span></td>
+              <td>中程度</td>
+              <td>中程度</td>
+              <td>低~中影響</td>
+              <td>バッチ取り込みとクエリの均衡</td>
+            </tr>
+            <tr>
+              <td><span class="highlight">レベル 6</span></td>
+              <td>最大</td>
+              <td>低速</td>
+              <td>中影響</td>
+              <td>アーカイブ / コスト最適化重視</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Configuration -->
+    <div class="section">
+      <h2>&#128268; 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">&#10003;</span><span>Amazon OpenSearch Serverless コレクションが作成済みであること</span></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><span>適切な IAM ポリシーでコレクションへのアクセスが許可されていること</span></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><span>OpenSearch Serverless のデータアクセスポリシーが設定済みであること</span></div>
+
+      <h3>ステップ 1: zstd コーデックでインデックスを作成</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">zstd コーデック (レベル 3) でインデックスを作成</span>
+        </div>
+        <pre><code class="language-bash"># zstd コーデック (レベル 3) でインデックスを作成
+curl -X PUT "https://&lt;collection-endpoint&gt;/my-logs-index" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "settings": {
+      "index": {
+        "codec": "zstd",
+        "codec.compression_level": 3
+      }
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "message": { "type": "text" },
+        "level": { "type": "keyword" },
+        "service": { "type": "keyword" }
+      }
+    }
+  }'</code></pre>
+      </div>
+
+      <h3>ステップ 2: zstd_no_dict モードでの作成</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">zstd_no_dict コーデック (レベル 1) でインデックスを作成</span>
+        </div>
+        <pre><code class="language-bash"># zstd_no_dict コーデック (レベル 1) でインデックスを作成
+curl -X PUT "https://&lt;collection-endpoint&gt;/my-timeseries-index" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "settings": {
+      "index": {
+        "codec": "zstd_no_dict",
+        "codec.compression_level": 1
+      }
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "metric_name": { "type": "keyword" },
+        "value": { "type": "double" }
+      }
+    }
+  }'</code></pre>
+      </div>
+
+      <h3>ステップ 3: インデックス設定の確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">インデックスの圧縮設定を確認</span>
+        </div>
+        <pre><code class="language-bash"># インデックスの圧縮設定を確認
+curl -X GET "https://&lt;collection-endpoint&gt;/my-logs-index/_settings?pretty"</code></pre>
+      </div>
+
+      <h3>インデックス設定 (JSON)</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">Zstandard 圧縮のインデックス設定例</span>
+        </div>
+        <pre><code class="language-json">{
+  "settings": {
+    "index": {
+      "codec": "zstd",
+      "codec.compression_level": 3
+    }
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Merits & Demerits -->
+    <div class="section">
+      <h2>&#128176; メリット / &#9888; デメリット</h2>
+      <div class="merit-grid">
+        <div class="merit-card positive">
+          <div class="merit-title">&#9989; ビジネス面のメリット</div>
+          <div class="merit-item"><span class="merit-icon">&#10003;</span><span>LZ4 比最大 32% のインデックスサイズ削減でマネージドストレージコストを大幅に低減</span></div>
+          <div class="merit-item"><span class="merit-icon">&#10003;</span><span>圧縮レベル調整でワークロード特性に応じた最適なコストパフォーマンスを実現</span></div>
+          <div class="merit-item"><span class="merit-icon">&#10003;</span><span>ログ分析やオブザーバビリティ等のデータ集約型ワークロードで TCO を改善</span></div>
+
+          <div class="merit-title" style="margin-top: 16px;">&#9889; 技術面のメリット</div>
+          <div class="merit-item"><span class="merit-icon">&#10003;</span><span>圧縮レベルの柔軟な設定で、ユースケースに応じた最適なバランスを選択可能</span></div>
+          <div class="merit-item"><span class="merit-icon">&#10003;</span><span>辞書ベース / 辞書なしの 2 モードでデータ特性に最適な圧縮方式を適用可能</span></div>
+          <div class="merit-item"><span class="merit-icon">&#10003;</span><span>既存のクエリやアプリケーションコードの変更は不要</span></div>
+        </div>
+        <div class="merit-card negative">
+          <div class="merit-title">&#9888; 制限事項</div>
+          <div class="merit-item"><span class="merit-icon">&#10060;</span><span>圧縮コーデックはインデックス作成時に設定が必要。既存インデックスのコーデックを後から変更することはできない</span></div>
+          <div class="merit-item"><span class="merit-icon">&#10060;</span><span>高い圧縮レベルではインデクシングスループットが低下するため、リアルタイム取り込みでは注意が必要</span></div>
+          <div class="merit-item"><span class="merit-icon">&#10060;</span><span>Zstandard 圧縮の展開処理がクエリレイテンシーに若干の影響を与える可能性がある</span></div>
+
+          <div class="merit-title" style="margin-top: 16px;">&#128161; 考慮すべき点</div>
+          <div class="merit-item"><span class="merit-icon">&#9888;</span><span>本番環境への適用前にベンチマークテストを実施することを推奨</span></div>
+          <div class="merit-item"><span class="merit-icon">&#9888;</span><span>データの繰り返しパターンの有無で zstd / zstd_no_dict を選択</span></div>
+          <div class="merit-item"><span class="merit-icon">&#9888;</span><span>ワークロードの SLA 要件を踏まえた圧縮レベル設定が重要</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>&#127919; ユースケース</h2>
+      <div class="usecase-cards">
+        <div class="usecase-card">
+          <div class="usecase-title">&#128203; ユースケース 1: 大規模ログ分析のコスト最適化</div>
+          <div class="usecase-scenario">マイクロサービスアーキテクチャを運用する企業で、1 日あたり数 TB のアプリケーションログを Amazon OpenSearch Serverless に取り込んでいる。ストレージコストが運用コストの大部分を占めており、クエリパフォーマンスを維持しつつコストを削減したい。</div>
+          <div class="usecase-config"><strong>推奨設定:</strong> codec: zstd, compression_level: 3</div>
+          <div class="usecase-effect"><strong>&#9989; 効果:</strong> ログデータは繰り返しパターンが多いため、zstd の辞書ベース圧縮により最大 32% のインデックスサイズ削減が期待できる。圧縮レベル 3 は圧縮率とインデクシング速度のバランスが良く、日次のログ取り込みにおいて十分なスループットを維持しつつストレージコストを大幅に削減。</div>
+        </div>
+        <div class="usecase-card">
+          <div class="usecase-title">&#128269; ユースケース 2: オブザーバビリティパイプラインの最適化</div>
+          <div class="usecase-scenario">オブザーバビリティパイプラインで大量のメトリクスデータとトレースデータを収集・分析している。データ量の増加に伴いストレージコストが急増しており、特にアクセス頻度が低い過去データの圧縮を強化したい。</div>
+          <div class="usecase-config"><strong>推奨設定:</strong> codec: zstd, compression_level: 6</div>
+          <div class="usecase-effect"><strong>&#9989; 効果:</strong> 高い圧縮レベル (レベル 6) を適用することで圧縮率を最大化してストレージコストを最小限に抑える。アクセス頻度が低い過去データに対しては、インデクシング速度の低下を許容しつつ最大限の圧縮効率を得ることで長期保持コストを大幅に削減。</div>
+        </div>
+        <div class="usecase-card">
+          <div class="usecase-title">&#128200; ユースケース 3: 時系列データの効率的な保存</div>
+          <div class="usecase-scenario">IoT デバイスからのセンサーデータを時系列として Amazon OpenSearch Serverless に格納している。データの取り込みは高頻度で行われるため、インデクシング速度を維持しつつストレージ効率を改善したい。</div>
+          <div class="usecase-config"><strong>推奨設定:</strong> codec: zstd_no_dict, compression_level: 1</div>
+          <div class="usecase-effect"><strong>&#9989; 効果:</strong> zstd_no_dict モードのレベル 1 を使用することで、辞書構築のオーバーヘッドを回避しつつ LZ4 よりも高い圧縮率を実現。高頻度のデータ取り込みに必要なインデクシングスループットを維持しながらストレージ効率を改善。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>&#128176; 料金</h2>
+      <div class="pricing-note">
+        <strong>&#128161; Zstandard コーデックの利用自体には追加料金は発生しません。</strong> Amazon OpenSearch Serverless の既存の料金体系が適用されます。Zstandard 圧縮を適用することでインデックスサイズが削減されるため、マネージドストレージの課金対象データ量が減少し、ストレージコストの直接的な削減につながります。
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>コンポーネント</th>
+              <th>料金体系</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>OpenSearch Compute Units (OCU)</td>
+              <td>コンピューティングリソースに基づく時間課金</td>
+            </tr>
+            <tr>
+              <td>マネージドストレージ</td>
+              <td>保存されたデータ量 (GB) に基づく月額課金</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>&#127758; 利用可能リージョン</h2>
+      <p>Zstandard コーデックサポートは、Amazon OpenSearch Serverless が利用可能な全ての AWS リージョンで本日より提供開始されています。</p>
+      <div style="text-align: center; margin-top: 12px;">
+        <span class="region-badge">&#127758; 全ての AWS リージョンで利用可能</span>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>&#128279; 関連サービス</h2>
+      <div class="related-grid">
+        <div class="related-item">
+          <strong>&#9729;&#65039; Amazon OpenSearch Service</strong>
+          マネージド型の OpenSearch クラスター。プロビジョンドクラスターでも Zstandard 圧縮をサポート。
+        </div>
+        <div class="related-item">
+          <strong>&#128268; Amazon OpenSearch Ingestion</strong>
+          OpenSearch へのデータ取り込みパイプライン。Zstandard 圧縮されたインデックスへの効率的なデータ取り込みに利用可能。
+        </div>
+        <div class="related-item">
+          <strong>&#128230; Amazon S3</strong>
+          Zstandard 圧縮されたデータの長期アーカイブ先として活用可能。
+        </div>
+        <div class="related-item">
+          <strong>&#128202; Amazon CloudWatch</strong>
+          OpenSearch Serverless コレクションのモニタリングに使用。圧縮率やストレージ使用量の推移を監視可能。
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p><strong>&#128206; 出典:</strong></p>
+      <ul class="source-list">
+        <li>&#128279; <a href="https://aws.amazon.com/about-aws/whats-new/2026/04/amazon-opensearch-serverless-supports-zstandard-index-compression/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li>&#128279; <a href="https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless.html" target="_blank" rel="noopener noreferrer">Amazon OpenSearch Serverless ドキュメント</a></li>
+        <li>&#128279; <a href="https://aws.amazon.com/opensearch-service/pricing/" target="_blank" rel="noopener noreferrer">Amazon OpenSearch Service 料金ページ</a></li>
+      </ul>
+      <p style="margin-top: 12px; font-size: 11px; color: rgba(213, 219, 219, 0.6);">Generated on 2026-04-10</p>
+    </footer>
+
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
