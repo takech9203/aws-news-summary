@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon CloudWatch Pipelines - 条件付き処理と Drop Events プロセッサ</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left { flex: 1; min-width: 280px; }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      line-height: 1.3;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+    }
+
+    .header-right {
+      text-align: right;
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Section */
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 10px;
+      margin-top: 16px;
+    }
+
+    p { margin-bottom: 12px; }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-card, .after-card {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+    }
+
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+    }
+
+    .before-card .card-label {
+      color: var(--aws-red);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .after-card .card-label {
+      color: var(--aws-green);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .before-card li, .after-card li {
+      margin-bottom: 8px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .before-card ul, .after-card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .before-card li::before {
+      content: "✗ ";
+      color: var(--aws-red);
+      font-weight: bold;
+    }
+
+    .after-card li::before {
+      content: "✓ ";
+      color: var(--aws-green);
+      font-weight: bold;
+    }
+
+    /* Feature cards */
+    .feature-cards {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 18px 20px;
+      border-left: 4px solid var(--aws-orange);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .feature-card .feature-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      font-size: 16px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feature-card .feature-desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      line-height: 1.6;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* Table */
+    .table-container {
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 2px solid var(--aws-orange);
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--aws-light-gray);
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    /* Use case */
+    .usecase-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.08), rgba(255, 153, 0, 0.02));
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+    }
+
+    .usecase-card h4 {
+      color: var(--aws-orange);
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .usecase-card p {
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .usecase-effect {
+      font-size: 13px;
+      color: var(--aws-green);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Merits/Demerits grid */
+    .merits-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    .merit-group h3 {
+      margin-top: 0;
+      margin-bottom: 12px;
+    }
+
+    .merit-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 10px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .merit-item .icon {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* Pricing */
+    .pricing-note {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pricing-note .icon {
+      font-size: 24px;
+    }
+
+    /* Links */
+    .links-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .link-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .link-item a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .link-item a:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    /* Caution card */
+    .caution-card {
+      background: rgba(209, 50, 18, 0.08);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin-bottom: 10px;
+    }
+
+    .caution-card li {
+      font-size: 14px;
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+
+    .caution-card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .caution-card li::before {
+      content: "⚠ ";
+      color: var(--aws-red);
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Related services */
+    .related-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .related-card {
+      background: rgba(0, 161, 201, 0.08);
+      border: 1px solid rgba(0, 161, 201, 0.25);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+
+    .related-card .related-name {
+      font-weight: 600;
+      color: var(--aws-teal);
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .related-card .related-desc {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      line-height: 1.5;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 { font-size: 24px; }
+      .before-after { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .merits-grid { grid-template-columns: 1fr; }
+      .links-grid { grid-template-columns: 1fr; }
+      .related-grid { grid-template-columns: 1fr; }
+      .header { flex-direction: column; }
+      .header-right { text-align: left; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">Amazon CloudWatch</span>
+        <h1>CloudWatch Pipelines - 条件付き処理と Drop Events プロセッサ</h1>
+        <div class="subtitle">パイプライン内のログ変換処理をより柔軟に制御する新機能</div>
+      </div>
+      <div class="header-right">
+        <div>2026 年 4 月 10 日</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number">21</div>
+        <div class="stat-label">対応プロセッサ種類</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">2</div>
+        <div class="stat-label">条件制御の粒度レベル</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">$0</div>
+        <div class="stat-label">追加コスト</div>
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon CloudWatch Pipelines に<span class="highlight">条件付き処理</span>と新しい<span class="highlight">Drop Events プロセッサ</span>が追加されました。特定の条件に基づいてプロセッサの実行をスキップしたり、不要なログエントリをフィルタリングして除外したりすることが可能になります。</p>
+      <p>条件付き処理は 21 種類のプロセッサで利用でき、<span class="highlight">プロセッサレベルの "run when" 条件</span>と<span class="highlight">エントリレベルの条件</span>の 2 つの粒度で制御が可能です。これらの機能は CloudWatch Pipelines が GA されているすべてのリージョンで追加コストなしで利用可能です。</p>
+    </div>
+
+    <!-- Before/After -->
+    <div class="section">
+      <h2>🔄 Before / After</h2>
+      <div class="before-after">
+        <div class="before-card">
+          <div class="card-label">❌ アップデート前</div>
+          <ul>
+            <li>すべてのプロセッサがすべてのログエントリに対して一律に実行され、条件制御できなかった</li>
+            <li>不要なログエントリをパイプライン内でフィルタリングする手段がなかった</li>
+            <li>ログの種類に基づいて異なる変換を適用するには複数パイプラインが必要だった</li>
+          </ul>
+        </div>
+        <div class="after-card">
+          <div class="card-label">✅ アップデート後</div>
+          <ul>
+            <li>21 種類のプロセッサに条件付き処理を設定でき、実行条件を制御可能に</li>
+            <li>Drop Events プロセッサにより不要なログエントリをパイプライン内で除外可能に</li>
+            <li>単一パイプラインで条件に基づいた柔軟なログ変換が可能になり管理が簡素化</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>CloudWatch Pipelines の条件付き処理フローを示しています。ログソースから取り込まれたデータが各プロセッサの条件に基づいて選択的に処理され、Drop Events プロセッサで不要なエントリが除外された後、宛先に配信されます。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Sources["📥 ログソース"]
+        direction LR
+        CWL["📋 CloudWatch Logs"]
+        S3["🪣 Amazon S3"]
+        CWL ~~~ S3
+    end
+
+    subgraph Pipeline["⚙️ CloudWatch Pipeline"]
+        direction TB
+        Ingest["📨 ログ取り込み"]
+
+        subgraph Processors["🔧 プロセッサチェーン"]
+            direction TB
+            P1["✏️ Add Entries<br/>run when: 条件 A"]
+            P2["🔑 Rename Key<br/>run when: 条件 B"]
+            P3["📝 Grok<br/>エントリレベル条件"]
+            Drop["🗑️ Drop Events<br/>不要エントリ除外"]
+        end
+
+        Ingest --> P1
+        P1 --> P2
+        P2 --> P3
+        P3 --> Drop
+    end
+
+    subgraph Destinations["📤 宛先"]
+        direction LR
+        Dest1["📋 CloudWatch<br/>Logs"]
+        Dest2["🪣 Amazon S3"]
+        Dest3["🔥 Amazon Data<br/>Firehose"]
+        Dest1 ~~~ Dest2 ~~~ Dest3
+    end
+
+    Sources --> Ingest
+    Drop -->|フィルタ済みログ| Destinations
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef error fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+
+    class Sources,Pipeline,Destinations,Processors cloud
+    class CWL,Dest1 internal
+    class S3,Dest2 storage
+    class Ingest,Dest3 compute
+    class P1,P2,P3 process
+    class Drop error
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="feature-cards">
+        <div class="feature-card">
+          <div class="feature-title">🎯 条件付き処理 - プロセッサレベル "run when" 条件</div>
+          <div class="feature-desc">
+            プロセッサ全体の実行をスキップするかどうかを条件で制御できます。21 種類のプロセッサで利用可能で、条件が満たされない場合はプロセッサの処理全体がスキップされ、ログエントリはそのまま次のプロセッサに渡されます。
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">📝 条件付き処理 - エントリレベル条件</div>
+          <div class="feature-desc">
+            個々のログエントリに対してアクションを適用するかどうかを制御できます。同一プロセッサ内でエントリごとに異なる処理を適用可能で、特定のフィールド値やパターンに基づいた精密なフィルタリングが可能です。
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">🗑️ Drop Events プロセッサ</div>
+          <div class="feature-desc">
+            不要なログエントリをパイプラインから完全に除外する新しいプロセッサです。条件に一致するログエントリを宛先に送信せずにドロップし、ログボリュームの削減と下流の処理コスト最適化に有効です。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specifications -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>条件付き処理の仕組み</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>条件タイプ</th>
+              <th>適用レベル</th>
+              <th>動作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="highlight">run when</span></td>
+              <td>プロセッサレベル</td>
+              <td>条件を満たさない場合、プロセッサ全体をスキップ</td>
+            </tr>
+            <tr>
+              <td><span class="highlight">エントリレベル条件</span></td>
+              <td>個別エントリ</td>
+              <td>条件を満たすエントリのみにアクションを適用</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>対応プロセッサ一覧</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>プロセッサ</th>
+              <th>機能概要</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Add Entries</td><td>ログエントリにフィールドを追加</td></tr>
+            <tr><td>Delete Entries</td><td>ログエントリからフィールドを削除</td></tr>
+            <tr><td>Copy Values</td><td>フィールド値を別のフィールドにコピー</td></tr>
+            <tr><td>Grok</td><td>Grok パターンでログをパース</td></tr>
+            <tr><td>Rename Key</td><td>フィールド名を変更</td></tr>
+            <tr><td>その他 16 種類</td><td>各種変換・加工プロセッサ</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>API 変更履歴</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>日付</th>
+              <th>サービス</th>
+              <th>変更内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2026/04/10</td>
+              <td>CloudWatch Observability Admin Service</td>
+              <td>8 updated api methods - マルチリージョンテレメトリ評価とテレメトリ有効化ルールのサポート追加</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Configuration Example -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="merit-item" style="margin-bottom:6px;">
+        <span class="icon">1️⃣</span>
+        <span>AWS アカウントで CloudWatch Pipelines が利用可能なリージョンであること</span>
+      </div>
+      <div class="merit-item" style="margin-bottom:6px;">
+        <span class="icon">2️⃣</span>
+        <span>CloudWatch Pipelines のパイプラインが作成済み、または新規作成予定であること</span>
+      </div>
+      <div class="merit-item" style="margin-bottom:16px;">
+        <span class="icon">3️⃣</span>
+        <span>パイプラインの設定に必要な IAM 権限が付与されていること</span>
+      </div>
+
+      <h3>ステップ 1: 条件付きプロセッサを含むパイプラインの作成</h3>
+      <p style="font-size:14px;">ソースフィールドが "web-server" の場合にのみ、ログエントリに "tier" フィールドを追加するプロセッサを設定します。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">条件付き処理を含むパイプラインを作成</span>
+        </div>
+        <pre><code class="language-bash">aws logs create-pipeline \
+  --pipeline-name "conditional-processing-pipeline" \
+  --log-group-name "/aws/application/my-app" \
+  --processors '[
+    {
+      "type": "AddEntries",
+      "runWhen": {
+        "matchField": "source",
+        "equals": "web-server"
+      },
+      "configuration": {
+        "entries": [
+          {"key": "tier", "value": "frontend"}
+        ]
+      }
+    }
+  ]'</code></pre>
+      </div>
+
+      <h3>ステップ 2: Drop Events プロセッサの追加</h3>
+      <p style="font-size:14px;">DEBUG レベルのログエントリをパイプラインから除外する Drop Events プロセッサを追加します。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Drop Events プロセッサで不要なログを除外</span>
+        </div>
+        <pre><code class="language-bash">aws logs update-pipeline \
+  --pipeline-name "conditional-processing-pipeline" \
+  --processors '[
+    {
+      "type": "AddEntries",
+      "runWhen": {
+        "matchField": "source",
+        "equals": "web-server"
+      },
+      "configuration": {
+        "entries": [
+          {"key": "tier", "value": "frontend"}
+        ]
+      }
+    },
+    {
+      "type": "DropEvents",
+      "configuration": {
+        "condition": {
+          "matchField": "level",
+          "equals": "DEBUG"
+        }
+      }
+    }
+  ]'</code></pre>
+      </div>
+
+      <h3>ステップ 3: コンソールでの設定確認</h3>
+      <p style="font-size:14px;">CloudWatch コンソールの Pipelines セクションからも条件付き処理の設定が可能です。各プロセッサの設定画面で "Run when" 条件を追加し、エントリレベルの条件を個別のアクションに対して設定できます。</p>
+
+      <h3>条件付き処理の設定例 - JSON</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">パイプライン設定例</span>
+        </div>
+        <pre><code class="language-json">{
+  "PipelineName": "my-log-pipeline",
+  "Processors": [
+    {
+      "Type": "AddEntries",
+      "RunWhen": {
+        "MatchField": "source",
+        "Equals": "application"
+      },
+      "Configuration": {
+        "Entries": [
+          {
+            "Key": "environment",
+            "Value": "production"
+          }
+        ]
+      }
+    },
+    {
+      "Type": "DropEvents",
+      "Configuration": {
+        "Condition": {
+          "MatchField": "level",
+          "Equals": "DEBUG"
+        }
+      }
+    }
+  ]
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Merits / Demerits -->
+    <div class="section">
+      <h2>💡 メリットと制約事項</h2>
+      <div class="merits-grid">
+        <div class="merit-group">
+          <h3 style="color: var(--aws-green);">✅ メリット</h3>
+          <h4 style="color: var(--aws-orange); font-size: 14px; margin-top: 10px; margin-bottom: 6px;">ビジネス面</h4>
+          <div class="merit-item">
+            <span class="icon">💰</span>
+            <span>Drop Events プロセッサにより不要なログを除外し、ストレージと分析コストを削減</span>
+          </div>
+          <div class="merit-item">
+            <span class="icon">📈</span>
+            <span>単一パイプラインで条件ベースの柔軟な処理が可能、複数パイプライン管理が不要に</span>
+          </div>
+          <div class="merit-item">
+            <span class="icon">🆓</span>
+            <span>GA 全リージョンで追加料金なしで利用可能</span>
+          </div>
+          <h4 style="color: var(--aws-orange); font-size: 14px; margin-top: 14px; margin-bottom: 6px;">技術面</h4>
+          <div class="merit-item">
+            <span class="icon">🎯</span>
+            <span>プロセッサレベルとエントリレベルの 2 つの粒度できめ細かなログ変換制御が可能</span>
+          </div>
+          <div class="merit-item">
+            <span class="icon">🧩</span>
+            <span>条件分岐を単一パイプラインで処理し、アーキテクチャを簡素化</span>
+          </div>
+          <div class="merit-item">
+            <span class="icon">🔧</span>
+            <span>Add Entries、Grok、Rename Key など 21 種類のプロセッサで条件付き処理が利用可能</span>
+          </div>
+        </div>
+        <div class="merit-group">
+          <h3 style="color: var(--aws-red);">⚠️ 制約事項・注意点</h3>
+          <div class="caution-card" style="margin-top: 10px;">
+            <ul>
+              <li>条件式の種類や複雑さに制限がある可能性 (公式ドキュメントでの確認を推奨)</li>
+              <li>Drop Events でドロップされたログは復元不可、条件設定に注意が必要</li>
+              <li>CloudWatch Pipelines が GA されていないリージョンでは利用不可</li>
+              <li>条件設定ミスで意図しないログが除外される可能性、本番適用前にテスト環境での検証を推奨</li>
+              <li>複雑な条件を多数設定した場合のパフォーマンスへの影響を事前に評価する必要がある</li>
+              <li>既存パイプラインへの追加時は現在の処理フローへの影響を確認すること</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+      <div class="usecase-card">
+        <h4>🗑️ ユースケース 1: 本番環境のデバッグログ除外</h4>
+        <p><strong>シナリオ:</strong> アプリケーションが大量の DEBUG レベルログを出力しており、本番環境ではこれらが不要。ログストレージコストが増大している。</p>
+        <p><strong>実装:</strong> Drop Events プロセッサで <code>level = DEBUG</code> のログをドロップ。</p>
+        <div class="usecase-effect">✅ DEBUG レベルのログがパイプラインで除外され、ログストレージコストの大幅な削減が期待できる。</div>
+      </div>
+      <div class="usecase-card">
+        <h4>🏢 ユースケース 2: マルチテナント環境での条件付きログ加工</h4>
+        <p><strong>シナリオ:</strong> SaaS アプリケーションでテナントごとに異なるログ加工ルールを適用したい。特定テナントのログにのみ追加フィールドを付与し、別テナントにはフィールド名変更を適用する。</p>
+        <p><strong>実装:</strong> AddEntries で <code>tenant_id = tenant-A</code> にフィールド追加、RenameKey で <code>tenant_id = tenant-B</code> にフィールド名変更。</p>
+        <div class="usecase-effect">✅ 単一パイプラインでテナントごとの要件に対応でき、パイプライン管理が大幅に簡素化される。</div>
+      </div>
+      <div class="usecase-card">
+        <h4>🔒 ユースケース 3: セキュリティログの選択的処理</h4>
+        <p><strong>シナリオ:</strong> セキュリティ関連のログのみに Grok パターンを適用して構造化し、それ以外はそのまま通過。ヘルスチェックのログは不要なので除外したい。</p>
+        <p><strong>実装:</strong> Grok プロセッサに <code>log_type = security</code> の run when 条件を設定。Drop Events で <code>request_path = /health</code> を除外。</p>
+        <div class="usecase-effect">✅ セキュリティログのみが構造化されて分析しやすくなり、ヘルスチェックログの除外によりノイズが削減される。</div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金情報</h2>
+      <div class="pricing-note">
+        <span class="icon">🆓</span>
+        <span>条件付き処理と Drop Events プロセッサは、CloudWatch Pipelines の既存料金に含まれており、追加コストは発生しません。CloudWatch Pipelines の料金は取り込みデータ量に基づく従量課金です。</span>
+      </div>
+      <div class="table-container" style="margin-top:16px;">
+        <table>
+          <thead>
+            <tr>
+              <th>項目</th>
+              <th>月額料金 (概算)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>CloudWatch Pipelines データ取り込み</td><td>リージョンおよび使用量に基づく従量課金</td></tr>
+            <tr><td>条件付き処理</td><td style="color: var(--aws-green); font-weight: 600;">追加料金なし</td></tr>
+            <tr><td>Drop Events プロセッサ</td><td style="color: var(--aws-green); font-weight: 600;">追加料金なし</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>🌏 利用可能リージョン</h2>
+      <p>CloudWatch Pipelines が一般提供 (GA) されているすべてのリージョンで利用可能です。具体的なリージョンの一覧については <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CloudWatch-Logs-Transformation.html" target="_blank" style="color: var(--aws-teal);">CloudWatch Pipelines のドキュメント</a>を参照してください。</p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div class="related-grid">
+        <div class="related-card">
+          <div class="related-name">📋 Amazon CloudWatch Logs</div>
+          <div class="related-desc">CloudWatch Pipelines のソースおよび宛先として利用されるログ管理サービス。パイプラインはロググループに対して設定される。</div>
+        </div>
+        <div class="related-card">
+          <div class="related-name">⚙️ Amazon CloudWatch Pipelines</div>
+          <div class="related-desc">ログデータの変換・加工・ルーティングを行うサービス。今回のアップデートで条件付き処理が追加された。</div>
+        </div>
+        <div class="related-card">
+          <div class="related-name">🔥 Amazon Data Firehose</div>
+          <div class="related-desc">Pipelines の宛先の 1 つとして利用可能。条件付き処理でフィルタリングされたログを外部システムに配信可能。</div>
+        </div>
+        <div class="related-card">
+          <div class="related-name">🪣 Amazon S3</div>
+          <div class="related-desc">Pipelines の宛先の 1 つ。Drop Events で不要ログを除外することで S3 へのストレージコストを削減可能。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reference Links -->
+    <div class="section">
+      <h2>📎 参考リンク</h2>
+      <div class="links-grid">
+        <div class="link-item">
+          <span>📢</span>
+          <a href="https://aws.amazon.com/about-aws/whats-new/2026/04/amazon-cloudwatch-pipelines-conditional/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a>
+        </div>
+        <div class="link-item">
+          <span>📖</span>
+          <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CloudWatch-Logs-Transformation.html" target="_blank" rel="noopener noreferrer">CloudWatch Pipelines ドキュメント</a>
+        </div>
+        <div class="link-item">
+          <span>💰</span>
+          <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer">Amazon CloudWatch 料金ページ</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典: <a href="https://aws.amazon.com/about-aws/whats-new/2026/04/amazon-cloudwatch-pipelines-conditional/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/04/amazon-cloudwatch-pipelines-conditional/</a></p>
+      <p style="margin-top: 8px;">Generated on 2026-04-11</p>
+    </footer>
+
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

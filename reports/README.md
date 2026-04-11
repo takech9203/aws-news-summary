@@ -6,8 +6,15 @@
 ## 2026 年
 
 - [2026-04-10 - AWS Backup - Amazon FSx サポートの 5 リージョン追加およびクロスリージョン・クロスアカウントコピーの 14 リージョン拡張](2026/2026-04-10-backup-extends-fsx-support.md)
+- [2026-04-10 - Amazon EC2 - X8i インスタンスのヨーロッパ (パリ) リージョン提供開始](2026/2026-04-10-amazon-ec2-x8i-instances-CDG-region.md)
+- [2026-04-10 - Amazon RDS for SQL Server - 最新 CU および GDR セキュリティアップデート](2026/2026-04-10-amazon-rds-supports-latest-cu-gdr-updates-microsoft-sq-server.md)
+- [2026-04-10 - Kiro CLI - カスタムエージェントによる SOC 2 コンプライアンス自動化](2026/2026-04-10-kiro-automating-soc-2-compliance.md)
 - [2026-04-10 - AWS Billing and Cost Management Dashboards - スケジュールメール配信](2026/2026-04-10-aws-billing-and-cost-management-dashboards-scheduled-email-delivery.md)
+- [2026-04-10 - AWS Deadline Cloud - 複数リージョンでのモニター作成サポート](2026/2026-04-10-deadline-cloud-monitor-creation.md)
 - [2026-04-10 - Amazon FSx for NetApp ONTAP - 第 2 世代ファイルシステムが 4 つの追加リージョンで利用可能に](2026/2026-04-10-second-gen-amazon-fsx-ontap-regions.md)
+- [2026-04-10 - Amazon CloudWatch Pipelines - コンプライアンスおよびガバナンス機能の追加](2026/2026-04-10-cloudwatch-pipelines-compliance-governance.md)
+- [2026-04-10 - Amazon CloudWatch Pipelines - 条件付き処理と Drop Events プロセッサのサポート](2026/2026-04-10-amazon-cloudwatch-pipelines-conditional.md)
+- [2026-04-10 - AWS RTB Fabric - リアルタイムビディングワークロード向けヘルスチェック機能](2026/2026-04-10-aws-rtb-fabric-health-checks.md)
 - [2026-04-09 - Amazon OpenSearch Serverless - Zstandard (zstd) インデックス圧縮サポート](2026/2026-04-09-amazon-opensearch-serverless-supports-zstandard-index-compression.md)
 - [2026-04-09 - Amazon Timestream for InfluxDB - カスタマー定義メンテナンスウィンドウのサポート](2026/2026-04-09-timestream-influxdb-maintenance-windows.md)
 - [2026-04-09 - AWS Private CA - AWS RAM カスタマーマネージドアクセス許可のサポート](2026/2026-04-09-aws-private-ca-customer-managed-permissions.md)
