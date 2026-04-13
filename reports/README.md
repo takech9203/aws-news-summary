@@ -5,6 +5,10 @@
 
 ## 2026 年
 
+- [2026-04-13 - Amazon FSx - opt-in リージョン間でのファイルシステムバックアップコピーをサポート](2026/2026-04-13-amazon-fsx-copying-backups-opt-in-regions.md)
+- [2026-04-13 - AWS Elastic Disaster Recovery - IPv6 サポート](2026/2026-04-13-aws-elastic-disaster-recovery-ipv6.md)
+- [2026-04-13 - Aurora DSQL - PHP 向けコネクタの提供開始](2026/2026-04-13-aurora-dsql-connector-for-php.md)
+- [2026-04-13 - AWS IoT - Israel (Tel Aviv) および Europe (Milan) リージョンでの提供開始](2026/2026-04-13-aws-iot-israel-tel-aviv-europe-milan.md)
 - [2026-04-10 - AWS Backup - Amazon FSx サポートの 5 リージョン追加およびクロスリージョン・クロスアカウントコピーの 14 リージョン拡張](2026/2026-04-10-backup-extends-fsx-support.md)
 - [2026-04-10 - Amazon EC2 - X8i インスタンスのヨーロッパ (パリ) リージョン提供開始](2026/2026-04-10-amazon-ec2-x8i-instances-CDG-region.md)
 - [2026-04-10 - Amazon RDS for SQL Server - 最新 CU および GDR セキュリティアップデート](2026/2026-04-10-amazon-rds-supports-latest-cu-gdr-updates-microsoft-sq-server.md)
