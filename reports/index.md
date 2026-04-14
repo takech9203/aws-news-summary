@@ -5,9 +5,18 @@
 
 ## 2026 年
 
+- [2026-04-14 - AWS Transform - Kiro および VS Code での利用開始](2026/2026-04-14-aws-transform-kiro-vscode.md)
+- [2026-04-14 - Amazon EC2 - C8gn/M8gn/R8gn インスタンスの EBS 最適化パフォーマンスが 2 倍に向上](2026/2026-04-14-ec2-c8gn-m8gn-r8gn-ebs.md)
+- [2026-04-14 - AWS Secrets Manager - ハイブリッドポスト量子 TLS のサポート](2026/2026-04-14-aws-secrets-manager-post-quantum-tls.md)
+- [2026-04-13 - Kiro CLI 2.0 - Windows サポート、ヘッドレスモード、ターミナル UI](2026/2026-04-13-kiro-changelog-2026-04-13.md)
+- [2026-04-13 - Amazon Redshift - Top-K クエリのパフォーマンス最適化](2026/2026-04-13-amazon-redshift-topk-optimization.md)
+- [2026-04-13 - Amazon CloudWatch Logs Insights - 保存済みクエリのパラメータサポート](2026/2026-04-13-cloudwatch-logs-insights-query-params.md)
+- [2026-04-13 - Amazon OpenSearch Serverless - Derived Source によるストレージ最適化](2026/2026-04-13-amazon-opensearch-serverless-supports-derived-source.md)
 - [2026-04-13 - Amazon FSx - opt-in リージョン間でのファイルシステムバックアップコピーをサポート](2026/2026-04-13-amazon-fsx-copying-backups-opt-in-regions.md)
+- [2026-04-13 - Amazon Quick - Google Drive ナレッジベースのドキュメントレベルアクセス制御](2026/2026-04-13-amazon-quick-document-level-access-controls-google-drive.md)
 - [2026-04-13 - AWS Elastic Disaster Recovery - IPv6 サポート](2026/2026-04-13-aws-elastic-disaster-recovery-ipv6.md)
 - [2026-04-13 - Aurora DSQL - PHP 向けコネクタの提供開始](2026/2026-04-13-aurora-dsql-connector-for-php.md)
+- [2026-04-13 - Amazon SageMaker JumpStart - NVIDIA Nemotron-3-Super-120B、Qwen3.5-9B、Qwen3.5-27B モデル追加](2026/2026-04-13-nemotron3super-120b-qwen3.5-9b-qwen3.5-27b-on-sagemaker-jumpstart.md)
 - [2026-04-13 - AWS IoT - Israel (Tel Aviv) および Europe (Milan) リージョンでの提供開始](2026/2026-04-13-aws-iot-israel-tel-aviv-europe-milan.md)
 - [2026-04-10 - AWS Backup - Amazon FSx サポートの 5 リージョン追加およびクロスリージョン・クロスアカウントコピーの 14 リージョン拡張](2026/2026-04-10-backup-extends-fsx-support.md)
 - [2026-04-10 - Amazon EC2 - X8i インスタンスのヨーロッパ (パリ) リージョン提供開始](2026/2026-04-10-amazon-ec2-x8i-instances-CDG-region.md)

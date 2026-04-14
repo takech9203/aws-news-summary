@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Redshift - Top-K クエリのパフォーマンス最適化</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* ヘッダー */
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid var(--aws-orange);
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 12px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .release-date {
+      font-size: 14px;
+      color: var(--aws-orange);
+      margin-top: 8px;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      color: var(--aws-white);
+      font-size: 18px;
+      font-weight: 600;
+      margin: 16px 0 8px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 600px) {
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.15);
+      border: 2px solid var(--aws-red);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.15);
+      border: 2px solid var(--aws-green);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box h3, .after-box h3 {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 {
+      color: var(--aws-red);
+    }
+
+    .after-box h3 {
+      color: var(--aws-green);
+    }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .before-box li, .after-box li {
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    /* Mermaid コンテナ */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .mermaid-caption {
+      color: var(--aws-light-gray);
+      font-size: 14px;
+      margin-top: 12px;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* 統計カード */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, var(--aws-orange) 0%, var(--aws-smile-orange) 100%);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--aws-squid-ink);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--aws-squid-ink);
+      font-weight: 500;
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* 機能カード */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .feature-card {
+      background: rgba(255, 153, 0, 0.1);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px;
+    }
+
+    .feature-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .feature-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    /* 仕様テーブル */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      font-size: 14px;
+    }
+
+    .spec-table th, .spec-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .spec-table th {
+      color: var(--aws-orange);
+      font-weight: 600;
+      background: rgba(255, 153, 0, 0.1);
+    }
+
+    .spec-table td {
+      color: var(--aws-light-gray);
+    }
+
+    /* メリット・デメリット */
+    .benefits-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 600px) {
+      .benefits-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .benefit-card {
+      background: var(--aws-squid-ink);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .benefit-category {
+      font-size: 12px;
+      color: var(--aws-orange);
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .benefit-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .benefit-check {
+      color: var(--aws-green);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    /* 制約カード */
+    .constraint-card {
+      background: rgba(209, 50, 18, 0.08);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .constraint-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .constraint-icon {
+      color: var(--aws-red);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .consideration-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .consideration-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .consideration-icon {
+      color: var(--aws-orange);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    /* ユースケース */
+    .usecase-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .usecase-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .usecase-card {
+      background: rgba(0, 161, 201, 0.1);
+      border: 1px solid var(--aws-teal);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .usecase-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .usecase-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+
+    .usecase-desc {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    .usecase-effect {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(0, 161, 201, 0.3);
+      font-size: 13px;
+      color: var(--aws-teal);
+      font-weight: 500;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* 料金テーブル */
+    .pricing-card {
+      background: rgba(140, 79, 255, 0.1);
+      border: 1px solid var(--aws-purple);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    /* 動作条件テーブル */
+    .conditions-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      font-size: 14px;
+    }
+
+    .conditions-table th, .conditions-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .conditions-table th {
+      color: var(--aws-orange);
+      font-weight: 600;
+      background: rgba(255, 153, 0, 0.1);
+    }
+
+    .conditions-table td {
+      color: var(--aws-light-gray);
+    }
+
+    /* 関連サービス */
+    .related-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .related-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .related-card {
+      background: rgba(140, 79, 255, 0.08);
+      border: 1px solid rgba(140, 79, 255, 0.3);
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    .related-name {
+      color: var(--aws-teal);
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .related-card p {
+      font-size: 12px;
+      color: var(--aws-light-gray);
+      margin: 6px 0 0 0;
+    }
+
+    /* フッター */
+    footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    footer ul {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0;
+    }
+
+    footer li {
+      margin: 6px 0;
+    }
+
+    /* API 変更テーブル */
+    .api-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+
+    .api-table th, .api-table td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .api-table th {
+      color: var(--aws-orange);
+      font-weight: 600;
+      background: rgba(255, 153, 0, 0.1);
+      font-size: 12px;
+    }
+
+    .api-table td {
+      color: var(--aws-light-gray);
+    }
+
+    .api-table a {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .api-table a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    /* ステップカード */
+    .step-card {
+      background: var(--aws-squid-ink);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .step-number {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 28px;
+      font-weight: 700;
+      font-size: 14px;
+      margin-right: 8px;
+    }
+
+    .step-title {
+      color: var(--aws-white);
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .step-desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- ヘッダー -->
+    <div class="header">
+      <div class="service-badge">Amazon Redshift</div>
+      <h1>Top-K クエリのパフォーマンス最適化</h1>
+      <div class="subtitle">ORDER BY + LIMIT の高速化 - データブロックのインテリジェントスキップ</div>
+      <div class="release-date">2026 年 4 月 13 日</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon Redshift が <span class="highlight">Top-K クエリ</span> (ORDER BY と LIMIT 句を組み合わせたクエリ) の処理を大幅に最適化するアップデートをリリース。ORDER BY カラムの <span class="highlight">min/max 値</span>に基づいてデータブロックの読み取り順序をインテリジェントに再編成し、不要なデータブロックをスキップすることで、処理するデータ量を劇的に削減する。メモリ上には最も条件に合致する K 行のみが保持される。</p>
+      <p style="margin-top: 12px;">パッチリリース <span class="highlight">P199</span> 以降で追加費用なしで利用可能。対象クエリに自動的に適用されるため、クエリの書き換えや設定変更は一切不要。</p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ アップデート前の課題</h3>
+          <ul>
+            <li>ORDER BY カラムがソート済みでもテーブル全体をフルスキャン</li>
+            <li>数十億行規模のテーブルでも全データブロックの読み取りが発生</li>
+            <li>不要な I/O とコンピュート処理でクエリレイテンシが高い</li>
+            <li>ソート対象の全データをメモリに保持しリソース消費が大きい</li>
+            <li>降順ソート (DESC) で末尾追加データ取得の効率が特に低い</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ アップデート後の改善</h3>
+          <ul>
+            <li>min/max 値に基づくデータブロック読み取り順序の再編成</li>
+            <li>不要なデータブロックの自動スキップでデータ量を劇的削減</li>
+            <li>K 行のみをメモリ保持しリソース効率が向上</li>
+            <li>自動適用のためアプリケーション側の変更が不要</li>
+            <li>追加費用なしでパフォーマンスが大幅に改善</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 統計情報 -->
+    <div class="section">
+      <h2>📊 数字で見るアップデート</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">💰</div>
+          <div class="stat-value">追加費用なし</div>
+          <div class="stat-label">無料で利用可能</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-value">自動適用</div>
+          <div class="stat-label">設定変更不要</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🌍</div>
+          <div class="stat-value">全リージョン</div>
+          <div class="stat-label">Redshift 対応リージョン全て</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📦</div>
+          <div class="stat-value">P199 以降</div>
+          <div class="stat-label">パッチリリース要件</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>従来の処理フローではテーブル全体をスキャンしてからソートと切り出しを行っていたが、最適化後は ORDER BY カラムの min/max 値に基づいて必要最小限のデータブロックのみを読み取り、K 行だけをメモリに保持して結果を返す。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Query["📝 Top-K クエリ"]
+        SQL["SELECT *&lt;br/&gt;FROM orders&lt;br/&gt;ORDER BY order_date DESC&lt;br/&gt;LIMIT 10"]
+    end
+
+    subgraph Traditional["❌ 従来の処理フロー"]
+        direction TB
+        FullScan["📊 テーブル全体スキャン"]
+        subgraph AllBlocks["🗂️ 全データブロック読み取り"]
+            direction LR
+            B1["Block 1&lt;br/&gt;2020 年"]
+            B2["Block 2&lt;br/&gt;2021 年"]
+            B3["Block 3&lt;br/&gt;2022 年"]
+            B4["Block ...&lt;br/&gt;2023 年"]
+            B5["Block N&lt;br/&gt;2024 年"]
+            B1 ~~~ B2 ~~~ B3 ~~~ B4 ~~~ B5
+        end
+        FullSort["🔄 全行ソート"]
+        Truncate["✂️ 上位 K 行を切り出し"]
+        FullScan --> AllBlocks
+        AllBlocks --> FullSort
+        FullSort --> Truncate
+    end
+
+    subgraph Optimized["✅ 最適化後の処理フロー"]
+        direction TB
+        MinMax["📏 min/max 値で&lt;br/&gt;ブロック評価"]
+        subgraph SelBlocks["🗂️ 必要なブロックのみ読み取り"]
+            direction LR
+            SB1["Block N&lt;br/&gt;2024 年 ✅"]
+            SB2["Block N-1&lt;br/&gt;2023 年 ✅"]
+            SB3["他のブロック&lt;br/&gt;⏭️ スキップ"]
+            SB1 ~~~ SB2 ~~~ SB3
+        end
+        TopK["🏆 K 行のみメモリ保持"]
+        MinMax --> SelBlocks
+        SelBlocks --> TopK
+    end
+
+    SQL --> Traditional
+    SQL --> Optimized
+
+    subgraph Result["📋 結果"]
+        R["直近 10 件の注文"]
+    end
+
+    Truncate --> Result
+    TopK --> Result
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef error fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+
+    class Query,Traditional,Optimized,AllBlocks,SelBlocks,Result cloud
+    class SQL process
+    class FullScan,FullSort,Truncate error
+    class MinMax,TopK input
+    class B1,B2,B3,B4,B5 warning
+    class SB1,SB2 input
+    class SB3 internal
+    class R process
+        </pre>
+      </div>
+      <p class="mermaid-caption">従来のフルスキャン方式と最適化後のインテリジェントスキップ方式の比較</p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>🔧 主要機能</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⏭️</div>
+          <div class="feature-title">データブロックのインテリジェントスキップ</div>
+          <div class="feature-desc">ORDER BY カラムの各データブロックに格納された min/max メタデータを活用。結果に含まれる可能性がないデータブロックを事前に判定してスキップし、テーブル全体のスキャンを回避して I/O コストを大幅に削減する。</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔀</div>
+          <div class="feature-title">データブロック読み取り順序の最適化</div>
+          <div class="feature-desc">ORDER BY の方向 (ASC/DESC) に応じて、最も条件に合致するブロックから優先的に読み取る。降順の場合はストレージ末尾のブロックから読み取りを開始し、K 行が確定した時点で残りのブロックの読み取りを打ち切る。</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🧠</div>
+          <div class="feature-title">メモリ効率の最適化</div>
+          <div class="feature-desc">全行をメモリに展開するのではなく、常に K 行のみをメモリ上に保持。新しい行が既存の K 行より条件に合致する場合のみ入れ替えを行い、大規模テーブルでも一定のメモリ消費量で処理が完了する。</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🤖</div>
+          <div class="feature-title">自動適用</div>
+          <div class="feature-desc">対象となる Top-K クエリに対して自動的に最適化が適用される。クエリの書き換えやヒントの追加は不要で、既存のアプリケーションやダッシュボードのクエリがそのまま高速化される。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>📐 技術仕様</h2>
+      <table class="spec-table">
+        <tr>
+          <th>項目</th>
+          <th>詳細</th>
+        </tr>
+        <tr>
+          <td>最適化対象</td>
+          <td>ORDER BY + LIMIT を含むクエリ</td>
+        </tr>
+        <tr>
+          <td>適用条件</td>
+          <td>ORDER BY カラムがソート済みまたは部分的にソート済み</td>
+        </tr>
+        <tr>
+          <td>特に効果が高いケース</td>
+          <td><span class="highlight">ORDER BY ... DESC LIMIT K</span> (降順ソート + 末尾追記型テーブル)</td>
+        </tr>
+        <tr>
+          <td>メタデータ活用</td>
+          <td>データブロックの min/max 値を使用</td>
+        </tr>
+        <tr>
+          <td>メモリ管理</td>
+          <td>K 行のみをメモリ上に保持</td>
+        </tr>
+        <tr>
+          <td>適用方式</td>
+          <td>自動適用 (設定変更不要)</td>
+        </tr>
+        <tr>
+          <td>パッチリリース</td>
+          <td>P199 以降</td>
+        </tr>
+        <tr>
+          <td>追加費用</td>
+          <td>なし</td>
+        </tr>
+      </table>
+
+      <h3 style="margin-top: 24px;">📏 最適化の動作条件</h3>
+      <table class="conditions-table">
+        <tr>
+          <th>条件</th>
+          <th>説明</th>
+        </tr>
+        <tr>
+          <td>ORDER BY + LIMIT の組み合わせ</td>
+          <td>クエリに ORDER BY 句と LIMIT 句の両方が含まれること</td>
+        </tr>
+        <tr>
+          <td>ソートキーとの関連</td>
+          <td>ORDER BY カラムがソートキーまたは部分的にソートされていると最大の効果を発揮</td>
+        </tr>
+        <tr>
+          <td>データブロックの min/max 精度</td>
+          <td>カラムの値がブロック内で偏りなく分布しているほど効率が高い</td>
+        </tr>
+        <tr>
+          <td>テーブルサイズ</td>
+          <td>大規模テーブルほど、スキップされるブロック数が多くなり効果が大きい</td>
+        </tr>
+      </table>
+
+      <h3 style="margin-top: 24px;">🔄 API 変更履歴</h3>
+      <p style="font-size: 14px;">今回のアップデートは Amazon Redshift の内部クエリエンジンの最適化であり、API レベルの変更はない。直近の Redshift 関連 API 変更は以下の通り。</p>
+      <table class="api-table">
+        <tr>
+          <th>日付</th>
+          <th>サービス</th>
+          <th>変更内容</th>
+        </tr>
+        <tr>
+          <td>2026/04/09</td>
+          <td><a href="https://awsapichanges.com/archive/changes/215aec-redshift-data.html" target="_blank" rel="noopener noreferrer">Redshift Data API Service</a></td>
+          <td>1 updated method - BatchExecuteStatement API に名前付き SQL パラメータのサポートを追加</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+      <p>特別な設定は不要であり、パッチリリース P199 以降が適用されたクラスターで自動的に有効化される。以下の手順で動作確認が可能。</p>
+
+      <div class="step-card">
+        <span class="step-number">1</span>
+        <span class="step-title">パッチバージョンの確認</span>
+        <div class="step-desc">クラスターのバージョンが P199 以降であることを確認する。Redshift Serverless の場合は自動的に最新パッチが適用される。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">バージョン確認</span>
+          </div>
+          <pre><code class="language-sql">SELECT version();</code></pre>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <span class="step-number">2</span>
+        <span class="step-title">Top-K クエリの実行</span>
+        <div class="step-desc">通常通り ORDER BY と LIMIT を含むクエリを実行するだけで最適化が自動的に適用される。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">直近 10 件の注文を取得</span>
+          </div>
+          <pre><code class="language-sql">-- 直近 10 件の注文を取得
+SELECT order_id, customer_id, order_date, total_amount
+FROM orders
+ORDER BY order_date DESC
+LIMIT 10;</code></pre>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <span class="step-number">3</span>
+        <span class="step-title">実行プランでの最適化確認</span>
+        <div class="step-desc">EXPLAIN コマンドで実行プランを確認し、Top-K 最適化が適用されていることを確認する。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">実行プラン確認</span>
+          </div>
+          <pre><code class="language-sql">EXPLAIN
+SELECT order_id, customer_id, order_date, total_amount
+FROM orders
+ORDER BY order_date DESC
+LIMIT 10;</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <div class="benefits-grid">
+        <div class="benefit-card">
+          <div class="benefit-category">💼 ビジネス面</div>
+          <div class="benefit-item">
+            <span class="benefit-check">✓</span>
+            <span><strong>クエリレスポンスの高速化:</strong> ダッシュボードやリアルタイムレポートで「直近 K 件」「上位 K 件」を表示するクエリが大幅に高速化</span>
+          </div>
+          <div class="benefit-item">
+            <span class="benefit-check">✓</span>
+            <span><strong>コスト効率の向上:</strong> スキャンデータ量削減により、Redshift Serverless のコンピュート課金が最適化</span>
+          </div>
+          <div class="benefit-item">
+            <span class="benefit-check">✓</span>
+            <span><strong>運用負荷ゼロ:</strong> 自動適用のため、DBA やアプリケーション開発者による追加作業が一切不要</span>
+          </div>
+        </div>
+        <div class="benefit-card">
+          <div class="benefit-category">🔧 技術面</div>
+          <div class="benefit-item">
+            <span class="benefit-check">✓</span>
+            <span><strong>I/O 削減:</strong> 不要なデータブロックの読み取りが排除され、ストレージへの I/O 負荷が大幅に低減</span>
+          </div>
+          <div class="benefit-item">
+            <span class="benefit-check">✓</span>
+            <span><strong>メモリ効率の向上:</strong> K 行のみをメモリに保持する方式で、大規模テーブルでも効率的に処理完了</span>
+          </div>
+          <div class="benefit-item">
+            <span class="benefit-check">✓</span>
+            <span><strong>既存ワークロードへの即座の適用:</strong> クエリ変更やテーブル設計の見直しが不要</span>
+          </div>
+          <div class="benefit-item">
+            <span class="benefit-check">✓</span>
+            <span><strong>ソートキー設計の活用:</strong> 既にソートキーが適切に設定されているテーブルで効果が最大化</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>制限事項</h3>
+      <div class="constraint-card">
+        <div class="constraint-item">
+          <span class="constraint-icon">⚠️</span>
+          <span>ORDER BY カラムがソートされていない場合、最適化の効果が限定的になる可能性がある</span>
+        </div>
+        <div class="constraint-item">
+          <span class="constraint-icon">⚠️</span>
+          <span>複合的な ORDER BY (複数カラムの組み合わせ) に対する最適化効果は、カラムの順序やソート状態に依存する</span>
+        </div>
+        <div class="constraint-item">
+          <span class="constraint-icon">⚠️</span>
+          <span>LIMIT を伴わない ORDER BY のみのクエリには適用されない</span>
+        </div>
+        <div class="constraint-item">
+          <span class="constraint-icon">⚠️</span>
+          <span>パッチリリース P199 以降が必要であり、古いバージョンのクラスターでは利用できない</span>
+        </div>
+      </div>
+
+      <h3>考慮すべき点</h3>
+      <div class="consideration-card">
+        <div class="consideration-item">
+          <span class="consideration-icon">💡</span>
+          <span>ソートキーの選択がこの最適化の効果に直接影響するため、Top-K クエリの頻度が高いテーブルではソートキー設計の見直しが推奨される</span>
+        </div>
+        <div class="consideration-item">
+          <span class="consideration-icon">💡</span>
+          <span>既存の EXPLAIN 出力に変化が生じるため、実行プランに基づく監視やアラートを設定している場合は確認が必要</span>
+        </div>
+        <div class="consideration-item">
+          <span class="consideration-icon">💡</span>
+          <span>データの追記パターン (時系列データなど) とソート順序が一致する場合に最大の効果を発揮する</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+      <div class="usecase-grid">
+        <div class="usecase-card">
+          <div class="usecase-icon">🛒</div>
+          <div class="usecase-title">E コマース - 直近注文の取得</div>
+          <div class="usecase-desc">数十億件のトランザクションを保持する注文テーブルから、直近 K 件の注文情報をリアルタイムダッシュボードに表示。</div>
+          <div class="code-block" style="margin-top: 12px;">
+            <div class="code-header">
+              <span class="code-lang">SQL</span>
+            </div>
+            <pre><code class="language-sql">-- 直近 100 件の注文を取得
+SELECT order_id, customer_name, order_date,
+       total_amount, status
+FROM orders
+ORDER BY order_date DESC
+LIMIT 100;</code></pre>
+          </div>
+          <div class="usecase-effect">✨ 数十億行のテーブルに対して、末尾の数ブロックのみの読み取りで完了。ダッシュボードの表示速度が劇的に改善。</div>
+        </div>
+
+        <div class="usecase-card">
+          <div class="usecase-icon">📡</div>
+          <div class="usecase-title">IoT データ - センサー最新値の取得</div>
+          <div class="usecase-desc">数百万台のセンサーから収集された時系列データテーブルから、最新の K 件のセンサー読み取り値を取得してモニタリングに利用。</div>
+          <div class="code-block" style="margin-top: 12px;">
+            <div class="code-header">
+              <span class="code-lang">SQL</span>
+            </div>
+            <pre><code class="language-sql">-- 特定センサーの直近 50 件のデータを取得
+SELECT sensor_id, reading_timestamp,
+       temperature, humidity, pressure
+FROM sensor_readings
+WHERE sensor_id = 'SENSOR-001'
+ORDER BY reading_timestamp DESC
+LIMIT 50;</code></pre>
+          </div>
+          <div class="usecase-effect">✨ 時系列で追記されるセンサーデータは自然にソートされているため、最適化の効果が最大限に発揮。</div>
+        </div>
+
+        <div class="usecase-card">
+          <div class="usecase-icon">🤖</div>
+          <div class="usecase-title">LLM 推論ログの分析</div>
+          <div class="usecase-desc">基盤モデルが処理した数十億件のプロンプトログから、直近の K 件または最も古い K 件のプロンプトを取得して分析。</div>
+          <div class="code-block" style="margin-top: 12px;">
+            <div class="code-header">
+              <span class="code-lang">SQL</span>
+            </div>
+            <pre><code class="language-sql">-- 直近 200 件の LLM 推論ログを取得
+SELECT prompt_id, model_id, prompt_text,
+       response_tokens, latency_ms, inferred_at
+FROM llm_inference_logs
+ORDER BY inferred_at DESC
+LIMIT 200;</code></pre>
+          </div>
+          <div class="usecase-effect">✨ 継続的に蓄積される LLM ログの巨大テーブルから、最新ログを効率的に取得。モデル監視や品質分析が高速化。</div>
+        </div>
+
+        <div class="usecase-card">
+          <div class="usecase-icon">📊</div>
+          <div class="usecase-title">売上ランキングの取得</div>
+          <div class="usecase-desc">数十万の SKU と数十億の販売トランザクションを持つ商品カタログから、売上上位 K 件または下位 K 件の商品を取得。</div>
+          <div class="code-block" style="margin-top: 12px;">
+            <div class="code-header">
+              <span class="code-lang">SQL</span>
+            </div>
+            <pre><code class="language-sql">-- 売上上位 20 商品を取得
+SELECT product_id, product_name,
+       category, total_sales
+FROM product_sales_summary
+ORDER BY total_sales DESC
+LIMIT 20;</code></pre>
+          </div>
+          <div class="usecase-effect">✨ 商品パフォーマンス分析において、最も売れている/いない商品を迅速に特定。在庫管理やマーケティング戦略の意思決定を加速。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 料金情報 -->
+    <div class="section">
+      <h2>💰 料金情報</h2>
+      <p>Top-K クエリ最適化は Amazon Redshift の内部エンジン改善であり、追加費用は発生しない。</p>
+      <div class="pricing-card">
+        <table class="spec-table">
+          <tr>
+            <th>項目</th>
+            <th>詳細</th>
+          </tr>
+          <tr>
+            <td>最適化機能自体</td>
+            <td><span class="highlight">無料</span> (追加費用なし)</td>
+          </tr>
+          <tr>
+            <td>Redshift Provisioned</td>
+            <td>既存のノード料金内で利用可能</td>
+          </tr>
+          <tr>
+            <td>Redshift Serverless</td>
+            <td>スキャンデータ量の削減により RPU 消費が低減し、コスト削減が期待される</td>
+          </tr>
+          <tr>
+            <td>パッチ適用</td>
+            <td>無料 (メンテナンスウィンドウで自動適用)</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- 利用可能リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>Amazon Redshift が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用可能。パッチリリース P199 以降が適用されたクラスターおよび Serverless ワークグループで自動的に有効化される。</p>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="related-grid">
+        <div class="related-card">
+          <div class="related-name">🔑 Amazon Redshift ソートキー</div>
+          <p>Top-K 最適化の効果を最大化するための基盤機能。適切なソートキー設計がパフォーマンス向上に直結する。</p>
+        </div>
+        <div class="related-card">
+          <div class="related-name">☁️ Amazon Redshift Serverless</div>
+          <p>従量課金モデルにおいて、スキャンデータ量の削減がコスト削減に直接反映される。</p>
+        </div>
+        <div class="related-card">
+          <div class="related-name">🗺️ Amazon Redshift ゾーンマップ</div>
+          <p>データブロックの min/max 値を管理する内部メタデータ機能。Top-K 最適化はこのゾーンマップを活用する。</p>
+        </div>
+        <div class="related-card">
+          <div class="related-name">💡 Amazon Redshift Advisor</div>
+          <p>ソートキーの推奨やクエリパフォーマンスの改善提案を提供し、Top-K 最適化と組み合わせて活用できる。</p>
+        </div>
+        <div class="related-card">
+          <div class="related-name">📊 Amazon QuickSight</div>
+          <p>Redshift と連携する BI サービス。ダッシュボードの Top-K 表示クエリが高速化される。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>Amazon Redshift の Top-K クエリ最適化は、ORDER BY と LIMIT を組み合わせたクエリの処理性能を劇的に向上させる内部エンジン改善。データブロックの min/max 値を活用したインテリジェントなスキップ機構により、大規模テーブルに対するフルスキャンを回避し、必要最小限のデータブロックのみを処理する。</p>
+      <p style="margin-top: 12px;"><span class="highlight">追加費用なし</span>でパッチ P199 から自動適用されるため、E コマースの直近注文取得、IoT センサーデータの最新値取得、LLM 推論ログの分析など、<strong style="color: var(--aws-white);">Top-K パターンを多用するワークロード</strong>を持つユーザーは、パッチの適用状況を確認し、ソートキー設計の見直しを検討することを推奨する。</p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li>→ <a href="https://aws.amazon.com/about-aws/whats-new/2026/04/amazon-redshift-topk-optimization/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li>→ <a href="https://docs.aws.amazon.com/redshift/latest/dg/" target="_blank" rel="noopener noreferrer">Amazon Redshift ドキュメント</a></li>
+        <li>→ <a href="https://docs.aws.amazon.com/redshift/latest/dg/c_best-practices-sort-key.html" target="_blank" rel="noopener noreferrer">Amazon Redshift ソートキーの選択</a></li>
+        <li>→ <a href="https://aws.amazon.com/redshift/pricing/" target="_blank" rel="noopener noreferrer">Amazon Redshift 料金</a></li>
+      </ul>
+    </footer>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+    hljs.highlightAll();
+  </script>
+</body>
+</html>
