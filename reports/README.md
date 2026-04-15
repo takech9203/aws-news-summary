@@ -5,12 +5,15 @@
 
 ## 2026 年
 
+- [2026-04-15 - Amazon QuickSight - シートツールチップによるリッチなコンテキストデータ探索](2026/2026-04-15-quick-sheet-tooltips.md)
 - [2026-04-14 - AWS Transform - Kiro および VS Code での利用開始](2026/2026-04-14-aws-transform-kiro-vscode.md)
+- [2026-04-14 - AWS Interconnect - multicloud 一般提供開始](2026/2026-04-14-aws-announces-ga-AWS-interconnect-multicloud.md)
 - [2026-04-14 - Amazon EC2 - C8gn/M8gn/R8gn インスタンスの EBS 最適化パフォーマンスが 2 倍に向上](2026/2026-04-14-ec2-c8gn-m8gn-r8gn-ebs.md)
 - [2026-04-14 - AWS Secrets Manager - ハイブリッドポスト量子 TLS のサポート](2026/2026-04-14-aws-secrets-manager-post-quantum-tls.md)
 - [2026-04-13 - Kiro CLI 2.0 - Windows サポート、ヘッドレスモード、ターミナル UI](2026/2026-04-13-kiro-changelog-2026-04-13.md)
 - [2026-04-13 - Amazon Redshift - Top-K クエリのパフォーマンス最適化](2026/2026-04-13-amazon-redshift-topk-optimization.md)
 - [2026-04-13 - Amazon CloudWatch Logs Insights - 保存済みクエリのパラメータサポート](2026/2026-04-13-cloudwatch-logs-insights-query-params.md)
+- [2026-04-13 - AWS Interconnect - last mile 一般提供開始](2026/2026-04-13-aws-announces-ga-AWS-interconnect-last-mile.md)
 - [2026-04-13 - Amazon OpenSearch Serverless - Derived Source によるストレージ最適化](2026/2026-04-13-amazon-opensearch-serverless-supports-derived-source.md)
 - [2026-04-13 - Amazon FSx - opt-in リージョン間でのファイルシステムバックアップコピーをサポート](2026/2026-04-13-amazon-fsx-copying-backups-opt-in-regions.md)
 - [2026-04-13 - Amazon Quick - Google Drive ナレッジベースのドキュメントレベルアクセス制御](2026/2026-04-13-amazon-quick-document-level-access-controls-google-drive.md)
