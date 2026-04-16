@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon CloudWatch - Cross-Region Telemetry Auditing and Enablement Rules</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+    <style>
+        :root {
+            --aws-squid-ink: #232F3E;
+            --aws-dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --aws-white: #FFFFFF;
+            --aws-light-gray: #D5DBDB;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background: var(--aws-squid-ink);
+            color: var(--aws-light-gray);
+            line-height: 1.8;
+            padding: 40px 20px;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 24px;
+            background: linear-gradient(135deg, var(--aws-dark-squid) 0%, var(--aws-squid-ink) 100%);
+            border-radius: 12px;
+            border: 3px solid var(--aws-orange);
+        }
+        .service-badge {
+            display: inline-block;
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            padding: 8px 24px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 16px;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--aws-white);
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+        .header .subtitle { font-size: 16px; color: var(--aws-light-gray); }
+        .release-date {
+            font-size: 14px;
+            color: var(--aws-orange);
+            margin-top: 16px;
+            font-weight: 600;
+        }
+
+        /* Sections */
+        .section {
+            background: var(--aws-dark-squid);
+            padding: 24px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .section h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--aws-orange);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section p { margin-bottom: 12px; font-size: 15px; }
+        .highlight {
+            background: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        /* Before/After Comparison */
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        @media (max-width: 768px) { .comparison { grid-template-columns: 1fr; } }
+        .comparison-card {
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 5px solid;
+        }
+        .comparison-card.before {
+            background: rgba(209, 50, 18, 0.15);
+            border-left-color: var(--aws-red);
+        }
+        .comparison-card.after {
+            background: rgba(29, 129, 2, 0.15);
+            border-left-color: var(--aws-green);
+        }
+        .comparison-card h4 { font-size: 16px; margin-bottom: 12px; font-weight: 600; }
+        .comparison-card.before h4 { color: var(--aws-red); }
+        .comparison-card.after h4 { color: var(--aws-green); }
+        .comparison-card ul { list-style: none; padding-left: 0; }
+        .comparison-card li {
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .comparison-card.before li::before { content: "\2715"; position: absolute; left: 0; color: var(--aws-red); font-weight: bold; }
+        .comparison-card.after li::before { content: "\2713"; position: absolute; left: 0; color: var(--aws-green); font-weight: bold; }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+        @media (max-width: 768px) { .stats-grid { grid-template-columns: 1fr; } }
+        .stats-card {
+            background: linear-gradient(135deg, var(--aws-orange) 0%, #FF6B00 100%);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            color: var(--aws-white);
+        }
+        .stats-card .number { font-size: 36px; font-weight: bold; line-height: 1; }
+        .stats-card .label { font-size: 13px; margin-top: 8px; }
+
+        /* Feature Grid */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+        @media (max-width: 768px) { .feature-grid { grid-template-columns: 1fr; } }
+        .feature-card {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid var(--aws-orange);
+        }
+        .feature-card h4 {
+            color: var(--aws-orange);
+            font-size: 15px;
+            margin-bottom: 8px;
+        }
+        .feature-card p { font-size: 13px; color: var(--aws-light-gray); margin-bottom: 0; }
+        .feature-card ul { list-style: none; padding-left: 0; margin-top: 8px; }
+        .feature-card li {
+            font-size: 13px;
+            padding-left: 16px;
+            position: relative;
+            margin-bottom: 4px;
+        }
+        .feature-card li::before {
+            content: "\2192";
+            position: absolute;
+            left: 0;
+            color: var(--aws-orange);
+        }
+
+        /* Mermaid Container */
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Usecase */
+        .usecase {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.15) 0%, rgba(255, 153, 0, 0.05) 100%);
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            margin-bottom: 16px;
+        }
+        .usecase h3 { font-size: 18px; color: var(--aws-orange); margin-bottom: 8px; }
+        .usecase p { font-size: 15px; color: #EEEEEE; margin-bottom: 8px; }
+        .usecase .effect {
+            font-size: 13px;
+            color: var(--aws-green);
+            padding: 8px 12px;
+            background: rgba(29, 129, 2, 0.1);
+            border-radius: 6px;
+            margin-top: 8px;
+        }
+
+        /* Resource Table */
+        .resource-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            font-size: 13px;
+        }
+        .resource-table th {
+            background: rgba(255, 153, 0, 0.2);
+            color: var(--aws-orange);
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--aws-orange);
+        }
+        .resource-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--aws-light-gray);
+        }
+        .resource-table tr:hover td {
+            background: rgba(255, 153, 0, 0.05);
+        }
+
+        /* API Table */
+        .api-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+        @media (max-width: 768px) { .api-grid { grid-template-columns: 1fr; } }
+        .api-card {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 153, 0, 0.15);
+        }
+        .api-card .api-name {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: var(--aws-teal);
+            margin-bottom: 4px;
+        }
+        .api-card .api-desc {
+            font-size: 12px;
+            color: var(--aws-light-gray);
+        }
+
+        /* Code Block */
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        .code-lang { color: var(--aws-orange); font-weight: bold; }
+        .code-title { color: var(--aws-light-gray); }
+        .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        /* Merit/Demerit */
+        .merit-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 16px;
+        }
+        @media (max-width: 768px) { .merit-grid { grid-template-columns: 1fr; } }
+        .merit-column h3 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        .merit-column.pros h3 { color: var(--aws-green); }
+        .merit-column.cons h3 { color: var(--aws-red); }
+        .merit-item {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .merit-column.pros .merit-item {
+            background: rgba(29, 129, 2, 0.1);
+            border-left: 3px solid var(--aws-green);
+        }
+        .merit-column.cons .merit-item {
+            background: rgba(209, 50, 18, 0.1);
+            border-left: 3px solid var(--aws-red);
+        }
+        .merit-item strong { color: var(--aws-white); }
+
+        /* Pricing Table */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+        @media (max-width: 768px) { .pricing-grid { grid-template-columns: 1fr; } }
+        .pricing-card {
+            background: rgba(0, 0, 0, 0.25);
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid rgba(255, 153, 0, 0.2);
+        }
+        .pricing-card .price {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--aws-orange);
+            margin-bottom: 4px;
+        }
+        .pricing-card .price-label {
+            font-size: 12px;
+            color: var(--aws-light-gray);
+        }
+        .pricing-note {
+            background: rgba(255, 153, 0, 0.1);
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-top: 16px;
+            font-size: 13px;
+            border-left: 3px solid var(--aws-orange);
+        }
+
+        /* Links */
+        a { color: var(--aws-teal); text-decoration: none; }
+        a:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+        /* Footer */
+        footer {
+            margin-top: 32px;
+            padding: 24px;
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            border-top: 3px solid var(--aws-orange);
+        }
+        footer h3 { font-size: 18px; color: var(--aws-orange); margin-bottom: 16px; }
+        footer a {
+            display: block;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: rgba(255, 153, 0, 0.1);
+            border-radius: 6px;
+            word-break: break-all;
+        }
+        .footer-note {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #333;
+            font-size: 12px;
+            color: #888;
+        }
+
+        /* Flow diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+        .flow-step {
+            background: var(--aws-dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 100px;
+        }
+        .flow-arrow {
+            color: var(--aws-orange);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        /* Region badge */
+        .region-badge {
+            display: inline-block;
+            background: rgba(0, 161, 201, 0.15);
+            color: var(--aws-teal);
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        /* Callout */
+        .callout {
+            background: rgba(255, 153, 0, 0.1);
+            border-left: 4px solid var(--aws-orange);
+            padding: 16px;
+            border-radius: 0 8px 8px 0;
+            margin: 16px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="service-badge">Amazon CloudWatch</div>
+            <h1>🌐 Cross-Region Telemetry<br/>Auditing &amp; Enablement Rules</h1>
+            <div class="subtitle">複数リージョンのテレメトリ設定を単一リージョンから一元管理</div>
+            <div class="release-date">📅 リリース日: 2026 年 4 月 16 日</div>
+        </div>
+
+        <!-- Overview -->
+        <div class="section">
+            <h2>📊 概要</h2>
+            <p>Amazon CloudWatch に、複数の AWS リージョンにまたがる<span class="highlight">テレメトリ設定の監査と有効化</span>を単一リージョンから一元管理できる機能が追加されました。EC2、VPC、CloudTrail などの AWS サービスからのテレメトリ (ログ、メトリクス、トレース) を、複数リージョンに対して一括で有効化・監査できます。</p>
+            <p>有効化ルールを作成することで、選択したリージョンまたは<span class="highlight">すべてのリージョン</span>にテレメトリ設定を自動適用でき、新しいリージョンが追加された際にもルールが自動的に拡張されます。</p>
+
+            <div class="comparison">
+                <div class="comparison-card before">
+                    <h4>⚠️ アップデート前</h4>
+                    <ul>
+                        <li>テレメトリ設定を各リージョンで個別に確認・有効化が必要</li>
+                        <li>新しいリージョン追加時にテレメトリ設定を手動で追加</li>
+                        <li>組織全体のテレメトリ一貫性の確保が困難</li>
+                        <li>リージョンごとに監査状態を個別確認が必要</li>
+                    </ul>
+                </div>
+                <div class="comparison-card after">
+                    <h4>✨ アップデート後</h4>
+                    <ul>
+                        <li>単一リージョンから複数リージョンを一元的に監査・有効化</li>
+                        <li>有効化ルールにより全リージョンに自動適用</li>
+                        <li>新リージョン追加時にルールが自動拡張</li>
+                        <li>AWS Organizations で組織全体のポリシーを一括適用</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="section">
+            <h2>📈 数字で見るアップデート</h2>
+            <div class="stats-grid">
+                <div class="stats-card">
+                    <div class="number">11+</div>
+                    <div class="label">サポート対象<br/>リソースタイプ</div>
+                </div>
+                <div class="stats-card">
+                    <div class="number">8</div>
+                    <div class="label">API メソッド</div>
+                </div>
+                <div class="stats-card">
+                    <div class="number">3</div>
+                    <div class="label">テレメトリタイプ<br/>ログ / メトリクス / トレース</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="section">
+            <h2>🏗️ アーキテクチャ図</h2>
+            <p>管理者はホームリージョンから有効化ルールを作成し、複数リージョンのテレメトリ設定を一元管理します。全リージョン設定のルールは、新しいリージョンが追加された際にも自動的に拡張されます。</p>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    subgraph Admin["☁️ 管理リージョン ホームリージョン"]
+        Console["👤 管理者<br/>CloudWatch コンソール / API"]
+        Audit["🔍 テレメトリ監査<br/>設定状態の確認"]
+        Rules["📋 有効化ルール<br/>リソースタイプ / テレメトリタイプ"]
+    end
+
+    subgraph Targets["🌐 対象リージョン"]
+        direction LR
+        subgraph R1["📍 リージョン A"]
+            EC2A["⚙️ EC2"]
+            VPCA["🔌 VPC"]
+        end
+        subgraph R2["📍 リージョン B"]
+            EC2B["⚙️ EC2"]
+            CTA["📝 CloudTrail"]
+        end
+        subgraph R3["📍 リージョン C 新規追加"]
+            EC2C["⚙️ EC2"]
+            EKSC["📦 EKS"]
+        end
+    end
+
+    subgraph Telemetry["📊 テレメトリ出力"]
+        direction LR
+        Logs["📄 ログ"]
+        Metrics["📈 メトリクス"]
+        Traces["🔗 トレース"]
+        Logs ~~~ Metrics ~~~ Traces
+    end
+
+    Console --> Audit
+    Console --> Rules
+    Audit -->|各リージョンの状態を一元確認| Targets
+    Rules -->|ルールを自動適用<br/>全リージョンまたは選択リージョン| Targets
+    R1 --> Telemetry
+    R2 --> Telemetry
+    R3 -->|新リージョンにも自動拡張| Telemetry
+
+    classDef admin fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef targets fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef region fill:none,stroke:#C5CAE9,stroke-width:2px,color:#666666
+    classDef telemetry fill:none,stroke:#C5E1A5,stroke-width:2px,color:#666666
+    classDef service fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef audit fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef rules fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef output fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef console fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Admin admin
+    class Targets targets
+    class R1,R2,R3 region
+    class Telemetry telemetry
+    class EC2A,VPCA,EC2B,CTA,EC2C,EKSC service
+    class Audit audit
+    class Rules rules
+    class Logs,Metrics,Traces output
+    class Console console
+                </pre>
+            </div>
+        </div>
+
+        <!-- Key Features -->
+        <div class="section">
+            <h2>🔧 主要機能</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>🔍 クロスリージョンテレメトリ監査</h4>
+                    <ul>
+                        <li>単一のホームリージョンから全リージョンの設定状態を一元確認</li>
+                        <li>アカウント単位または Organizations 全体での監査をサポート</li>
+                        <li>各リージョンの有効化状態、ルール適用状態、エラー情報をまとめて取得</li>
+                        <li><code>GetTelemetryEvaluationStatus</code> API で一括確認</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <h4>📋 テレメトリ有効化ルール</h4>
+                    <ul>
+                        <li>リソースタイプ、テレメトリタイプ、対象リージョンを指定してルール作成</li>
+                        <li>選択リージョンまたは全リージョンに適用可能</li>
+                        <li><code>AllRegions</code> フラグで新リージョンに自動拡張</li>
+                        <li>送信先設定でログ保持期間やフォーマットをカスタマイズ</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <h4>🏢 AWS Organizations 統合</h4>
+                    <ul>
+                        <li>組織全体に対するテレメトリルールの一括作成・適用</li>
+                        <li><code>CreateTelemetryRuleForOrganization</code> API で組織レベル管理</li>
+                        <li>組織内の全アカウントにテレメトリポリシーを統一適用</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <h4>🎯 幅広いリソースタイプ</h4>
+                    <ul>
+                        <li>EC2、VPC、Lambda、CloudTrail、EKS など 11 種類以上に対応</li>
+                        <li>テレメトリタイプはログ、メトリクス、トレースの 3 種類</li>
+                        <li>WAFv2、ELB、Route 53 Resolver、Bedrock AgentCore なども対応</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Supported Resource Types -->
+        <div class="section">
+            <h2>📋 サポート対象リソースタイプ</h2>
+            <table class="resource-table">
+                <thead>
+                    <tr>
+                        <th>リソースタイプ</th>
+                        <th>テレメトリ対象</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>AWS::EC2::Instance</code></td>
+                        <td>EC2 インスタンスのログ、メトリクス、トレース</td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS::EC2::VPC</code></td>
+                        <td>VPC フローログ</td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS::Lambda::Function</code></td>
+                        <td>Lambda 関数のログ、メトリクス、トレース</td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS::CloudTrail</code></td>
+                        <td>CloudTrail の証跡ログ</td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS::EKS::Cluster</code></td>
+                        <td>EKS 監査ログ、コントローラーマネージャーログなど</td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS::WAFv2::WebACL</code></td>
+                        <td>WAF ログ</td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS::ElasticLoadBalancingV2</code></td>
+                        <td>ALB/NLB アクセスログ</td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS::Route53Resolver</code></td>
+                        <td>Route 53 Resolver クエリログ</td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS::BedrockAgentCore</code></td>
+                        <td>Bedrock AgentCore ランタイムログ</td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS::SecurityHub::Hub</code></td>
+                        <td>Security Hub セキュリティ検出ログ</td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS::CloudFront</code></td>
+                        <td>CloudFront ディストリビューションログ</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- API Methods -->
+        <div class="section">
+            <h2>⚙️ 主要 API メソッド</h2>
+            <p>CloudWatch Observability Admin Service に 8 つの API メソッドが追加されました。</p>
+            <div class="api-grid">
+                <div class="api-card">
+                    <div class="api-name">CreateTelemetryRule</div>
+                    <div class="api-desc">アカウント単位のテレメトリ有効化ルールを作成</div>
+                </div>
+                <div class="api-card">
+                    <div class="api-name">CreateTelemetryRuleForOrganization</div>
+                    <div class="api-desc">組織全体のテレメトリ有効化ルールを作成</div>
+                </div>
+                <div class="api-card">
+                    <div class="api-name">GetTelemetryEvaluationStatus</div>
+                    <div class="api-desc">アカウントのテレメトリ監査ステータスを取得</div>
+                </div>
+                <div class="api-card">
+                    <div class="api-name">GetTelemetryEvaluationStatusForOrganization</div>
+                    <div class="api-desc">組織全体のテレメトリ監査ステータスを取得</div>
+                </div>
+                <div class="api-card">
+                    <div class="api-name">GetTelemetryRule</div>
+                    <div class="api-desc">特定のテレメトリルールの詳細を取得</div>
+                </div>
+                <div class="api-card">
+                    <div class="api-name">GetTelemetryRuleForOrganization</div>
+                    <div class="api-desc">組織レベルのテレメトリルール詳細を取得</div>
+                </div>
+                <div class="api-card">
+                    <div class="api-name">UpdateTelemetryRule</div>
+                    <div class="api-desc">アカウント単位のテレメトリルールを更新</div>
+                </div>
+                <div class="api-card">
+                    <div class="api-name">UpdateTelemetryRuleForOrganization</div>
+                    <div class="api-desc">組織全体のテレメトリルールを更新</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Setup Steps -->
+        <div class="section">
+            <h2>💻 設定方法</h2>
+            <p>テレメトリ監査の有効化から有効化ルールの作成まで、4 ステップで設定できます。</p>
+
+            <h3 style="color: var(--aws-white); font-size: 16px; margin: 20px 0 12px;">ステップ 1: テレメトリ監査の有効化</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">アカウント単位でテレメトリ監査を開始</span>
+                </div>
+                <pre><code class="language-bash"># アカウント単位でテレメトリ監査を開始
+aws observabilityadmin start-telemetry-evaluation</code></pre>
+            </div>
+
+            <h3 style="color: var(--aws-white); font-size: 16px; margin: 20px 0 12px;">ステップ 2: テレメトリ監査ステータスの確認</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">テレメトリ監査のステータスを確認</span>
+                </div>
+                <pre><code class="language-bash"># テレメトリ監査のステータスを確認
+aws observabilityadmin get-telemetry-evaluation-status</code></pre>
+            </div>
+
+            <h3 style="color: var(--aws-white); font-size: 16px; margin: 20px 0 12px;">ステップ 3: テレメトリ有効化ルールの作成</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">特定リージョンに対する EC2 メトリクスの有効化ルール</span>
+                </div>
+                <pre><code class="language-bash"># 特定リージョンに対する EC2 メトリクスの有効化ルールを作成
+aws observabilityadmin create-telemetry-rule \
+    --rule-name "ec2-metrics-apac" \
+    --rule '{
+        "ResourceType": "AWS::EC2::Instance",
+        "TelemetryType": "Metrics",
+        "Regions": ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2"],
+        "AllRegions": false
+    }'</code></pre>
+            </div>
+
+            <h3 style="color: var(--aws-white); font-size: 16px; margin: 20px 0 12px;">ステップ 4: 組織全体へのルール適用</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">組織全体に CloudTrail ログの有効化ルールを作成</span>
+                </div>
+                <pre><code class="language-bash"># 組織全体に CloudTrail ログの有効化ルールを作成
+aws observabilityadmin create-telemetry-rule-for-organization \
+    --rule-name "cloudtrail-logs-org-wide" \
+    --rule '{
+        "ResourceType": "AWS::CloudTrail",
+        "TelemetryType": "Logs",
+        "DestinationConfiguration": {
+            "DestinationType": "cloud-watch-logs",
+            "DestinationPattern": "/aws/cloudtrail",
+            "RetentionInDays": 365
+        },
+        "AllRegions": true
+    }'</code></pre>
+            </div>
+        </div>
+
+        <!-- Code Sample - Python SDK -->
+        <div class="section">
+            <h2>🐍 Python SDK サンプルコード</h2>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Python</span>
+                    <span class="code-title">全リージョンに VPC フローログの有効化ルールを作成</span>
+                </div>
+                <pre><code class="language-python">import boto3
+
+client = boto3.client('observabilityadmin')
+
+# 全リージョンに VPC フローログの有効化ルールを作成
+response = client.create_telemetry_rule(
+    RuleName='vpc-flow-logs-all-regions',
+    Rule={
+        'ResourceType': 'AWS::EC2::VPC',
+        'TelemetryType': 'Logs',
+        'TelemetrySourceTypes': ['VPC_FLOW_LOGS'],
+        'DestinationConfiguration': {
+            'DestinationType': 'cloud-watch-logs',
+            'DestinationPattern': '/aws/vpc/flowlogs',
+            'RetentionInDays': 90,
+            'VPCFlowLogParameters': {
+                'TrafficType': 'ALL',
+                'MaxAggregationInterval': 60
+            }
+        },
+        'AllRegions': True
+    },
+    Tags={
+        'Environment': 'production',
+        'ManagedBy': 'observability-team'
+    }
+)
+
+print(f"Rule ARN: {response['RuleArn']}")</code></pre>
+            </div>
+        </div>
+
+        <!-- Merits / Demerits -->
+        <div class="section">
+            <h2>⚖️ メリットと制約事項</h2>
+            <div class="merit-grid">
+                <div class="merit-column pros">
+                    <h3>✅ メリット</h3>
+                    <div class="merit-item">
+                        <strong>運用コストの削減:</strong> 各リージョンでの個別設定作業が不要になり、マルチリージョン環境のオブザーバビリティ管理工数を大幅に削減
+                    </div>
+                    <div class="merit-item">
+                        <strong>コンプライアンス遵守の効率化:</strong> 組織全体でテレメトリポリシーを統一的に適用し、監査要件への準拠を効率的に維持
+                    </div>
+                    <div class="merit-item">
+                        <strong>新リージョン展開の迅速化:</strong> 全リージョン設定のルールにより、新リージョンへの展開時にテレメトリ追加作業が不要
+                    </div>
+                    <div class="merit-item">
+                        <strong>自動拡張:</strong> <code>AllRegions</code> フラグで新リージョン利用可能時にルールが自動拡張
+                    </div>
+                    <div class="merit-item">
+                        <strong>API 自動化:</strong> 8 つの API メソッドでテレメトリルールの CRUD をプログラマティックに管理
+                    </div>
+                </div>
+                <div class="merit-column cons">
+                    <h3>⚠️ 制約事項と注意点</h3>
+                    <div class="merit-item">
+                        <strong>送信先タイプの制限:</strong> 現時点で <code>cloud-watch-logs</code> のみサポート
+                    </div>
+                    <div class="merit-item">
+                        <strong>リージョン制限:</strong> GovCloud や中国リージョンは対象外。AWS 商用リージョンのみ対応
+                    </div>
+                    <div class="merit-item">
+                        <strong>非同期適用:</strong> ルール適用は非同期のため、全リージョンへの反映に時間がかかる場合がある
+                    </div>
+                    <div class="merit-item">
+                        <strong>コスト考慮:</strong> 全リージョン有効化により、意図しないリージョンでもテレメトリが有効化される可能性あり。コストへの影響を事前に見積もること
+                    </div>
+                    <div class="merit-item">
+                        <strong>権限管理:</strong> Organizations レベルのルールは管理アカウントからのみ作成可能
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Use Cases -->
+        <div class="section">
+            <h2>🎯 ユースケース</h2>
+            <div class="usecase">
+                <h3>🌍 ユースケース 1: マルチリージョンワークロードの統一オブザーバビリティ</h3>
+                <p>グローバルに展開された Web アプリケーションが複数リージョンで EC2 インスタンスと VPC を使用しており、すべてのリージョンでメトリクスとログを一貫して収集する必要がある。</p>
+                <p>全リージョンの EC2 インスタンスメトリクスと VPC フローログを <code>AllRegions: true</code> で有効化。</p>
+                <div class="effect">💡 効果: 新リージョンへの展開時にテレメトリ設定を手動追加する必要がなくなり、常に全リージョンで一貫したオブザーバビリティが確保される</div>
+            </div>
+            <div class="usecase">
+                <h3>🔒 ユースケース 2: 組織全体のセキュリティ監査ログの一元化</h3>
+                <p>セキュリティチームが AWS Organizations 配下の全アカウント・全リージョンで CloudTrail ログと Security Hub の検出ログを確実に有効化し、コンプライアンス監査に対応。</p>
+                <p><code>create-telemetry-rule-for-organization</code> で CloudTrail と Security Hub のログを 365 日保持で全リージョンに適用。</p>
+                <div class="effect">💡 効果: 組織内の全アカウントとリージョンで監査ログが確実に有効化され、新規アカウント・リージョン追加時も自動的にポリシーが適用される</div>
+            </div>
+            <div class="usecase">
+                <h3>📦 ユースケース 3: EKS クラスターのマルチリージョン監視</h3>
+                <p>複数リージョンに展開された EKS クラスターの監査ログ、API サーバーログ、コントローラーマネージャーログを一元的に有効化し、Kubernetes 運用チームに一貫した可視性を提供。</p>
+                <p>APAC リージョンを指定して EKS の各種ログタイプを一括有効化。</p>
+                <div class="effect">💡 効果: 対象リージョンの EKS クラスターに一貫したログ設定が適用され、リージョンごとの個別設定が不要になる</div>
+            </div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="section">
+            <h2>💰 料金情報</h2>
+            <div class="callout">
+                クロスリージョンテレメトリ監査と有効化ルール機能自体には<span class="highlight">追加料金は発生しません</span>。ただし、有効化されたテレメトリに基づく以下の料金が適用されます。
+            </div>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <div class="price">$0.50/GB</div>
+                    <div class="price-label">CloudWatch Logs 取り込み</div>
+                </div>
+                <div class="pricing-card">
+                    <div class="price">$0.03/GB/月</div>
+                    <div class="price-label">CloudWatch Logs 保存</div>
+                </div>
+                <div class="pricing-card">
+                    <div class="price">$0.30</div>
+                    <div class="price-label">カスタムメトリクス/月<br/>最初の 10,000 メトリクス</div>
+                </div>
+                <div class="pricing-card">
+                    <div class="price">$0.50/GB</div>
+                    <div class="price-label">VPC フローログ<br/>CloudWatch Logs</div>
+                </div>
+            </div>
+            <div class="pricing-note">
+                ⚠️ 全リージョンでテレメトリを有効化する場合、リージョン数に比例してログストレージとメトリクスのコストが増加するため、事前に <code>RetentionInDays</code> やテレメトリ対象の範囲を適切に設計することが重要です。
+            </div>
+        </div>
+
+        <!-- Region -->
+        <div class="section">
+            <h2>🌍 利用可能リージョン</h2>
+            <div class="region-badge">🌐 すべての AWS 商用リージョンで利用可能</div>
+        </div>
+
+        <!-- Related Services -->
+        <div class="section">
+            <h2>🔗 関連サービス</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>📊 CloudWatch Observability Admin</h4>
+                    <p>テレメトリ監査と有効化ルールの管理基盤となるサービス</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🏢 AWS Organizations</h4>
+                    <p>組織全体へのテレメトリポリシーの一括適用を実現する統合機能</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📄 CloudWatch Logs</h4>
+                    <p>テレメトリデータの送信先として使用されるログストレージサービス</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🔍 AWS CloudTrail</h4>
+                    <p>有効化ルールの対象サービスの 1 つ。API アクティビティの記録を管理</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <h3>📎 参考リンク</h3>
+            <a href="https://aws.amazon.com/about-aws/whats-new/2026/04/amazon-cloudwatch-cross-region-enablement-rules/" target="_blank" rel="noopener noreferrer">📰 公式発表 - What's New</a>
+            <a href="https://docs.aws.amazon.com/cloudwatch/latest/APIReference/Welcome.html" target="_blank" rel="noopener noreferrer">📖 CloudWatch Observability Admin API リファレンス</a>
+            <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer">💰 Amazon CloudWatch 料金ページ</a>
+            <a href="https://awsapichanges.com/archive/changes/974e23-observabilityadmin.html" target="_blank" rel="noopener noreferrer">🔄 AWS API Changes - CloudWatch Observability Admin Service</a>
+            <div class="footer-note">
+                このインフォグラフィックは AWS 公式発表に基づいて作成されています。最新情報は公式ドキュメントをご確認ください。
+            </div>
+        </footer>
+    </div>
+
+    <!-- Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+    </script>
+    <!-- highlight.js -->
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

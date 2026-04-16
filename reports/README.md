@@ -5,10 +5,16 @@
 
 ## 2026 年
 
+- [2026-04-16 - Amazon Bedrock - Claude Opus 4.7 モデルの提供開始](2026/2026-04-16-claude-opus-4.7-amazon-bedrock.md)
+- [2026-04-16 - Amazon Quick - マルチアカウントサインイン](2026/2026-04-16-amazon-quick-multi-account-sign-in.md)
+- [2026-04-16 - AWS Elastic Disaster Recovery - AWS European Sovereign Cloud での提供開始](2026/2026-04-16-drs-thf.md)
+- [2026-04-16 - Amazon CloudWatch - クロスリージョンテレメトリ監査と有効化ルール](2026/2026-04-16-amazon-cloudwatch-cross-region-enablement-rules.md)
+- [2026-04-15 - AWS Payment Cryptography - 南米 (サンパウロ) リージョンでの提供開始](2026/2026-04-15-aws-payment-cryptography-south.md)
 - [2026-04-15 - Amazon QuickSight - シートツールチップによるリッチなコンテキストデータ探索](2026/2026-04-15-quick-sheet-tooltips.md)
 - [2026-04-14 - AWS Transform - Kiro および VS Code での利用開始](2026/2026-04-14-aws-transform-kiro-vscode.md)
 - [2026-04-14 - AWS Interconnect - multicloud 一般提供開始](2026/2026-04-14-aws-announces-ga-AWS-interconnect-multicloud.md)
 - [2026-04-14 - Amazon EC2 - C8gn/M8gn/R8gn インスタンスの EBS 最適化パフォーマンスが 2 倍に向上](2026/2026-04-14-ec2-c8gn-m8gn-r8gn-ebs.md)
+- [2026-04-14 - Amazon EC2 P6-B300 インスタンス - AWS GovCloud (US-East) リージョンでの提供開始](2026/2026-04-14-ec2-p6-b300-govcloud-us-east.md)
 - [2026-04-14 - AWS Secrets Manager - ハイブリッドポスト量子 TLS のサポート](2026/2026-04-14-aws-secrets-manager-post-quantum-tls.md)
 - [2026-04-13 - Kiro CLI 2.0 - Windows サポート、ヘッドレスモード、ターミナル UI](2026/2026-04-13-kiro-changelog-2026-04-13.md)
 - [2026-04-13 - Amazon Redshift - Top-K クエリのパフォーマンス最適化](2026/2026-04-13-amazon-redshift-topk-optimization.md)
