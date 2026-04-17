@@ -5,10 +5,21 @@
 
 ## 2026 年
 
+- [2026-04-17 - Kiro - Claude Opus 4.7 モデルサポート](2026/2026-04-17-kiro-opus-4-7.md)
+- [2026-04-17 - Amazon Managed Grafana - Grafana 12.4 ワークスペース作成サポート](2026/2026-04-17-amazon-managed-grafana-v12-create.md)
+- [2026-04-17 - AWS Deadline Cloud - AI 搭載トラブルシューティングアシスタント](2026/2026-04-17-deadline-cloud-ai-troubleshooting.md)
+- [2026-04-17 - Amazon SageMaker JumpStart - 基盤モデルの最適化デプロイメント](2026/2026-04-17-sagemaker-jumpstart-optimized-deployments.md)
+- [2026-04-17 - Amazon EC2 High Memory U7i インスタンス - アジアパシフィック (シンガポール) リージョンで利用可能に](2026/2026-04-17-ec2-high-memory-u7i-asia-pacific.md)
+- [2026-04-16 - Amazon FSx for Lustre - Persistent-2 ファイルシステムが 4 つの追加リージョンで利用可能に](2026/2026-04-16-amazon-fsx-lustre-persistent-2-aws.md)
+- [2026-04-16 - Kiro CLI - 33 秒で根本原因を特定: ビルド時間 4 年分を削減した事例](2026/2026-04-16-kiro-root-cause-in-33s.md)
+- [2026-04-16 - Amazon WorkSpaces - US East (Ohio) および Asia Pacific (Malaysia) リージョン追加](2026/2026-04-16-amazon-workspaces-available-two-new-regions.md)
 - [2026-04-16 - Amazon Bedrock - Claude Opus 4.7 モデルの提供開始](2026/2026-04-16-claude-opus-4.7-amazon-bedrock.md)
+- [2026-04-16 - Amazon CloudWatch RUM - AWS European Sovereign Cloud での提供開始](2026/2026-04-16-amazon-cloudwatch-rum-european-sovereign-cloud.md)
 - [2026-04-16 - Amazon Quick - マルチアカウントサインイン](2026/2026-04-16-amazon-quick-multi-account-sign-in.md)
+- [2026-04-16 - Amazon EC2 - C8in および C8ib インスタンスの一般提供開始](2026/2026-04-16-amazon-ec2-c8in-c8ib-instances-ga.md)
 - [2026-04-16 - AWS Elastic Disaster Recovery - AWS European Sovereign Cloud での提供開始](2026/2026-04-16-drs-thf.md)
 - [2026-04-16 - Amazon CloudWatch - クロスリージョンテレメトリ監査と有効化ルール](2026/2026-04-16-amazon-cloudwatch-cross-region-enablement-rules.md)
+- [2026-04-16 - Amazon EC2 X8aedz - ヨーロッパ (ストックホルム) リージョンで利用可能に](2026/2026-04-16-ec2-x8aedz-instances-stockholm.md)
 - [2026-04-15 - AWS Payment Cryptography - 南米 (サンパウロ) リージョンでの提供開始](2026/2026-04-15-aws-payment-cryptography-south.md)
 - [2026-04-15 - Amazon QuickSight - シートツールチップによるリッチなコンテキストデータ探索](2026/2026-04-15-quick-sheet-tooltips.md)
 - [2026-04-14 - AWS Transform - Kiro および VS Code での利用開始](2026/2026-04-14-aws-transform-kiro-vscode.md)
