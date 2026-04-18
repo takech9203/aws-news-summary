@@ -7,7 +7,9 @@
 
 - [2026-04-17 - Kiro - Claude Opus 4.7 モデルサポート](2026/2026-04-17-kiro-opus-4-7.md)
 - [2026-04-17 - Amazon Managed Grafana - Grafana 12.4 ワークスペース作成サポート](2026/2026-04-17-amazon-managed-grafana-v12-create.md)
+- [2026-04-17 - Amazon SageMaker HyperPod - フレキシブルインスタンスグループ](2026/2026-04-17-sagemaker-hyperpod-flexible-instance-groups.md)
 - [2026-04-17 - AWS Deadline Cloud - AI 搭載トラブルシューティングアシスタント](2026/2026-04-17-deadline-cloud-ai-troubleshooting.md)
+- [2026-04-17 - Amazon ECR - Pull Through Cache における Referrer 自動検出・同期サポート](2026/2026-04-17-amazon-ecr-pull-through-cache-referrers.md)
 - [2026-04-17 - Amazon SageMaker JumpStart - 基盤モデルの最適化デプロイメント](2026/2026-04-17-sagemaker-jumpstart-optimized-deployments.md)
 - [2026-04-17 - Amazon EC2 High Memory U7i インスタンス - アジアパシフィック (シンガポール) リージョンで利用可能に](2026/2026-04-17-ec2-high-memory-u7i-asia-pacific.md)
 - [2026-04-16 - Amazon FSx for Lustre - Persistent-2 ファイルシステムが 4 つの追加リージョンで利用可能に](2026/2026-04-16-amazon-fsx-lustre-persistent-2-aws.md)

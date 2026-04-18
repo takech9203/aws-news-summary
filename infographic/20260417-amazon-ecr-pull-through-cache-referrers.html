@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon ECR - Pull Through Cache Referrer 自動検出・同期サポート</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left { flex: 1; min-width: 280px; }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      line-height: 1.3;
+      margin-bottom: 8px;
+    }
+
+    .header-meta {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      opacity: 0.8;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 10px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Overview summary box */
+    .overview-summary {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(140, 79, 255, 0.08));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    /* Before / After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    @media (max-width: 640px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+
+    .before-card, .after-card {
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .before-card {
+      background: rgba(209, 50, 18, 0.10);
+      border: 1px solid rgba(209, 50, 18, 0.35);
+    }
+    .after-card {
+      background: rgba(29, 129, 2, 0.10);
+      border: 1px solid rgba(29, 129, 2, 0.35);
+    }
+    .before-card .ba-label {
+      color: var(--aws-red);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .after-card .ba-label {
+      color: var(--aws-green);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ba-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 6px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .ba-item span:first-child { flex-shrink: 0; }
+
+    /* Feature cards */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 640px) {
+      .feature-grid { grid-template-columns: 1fr; }
+    }
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 18px;
+      border-left: 4px solid var(--aws-orange);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      border-right: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .feature-card .fc-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    .feature-card .fc-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+    .feature-card .fc-desc {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--aws-light-gray);
+    }
+
+    /* Tech spec table */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+    .spec-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+    .spec-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      color: var(--aws-light-gray);
+    }
+    .spec-table tr:hover td {
+      background: rgba(255,255,255,0.03);
+    }
+
+    /* Usecase cards */
+    .usecase-card {
+      background: linear-gradient(135deg, rgba(255,153,0,0.08), rgba(255,153,0,0.02));
+      border: 1px solid rgba(255,153,0,0.2);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .usecase-card .uc-title {
+      font-weight: 600;
+      color: var(--aws-orange);
+      font-size: 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .usecase-card .uc-scenario {
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .usecase-card .uc-effect {
+      font-size: 13px;
+      background: rgba(29,129,2,0.1);
+      border-left: 3px solid var(--aws-green);
+      padding: 10px 14px;
+      border-radius: 0 6px 6px 0;
+      color: var(--aws-light-gray);
+    }
+
+    /* Pricing */
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 12px 0;
+    }
+    .pricing-item {
+      background: rgba(255,153,0,0.06);
+      border: 1px solid rgba(255,153,0,0.15);
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+    }
+    .pricing-item .pi-label {
+      font-size: 12px;
+      color: var(--aws-light-gray);
+      margin-bottom: 6px;
+    }
+    .pricing-item .pi-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--aws-orange);
+    }
+    .pricing-item .pi-note {
+      font-size: 11px;
+      color: var(--aws-light-gray);
+      opacity: 0.7;
+      margin-top: 4px;
+    }
+
+    /* Merit / Demerit */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+    @media (max-width: 640px) {
+      .merit-grid { grid-template-columns: 1fr; }
+    }
+    .merit-col h3 { font-size: 16px; }
+    .merit-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .merit-item span:first-child { flex-shrink: 0; font-size: 16px; }
+
+    /* Region tags */
+    .region-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .region-tag {
+      background: rgba(255,153,0,0.10);
+      border: 1px solid rgba(255,153,0,0.25);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Related services */
+    .related-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    @media (max-width: 640px) {
+      .related-grid { grid-template-columns: 1fr; }
+    }
+    .related-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      padding: 12px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .related-item .ri-icon { font-size: 22px; flex-shrink: 0; }
+    .related-item .ri-name { font-weight: 600; color: var(--aws-white); font-size: 14px; }
+    .related-item .ri-desc { font-size: 12px; color: var(--aws-light-gray); margin-top: 2px; }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+    footer a:hover { color: var(--aws-smile-orange); }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    /* Restriction cards */
+    .restriction-list { margin-top: 12px; }
+    .restriction-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 10px 14px;
+      background: rgba(255,243,224,0.04);
+      border-left: 3px solid var(--aws-smile-orange);
+      border-radius: 0 6px 6px 0;
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <div class="service-badge">Amazon ECR</div>
+        <h1>📦 Pull Through Cache における<br>Referrer 自動検出・同期サポート</h1>
+        <div class="header-meta">OCI Referrer Discovery and Sync | 2026 年 4 月 17 日</div>
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <div class="overview-summary">
+        Amazon ECR の <span class="highlight">Pull Through Cache</span> 機能が、<span class="highlight">OCI Referrer</span> (イメージ署名、SBOM、アテステーションなど) の自動検出と同期をサポート。Pull Through Cache リポジトリに対して Referrers API をリクエストすると、ECR が自動的に上流レジストリから関連する Referrer アーティファクトを取得してプライベートリポジトリにキャッシュする。サプライチェーンセキュリティのワークフローが Pull Through Cache 上で完結するようになった。
+      </div>
+
+      <div class="before-after">
+        <div class="before-card">
+          <div class="ba-label">❌ Before - アップデート前</div>
+          <div class="ba-item"><span>🔴</span><span>Referrers API で上流の Referrer が返されなかった</span></div>
+          <div class="ba-item"><span>🔴</span><span>cosign 署名検証には手動で上流から署名アーティファクトを取得する必要があった</span></div>
+          <div class="ba-item"><span>🔴</span><span>SBOM やアテステーション検出に上流レジストリへの直接アクセスが必要だった</span></div>
+          <div class="ba-item"><span>🔴</span><span>セキュリティワークフローと Pull Through Cache の統合が複雑で運用負荷が高かった</span></div>
+        </div>
+        <div class="after-card">
+          <div class="ba-label">✅ After - アップデート後</div>
+          <div class="ba-item"><span>🟢</span><span>Referrers API リクエスト時に ECR が自動的に Referrer を検出・同期</span></div>
+          <div class="ba-item"><span>🟢</span><span>署名検証がクライアント側の回避策なしで Pull Through Cache 経由で動作</span></div>
+          <div class="ba-item"><span>🟢</span><span>SBOM ディスカバリーとアテステーション取得がシームレスに利用可能</span></div>
+          <div class="ba-item"><span>🟢</span><span>セキュリティツールチェーンを Pull Through Cache に直接使用可能</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p style="margin-bottom: 12px; font-size: 14px;">Pull Through Cache リポジトリに対する Referrers API リクエスト時に、ECR が自動的に上流レジストリから Referrer アーティファクトを検出・同期し、クライアントに返却するフロー。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+sequenceDiagram
+    participant Client as 👤 クライアント
+    participant ECR as 📦 ECR Pull Through Cache
+    participant Upstream as ☁️ 上流レジストリ
+
+    Note over Client,Upstream: イメージプル時のフロー
+    Client->>ECR: docker pull イメージ
+    ECR->>Upstream: イメージ取得
+    Upstream-->>ECR: イメージレイヤー返却
+    ECR-->>Client: キャッシュ済みイメージ返却
+
+    Note over Client,Upstream: Referrer 検出・同期フロー - 新機能
+    Client->>ECR: Referrers API リクエスト
+    ECR->>Upstream: 上流 Referrer を自動検出
+    Upstream-->>ECR: 署名 / SBOM / アテステーション返却
+    ECR->>ECR: Referrer をキャッシュに保存
+    ECR-->>Client: キャッシュ済み Referrer 返却
+
+    Note over Client: 署名検証 / SBOM 検出が Pull Through Cache で完結
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="fc-icon">🔍</div>
+          <div class="fc-title">OCI Referrer の自動検出</div>
+          <div class="fc-desc">Referrers API 呼び出し時に ECR が自動的に上流レジストリの Referrer を検出。OCI Distribution Spec v1.1 に準拠した Referrers API をサポート。</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🔄</div>
+          <div class="fc-title">Referrer アーティファクトの自動同期</div>
+          <div class="fc-desc">検出された署名、SBOM、アテステーションをプライベートリポジトリに自動キャッシュ。以降のリクエストではキャッシュされたアーティファクトを返却。</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">🔐</div>
+          <div class="fc-title">エンドツーエンドの署名検証</div>
+          <div class="fc-desc">cosign などの署名検証ツールが Pull Through Cache リポジトリに対して直接動作。クライアント側の上流レジストリへの追加アクセスが不要。</div>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon">📄</div>
+          <div class="fc-title">SBOM ディスカバリーとアテステーション取得</div>
+          <div class="fc-desc">SBOM (Software Bill of Materials) の自動検出と取得。in-toto アテステーションなどの証明書アーティファクトの自動同期。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3 style="margin-top: 0;">OCI Referrer の種類</h3>
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>Referrer タイプ</th>
+            <th>説明</th>
+            <th>代表的なツール</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>🔑 イメージ署名</td>
+            <td>コンテナイメージの暗号署名</td>
+            <td>cosign, Notation</td>
+          </tr>
+          <tr>
+            <td>📋 SBOM</td>
+            <td>ソフトウェア部品表</td>
+            <td>syft, trivy</td>
+          </tr>
+          <tr>
+            <td>📜 アテステーション</td>
+            <td>ビルドや脆弱性スキャンの証明</td>
+            <td>in-toto, SLSA</td>
+          </tr>
+          <tr>
+            <td>🛡️ 脆弱性レポート</td>
+            <td>セキュリティスキャン結果</td>
+            <td>trivy, grype</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 style="margin-top: 24px;">OCI Referrers API</h3>
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>詳細</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>API パス</td>
+            <td><code style="background:rgba(255,153,0,0.15);padding:2px 6px;border-radius:4px;">GET /v2/{name}/referrers/{digest}</code></td>
+          </tr>
+          <tr>
+            <td>仕様準拠</td>
+            <td>OCI Distribution Specification v1.1</td>
+          </tr>
+          <tr>
+            <td>フィルタリング</td>
+            <td><code style="background:rgba(255,153,0,0.15);padding:2px 6px;border-radius:4px;">artifactType</code> パラメータによるタイプフィルタリング</td>
+          </tr>
+          <tr>
+            <td>レスポンス形式</td>
+            <td>OCI Image Index (application/vnd.oci.image.index.v1+json)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Setup Guide -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="merit-item" style="margin-bottom: 6px;"><span>✓</span><span>Amazon ECR プライベートレジストリが作成されていること</span></div>
+      <div class="merit-item" style="margin-bottom: 6px;"><span>✓</span><span>Pull Through Cache ルールが設定されていること</span></div>
+      <div class="merit-item" style="margin-bottom: 16px;"><span>✓</span><span>適切な IAM 権限が付与されていること</span></div>
+
+      <h3>Step 1: Pull Through Cache ルールの確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">既存の Pull Through Cache ルールを確認</span>
+        </div>
+        <pre><code class="language-bash">aws ecr describe-pull-through-cache-rules \
+  --region us-east-1</code></pre>
+      </div>
+
+      <h3 style="margin-top: 20px;">Step 2: Pull Through Cache 経由でイメージをプル</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Docker Hub のイメージを Pull Through Cache 経由でプル</span>
+        </div>
+        <pre><code class="language-bash"># Pull Through Cache ルールに従ったリポジトリ URI を使用
+docker pull &lt;account-id&gt;.dkr.ecr.us-east-1.amazonaws.com/docker-hub/library/nginx:latest</code></pre>
+      </div>
+
+      <h3 style="margin-top: 20px;">Step 3: Referrer の検出と検証</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">署名検証と Referrer 一覧表示</span>
+        </div>
+        <pre><code class="language-bash"># cosign で Pull Through Cache リポジトリのイメージ署名を検証
+cosign verify \
+  &lt;account-id&gt;.dkr.ecr.us-east-1.amazonaws.com/docker-hub/library/nginx:latest \
+  --certificate-identity=&lt;identity&gt; \
+  --certificate-oidc-issuer=&lt;issuer&gt;
+
+# ORAS CLI で Referrer を一覧表示
+oras discover \
+  &lt;account-id&gt;.dkr.ecr.us-east-1.amazonaws.com/docker-hub/library/nginx:latest</code></pre>
+      </div>
+    </div>
+
+    <!-- Merits & Demerits -->
+    <div class="section">
+      <h2>⚖️ メリットとデメリット</h2>
+      <div class="merit-grid">
+        <div class="merit-col">
+          <h3 style="color: var(--aws-green);">✅ メリット</h3>
+          <p style="font-size:13px; color: var(--aws-orange); font-weight:600; margin: 10px 0 6px;">ビジネス面</p>
+          <div class="merit-item"><span>🟢</span><span>サプライチェーンセキュリティの強化 - 署名検証と SBOM 検出が Pull Through Cache で完結</span></div>
+          <div class="merit-item"><span>🟢</span><span>運用コストの削減 - 手動での Referrer 取得作業が不要に</span></div>
+          <div class="merit-item"><span>🟢</span><span>コンプライアンス対応の簡素化 - SBOM やアテステーションの自動収集</span></div>
+          <p style="font-size:13px; color: var(--aws-orange); font-weight:600; margin: 14px 0 6px;">技術面</p>
+          <div class="merit-item"><span>🟢</span><span>シームレスな統合 - cosign、ORAS、Notation などが追加設定なしで動作</span></div>
+          <div class="merit-item"><span>🟢</span><span>キャッシュによるパフォーマンス向上 - 以降のリクエストで上流への通信が不要</span></div>
+          <div class="merit-item"><span>🟢</span><span>クライアント側の複雑性排除 - 回避策スクリプトが不要に</span></div>
+        </div>
+        <div class="merit-col">
+          <h3 style="color: var(--aws-smile-orange);">⚠️ デメリット・制約事項</h3>
+          <p style="font-size:13px; color: var(--aws-orange); font-weight:600; margin: 10px 0 6px;">制限事項</p>
+          <div class="merit-item"><span>🟡</span><span>Pull Through Cache ルールの事前設定が必要</span></div>
+          <div class="merit-item"><span>🟡</span><span>上流レジストリが OCI Referrers API をサポートしている必要がある</span></div>
+          <div class="merit-item"><span>🟡</span><span>Referrer の同期はオンデマンド - プロアクティブな事前同期ではない</span></div>
+          <p style="font-size:13px; color: var(--aws-orange); font-weight:600; margin: 14px 0 6px;">考慮すべき点</p>
+          <div class="merit-item"><span>🟡</span><span>Referrer アーティファクトもストレージを消費 - ECR 料金に影響</span></div>
+          <div class="merit-item"><span>🟡</span><span>初回 Referrer 取得時は上流へのアクセスでレイテンシが増加する可能性</span></div>
+          <div class="merit-item"><span>🟡</span><span>アップストリーム認証情報 (Secrets Manager) の正しい設定が必要</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase-card">
+        <div class="uc-title">🔐 UC1: CI/CD パイプラインでのイメージ署名検証</div>
+        <div class="uc-scenario">
+          本番環境へのデプロイ前に、Pull Through Cache 経由で取得したコンテナイメージの署名を自動検証。これまで上流レジストリに直接アクセスする必要があったが、Pull Through Cache リポジトリに対して <code style="background:rgba(255,153,0,0.15);padding:2px 6px;border-radius:4px;">cosign verify</code> を実行するだけで完結。
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">CI/CD パイプラインでの署名検証ステップ</span>
+          </div>
+          <pre><code class="language-bash">IMAGE="&lt;account-id&gt;.dkr.ecr.us-east-1.amazonaws.com/docker-hub/library/nginx:latest"
+
+# Pull Through Cache から署名を自動取得して検証
+cosign verify $IMAGE \
+  --certificate-identity="https://github.com/myorg/myrepo/.github/workflows/release.yml@refs/heads/main" \
+  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"</code></pre>
+        </div>
+        <div class="uc-effect">
+          <strong>効果:</strong> デプロイパイプラインの署名検証が簡素化。ネットワークポリシーで外部レジストリへのアクセスを制限している環境でも署名検証が可能。
+        </div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="uc-title">📋 UC2: SBOM ベースの脆弱性管理</div>
+        <div class="uc-scenario">
+          セキュリティチームが、Pull Through Cache 経由で使用しているサードパーティコンテナイメージの SBOM を自動的に収集し、脆弱性管理プラットフォームに連携。
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">SBOM 取得と脆弱性スキャン連携</span>
+          </div>
+          <pre><code class="language-bash">IMAGE="&lt;account-id&gt;.dkr.ecr.us-east-1.amazonaws.com/docker-hub/library/python:3.12"
+
+# ORAS で SBOM Referrer を検出
+oras discover $IMAGE --artifact-type "application/spdx+json"
+
+# SBOM をダウンロードして脆弱性スキャンツールに入力
+oras pull $IMAGE --include-subject --artifact-type "application/spdx+json" -o /tmp/sbom/</code></pre>
+        </div>
+        <div class="uc-effect">
+          <strong>効果:</strong> サードパーティイメージの SBOM 収集が自動化され、ソフトウェアサプライチェーンの可視性が向上。米国大統領令 14028 などの SBOM 要件への対応が容易に。
+        </div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="uc-title">🛡️ UC3: SLSA アテステーションによるビルド来歴の検証</div>
+        <div class="uc-scenario">
+          プラットフォームチームが、Pull Through Cache で取得したベースイメージの SLSA アテステーションを検証し、信頼できるビルドプロセスで生成されたことを確認。
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">SLSA アテステーション検証</span>
+          </div>
+          <pre><code class="language-bash">IMAGE="&lt;account-id&gt;.dkr.ecr.us-east-1.amazonaws.com/ghcr/myorg/base-image:v1"
+
+# cosign でアテステーションを検証
+cosign verify-attestation $IMAGE \
+  --type slsaprovenance \
+  --certificate-identity="https://github.com/myorg/base-image/.github/workflows/build.yml@refs/heads/main" \
+  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"</code></pre>
+        </div>
+        <div class="uc-effect">
+          <strong>効果:</strong> ベースイメージのビルド来歴を自動検証でき、サプライチェーン攻撃のリスクを軽減。Pull Through Cache を使用しながら SLSA レベル要件を満たすことが可能。
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p style="margin-bottom: 16px; font-size: 14px;">Pull Through Cache の Referrer 同期機能自体に<span class="highlight">追加料金は発生しない</span>。以下の標準的な ECR 料金が適用される。</p>
+      <div class="pricing-grid">
+        <div class="pricing-item">
+          <div class="pi-label">ストレージ</div>
+          <div class="pi-value">$0.10</div>
+          <div class="pi-note">/GB/月</div>
+        </div>
+        <div class="pricing-item">
+          <div class="pi-label">データ転送 (インターネットへ)</div>
+          <div class="pi-value">$0.09</div>
+          <div class="pi-note">/GB (最初の 10TB まで)</div>
+        </div>
+        <div class="pricing-item">
+          <div class="pi-label">プライベートリポジトリへのプッシュ</div>
+          <div class="pi-value">無料</div>
+          <div class="pi-note">&nbsp;</div>
+        </div>
+        <div class="pricing-item">
+          <div class="pi-label">プライベートリポジトリからのプル</div>
+          <div class="pi-value">無料</div>
+          <div class="pi-note">同一リージョン内</div>
+        </div>
+      </div>
+      <p style="margin-top: 12px; font-size: 13px; opacity: 0.8;">Referrer アーティファクトもストレージを消費するが、一般的に署名や SBOM のサイズは数 KB - 数 MB 程度であり、イメージレイヤーと比較して影響は小さい。</p>
+    </div>
+
+    <!-- Regions -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p style="margin-bottom: 12px; font-size: 14px;">Amazon ECR Pull Through Cache がサポートされているすべての AWS リージョンで利用可能。</p>
+      <div class="region-tags">
+        <span class="region-tag">🇺🇸 米国東部 (バージニア北部, オハイオ)</span>
+        <span class="region-tag">🇺🇸 米国西部 (北カリフォルニア, オレゴン)</span>
+        <span class="region-tag">🇪🇺 欧州 (フランクフルト, アイルランド, ロンドン, パリ, ストックホルム, ミラノ, スペイン, チューリッヒ)</span>
+        <span class="region-tag">🇯🇵 アジアパシフィック (東京, 大阪)</span>
+        <span class="region-tag">🇰🇷 ソウル</span>
+        <span class="region-tag">🇸🇬 シンガポール</span>
+        <span class="region-tag">🇦🇺 シドニー, メルボルン</span>
+        <span class="region-tag">🇮🇳 ムンバイ, ハイデラバード</span>
+        <span class="region-tag">🇮🇩 ジャカルタ</span>
+        <span class="region-tag">🇨🇦 カナダ (中部, 西部)</span>
+        <span class="region-tag">🇧🇷 南米 (サンパウロ)</span>
+        <span class="region-tag">🇧🇭 中東 (バーレーン, UAE)</span>
+        <span class="region-tag">🇿🇦 アフリカ (ケープタウン)</span>
+        <span class="region-tag">🇺🇸 AWS GovCloud (US)</span>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="related-grid">
+        <div class="related-item">
+          <div class="ri-icon">📦</div>
+          <div>
+            <div class="ri-name">Amazon ECR Pull Through Cache</div>
+            <div class="ri-desc">上流レジストリのイメージを自動キャッシュ。今回のアップデートはこの機能の拡張。</div>
+          </div>
+        </div>
+        <div class="related-item">
+          <div class="ri-icon">🔑</div>
+          <div>
+            <div class="ri-name">AWS Secrets Manager</div>
+            <div class="ri-desc">Pull Through Cache の上流レジストリ認証情報を安全に保管。</div>
+          </div>
+        </div>
+        <div class="related-item">
+          <div class="ri-icon">🔍</div>
+          <div>
+            <div class="ri-name">Amazon Inspector</div>
+            <div class="ri-desc">ECR リポジトリ内のコンテナイメージの脆弱性スキャン。SBOM 自動同期と組み合わせて包括的なセキュリティ評価。</div>
+          </div>
+        </div>
+        <div class="related-item">
+          <div class="ri-icon">🚀</div>
+          <div>
+            <div class="ri-name">Amazon ECS / Amazon EKS</div>
+            <div class="ri-desc">Pull Through Cache からコンテナイメージをプルしてワークロードを実行。署名検証済みのイメージのみデプロイするポリシーと統合可能。</div>
+          </div>
+        </div>
+        <div class="related-item">
+          <div class="ri-icon">✍️</div>
+          <div>
+            <div class="ri-name">AWS Signer</div>
+            <div class="ri-desc">コンテナイメージ署名サービス。Notation を使用した署名と検証のワークフローで活用。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p style="margin-bottom: 8px;">📎 出典:</p>
+      <ul style="list-style: none; padding: 0; margin: 0;">
+        <li style="margin-bottom: 4px;">- <a href="https://aws.amazon.com/about-aws/whats-new/2026/04/amazon-ecr-pull-through-cache-referrers/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li style="margin-bottom: 4px;">- <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/pull-through-cache.html" target="_blank" rel="noopener noreferrer">Amazon ECR Pull Through Cache ドキュメント</a></li>
+        <li style="margin-bottom: 4px;">- <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/" target="_blank" rel="noopener noreferrer">Amazon ECR ユーザーガイド</a></li>
+        <li style="margin-bottom: 4px;">- <a href="https://aws.amazon.com/ecr/pricing/" target="_blank" rel="noopener noreferrer">Amazon ECR 料金ページ</a></li>
+      </ul>
+      <p style="margin-top: 12px; opacity: 0.6;">Generated on 2026-04-18</p>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
