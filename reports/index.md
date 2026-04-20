@@ -5,6 +5,13 @@
 
 ## 2026 年
 
+- [2026-04-20 - Amazon EKS - IAM 条件キーによるクラスターガバナンスの強化](2026/2026-04-20-amazon-eks-iam-condition-keys.md)
+- [2026-04-20 - AWS Managed Microsoft AD - Windows 機能レベル 2016 への自動アップグレード](2026/2026-04-20-aws-managed-microsoft-ad-2016-functional-level.md)
+- [2026-04-20 - Amazon DocumentDB - バージョン 5.0 から 8.0 へのインプレースメジャーバージョンアップグレード](2026/2026-04-20-amazon-documentdb-mongodb-in-place-version-upgrade-5-0-to-8-0.md)
+- [2026-04-20 - Amazon S3 Express One Zone - S3 Inventory サポート](2026/2026-04-20-s3-express-one-zone-supports-s3-inventory.md)
+- [2026-04-20 - Amazon EVS - Microsoft Windows Server ライセンスの提供開始](2026/2026-04-20-amazon-evs-windows-server-licensing.md)
+- [2026-04-20 - Amazon EBS - Elastic Volumes 変更回数の拡張が AWS European Sovereign Cloud リージョンに対応](2026/2026-04-20-amazon-ebs-four-volume-modifications-european-sovereign-region.md)
+- [2026-04-20 - AWS IoT Greengrass v2.17 - 非 root インストールと軽量コンポーネントの導入](2026/2026-04-20-aws-iot-greengrass-v217.md)
 - [2026-04-17 - Kiro - Claude Opus 4.7 モデルサポート](2026/2026-04-17-kiro-opus-4-7.md)
 - [2026-04-17 - Amazon Managed Grafana - Grafana 12.4 ワークスペース作成サポート](2026/2026-04-17-amazon-managed-grafana-v12-create.md)
 - [2026-04-17 - Amazon SageMaker HyperPod - フレキシブルインスタンスグループ](2026/2026-04-17-sagemaker-hyperpod-flexible-instance-groups.md)

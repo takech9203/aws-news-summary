@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon EKS - IAM 条件キーによるクラスターガバナンスの強化</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      padding: 40px 24px;
+      background: linear-gradient(135deg, var(--aws-dark-squid) 0%, rgba(255, 153, 0, 0.1) 100%);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--aws-orange), var(--aws-smile-orange), var(--aws-orange));
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 12px;
+      line-height: 1.3;
+    }
+
+    .header .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+      margin-bottom: 8px;
+    }
+
+    .header .date {
+      font-size: 14px;
+      color: var(--aws-orange);
+      font-weight: 600;
+    }
+
+    /* Sections */
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .section-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title .icon {
+      font-size: 26px;
+    }
+
+    /* Overview */
+    .overview-text {
+      font-size: 15px;
+      line-height: 1.8;
+      color: var(--aws-light-gray);
+      margin-bottom: 20px;
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .before-card, .after-card {
+      border-radius: 10px;
+      padding: 20px;
+    }
+
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+    }
+
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+    }
+
+    .before-card .card-label {
+      color: var(--aws-red);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .after-card .card-label {
+      color: var(--aws-green);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .before-card li, .after-card li {
+      font-size: 14px;
+      line-height: 1.7;
+      margin-bottom: 8px;
+      list-style: none;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .before-card li::before {
+      content: '\2717';
+      position: absolute;
+      left: 0;
+      color: var(--aws-red);
+      font-weight: 700;
+    }
+
+    .after-card li::before {
+      content: '\2713';
+      position: absolute;
+      left: 0;
+      color: var(--aws-green);
+      font-weight: 700;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15) 0%, rgba(255, 153, 0, 0.05) 100%);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* Feature cards */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .feature-card {
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 18px;
+    }
+
+    .feature-card .feature-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feature-card .feature-desc {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      line-height: 1.6;
+    }
+
+    .feature-card .condition-key {
+      display: inline-block;
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .mermaid-caption {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      text-align: center;
+      margin-top: 12px;
+      font-style: italic;
+    }
+
+    /* Spec table */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .spec-table th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      font-weight: 600;
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .spec-table td {
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--aws-light-gray);
+    }
+
+    .spec-table tr:hover td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .spec-table code {
+      background: rgba(255, 153, 0, 0.12);
+      color: var(--aws-orange);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+
+    .type-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .type-bool { background: rgba(140, 79, 255, 0.2); color: var(--aws-purple); }
+    .type-string { background: rgba(0, 161, 201, 0.2); color: var(--aws-teal); }
+    .type-arn { background: rgba(255, 153, 0, 0.2); color: var(--aws-orange); }
+
+    /* Code block */
+    .code-block {
+      background: #0d1117;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #161b22;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Usecase */
+    .usecase-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.08) 0%, rgba(255, 153, 0, 0.02) 100%);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 10px;
+      padding: 22px;
+      margin-bottom: 16px;
+    }
+
+    .usecase-card .usecase-number {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 28px;
+      font-weight: 700;
+      font-size: 14px;
+      margin-right: 10px;
+    }
+
+    .usecase-card .usecase-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--aws-white);
+      display: inline;
+    }
+
+    .usecase-card .usecase-scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin: 12px 0;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 6px;
+      border-left: 3px solid var(--aws-teal);
+    }
+
+    .usecase-card .usecase-effect {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      padding: 12px;
+      background: rgba(29, 129, 2, 0.08);
+      border-radius: 6px;
+      border-left: 3px solid var(--aws-green);
+    }
+
+    .usecase-card .usecase-effect strong {
+      color: var(--aws-green);
+    }
+
+    /* Merits / Demerits */
+    .merits-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .merit-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .merit-icon {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      line-height: 24px;
+      text-align: center;
+      font-size: 16px;
+    }
+
+    .merit-text {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .merit-text strong {
+      color: var(--aws-white);
+    }
+
+    /* Considerations */
+    .consideration-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding: 12px;
+      background: rgba(255, 153, 0, 0.05);
+      border-radius: 8px;
+      border-left: 3px solid var(--aws-orange);
+    }
+
+    .consideration-icon {
+      flex-shrink: 0;
+      font-size: 18px;
+    }
+
+    .consideration-text {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* Pricing */
+    .pricing-highlight {
+      text-align: center;
+      padding: 20px;
+      background: linear-gradient(135deg, rgba(29, 129, 2, 0.1) 0%, rgba(29, 129, 2, 0.03) 100%);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+
+    .pricing-highlight .price-label {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--aws-green);
+    }
+
+    .pricing-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .pricing-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+      padding: 10px 16px;
+      text-align: left;
+    }
+
+    .pricing-table td {
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    /* Related services */
+    .related-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .related-item {
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .related-item .related-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--aws-teal);
+      margin-bottom: 4px;
+    }
+
+    .related-item .related-desc {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Region badge */
+    .region-badge {
+      display: inline-block;
+      background: rgba(0, 161, 201, 0.15);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      color: var(--aws-teal);
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Setup steps */
+    .setup-step {
+      margin-bottom: 20px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 8px;
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 16px;
+      margin-right: 10px;
+    }
+
+    .step-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--aws-white);
+      display: inline;
+    }
+
+    .step-desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 10px;
+      line-height: 1.6;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 32px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    .footer-links {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    /* Summary box */
+    .summary-box {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.12) 0%, rgba(255, 153, 0, 0.04) 100%);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 12px;
+      padding: 24px;
+      margin-top: 20px;
+    }
+
+    .summary-box p {
+      font-size: 15px;
+      line-height: 1.8;
+      color: var(--aws-light-gray);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .header h1 { font-size: 24px; }
+      .before-after { grid-template-columns: 1fr; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .merits-grid { grid-template-columns: 1fr; }
+      .related-grid { grid-template-columns: 1fr; }
+      .flow-diagram { flex-direction: column; }
+      .flow-arrow { transform: rotate(90deg); }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="service-badge">Amazon EKS</div>
+      <h1>IAM 条件キーによるクラスターガバナンスの強化</h1>
+      <div class="subtitle">クラスター作成・設定 API 向けの 7 つの新しい IAM 条件キー</div>
+      <div class="date">2026 年 4 月 20 日</div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number">7</div>
+        <div class="stat-label">新しい IAM 条件キー</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">4</div>
+        <div class="stat-label">対象 API アクション</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">$0</div>
+        <div class="stat-label">追加料金なし</div>
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2 class="section-title"><span class="icon">📋</span> 概要</h2>
+      <p class="overview-text">
+        Amazon EKS がクラスター作成および設定 API に対して <span class="highlight">7 つの新しい IAM 条件キー</span>をサポートしました。IAM ポリシーおよび Service Control Policies (SCPs) を通じたガバナンス制御が強化され、マルチアカウント環境における EKS クラスターの構成を一元的に管理できるようになります。
+      </p>
+      <p class="overview-text">
+        エンドポイントのアクセス制御、暗号化設定、Kubernetes バージョンの制限、削除保護の強制、コントロールプレーンのスケーリングティア指定、ゾーナルシフトの有効化といった幅広い構成要素を<span class="highlight">ポリシーベースでプロアクティブに制御</span>できます。
+      </p>
+
+      <div class="before-after">
+        <div class="before-card">
+          <div class="card-label">&#x274C; アップデート前の課題</div>
+          <ul>
+            <li>EKS クラスターの構成を IAM ポリシーで細かく制御する手段が限定的だった</li>
+            <li>マルチアカウント環境でクラスター構成の標準化には手動プロセスやデプロイ後の AWS Config ルールなどリアクティブな仕組みに依存</li>
+            <li>SCP でクラスター作成自体の許可/拒否は可能だったが、個別設定パラメータに対する条件付き制御ができなかった</li>
+          </ul>
+        </div>
+        <div class="after-card">
+          <div class="card-label">&#x2705; アップデート後の改善</div>
+          <ul>
+            <li>7 つの新しい条件キーにより、クラスター作成時・設定変更時の構成パラメータを IAM ポリシーレベルで制御可能</li>
+            <li>SCP と組み合わせ、組織全体のクラスター構成ガバナンスをプロアクティブに強制可能</li>
+            <li>手動確認やデプロイ後のチェックが不要になり、ポリシー違反のクラスターが作成される前にブロック可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2 class="section-title"><span class="icon">🏗️</span> アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Org["🏢 AWS Organizations"]
+        SCP["📋 Service Control Policy<br/>EKS 条件キーによる制御"]
+    end
+
+    subgraph Account["📦 メンバーアカウント"]
+        subgraph IAM["🔐 IAM"]
+            Policy["📜 IAM ポリシー<br/>条件キーによるガードレール"]
+        end
+
+        subgraph EKS["☸ Amazon EKS"]
+            direction LR
+            Create["⚡ CreateCluster"]
+            Update["🔄 UpdateClusterConfig"]
+            Version["📌 UpdateClusterVersion"]
+            Encrypt["🔑 AssociateEncryptionConfig"]
+            Create ~~~ Update ~~~ Version ~~~ Encrypt
+        end
+    end
+
+    subgraph Conditions["🛡️ IAM 条件キー"]
+        direction LR
+        C1["🔒 endpointPublicAccess<br/>endpointPrivateAccess"]
+        C2["🔑 encryptionConfig<br/>ProviderKeyArns"]
+        C3["📌 kubernetesVersion"]
+        C4["🛡️ deletionProtection"]
+        C5["📊 controlPlane<br/>ScalingTier"]
+        C6["🌐 zonalShiftEnabled"]
+        C1 ~~~ C2 ~~~ C3
+        C4 ~~~ C5 ~~~ C6
+    end
+
+    SCP --> Policy
+    Policy -->|条件を評価| EKS
+    Conditions -.->|制御対象| EKS
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class Org cloud
+    class Account,IAM,EKS layer
+    class SCP,Policy decision
+    class Create,Update,Version,Encrypt compute
+    class Conditions cloud
+    class C1,C2,C3,C4,C5,C6 internal
+        </pre>
+      </div>
+      <p class="mermaid-caption">AWS Organizations の SCP および IAM ポリシーで新しい条件キーを使用し、EKS クラスターの作成・設定 API に対するガバナンスを適用するフロー</p>
+    </div>
+
+    <!-- Governance Flow -->
+    <div class="section">
+      <h2 class="section-title"><span class="icon">🔄</span> ガバナンス適用フロー</h2>
+      <div class="flow-diagram">
+        <div class="flow-step">👤 開発者<br/>クラスター作成要求</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step">🔐 IAM / SCP<br/>条件キーを評価</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step">🛡️ ポリシー判定<br/>許可 or 拒否</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step">☸ EKS<br/>クラスター作成</div>
+      </div>
+      <p style="text-align: center; font-size: 13px; color: var(--aws-light-gray);">条件を満たさない API リクエストは実行前にブロックされ、非準拠クラスターの作成を未然に防止</p>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2 class="section-title"><span class="icon">⚙️</span> 主要機能: 7 つの IAM 条件キー</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-title">🔒 エンドポイントアクセス制御</div>
+          <div class="feature-desc">
+            クラスター API エンドポイントのパブリック/プライベートアクセスを条件として制御。組み合わせにより、プライベート専用エンドポイントの強制が可能。
+          </div>
+          <span class="condition-key">eks:endpointPublicAccess</span>
+          <span class="condition-key">eks:endpointPrivateAccess</span>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">🔑 暗号化設定の強制</div>
+          <div class="feature-desc">
+            Kubernetes シークレットの暗号化に使用する KMS キーの ARN を条件として指定。カスタマーマネージド KMS キーの使用を強制可能。
+          </div>
+          <span class="condition-key">eks:encryptionConfigProviderKeyArns</span>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">📌 Kubernetes バージョンの制限</div>
+          <div class="feature-desc">
+            使用可能な Kubernetes バージョンを条件として制限。組織で承認済みのバージョンのみにクラスター作成・アップグレードを限定可能。
+          </div>
+          <span class="condition-key">eks:kubernetesVersion</span>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">🛡️ 削除保護の強制</div>
+          <div class="feature-desc">
+            クラスターの削除保護設定を条件として制御。本番環境ワークロード向けクラスターの誤削除を防止。
+          </div>
+          <span class="condition-key">eks:deletionProtection</span>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">📊 コントロールプレーンスケーリングティア</div>
+          <div class="feature-desc">
+            コントロールプレーンのスケーリングティアを条件として指定。ワークロード要件に応じた適切なティアの使用を強制可能。
+          </div>
+          <span class="condition-key">eks:controlPlaneScalingTier</span>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">🌐 ゾーナルシフトの強制</div>
+          <div class="feature-desc">
+            ゾーナルシフト機能の有効/無効を条件として制御。高可用性が求められるワークロードに対してゾーナルシフトの有効化を強制可能。
+          </div>
+          <span class="condition-key">eks:zonalShiftEnabled</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specifications -->
+    <div class="section">
+      <h2 class="section-title"><span class="icon">📊</span> 技術仕様</h2>
+      <h3 style="color: var(--aws-white); font-size: 17px; margin-bottom: 14px;">条件キーの一覧</h3>
+      <div style="overflow-x: auto;">
+        <table class="spec-table">
+          <thead>
+            <tr>
+              <th>条件キー</th>
+              <th>型</th>
+              <th>対象 API</th>
+              <th>説明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>eks:endpointPublicAccess</code></td>
+              <td><span class="type-badge type-bool">Bool</span></td>
+              <td>CreateCluster, UpdateClusterConfig</td>
+              <td>パブリック API エンドポイントの許可/拒否</td>
+            </tr>
+            <tr>
+              <td><code>eks:endpointPrivateAccess</code></td>
+              <td><span class="type-badge type-bool">Bool</span></td>
+              <td>CreateCluster, UpdateClusterConfig</td>
+              <td>プライベート API エンドポイントの許可/拒否</td>
+            </tr>
+            <tr>
+              <td><code>eks:encryptionConfigProviderKeyArns</code></td>
+              <td><span class="type-badge type-arn">ARN</span></td>
+              <td>CreateCluster, AssociateEncryptionConfig</td>
+              <td>シークレット暗号化用 KMS キー ARN</td>
+            </tr>
+            <tr>
+              <td><code>eks:kubernetesVersion</code></td>
+              <td><span class="type-badge type-string">String</span></td>
+              <td>CreateCluster, UpdateClusterVersion</td>
+              <td>Kubernetes バージョン</td>
+            </tr>
+            <tr>
+              <td><code>eks:deletionProtection</code></td>
+              <td><span class="type-badge type-string">String</span></td>
+              <td>CreateCluster, UpdateClusterConfig</td>
+              <td>削除保護の有効/無効</td>
+            </tr>
+            <tr>
+              <td><code>eks:controlPlaneScalingTier</code></td>
+              <td><span class="type-badge type-string">String</span></td>
+              <td>CreateCluster, UpdateClusterConfig</td>
+              <td>コントロールプレーンスケーリングティア</td>
+            </tr>
+            <tr>
+              <td><code>eks:zonalShiftEnabled</code></td>
+              <td><span class="type-badge type-bool">Bool</span></td>
+              <td>CreateCluster, UpdateClusterConfig</td>
+              <td>ゾーナルシフトの有効/無効</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="color: var(--aws-white); font-size: 17px; margin: 24px 0 14px;">対象 API アクション</h3>
+      <div style="overflow-x: auto;">
+        <table class="spec-table">
+          <thead>
+            <tr>
+              <th>API</th>
+              <th>説明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>CreateCluster</code></td>
+              <td>新しい EKS クラスターの作成</td>
+            </tr>
+            <tr>
+              <td><code>UpdateClusterConfig</code></td>
+              <td>既存クラスターの設定変更</td>
+            </tr>
+            <tr>
+              <td><code>UpdateClusterVersion</code></td>
+              <td>クラスターの Kubernetes バージョン更新</td>
+            </tr>
+            <tr>
+              <td><code>AssociateEncryptionConfig</code></td>
+              <td>クラスターへの暗号化設定の関連付け</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Setup Guide -->
+    <div class="section">
+      <h2 class="section-title"><span class="icon">🔧</span> 設定方法</h2>
+
+      <h3 style="color: var(--aws-white); font-size: 17px; margin-bottom: 14px;">前提条件</h3>
+      <div style="margin-bottom: 24px;">
+        <div class="merit-item">
+          <span class="merit-icon">&#x2713;</span>
+          <span class="merit-text">AWS Organizations が有効化されていること (SCP を使用する場合)</span>
+        </div>
+        <div class="merit-item">
+          <span class="merit-icon">&#x2713;</span>
+          <span class="merit-text">IAM ポリシーの作成・編集権限があること</span>
+        </div>
+        <div class="merit-item">
+          <span class="merit-icon">&#x2713;</span>
+          <span class="merit-text">EKS クラスターの管理権限があること</span>
+        </div>
+      </div>
+
+      <div class="setup-step">
+        <span class="step-number">1</span>
+        <span class="step-title">プライベートエンドポイントを強制する SCP の作成</span>
+        <div class="step-desc">パブリックエンドポイントが有効なクラスターの作成・設定変更を拒否し、プライベート専用エンドポイントのみを許可します。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <span class="code-title">SCP: プライベートエンドポイント強制</span>
+          </div>
+          <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "DenyPublicEKSEndpoint",
+            "Effect": "Deny",
+            "Action": [
+                "eks:CreateCluster",
+                "eks:UpdateClusterConfig"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "Bool": {
+                    "eks:endpointPublicAccess": "true"
+                }
+            }
+        },
+        {
+            "Sid": "RequirePrivateEKSEndpoint",
+            "Effect": "Deny",
+            "Action": [
+                "eks:CreateCluster",
+                "eks:UpdateClusterConfig"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "Bool": {
+                    "eks:endpointPrivateAccess": "false"
+                }
+            }
+        }
+    ]
+}</code></pre>
+        </div>
+      </div>
+
+      <div class="setup-step">
+        <span class="step-number">2</span>
+        <span class="step-title">カスタマーマネージド KMS キーを強制する SCP の作成</span>
+        <div class="step-desc">カスタマーマネージド KMS キーが指定されていないクラスターの作成および暗号化設定の関連付けを拒否します。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <span class="code-title">SCP: KMS 暗号化強制</span>
+          </div>
+          <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "RequireCustomerManagedKMSKey",
+            "Effect": "Deny",
+            "Action": [
+                "eks:CreateCluster",
+                "eks:AssociateEncryptionConfig"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "ForAllValues:ArnNotLike": {
+                    "eks:encryptionConfigProviderKeyArns": "arn:aws:kms:*:*:key/*"
+                }
+            }
+        }
+    ]
+}</code></pre>
+        </div>
+      </div>
+
+      <div class="setup-step">
+        <span class="step-number">3</span>
+        <span class="step-title">Kubernetes バージョンと削除保護を強制する SCP の作成</span>
+        <div class="step-desc">承認済みの Kubernetes バージョン以外でのクラスター作成・バージョン更新を拒否し、削除保護が有効でないクラスターの作成を拒否します。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <span class="code-title">SCP: バージョン制限 + 削除保護</span>
+          </div>
+          <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "RestrictKubernetesVersion",
+            "Effect": "Deny",
+            "Action": [
+                "eks:CreateCluster",
+                "eks:UpdateClusterVersion"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringNotEquals": {
+                    "eks:kubernetesVersion": [
+                        "1.31",
+                        "1.32"
+                    ]
+                }
+            }
+        },
+        {
+            "Sid": "RequireDeletionProtection",
+            "Effect": "Deny",
+            "Action": [
+                "eks:CreateCluster",
+                "eks:UpdateClusterConfig"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringNotEquals": {
+                    "eks:deletionProtection": "ENABLED"
+                }
+            }
+        }
+    ]
+}</code></pre>
+        </div>
+      </div>
+
+      <div class="setup-step">
+        <span class="step-number">4</span>
+        <span class="step-title">SCP を Organizations の OU にアタッチ</span>
+        <div class="step-desc">作成した SCP を AWS Organizations の組織単位にアタッチすることで、OU 配下のすべてのアカウントに対してポリシーが適用されます。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI: SCP 作成とアタッチ</span>
+          </div>
+          <pre><code class="language-bash"># SCP を作成
+aws organizations create-policy \
+  --name "EKS-Governance-Policy" \
+  --description "Enforce EKS cluster governance with IAM condition keys" \
+  --type SERVICE_CONTROL_POLICY \
+  --content file://eks-governance-scp.json
+
+# SCP を OU にアタッチ
+aws organizations attach-policy \
+  --policy-id p-xxxxxxxxxxxx \
+  --target-id ou-xxxx-xxxxxxxx</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2 class="section-title"><span class="icon">💡</span> ユースケース</h2>
+
+      <div class="usecase-card">
+        <span class="usecase-number">1</span>
+        <span class="usecase-title">🏦 金融機関のセキュアクラスター強制</span>
+        <div class="usecase-scenario">
+          <strong style="color: var(--aws-teal);">シナリオ:</strong> 金融機関が複数の AWS アカウントで EKS クラスターを運用しており、すべてのクラスターでプライベートエンドポイント、カスタマーマネージド KMS キーによるシークレット暗号化、削除保護を必須とするセキュリティポリシーがある。
+        </div>
+        <div class="usecase-effect">
+          <strong>効果:</strong> 組織全体のすべてのアカウントで、セキュリティ要件を満たさない EKS クラスターの作成が自動的にブロックされ、コンプライアンス違反を未然に防止できる。
+        </div>
+      </div>
+
+      <div class="usecase-card">
+        <span class="usecase-number">2</span>
+        <span class="usecase-title">📌 標準化された Kubernetes バージョン管理</span>
+        <div class="usecase-scenario">
+          <strong style="color: var(--aws-teal);">シナリオ:</strong> 大規模な組織でプラットフォームチームが、すべての開発チームが使用する Kubernetes バージョンを組織承認済みのバージョンに制限し、サポート切れのバージョンでのクラスター作成を防止したい。
+        </div>
+        <div class="usecase-effect">
+          <strong>効果:</strong> 組織で承認されたバージョンのみでクラスターが作成・更新されるため、セキュリティパッチの適用状況やサポートライフサイクルの一元管理が容易になる。
+        </div>
+      </div>
+
+      <div class="usecase-card">
+        <span class="usecase-number">3</span>
+        <span class="usecase-title">🌐 本番環境の高可用性ガードレール</span>
+        <div class="usecase-scenario">
+          <strong style="color: var(--aws-teal);">シナリオ:</strong> 本番環境の OU に属するアカウントでは、すべての EKS クラスターにゾーナルシフトの有効化と削除保護を強制し、障害時の可用性と誤操作防止を確保したい。
+        </div>
+        <div class="usecase-effect">
+          <strong>効果:</strong> 本番環境のクラスターには必ずゾーナルシフトと削除保護が有効化されるため、AZ 障害時の自動フェイルオーバーと誤削除防止のガードレールが確立される。
+        </div>
+      </div>
+    </div>
+
+    <!-- Merits / Demerits -->
+    <div class="section">
+      <h2 class="section-title"><span class="icon">⚖️</span> メリットとデメリット</h2>
+
+      <div class="merits-grid">
+        <div>
+          <h3 style="color: var(--aws-green); font-size: 17px; margin-bottom: 14px;">&#x2705; ビジネス面のメリット</h3>
+          <div class="merit-item">
+            <span class="merit-icon" style="color: var(--aws-green);">&#x2713;</span>
+            <span class="merit-text"><strong>コンプライアンスの自動化:</strong> IAM ポリシーレベルでクラスター構成を強制し、手動レビューやデプロイ後の監査への依存を排除</span>
+          </div>
+          <div class="merit-item">
+            <span class="merit-icon" style="color: var(--aws-green);">&#x2713;</span>
+            <span class="merit-text"><strong>マルチアカウントガバナンス:</strong> SCP と組み合わせ、組織全体に一貫したクラスター構成ポリシーを適用</span>
+          </div>
+          <div class="merit-item">
+            <span class="merit-icon" style="color: var(--aws-green);">&#x2713;</span>
+            <span class="merit-text"><strong>運用リスクの軽減:</strong> 削除保護やパブリックエンドポイント制限により人的ミスを予防</span>
+          </div>
+        </div>
+        <div>
+          <h3 style="color: var(--aws-green); font-size: 17px; margin-bottom: 14px;">&#x2705; 技術面のメリット</h3>
+          <div class="merit-item">
+            <span class="merit-icon" style="color: var(--aws-green);">&#x2713;</span>
+            <span class="merit-text"><strong>プロアクティブなポリシー適用:</strong> クラスター作成時点で構成違反をブロックし、後からの修正コストが不要</span>
+          </div>
+          <div class="merit-item">
+            <span class="merit-icon" style="color: var(--aws-green);">&#x2713;</span>
+            <span class="merit-text"><strong>きめ細かいアクセス制御:</strong> 7 つの条件キーにより多角的な構成要素を個別に制御可能</span>
+          </div>
+          <div class="merit-item">
+            <span class="merit-icon" style="color: var(--aws-green);">&#x2713;</span>
+            <span class="merit-text"><strong>既存 IAM との統合:</strong> 新しいツールやサービスの導入不要で、既存の仕組みをそのまま活用</span>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="color: var(--aws-red); font-size: 17px; margin: 24px 0 14px;">&#x26A0;&#xFE0F; 制限事項・考慮すべき点</h3>
+      <div class="consideration-item">
+        <span class="consideration-icon">&#x26A0;&#xFE0F;</span>
+        <span class="consideration-text">条件キーは対象 API に対してのみ適用され、既存クラスターの構成を自動修正する機能はない。既にデプロイ済みのクラスターには遡及適用されない。</span>
+      </div>
+      <div class="consideration-item">
+        <span class="consideration-icon">&#x26A0;&#xFE0F;</span>
+        <span class="consideration-text">SCP の最大文字数制限 (5,120 文字) があるため、多数の条件キーを含む複雑なポリシーでは分割が必要になる場合がある。</span>
+      </div>
+      <div class="consideration-item">
+        <span class="consideration-icon">&#x26A0;&#xFE0F;</span>
+        <span class="consideration-text">複数の条件キーを組み合わせる場合、ポリシーの論理構造を慎重に設計する必要がある。条件キーの値が API リクエストに含まれない場合の挙動を理解した上でポリシーを設計すること。</span>
+      </div>
+      <div class="consideration-item">
+        <span class="consideration-icon">&#x26A0;&#xFE0F;</span>
+        <span class="consideration-text">既存クラスターの構成適合性を確認するには、AWS Config のカスタムルールや EKS API の DescribeCluster を使用した別途の監査が必要。</span>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2 class="section-title"><span class="icon">💰</span> 料金情報</h2>
+      <div class="pricing-highlight">
+        <div class="price-label">&#x1F389; 新しい IAM 条件キーの使用に追加料金は発生しません</div>
+        <p style="font-size: 14px; margin-top: 8px;">Amazon EKS の既存の料金体系がそのまま適用されます。</p>
+      </div>
+      <table class="pricing-table">
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>料金</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>EKS クラスター</td>
+            <td>$0.10 / 時間</td>
+          </tr>
+          <tr>
+            <td>IAM 条件キー</td>
+            <td style="color: var(--aws-green); font-weight: 600;">追加料金なし</td>
+          </tr>
+          <tr>
+            <td>SCP</td>
+            <td style="color: var(--aws-green); font-weight: 600;">追加料金なし</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2 class="section-title"><span class="icon">🌍</span> 利用可能リージョン</h2>
+      <p style="margin-bottom: 16px;">Amazon EKS が利用可能なすべての AWS リージョンで、新しい IAM 条件キーを利用できます。</p>
+      <div style="text-align: center;">
+        <span class="region-badge">&#x1F30F; 全 EKS 対応リージョンで利用可能</span>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2 class="section-title"><span class="icon">🔗</span> 関連サービス・機能</h2>
+      <div class="related-grid">
+        <div class="related-item">
+          <div class="related-name">&#x1F3E2; AWS Organizations / SCP</div>
+          <div class="related-desc">条件キーを SCP に組み込むことで、マルチアカウント環境全体にガバナンスポリシーを適用可能</div>
+        </div>
+        <div class="related-item">
+          <div class="related-name">&#x1F510; AWS IAM</div>
+          <div class="related-desc">条件キーは IAM ポリシーの Condition 要素で使用し、きめ細かいアクセス制御を実現</div>
+        </div>
+        <div class="related-item">
+          <div class="related-name">&#x1F511; AWS KMS</div>
+          <div class="related-desc">encryptionConfigProviderKeyArns 条件キーと組み合わせて、カスタマーマネージド KMS キーによる暗号化を強制</div>
+        </div>
+        <div class="related-item">
+          <div class="related-name">&#x2699;&#xFE0F; AWS Config</div>
+          <div class="related-desc">既存クラスターの構成適合性を監視するカスタムルールと組み合わせて包括的なガバナンスを実現</div>
+        </div>
+        <div class="related-item" style="grid-column: 1 / -1;">
+          <div class="related-name">&#x1F6E1;&#xFE0F; Amazon Route 53 Application Recovery Controller</div>
+          <div class="related-desc">ゾーナルシフト機能と連携し、AZ 障害時の高可用性を確保</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="section">
+      <h2 class="section-title"><span class="icon">📝</span> まとめ</h2>
+      <div class="summary-box">
+        <p>
+          Amazon EKS が <span class="highlight">7 つの新しい IAM 条件キー</span>をサポートし、クラスター作成・設定 API に対するガバナンス制御が大幅に強化されました。エンドポイントアクセス、暗号化、Kubernetes バージョン、削除保護、コントロールプレーンスケーリング、ゾーナルシフトといった構成要素を IAM ポリシーおよび SCP レベルで<span class="highlight">プロアクティブに制御</span>できるようになったことで、マルチアカウント環境でのセキュリティとコンプライアンスの自動化が実現します。
+        </p>
+        <p style="margin-top: 12px;">
+          既存の IAM インフラをそのまま活用できるため、EKS クラスターを運用するすべての組織で、SCP への条件キー追加を検討することを推奨します。
+        </p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p style="font-size: 14px; color: var(--aws-orange); font-weight: 600; margin-bottom: 10px;">&#x1F4CE; 参考リンク</p>
+      <div class="footer-links">
+        <a href="https://aws.amazon.com/about-aws/whats-new/2026/04/amazon-eks-iam-condition-keys/" target="_blank" rel="noopener noreferrer">&#x1F4F0; 公式発表 - What's New</a>
+        <a href="https://docs.aws.amazon.com/eks/latest/userguide/security_iam_service-with-iam.html" target="_blank" rel="noopener noreferrer">&#x1F4D6; Amazon EKS ユーザーガイド - IAM 条件キー</a>
+        <a href="https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonelastickubernetesservice.html" target="_blank" rel="noopener noreferrer">&#x1F4D6; Amazon EKS のサービス認可リファレンス</a>
+        <a href="https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html" target="_blank" rel="noopener noreferrer">&#x1F4D6; AWS Organizations - SCP ドキュメント</a>
+        <a href="https://aws.amazon.com/eks/pricing/" target="_blank" rel="noopener noreferrer">&#x1F4B0; Amazon EKS 料金ページ</a>
+      </div>
+      <p style="margin-top: 16px; font-size: 11px; color: #888;">Generated on 2026-04-20 | AWS News Infographic</p>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
