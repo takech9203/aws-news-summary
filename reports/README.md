@@ -5,6 +5,14 @@
 
 ## 2026 年
 
+- [2026-04-24 - AWS Marketplace Management Portal - 銀行口座削除機能](2026/2026-04-24-aws-marketplace-management-portal.md)
+- [2026-04-24 - Amazon Connect - AI エージェントパフォーマンスメトリクス](2026/2026-04-24-amazon-connect-ai-agent-metrics.md)
+- [2026-04-24 - Kiro CLI 2.1 - リアルタイムシェルストリーミング、Tool Search、スキルスラッシュコマンド](2026/2026-04-24-kiro-changelog-2026-04-24.md)
+- [2026-04-24 - AWS Lambda - Kafka イベントソースマッピング向け Provisioned Mode のリージョン拡大](2026/2026-04-24-aws-Lambda-provisioned-esm-region-expansion.md)
+- [2026-04-24 - Amazon Bedrock AgentCore - Gateway および Identity の VPC エグレスサポート](2026/2026-04-24-agentcore-gateway-identity-vpc.md)
+- [2026-04-24 - AWS Deadline Cloud - ジョブサブミッションワークフロー向けカスタムスクリプティング](2026/2026-04-24-aws-deadline-cloud.md)
+- [2026-04-24 - Amazon EC2 - High Memory U7i/U7in インスタンスの追加リージョン展開](2026/2026-04-24-amazon-ec2-high-memory-u7i.md)
+- [2026-04-24 - Amazon Quick - Visier Vee エージェント統合によるワークフォースインテリジェンス](2026/2026-04-24-amazon-quick-visier-vee.md)
 - [2026-04-20 - Amazon EKS - IAM 条件キーによるクラスターガバナンスの強化](2026/2026-04-20-amazon-eks-iam-condition-keys.md)
 - [2026-04-20 - AWS Managed Microsoft AD - Windows 機能レベル 2016 への自動アップグレード](2026/2026-04-20-aws-managed-microsoft-ad-2016-functional-level.md)
 - [2026-04-20 - Amazon DocumentDB - バージョン 5.0 から 8.0 へのインプレースメジャーバージョンアップグレード](2026/2026-04-20-amazon-documentdb-mongodb-in-place-version-upgrade-5-0-to-8-0.md)
