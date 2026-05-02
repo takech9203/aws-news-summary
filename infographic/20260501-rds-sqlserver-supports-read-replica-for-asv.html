@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon RDS for SQL Server - 追加ストレージボリュームでのリードレプリカサポート</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left {
+      flex: 1;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 8px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .date-badge {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      border: 1px solid var(--aws-orange);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .feature-card {
+      background: rgba(255, 153, 0, 0.05);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 12px 0;
+    }
+
+    .feature-card h3 {
+      margin-top: 0;
+      color: var(--aws-orange);
+      font-size: 16px;
+    }
+
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-card h3 {
+      color: var(--aws-red);
+      margin-top: 0;
+      font-size: 14px;
+    }
+
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-card h3 {
+      color: var(--aws-green);
+      margin-top: 0;
+      font-size: 14px;
+    }
+
+    .before-card ul, .after-card ul {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .before-card li, .after-card li {
+      margin: 8px 0;
+      font-size: 14px;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .before-card li::before {
+      content: '✗';
+      position: absolute;
+      left: 0;
+      color: var(--aws-red);
+      font-weight: bold;
+    }
+
+    .after-card li::before {
+      content: '✓';
+      position: absolute;
+      left: 0;
+      color: var(--aws-green);
+      font-weight: bold;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+
+    .usecase-card h3 {
+      color: var(--aws-orange);
+      margin-top: 0;
+      font-size: 16px;
+    }
+
+    .usecase-card .scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 12px;
+      font-style: italic;
+    }
+
+    .usecase-card .effect {
+      font-size: 14px;
+      color: var(--aws-green);
+      margin-top: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 2px solid var(--aws-orange);
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon {
+      color: var(--aws-green);
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .cross-icon {
+      color: var(--aws-red);
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    .merit-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .merit-card {
+      background: rgba(29, 129, 2, 0.08);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .merit-card h3 {
+      color: var(--aws-green);
+      margin-top: 0;
+      font-size: 15px;
+    }
+
+    .demerit-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .demerit-card h3 {
+      color: var(--aws-orange);
+      margin-top: 0;
+      font-size: 15px;
+    }
+
+    .region-badge {
+      display: inline-block;
+      background: rgba(0, 161, 201, 0.15);
+      color: var(--aws-teal);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+      margin: 4px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    @media (max-width: 768px) {
+      h1 { font-size: 24px; }
+      h2 { font-size: 20px; }
+      .before-after { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .merit-section { grid-template-columns: 1fr; }
+      .header { flex-direction: column; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="badge">Amazon RDS for SQL Server</span>
+        <h1>🗄️ 追加ストレージボリュームでのリードレプリカサポート</h1>
+        <p class="subtitle">大容量 DB インスタンスの読み取りスケーリングとクロスリージョン DR を実現</p>
+      </div>
+      <div class="date-badge">📅 2026-05-01</div>
+    </div>
+
+    <!-- Overview Section -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon RDS for SQL Server が、<span class="highlight">追加ストレージボリューム (ASV)</span> を構成した DB インスタンスでリードレプリカの作成をサポートしました。プライマリストレージボリュームに加えて最大 3 つのストレージボリューム (各最大 64 TiB) を追加することで、最大 <span class="highlight">256 TiB</span> までスケール可能なデータベースでも、同一リージョンおよびクロスリージョンのリードレプリカを作成できます。</p>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-value">256 TiB</span>
+          <span class="stat-label">合計最大ストレージ容量</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">4</span>
+          <span class="stat-label">合計ボリューム数 (プライマリ + 追加 3)</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">64 TiB</span>
+          <span class="stat-label">ボリュームあたり最大容量</span>
+        </div>
+      </div>
+
+      <!-- Before/After -->
+      <div class="before-after">
+        <div class="before-card">
+          <h3>❌ Before</h3>
+          <ul>
+            <li>ASV を使用した大容量インスタンスではリードレプリカ作成不可</li>
+            <li>読み取りスケーリングには手動で DB 構築が必要</li>
+            <li>クロスリージョン DR が ASV 利用時に制限</li>
+          </ul>
+        </div>
+        <div class="after-card">
+          <h3>✅ After</h3>
+          <ul>
+            <li>ASV 構成のインスタンスから同一/クロスリージョンレプリカを作成可能</li>
+            <li>ストレージレイアウトが自動的に保持される</li>
+            <li>ソースとレプリカのストレージを独立管理可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>追加ストレージボリュームを持つソース DB インスタンスから、同一リージョンおよびクロスリージョンのリードレプリカを作成する構成を示しています。レプリカはソースのストレージレイアウトを保持して作成されます。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Source["🗄️ ソース DB インスタンス"]
+        direction LR
+        PV["📦 プライマリボリューム<br/>最大 64 TiB"]
+        ASV1["📦 追加ボリューム 1<br/>最大 64 TiB"]
+        ASV2["📦 追加ボリューム 2<br/>最大 64 TiB"]
+        ASV3["📦 追加ボリューム 3<br/>最大 64 TiB"]
+        PV ~~~ ASV1 ~~~ ASV2 ~~~ ASV3
+    end
+
+    subgraph SameRegion["🌐 同一リージョン"]
+        RR1["📋 リードレプリカ 1<br/>ストレージレイアウト保持"]
+    end
+
+    subgraph CrossRegion["🌍 別リージョン"]
+        RR2["📋 リードレプリカ 2<br/>ストレージレイアウト保持"]
+    end
+
+    Source -->|"レプリケーション"| SameRegion
+    Source -->|"クロスリージョン<br/>レプリケーション"| CrossRegion
+
+    classDef source fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef replica fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef cross fill:#FFF3E0,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+
+    class Source source
+    class SameRegion replica
+    class CrossRegion cross
+    class PV,ASV1,ASV2,ASV3 storage
+    class RR1,RR2 replica
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <h3>📦 追加ストレージボリューム対応のリードレプリカ作成</h3>
+        <p>プライマリ + 最大 3 つの追加ストレージボリュームを持つインスタンスからレプリカを作成可能。最大 256 TiB のデータベースストレージ構成をそのままレプリケーションできます。既存のリードレプリカ機能と同様の操作方法で利用可能です。</p>
+      </div>
+
+      <div class="feature-card">
+        <h3>🔄 ストレージレイアウトの自動保持</h3>
+        <p>リードレプリカ作成時にソースインスタンスのストレージレイアウトを自動的に複製。追加ストレージボリュームの数と構成がレプリカに反映され、データの整合性を保ちながらレプリケーションを実行します。</p>
+      </div>
+
+      <div class="feature-card">
+        <h3>🔧 独立したストレージ管理</h3>
+        <p>初期作成後はソースとレプリカのストレージボリューム構成を個別に管理可能。レプリカ側で追加ストレージボリュームのサイズ変更や追加が独立して可能で、ワークロードに応じた柔軟なストレージ最適化が実現できます。</p>
+      </div>
+    </div>
+
+    <!-- Technical Specifications -->
+    <div class="section">
+      <h2>📐 技術仕様</h2>
+
+      <h3>ストレージ構成</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>プライマリストレージボリューム</td><td>最大 64 TiB</td></tr>
+        <tr><td>追加ストレージボリューム数</td><td>最大 3 つ</td></tr>
+        <tr><td>追加ストレージボリュームあたりの容量</td><td>最大 64 TiB</td></tr>
+        <tr><td>合計最大ストレージ容量</td><td>256 TiB</td></tr>
+        <tr><td>レプリカタイプ</td><td>同一リージョン、クロスリージョン</td></tr>
+      </table>
+
+      <h3>サポートされる操作方法</h3>
+      <table>
+        <tr><th>方法</th><th>詳細</th></tr>
+        <tr><td>AWS Management Console</td><td>GUI からリードレプリカを作成</td></tr>
+        <tr><td>AWS CLI</td><td><code>create-db-instance-read-replica</code> コマンドを使用</td></tr>
+        <tr><td>AWS SDK</td><td>各言語の SDK から API を呼び出し</td></tr>
+      </table>
+    </div>
+
+    <!-- Configuration Steps -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>Amazon RDS for SQL Server の DB インスタンスが追加ストレージボリュームで構成されていること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ソースインスタンスで自動バックアップが有効になっていること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>クロスリージョンレプリカの場合、ターゲットリージョンで RDS が利用可能であること</span></div>
+
+      <h3>ステップ 1: ソースインスタンスの確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ストレージ構成の確認</span>
+        </div>
+        <pre><code class="language-bash">aws rds describe-db-instances \
+  --db-instance-identifier my-sql-server-instance \
+  --query "DBInstances[0].{StorageType:StorageType,AllocatedStorage:AllocatedStorage}"</code></pre>
+      </div>
+
+      <h3>ステップ 2: 同一リージョンリードレプリカの作成</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">同一リージョンレプリカ</span>
+        </div>
+        <pre><code class="language-bash">aws rds create-db-instance-read-replica \
+  --db-instance-identifier my-sql-server-replica \
+  --source-db-instance-identifier my-sql-server-instance</code></pre>
+      </div>
+
+      <h3>ステップ 3: クロスリージョンリードレプリカの作成</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">クロスリージョンレプリカ</span>
+        </div>
+        <pre><code class="language-bash">aws rds create-db-instance-read-replica \
+  --db-instance-identifier my-sql-server-replica-dr \
+  --source-db-instance-identifier arn:aws:rds:us-east-1:123456789012:db:my-sql-server-instance \
+  --region us-west-2</code></pre>
+      </div>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <div class="merit-section">
+        <div class="merit-card">
+          <h3>💼 ビジネス面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>ディザスタリカバリの強化</strong>: 大容量 DB でもクロスリージョンレプリカにより事業継続性を確保</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>読み取りパフォーマンス向上</strong>: レポーティングやアナリティクスをレプリカにオフロード</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>運用の簡素化</strong>: 手動での DB 複製が不要になり、運用工数とコストを削減</span></div>
+        </div>
+        <div class="merit-card">
+          <h3>🔧 技術面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>ストレージレイアウト自動保持</strong>: ASV 構成を手動で再現する必要なし</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>独立したストレージ管理</strong>: ソースとレプリカで異なるストレージ要件に対応可能</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>既存ツールとの互換性</strong>: Console、CLI、SDK から既存の操作フローで利用可能</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <div class="merit-section">
+        <div class="demerit-card">
+          <h3>🚧 制限事項</h3>
+          <div class="check-item"><span class="cross-icon">!</span><span>ASV の合計容量が大きい場合、レプリカの初期作成に時間がかかる可能性</span></div>
+          <div class="check-item"><span class="cross-icon">!</span><span>リードレプリカは読み取り専用 (書き込みはソースのみ)</span></div>
+          <div class="check-item"><span class="cross-icon">!</span><span>クロスリージョンレプリカではデータ転送料金が発生</span></div>
+        </div>
+        <div class="demerit-card">
+          <h3>📝 考慮すべき点</h3>
+          <div class="check-item"><span class="cross-icon">!</span><span>レプリカのストレージ構成をソースと異なるものに変更する場合、パフォーマンスへの影響を検証すること</span></div>
+          <div class="check-item"><span class="cross-icon">!</span><span>大容量ストレージのレプリケーション遅延を監視し、許容範囲内であることを確認すること</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase-card">
+        <h3>📊 大規模データウェアハウスの読み取りスケーリング</h3>
+        <p class="scenario">100 TiB を超える SQL Server データベースで、レポーティングクエリが本番ワークロードに影響を与えている場合</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">レポーティング用レプリカの作成</span>
+          </div>
+          <pre><code class="language-bash"># 大容量 DB インスタンスのリードレプリカを作成
+aws rds create-db-instance-read-replica \
+  --db-instance-identifier reporting-replica \
+  --source-db-instance-identifier production-sql-server \
+  --db-instance-class db.r6i.8xlarge</code></pre>
+        </div>
+        <p class="effect">→ レポーティングワークロードをレプリカにオフロードし、本番 DB のパフォーマンスを維持しながら大容量データへのクエリを高速実行</p>
+      </div>
+
+      <div class="usecase-card">
+        <h3>🌍 クロスリージョン DR 構成</h3>
+        <p class="scenario">規制要件により、大容量 SQL Server データベースのクロスリージョンバックアップが必要な場合</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">DR 用クロスリージョンレプリカ</span>
+          </div>
+          <pre><code class="language-bash"># DR 用のクロスリージョンレプリカを作成
+aws rds create-db-instance-read-replica \
+  --db-instance-identifier dr-replica-west \
+  --source-db-instance-identifier arn:aws:rds:ap-northeast-1:123456789012:db:production-db \
+  --region ap-southeast-1</code></pre>
+        </div>
+        <p class="effect">→ 大容量 DB のクロスリージョン DR を自動化し、RTO/RPO 目標を達成。手動でのデータ移行作業を排除</p>
+      </div>
+
+      <div class="usecase-card">
+        <h3>🔬 データ分析基盤との統合</h3>
+        <p class="scenario">複数の追加ストレージボリュームに分散されたデータを、分析チームが本番に影響を与えずにアクセスしたい場合</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">分析専用レプリカの作成とエンドポイント確認</span>
+          </div>
+          <pre><code class="language-bash"># 分析専用レプリカの作成
+aws rds create-db-instance-read-replica \
+  --db-instance-identifier analytics-replica \
+  --source-db-instance-identifier main-sql-server \
+  --db-instance-class db.r6i.4xlarge
+
+# レプリカのエンドポイントを分析ツールに設定
+aws rds describe-db-instances \
+  --db-instance-identifier analytics-replica \
+  --query "DBInstances[0].Endpoint"</code></pre>
+        </div>
+        <p class="effect">→ 分析チームが全ストレージボリュームのデータにアクセス可能になり、本番環境への影響なくデータ分析を実行可能</p>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金情報</h2>
+      <p>リードレプリカの料金は、通常の Amazon RDS for SQL Server インスタンス料金に準じます。</p>
+      <table>
+        <tr><th>項目</th><th>説明</th></tr>
+        <tr><td>DB インスタンス料金</td><td>レプリカのインスタンスクラスに応じた時間料金</td></tr>
+        <tr><td>ストレージ料金</td><td>レプリカのストレージ使用量に応じた月額料金</td></tr>
+        <tr><td>データ転送料金</td><td>クロスリージョンレプリカの場合、リージョン間データ転送料金が発生</td></tr>
+      </table>
+    </div>
+
+    <!-- Region Availability -->
+    <div class="section">
+      <h2>🌐 利用可能リージョン</h2>
+      <p>すべての AWS 商用リージョンおよび AWS GovCloud (US) リージョンで利用可能です。</p>
+      <div>
+        <span class="region-badge">全 AWS 商用リージョン</span>
+        <span class="region-badge">AWS GovCloud (US)</span>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="feature-card">
+        <h3>📦 Amazon RDS Additional Storage Volumes</h3>
+        <p>プライマリボリュームに加えて最大 3 つのストレージボリュームを追加し、最大 256 TiB までスケール可能にする機能</p>
+      </div>
+      <div class="feature-card">
+        <h3>📋 Amazon RDS リードレプリカ</h3>
+        <p>読み取りワークロードのスケーリングやディザスタリカバリに使用されるリードオンリーの DB インスタンス</p>
+      </div>
+      <div class="feature-card">
+        <h3>🔒 Amazon RDS Multi-AZ</h3>
+        <p>高可用性のためのスタンバイレプリカを別の AZ に配置する機能</p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul style="list-style: none; padding: 0; margin: 8px 0;">
+        <li style="margin: 4px 0;">- <a href="https://aws.amazon.com/about-aws/whats-new/2026/05/rds-sqlserver-supports-read-replica-for-asv/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li style="margin: 4px 0;">- <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/SQLServer.ReadReplicas.html" target="_blank" rel="noopener noreferrer">Working with read replicas for Amazon RDS for SQL Server</a></li>
+        <li style="margin: 4px 0;">- <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Storage.html" target="_blank" rel="noopener noreferrer">Working with storage in RDS for SQL Server</a></li>
+        <li style="margin: 4px 0;">- <a href="https://aws.amazon.com/rds/sqlserver/pricing/" target="_blank" rel="noopener noreferrer">Amazon RDS for SQL Server 料金</a></li>
+      </ul>
+      <p style="margin-top: 12px; color: rgba(213, 219, 219, 0.6);">Generated: 2026-05-02</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

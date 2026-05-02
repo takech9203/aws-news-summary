@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Redshift - Concurrency Scaling auto-copy / zero-ETL</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left {
+      flex: 1;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+      margin: 0;
+    }
+
+    .header-right {
+      text-align: right;
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 0 0 12px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 153, 0, 0.05);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box .label {
+      color: var(--aws-red);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-box .label {
+      color: var(--aws-green);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li {
+      margin-bottom: 6px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .feature-card {
+      background: rgba(255, 153, 0, 0.05);
+      border-radius: 8px;
+      padding: 20px;
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .feature-card .feature-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feature-card .feature-desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin: 0;
+    }
+
+    .feature-card ul {
+      margin: 8px 0 0 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .feature-card li {
+      margin-bottom: 4px;
+    }
+
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .usecase-card .usecase-title {
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .usecase-card .usecase-scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 12px;
+    }
+
+    .usecase-card .usecase-effect {
+      font-size: 14px;
+      color: var(--aws-green);
+      font-weight: 500;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    .tech-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .tech-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .tech-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--aws-light-gray);
+    }
+
+    .tech-table tr:hover td {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    .pricing-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .pricing-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .pricing-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--aws-light-gray);
+    }
+
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    .merit-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .merit-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    .merit-list .icon {
+      color: var(--aws-green);
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .demerit-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .demerit-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    .demerit-list .icon {
+      color: var(--aws-red);
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .caution-list li .icon {
+      color: #FF9800;
+    }
+
+    .region-badge {
+      display: inline-block;
+      background: rgba(0, 161, 201, 0.15);
+      color: var(--aws-teal);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      margin: 4px 4px 4px 0;
+    }
+
+    .related-links {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .related-links li {
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .related-links a {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .related-links a:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 24px;
+      }
+
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .header {
+        flex-direction: column;
+      }
+
+      .header-right {
+        text-align: left;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">Amazon Redshift</span>
+        <h1>Concurrency Scaling による auto-copy および zero-ETL サポート</h1>
+        <p class="subtitle">データ取り込みパイプラインの自動スケーリングで、安定したクエリパフォーマンスを実現</p>
+      </div>
+      <div class="header-right">
+        <div>2026 年 5 月 1 日</div>
+        <div>GA (一般提供)</div>
+      </div>
+    </div>
+
+    <!-- Overview Section -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon Redshift が <span class="highlight">Concurrency Scaling</span> の auto-copy および zero-ETL に対するサポートを一般提供 (GA) として発表しました。データ取り込みパイプラインにおける読み取りおよび書き込みクエリの増加に対して、自動的にコンピュートキャパシティを追加し、パフォーマンスを維持できるようになります。</p>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">auto-copy</div>
+          <div class="stat-label">S3 バケット監視と自動ロード</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">zero-ETL</div>
+          <div class="stat-label">ニアリアルタイムレプリケーション</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">自動</div>
+          <div class="stat-label">コンピュートスケーリング</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Before/After Section -->
+    <div class="section">
+      <h2>🔄 Before / After 比較</h2>
+      <div class="before-after">
+        <div class="before-box">
+          <div class="label">❌ Before</div>
+          <ul>
+            <li>auto-copy や zero-ETL によるデータ取り込み中に読み取りクエリのパフォーマンスが低下</li>
+            <li>データ取り込み量が急増した際、書き込みクエリがメインクラスターのリソースを圧迫</li>
+            <li>取り込みパイプラインとユーザークエリのリソース競合を手動で管理する必要があった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <div class="label">✅ After</div>
+          <ul>
+            <li>Concurrency Scaling が自動的にコンピュートキャパシティを追加し、読み取り・書き込みクエリの増加に対応</li>
+            <li>auto-copy による S3 からのデータロードが高負荷時でもスムーズに実行</li>
+            <li>zero-ETL によるニアリアルタイムレプリケーションがパフォーマンス低下なく継続</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>Concurrency Scaling が auto-copy および zero-ETL のデータ取り込みパイプラインにおいて、負荷増大時に自動的に追加コンピュートキャパシティを提供する構成を示しています。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Sources["&#128230; データソース"]
+        direction LR
+        S3["&#129717; Amazon S3&lt;br/&gt;新規データファイル"]
+        OpDB["&#128452;&#65039; オペレーショナル DB&lt;br/&gt;DynamoDB / Aurora / RDS"]
+        S3 ~~~ OpDB
+    end
+
+    subgraph Redshift["&#9729;&#65039; Amazon Redshift"]
+        direction TB
+        subgraph Ingestion["&#11015;&#65039; データ取り込み"]
+            direction LR
+            AutoCopy["&#128203; auto-copy&lt;br/&gt;S3 自動ロード"]
+            ZeroETL["&#128260; zero-ETL&lt;br/&gt;ニアリアルタイム&lt;br/&gt;レプリケーション"]
+            AutoCopy ~~~ ZeroETL
+        end
+
+        subgraph MainCluster["&#128421;&#65039; メインクラスター"]
+            Compute["&#9881;&#65039; コンピュート&lt;br/&gt;ノード"]
+        end
+
+        subgraph ConcurrencyScaling["&#10133; Concurrency Scaling"]
+            Extra["&#9889; 追加&lt;br/&gt;コンピュート&lt;br/&gt;キャパシティ"]
+        end
+    end
+
+    subgraph Users["&#128100; ユーザー"]
+        ReadQuery["&#128202; 読み取りクエリ"]
+        WriteQuery["&#9999;&#65039; 書き込みクエリ"]
+    end
+
+    S3 --> AutoCopy
+    OpDB --> ZeroETL
+    AutoCopy --> Compute
+    ZeroETL --> Compute
+    Compute -->|負荷増大時| Extra
+    ReadQuery --> Redshift
+    WriteQuery --> Redshift
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Sources cloud
+    class Redshift cloud
+    class Ingestion,MainCluster,ConcurrencyScaling layer
+    class AutoCopy,ZeroETL,Compute,Extra compute
+    class S3,OpDB storage
+    class ReadQuery,WriteQuery,Users user
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features Section -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-title">📋 auto-copy の Concurrency Scaling 対応</div>
+          <ul>
+            <li>S3 バケットの監視と新規データファイルの自動ロードにおいて、Concurrency Scaling が適用</li>
+            <li>データファイルが大量に追加された場合でも、自動的にスケールアウトして取り込み処理を加速</li>
+            <li>ユーザーの読み取りクエリへの影響を最小限に抑制</li>
+          </ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">🔄 zero-ETL の Concurrency Scaling 対応</div>
+          <ul>
+            <li>オペレーショナル DB およびトランザクショナル DB からのニアリアルタイムレプリケーションにおいて Concurrency Scaling が適用</li>
+            <li>レプリケーション負荷が増大した際に追加キャパシティを自動プロビジョニング</li>
+            <li>DynamoDB、Aurora、RDS などのソースデータベースからの同期遅延を削減</li>
+          </ul>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">📊 読み取り・書き込み両方のスケーリング</div>
+          <ul>
+            <li>Concurrency Scaling が読み取りクエリだけでなく書き込みクエリにも対応</li>
+            <li>データ取り込みと分析クエリの両方でパフォーマンスを維持</li>
+            <li>クラスター全体のスループット向上に貢献</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specifications -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <h3>対応環境</h3>
+      <table class="tech-table">
+        <tr>
+          <th>項目</th>
+          <th>詳細</th>
+        </tr>
+        <tr>
+          <td>対象サービス</td>
+          <td>Amazon Redshift Serverless、RA3 プロビジョニングデータウェアハウス</td>
+        </tr>
+        <tr>
+          <td>スケーリング対象</td>
+          <td>読み取りクエリ、書き込みクエリ</td>
+        </tr>
+        <tr>
+          <td>対応機能</td>
+          <td>auto-copy、zero-ETL</td>
+        </tr>
+        <tr>
+          <td>スケーリング方式</td>
+          <td>自動 (負荷に応じてコンピュートキャパシティを追加)</td>
+        </tr>
+      </table>
+
+      <h3 style="margin-top: 24px;">API 変更履歴</h3>
+      <table class="tech-table">
+        <tr>
+          <th>日付</th>
+          <th>サービス</th>
+          <th>変更内容</th>
+        </tr>
+        <tr>
+          <td>2026/04/09</td>
+          <td>Redshift Data API Service</td>
+          <td>BatchExecuteStatement API の名前付き SQL パラメータサポート</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Setup Guide -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+      <h3>前提条件</h3>
+      <ul class="merit-list">
+        <li><span class="icon">1.</span> Amazon Redshift Serverless ワークグループまたは RA3 プロビジョニングクラスター</li>
+        <li><span class="icon">2.</span> Concurrency Scaling が有効化されていること</li>
+        <li><span class="icon">3.</span> auto-copy または zero-ETL インテグレーションが設定済みであること</li>
+      </ul>
+
+      <h3 style="margin-top: 24px;">Step 1: Concurrency Scaling の有効化</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">WLM で Concurrency Scaling を有効化</span>
+        </div>
+        <pre><code class="language-sql">-- ワークロード管理 (WLM) で Concurrency Scaling を有効化
+ALTER WORKLOAD MANAGEMENT CONFIGURATION
+SET concurrency_scaling = 'auto';</code></pre>
+      </div>
+
+      <h3 style="margin-top: 24px;">Step 2: auto-copy の設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">S3 バケットからの auto-copy ジョブを作成</span>
+        </div>
+        <pre><code class="language-sql">-- S3 バケットからの auto-copy ジョブを作成
+COPY my_table
+FROM 's3://my-bucket/data/'
+IAM_ROLE 'arn:aws:iam::123456789012:role/RedshiftCopyRole'
+FORMAT AS PARQUET
+JOB CREATE my_auto_copy_job
+AUTO ON;</code></pre>
+      </div>
+
+      <h3 style="margin-top: 24px;">Step 3: zero-ETL インテグレーションの確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">zero-ETL インテグレーションのステータス確認</span>
+        </div>
+        <pre><code class="language-sql">-- zero-ETL インテグレーションのステータス確認
+SELECT integration_id, source_arn, target_arn, status
+FROM svv_integration
+WHERE status = 'active';</code></pre>
+      </div>
+
+      <h3 style="margin-top: 24px;">モニタリング</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">Concurrency Scaling のアクティビティ確認</span>
+        </div>
+        <pre><code class="language-sql">-- Concurrency Scaling の有効化確認
+SHOW concurrency_scaling;
+
+-- auto-copy ジョブの実行状況確認
+SELECT * FROM sys_copy_job
+WHERE status = 'RUNNING'
+ORDER BY start_time DESC;
+
+-- Concurrency Scaling のアクティビティ確認
+SELECT * FROM stl_concurrency_scaling
+ORDER BY start_time DESC
+LIMIT 10;</code></pre>
+      </div>
+    </div>
+
+    <!-- Merits Section -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <h3>ビジネス面</h3>
+      <ul class="merit-list">
+        <li><span class="icon">✓</span><span><strong>データ鮮度の向上</strong>: 取り込みパイプラインのスループットが向上し、分析用データの鮮度が改善</span></li>
+        <li><span class="icon">✓</span><span><strong>SLA の維持</strong>: データ取り込み量の増加時でもクエリレスポンスタイムを維持可能</span></li>
+        <li><span class="icon">✓</span><span><strong>運用コスト削減</strong>: 手動でのキャパシティ計画やリソース調整が不要に</span></li>
+      </ul>
+
+      <h3 style="margin-top: 20px;">技術面</h3>
+      <ul class="merit-list">
+        <li><span class="icon">✓</span><span><strong>自動スケーリング</strong>: 負荷に応じてコンピュートリソースが自動的に追加・削除</span></li>
+        <li><span class="icon">✓</span><span><strong>リソース競合の解消</strong>: データ取り込みとユーザークエリのリソース競合を自動的に解消</span></li>
+        <li><span class="icon">✓</span><span><strong>ニアリアルタイム処理の安定化</strong>: zero-ETL のレプリケーション遅延を最小限に維持</span></li>
+      </ul>
+    </div>
+
+    <!-- Demerits Section -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <h3>制限事項</h3>
+      <ul class="demerit-list">
+        <li><span class="icon">✗</span><span>Redshift Serverless および RA3 プロビジョニングデータウェアハウスのみが対象</span></li>
+        <li><span class="icon">✗</span><span>DC2 や DS2 ノードタイプでは利用不可</span></li>
+        <li><span class="icon">✗</span><span>Concurrency Scaling の利用には追加のコンピュートコストが発生</span></li>
+      </ul>
+
+      <h3 style="margin-top: 20px;">考慮すべき点</h3>
+      <ul class="demerit-list caution-list">
+        <li><span class="icon">⚠</span><span>Concurrency Scaling クラスターの起動には数秒から数十秒の遅延が発生する場合がある</span></li>
+        <li><span class="icon">⚠</span><span>大量のスケーリングイベントが発生した場合、コストが想定以上に増加する可能性がある</span></li>
+        <li><span class="icon">⚠</span><span>Concurrency Scaling の使用量を監視し、必要に応じて上限を設定することを推奨</span></li>
+      </ul>
+    </div>
+
+    <!-- Use Cases Section -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+      <div class="usecase-card">
+        <div class="usecase-title">🛒 ユースケース 1: リアルタイムデータレイク分析</div>
+        <div class="usecase-scenario">EC サイトがトランザクションログを S3 に出力し、auto-copy で Redshift に自動取り込みしている。セール期間中はデータ量が通常の 10 倍に増加する。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">auto-copy + Concurrency Scaling</span>
+          </div>
+          <pre><code class="language-sql">-- auto-copy ジョブの作成
+COPY transaction_logs
+FROM 's3://ecommerce-logs/transactions/'
+IAM_ROLE 'arn:aws:iam::123456789012:role/RedshiftRole'
+FORMAT AS PARQUET
+JOB CREATE sales_auto_copy
+AUTO ON;
+
+-- Concurrency Scaling の有効化
+ALTER WORKLOAD MANAGEMENT CONFIGURATION
+SET concurrency_scaling = 'auto';</code></pre>
+        </div>
+        <div class="usecase-effect">✅ 効果: セール期間中のデータ取り込み量増加に対して自動的にスケールし、分析ダッシュボードのレスポンスタイムを維持</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">🔗 ユースケース 2: マルチソース zero-ETL 統合</div>
+        <div class="usecase-scenario">複数の Aurora データベースから zero-ETL で Redshift にデータをレプリケーションし、統合分析を実行。業務時間中はソースデータベースのトランザクション量が増加する。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">zero-ETL モニタリング</span>
+          </div>
+          <pre><code class="language-sql">-- zero-ETL インテグレーションのステータス確認
+SELECT integration_id, source_arn, status,
+       last_successful_replication_time
+FROM svv_integration;
+
+-- Concurrency Scaling アクティビティの監視
+SELECT query, service_class, start_time, end_time
+FROM stl_concurrency_scaling
+WHERE start_time > DATEADD(hour, -1, GETDATE());</code></pre>
+        </div>
+        <div class="usecase-effect">✅ 効果: 業務時間中のレプリケーション負荷増大に対して Concurrency Scaling が自動対応し、レプリケーション遅延を最小限に維持</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">📡 ユースケース 3: IoT データのリアルタイム取り込み</div>
+        <div class="usecase-scenario">IoT デバイスからのセンサーデータが S3 に蓄積され、auto-copy で Redshift にロードされる。デバイス数の増加に伴い、取り込みデータ量が変動する。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">IoT センサーデータの auto-copy</span>
+          </div>
+          <pre><code class="language-sql">-- IoT センサーデータの auto-copy
+COPY sensor_data
+FROM 's3://iot-data/sensors/'
+IAM_ROLE 'arn:aws:iam::123456789012:role/IoTRedshiftRole'
+FORMAT AS JSON 'auto'
+JOB CREATE iot_sensor_copy
+AUTO ON;</code></pre>
+        </div>
+        <div class="usecase-effect">✅ 効果: デバイス数の増減に応じて自動的にスケーリングし、データ取り込みのスループットを維持</div>
+      </div>
+    </div>
+
+    <!-- Pricing Section -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>Concurrency Scaling は <span class="highlight">1 日あたり 1 時間の無料クレジット</span>が付与されます。無料クレジットを超過した使用時間分については、オンデマンドの Redshift クラスター料金と同等の秒単位課金が適用されます。</p>
+      <table class="pricing-table">
+        <tr>
+          <th>使用量</th>
+          <th>月額料金 (概算)</th>
+        </tr>
+        <tr>
+          <td>1 日あたり 1 時間以内の使用</td>
+          <td style="color: var(--aws-green); font-weight: 600;">無料 (無料クレジット内)</td>
+        </tr>
+        <tr>
+          <td>1 日あたり追加 2 時間の使用 (ra3.xlplus)</td>
+          <td>約 $110/月</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Region Availability -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>すべての AWS 商用リージョンおよび AWS GovCloud (US) リージョンで利用可能です。</p>
+      <div style="margin-top: 12px;">
+        <span class="region-badge">全 AWS 商用リージョン</span>
+        <span class="region-badge">AWS GovCloud (US)</span>
+      </div>
+      <p style="margin-top: 12px; font-size: 14px;">対象: Redshift Serverless および RA3 プロビジョニングデータウェアハウス</p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <ul class="related-links">
+        <li>🔸 <strong>Amazon Redshift Concurrency Scaling</strong>: 読み取り・書き込みクエリの自動スケーリング基盤機能</li>
+        <li>🔸 <strong>Amazon Redshift auto-copy</strong>: S3 バケットの監視と新規データファイルの自動ロード機能</li>
+        <li>🔸 <strong>Amazon Redshift zero-ETL</strong>: オペレーショナル DB からのニアリアルタイムデータレプリケーション</li>
+        <li>🔸 <strong>Amazon Aurora zero-ETL integration</strong>: Aurora から Redshift へのネイティブデータ統合</li>
+        <li>🔸 <strong>Amazon DynamoDB zero-ETL integration</strong>: DynamoDB から Redshift へのデータ統合</li>
+      </ul>
+    </div>
+
+    <!-- References -->
+    <div class="section">
+      <h2>📚 参考リンク</h2>
+      <ul class="related-links">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/03/concurrency-scaling-auto-copy-zero-ETL/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/redshift/latest/dg/concurrency-scaling.html" target="_blank" rel="noopener noreferrer">ドキュメント - Concurrency Scaling</a></li>
+        <li><a href="https://docs.aws.amazon.com/redshift/latest/dg/loading-data-copy-job.html" target="_blank" rel="noopener noreferrer">ドキュメント - auto-copy</a></li>
+        <li><a href="https://docs.aws.amazon.com/redshift/latest/dg/zero-etl-using.html" target="_blank" rel="noopener noreferrer">ドキュメント - zero-ETL integrations</a></li>
+        <li><a href="https://aws.amazon.com/redshift/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a></li>
+      </ul>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典: <a href="https://aws.amazon.com/about-aws/whats-new/2026/03/concurrency-scaling-auto-copy-zero-ETL/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/03/concurrency-scaling-auto-copy-zero-ETL/</a></p>
+      <p style="margin-top: 8px; opacity: 0.7;">Generated: 2026-05-02 | AWS News Summary Infographic</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
