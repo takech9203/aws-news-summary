@@ -7,6 +7,7 @@
 
 - [2026-05-01 - Amazon OpenSearch Service - OpenSearch UI クロスリージョンデータアクセス](2026/2026-05-01-opensearch-ui-cross-region-data-access-domains.md)
 - [2026-05-01 - Amazon RDS for SQL Server - 追加ストレージボリュームのクロスアカウントスナップショット共有](2026/2026-05-01-rds-sqlserver-cross-account-snapshot-sharing-additional-storage-volume.md)
+- [2026-05-01 - Amazon Bedrock AgentCore - 南米サンパウロリージョンでの提供開始](2026/2026-05-01-agentcore-sao-paulo-region.md)
 - [2026-05-01 - AWS Transform - BI マイグレーションエージェント](2026/2026-05-01-quick-bi-migration.md)
 - [2026-05-01 - Amazon CloudFront - VPC Origins での WebSocket サポート](2026/2026-05-01-amazon-cloudfront-websockets-vpc-origins.md)
 - [2026-05-01 - Amazon EKS - Elastic Fabric Adapter 向け Dynamic Resource Allocation (DRA) サポート](2026/2026-05-01-kubernetes-dra-elastic-fabric-adapter.md)
