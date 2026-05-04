@@ -5,6 +5,16 @@
 
 ## 2026 年
 
+- [2026-05-04 - Amazon SageMaker AI - AI エージェントによるモデルカスタマイズ体験](2026/2026-05-04-amazon-sagemaker-ai-ai.md)
+- [2026-05-04 - Amazon Quick - S3 Tables データソース (Direct Query)](2026/2026-05-04-quick-direct-query-s3-tables.md)
+- [2026-05-04 - AWS Payment Cryptography - クロスアカウント鍵共有](2026/2026-05-04-payment-cryptography-resource.md)
+- [2026-05-04 - Amazon EventBridge - データプレーン API の AWS CloudTrail ロギングサポート](2026/2026-05-04-amazon-eventbridge-data-aws-cloudtrail.md)
+- [2026-05-04 - AWS Entity Resolution - ML ベースインクリメンタルマッチングワークフロー](2026/2026-05-04-aws-entity-resolution-ml.md)
+- [2026-05-04 - Amazon Aurora DSQL - JSON データ型サポート (圧縮対応)](2026/2026-05-04-aurora-dsql-json-support.md)
+- [2026-05-04 - Amazon Quick - Dataset Q&A](2026/2026-05-04-amazon-quick-dataset-qa.md)
+- [2026-05-04 - Amazon Quick - Microsoft Outlook 拡張機能 (Preview)](2026/2026-05-04-amazon-quick-microsoft-outlook.md)
+- [2026-05-04 - Amazon RDS for SQL Server - M8i / R8i インスタンスサポート](2026/2026-05-04-rds-sqlserver-supports-m8i-r8i-instances.md)
+- [2026-05-04 - Amazon Quick - Generate Analysis (自然言語プロンプトによるダッシュボード自動生成)](2026/2026-05-04-amazon-quick-generates-analyses-from-natural-language-prompts.md)
 - [2026-05-01 - Amazon OpenSearch Service - OpenSearch UI クロスリージョンデータアクセス](2026/2026-05-01-opensearch-ui-cross-region-data-access-domains.md)
 - [2026-05-01 - Amazon RDS for SQL Server - 追加ストレージボリュームのクロスアカウントスナップショット共有](2026/2026-05-01-rds-sqlserver-cross-account-snapshot-sharing-additional-storage-volume.md)
 - [2026-05-01 - Amazon Bedrock AgentCore - 南米サンパウロリージョンでの提供開始](2026/2026-05-01-agentcore-sao-paulo-region.md)

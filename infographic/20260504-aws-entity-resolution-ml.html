@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Entity Resolution - ML ベースインクリメンタルマッチングワークフロー</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left {
+      flex: 1;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+    }
+
+    .date-badge {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      background: var(--aws-dark-squid);
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      white-space: nowrap;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 12px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 153, 0, 0.05);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-desc {
+      color: var(--aws-light-gray);
+      font-size: 14px;
+    }
+
+    /* Before/After */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-card h3 {
+      color: var(--aws-red);
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-card h3 {
+      color: var(--aws-green);
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .before-card ul, .after-card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .before-card li, .after-card li {
+      padding: 4px 0;
+      font-size: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .before-card li::before {
+      content: "✗";
+      color: var(--aws-red);
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+
+    .after-card li::before {
+      content: "✓";
+      color: var(--aws-green);
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Use case cards */
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+
+    .usecase-card h4 {
+      color: var(--aws-orange);
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .usecase-card p {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    .usecase-effect {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: rgba(29, 129, 2, 0.1);
+      border-radius: 6px;
+      font-size: 13px;
+      color: #7ecf7e;
+    }
+
+    /* Table */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .data-table th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .data-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--aws-light-gray);
+    }
+
+    .data-table tr:hover td {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    /* Code block */
+    .code-block {
+      background: #0d1117;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #161b22;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Region grid */
+    .region-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .region-item {
+      background: rgba(255, 153, 0, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .region-code {
+      color: var(--aws-teal);
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    /* Merit/Demerit */
+    .merit-list, .demerit-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .merit-list li {
+      padding: 6px 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .merit-list li::before {
+      content: "✅";
+      flex-shrink: 0;
+    }
+
+    .demerit-list li {
+      padding: 6px 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .demerit-list li::before {
+      content: "⚠️";
+      flex-shrink: 0;
+    }
+
+    /* Links */
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    .link-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .link-list li {
+      padding: 6px 0;
+      font-size: 14px;
+    }
+
+    .link-list li::before {
+      content: "📎 ";
+    }
+
+    /* Related services */
+    .related-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+      margin: 12px 0;
+    }
+
+    .related-item {
+      background: rgba(0, 161, 201, 0.08);
+      border: 1px solid rgba(0, 161, 201, 0.2);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 14px;
+    }
+
+    .related-item strong {
+      color: var(--aws-teal);
+    }
+
+    footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 { font-size: 24px; }
+      .comparison-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .region-grid { grid-template-columns: 1fr; }
+      .related-grid { grid-template-columns: 1fr; }
+      .header { flex-direction: column; }
+    }
+
+    @media (max-width: 480px) {
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <div class="service-badge">AWS Entity Resolution</div>
+        <h1>🤖 ML ベースインクリメンタルマッチングワークフロー</h1>
+        <div class="subtitle">Machine Learning による差分処理で、エンタープライズ規模のエンティティ解決を劇的に効率化</div>
+      </div>
+      <div class="date-badge">📅 2026-05-04 GA</div>
+    </div>
+
+    <!-- Overview / Stats -->
+    <div class="section">
+      <h2>📊 数字で見るアップデート効果</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-value">95%</span>
+          <span class="stat-label">処理時間削減</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">10 億件</span>
+          <span class="stat-label">最大ベースレコード数</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">5,000 万件</span>
+          <span class="stat-label">最大インクリメンタルレコード/実行</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">&lt; 1 時間</span>
+          <span class="stat-label">100 万件の処理時間</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="section">
+      <h2>💡 概要</h2>
+      <p>AWS Entity Resolution が <span class="highlight">ML ベースのインクリメンタルマッチングワークフロー</span>の一般提供 (GA) を開始。従来、ML マッチングワークフローでは新しいレコードを 1 件追加するだけでもデータセット全体の再処理が必要であったが、本機能により<span class="highlight">差分レコードのみ</span>の処理が可能になった。</p>
+      <p style="margin-top: 12px;">これにより、これまで経済的に不可能であった大規模で継続的なエンタープライズワークロードに AWS Entity Resolution を適用できるようになった。</p>
+    </div>
+
+    <!-- Before/After -->
+    <div class="section">
+      <h2>🔄 Before / After 比較</h2>
+      <div class="comparison-grid">
+        <div class="before-card">
+          <h3>❌ Before - フルバッチ処理</h3>
+          <ul>
+            <li>新規レコード 1 件追加でもデータセット全体を再処理</li>
+            <li>フルバッチ再処理に最大 2 日間の処理時間</li>
+            <li>数千ドルのインフラコストが発生</li>
+            <li>インクリメンタル処理はルールベースのみ対応</li>
+            <li>大規模企業はコスト高の回避策を模索</li>
+          </ul>
+        </div>
+        <div class="after-card">
+          <h3>✅ After - インクリメンタル処理</h3>
+          <ul>
+            <li>差分レコードのみを処理可能</li>
+            <li>100 万件を 1 時間未満で処理</li>
+            <li>インフラコスト大幅削減</li>
+            <li>ML マッチングでインクリメンタル対応</li>
+            <li>最大 10 億件ベースに 5,000 万件差分処理</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p style="margin-bottom: 12px;">ML ベースインクリメンタルマッチングワークフローのデータフロー。新規レコードのみが差分検出され、既存のベースレコードに対して ML マッチング処理が実行される。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Input["🗄️ データ入力"]
+        direction LR
+        S3["🪣 Amazon S3<br/>データレイク"]
+        NewRecords["📄 新規レコード<br/>差分データ"]
+        S3 ~~~ NewRecords
+    end
+
+    subgraph ER["⚙️ AWS Entity Resolution"]
+        direction LR
+        Detect["🔍 差分検出<br/>前回実行以降の<br/>新規レコード特定"]
+        ML["🤖 ML マッチング<br/>インクリメンタル処理"]
+        Base["🗃️ ベースレコード<br/>最大 10 億件"]
+        Detect --> ML
+        Base --> ML
+    end
+
+    subgraph Output["📊 出力"]
+        direction LR
+        MatchGroups["🔗 マッチグループ<br/>信頼度スコア付き"]
+        Downstream["⚡ 下流アプリケーション<br/>CDP / CRM / 分析"]
+        MatchGroups ~~~ Downstream
+    end
+
+    NewRecords --> Detect
+    ML --> MatchGroups
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef process fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#1565C0
+
+    class Input cloud
+    class ER cloud
+    class Output cloud
+    class S3,NewRecords,Base storage
+    class Detect,ML compute
+    class MatchGroups,Downstream process
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="card">
+        <div class="card-title">🤖 ML ベースインクリメンタルマッチング</div>
+        <div class="card-desc">前回のワークフロー実行以降に追加された新規レコードのみを対象に ML マッチングを実行。データセット全体の再処理が不要になり、処理時間とコストを大幅に削減。事前構成済み ML モデルによる高精度なマッチング品質を維持。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">📈 大規模データセット対応</div>
+        <div class="card-desc">最大 10 億件の履歴ベースレコードに対するインクリメンタル処理をサポート。1 回のインクリメンタル実行で最大 5,000 万件の新規レコードを処理可能。エンタープライズ規模の継続的ワークロードに対応。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🚀 劇的なパフォーマンス向上</div>
+        <div class="card-desc">100 万件のインクリメンタルレコードを 1 時間未満で処理。従来のフルバッチ処理と比較して 95% の処理時間削減。インフラコストの大幅な削減を実現。</div>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>詳細</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>最大ベースレコード数</td>
+            <td><strong>10 億件</strong></td>
+          </tr>
+          <tr>
+            <td>最大インクリメンタルレコード数</td>
+            <td><strong>5,000 万件/実行</strong></td>
+          </tr>
+          <tr>
+            <td>処理速度 (100 万件)</td>
+            <td><strong>1 時間未満</strong></td>
+          </tr>
+          <tr>
+            <td>処理時間削減率</td>
+            <td><strong>約 95%</strong> (フルバッチ比)</td>
+          </tr>
+          <tr>
+            <td>マッチング手法</td>
+            <td>事前構成済み ML モデル</td>
+          </tr>
+          <tr>
+            <td>出力形式</td>
+            <td>マッチグループ + 信頼度スコア (0.0 - 1.0)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 style="margin-top: 20px;">API 変更履歴</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>サービス</th>
+            <th>変更内容</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>2026/05/01</td>
+            <td>entityresolution</td>
+            <td>CreateMatchingWorkflow, GetMatchingWorkflow, UpdateMatchingWorkflow に ruleConditionProperties.matchingConfig.enableTransitiveMatching パラメータを追加</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Configuration -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+
+      <h3>incrementalRunConfig の設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">インクリメンタル処理有効化</span>
+        </div>
+        <pre><code class="language-json">{
+  "resolutionTechniques": {
+    "resolutionType": "ML_MATCHING"
+  },
+  "incrementalRunConfig": {
+    "incrementalRunType": "IMMEDIATE"
+  }
+}</code></pre>
+      </div>
+      <p style="font-size: 14px; margin-bottom: 20px;"><code>incrementalRunType</code> を <code>IMMEDIATE</code> に設定することで、インクリメンタル処理モードが有効になる。</p>
+
+      <h3>ワークフロー作成 (AWS CLI)</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ML マッチングワークフローの作成</span>
+        </div>
+        <pre><code class="language-bash">aws entityresolution create-matching-workflow \
+  --workflow-name "my-incremental-ml-workflow" \
+  --input-source-config '[{
+    "inputSourceARN": "arn:aws:s3:::my-bucket/input/",
+    "schemaName": "my-schema",
+    "applyNormalization": true
+  }]' \
+  --output-source-config '[{
+    "outputS3Path": "s3://my-bucket/output/",
+    "output": [
+      {"name": "first_name", "hashed": false},
+      {"name": "last_name", "hashed": false},
+      {"name": "email", "hashed": true}
+    ]
+  }]' \
+  --resolution-techniques '{
+    "resolutionType": "ML_MATCHING"
+  }' \
+  --incremental-run-config '{
+    "incrementalRunType": "IMMEDIATE"
+  }' \
+  --role-arn "arn:aws:iam::123456789012:role/EntityResolutionRole"</code></pre>
+      </div>
+
+      <h3 style="margin-top: 20px;">実行手順フロー</h3>
+      <div class="flow-diagram">
+        <div class="flow-step">📋 ワークフロー<br/>作成</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🔄 初回<br/>フルバッチ実行</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📄 新規レコード<br/>S3 追加</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">⚡ インクリメンタル<br/>実行</div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">インクリメンタル実行とステータス確認</span>
+        </div>
+        <pre><code class="language-bash"># 初回フルバッチ実行
+aws entityresolution start-matching-job \
+  --workflow-name "my-incremental-ml-workflow"
+
+# 2回目以降: 新規レコード追加後に再実行 (差分のみ処理)
+aws entityresolution start-matching-job \
+  --workflow-name "my-incremental-ml-workflow"
+
+# ジョブステータスの確認
+aws entityresolution get-matching-job \
+  --workflow-name "my-incremental-ml-workflow" \
+  --job-id "job-id-from-start-matching-job"</code></pre>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+      <div class="usecase-card">
+        <h4>✈️ ロイヤルティプログラムの継続的な重複排除</h4>
+        <p>航空会社が数百万人のロイヤルティプログラム会員データベースを運用。従来は毎週フルバッチ処理に 2 日間を費やしていたが、インクリメンタル処理により新規会員のみを処理。</p>
+        <div class="usecase-effect">効果: 日次バッチで新規会員 (約 1 万件/日) のみを処理し、処理時間を 2 日から数分に短縮。年間インフラコスト 90% 以上削減。</div>
+      </div>
+      <div class="usecase-card">
+        <h4>🛒 マルチチャネル顧客プロファイルの統合</h4>
+        <p>EC サイト、実店舗、モバイルアプリなど複数チャネルから日々追加される顧客データを統合し、統一顧客プロファイルを維持。8 億件の履歴レコードに対して、毎日 50 万件の新規インタラクションを処理。</p>
+        <div class="usecase-effect">効果: 日次でのカスタマー 360 更新が可能になり、パーソナライゼーション施策の鮮度が向上。</div>
+      </div>
+      <div class="usecase-card">
+        <h4>🏥 医療研究データのインクリメンタル名寄せ</h4>
+        <p>複数の医療機関から継続的に収集される患者レコードを名寄せし、臨床研究や疫学調査のためのデータセットを構築。5 億件の既存レコードに対して、月次で 200 万件の新規レコードを追加処理。</p>
+        <div class="usecase-effect">効果: 月次のデータ更新を数時間で完了。PHI データのハッシュ化出力によりコンプライアンスも確保。</div>
+      </div>
+    </div>
+
+    <!-- Merits -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <h3>ビジネス面</h3>
+      <ul class="merit-list">
+        <li>差分レコードのみの課金により、継続的な ML マッチング処理のコストが大幅に削減</li>
+        <li>日次または高頻度でのインクリメンタル実行により、マッチ結果を常に最新の状態に維持</li>
+        <li>10 億件規模のデータセットに対して経済的にエンティティ解決を実行可能</li>
+      </ul>
+      <h3 style="margin-top: 16px;">技術面</h3>
+      <ul class="merit-list">
+        <li>処理時間 95% 削減: 100 万件のインクリメンタルレコードを 1 時間未満で処理</li>
+        <li>incrementalRunConfig の追加のみで既存の ML ワークフローをインクリメンタルに変換可能</li>
+        <li>フルバッチ処理と同じ事前構成済み ML モデルを使用し、マッチング品質を維持</li>
+      </ul>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <h3>制限事項</h3>
+      <ul class="demerit-list">
+        <li>インクリメンタルレコード数の上限は 1 回の実行あたり 5,000 万件</li>
+        <li>ベースレコード数の上限は 10 億件</li>
+        <li>初回実行は必ずフルバッチ処理が必要 (ベースライン構築)</li>
+        <li>ML マッチングモデルはカスタマイズ不可 (事前構成済みモデルのみ)</li>
+      </ul>
+      <h3 style="margin-top: 16px;">考慮すべき点</h3>
+      <ul class="demerit-list">
+        <li>ML マッチングの入力フィールドは名前、メールアドレス、電話番号、住所、生年月日に限定</li>
+        <li>インクリメンタル処理の精度は、ベースレコードの品質に依存</li>
+        <li>データの大幅な変更がある場合は、定期的なフルバッチ再処理の実行を検討する必要あり</li>
+        <li>AWS Free Tier は AWS Entity Resolution には適用されない</li>
+      </ul>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金情報</h2>
+      <p style="margin-bottom: 12px;">インクリメンタル処理では、<span class="highlight">新規に処理されたレコードのみが課金対象</span>。前回処理済みのベースレコードに対する再課金は発生しない。</p>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>マッチング手法</th>
+            <th>料金</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ルールベースまたは ML マッチング</td>
+            <td><strong>$0.25 / 1,000 レコード</strong></td>
+          </tr>
+          <tr>
+            <td>データサービスプロバイダーマッチング</td>
+            <td><strong>$0.10 / 1,000 レコード</strong></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 style="margin-top: 16px;">料金例 (ML マッチング)</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>シナリオ</th>
+            <th>月額料金 (概算)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>100 万件のインクリメンタルレコード/月</td>
+            <td><strong>$250</strong></td>
+          </tr>
+          <tr>
+            <td>500 万件のインクリメンタルレコード/月</td>
+            <td><strong>$1,250</strong></td>
+          </tr>
+          <tr>
+            <td>1,000 万件のインクリメンタルレコード/月</td>
+            <td><strong>$2,500</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Regions -->
+    <div class="section">
+      <h2>🌐 利用可能リージョン</h2>
+      <div class="region-grid">
+        <div class="region-item"><span>米国東部 (バージニア北部)</span><span class="region-code">us-east-1</span></div>
+        <div class="region-item"><span>米国東部 (オハイオ)</span><span class="region-code">us-east-2</span></div>
+        <div class="region-item"><span>米国西部 (オレゴン)</span><span class="region-code">us-west-2</span></div>
+        <div class="region-item"><span>カナダ (中部)</span><span class="region-code">ca-central-1</span></div>
+        <div class="region-item"><span>アジアパシフィック (東京)</span><span class="region-code">ap-northeast-1</span></div>
+        <div class="region-item"><span>アジアパシフィック (ソウル)</span><span class="region-code">ap-northeast-2</span></div>
+        <div class="region-item"><span>アジアパシフィック (シンガポール)</span><span class="region-code">ap-southeast-1</span></div>
+        <div class="region-item"><span>アジアパシフィック (シドニー)</span><span class="region-code">ap-southeast-2</span></div>
+        <div class="region-item"><span>欧州 (フランクフルト)</span><span class="region-code">eu-central-1</span></div>
+        <div class="region-item"><span>欧州 (アイルランド)</span><span class="region-code">eu-west-1</span></div>
+        <div class="region-item"><span>欧州 (ロンドン)</span><span class="region-code">eu-west-2</span></div>
+        <div class="region-item"><span>アフリカ (ケープタウン)</span><span class="region-code">af-south-1</span></div>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div class="related-grid">
+        <div class="related-item"><strong>Amazon S3</strong> - データ入力ソースおよび出力先として使用</div>
+        <div class="related-item"><strong>AWS Glue</strong> - スキーママッピングの定義やデータカタログとの連携</div>
+        <div class="related-item"><strong>Amazon Connect Customer Profiles</strong> - 出力を顧客プロファイルに統合</div>
+        <div class="related-item"><strong>AWS Step Functions</strong> - インクリメンタルワークフローの自動化パイプライン構築</div>
+        <div class="related-item"><strong>Amazon EventBridge</strong> - S3 へのデータ到着をトリガーにインクリメンタル処理を自動起動</div>
+      </div>
+    </div>
+
+    <!-- References -->
+    <div class="section">
+      <h2>📚 参考リンク</h2>
+      <ul class="link-list">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/05/aws-entity-resolution-ml/" target="_blank" class="aws-link">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/entityresolution/latest/userguide/" target="_blank" class="aws-link">AWS Entity Resolution ユーザーガイド</a></li>
+        <li><a href="https://aws.amazon.com/entity-resolution/" target="_blank" class="aws-link">AWS Entity Resolution 製品ページ</a></li>
+        <li><a href="https://aws.amazon.com/entity-resolution/pricing/" target="_blank" class="aws-link">料金ページ</a></li>
+        <li><a href="https://docs.aws.amazon.com/entityresolution/latest/apireference/API_CreateMatchingWorkflow.html" target="_blank" class="aws-link">API リファレンス - CreateMatchingWorkflow</a></li>
+        <li><a href="https://awsapichanges.com/archive/changes/6338dd-entityresolution.html" target="_blank" class="aws-link">AWS API Changes - EntityResolution</a></li>
+      </ul>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典: <a href="https://aws.amazon.com/about-aws/whats-new/2026/05/aws-entity-resolution-ml/" target="_blank">https://aws.amazon.com/about-aws/whats-new/2026/05/aws-entity-resolution-ml/</a></p>
+      <p style="margin-top: 4px;">生成日: 2026-05-04 | AWS Entity Resolution ML ベースインクリメンタルマッチングワークフロー GA</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
