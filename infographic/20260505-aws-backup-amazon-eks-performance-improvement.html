@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Backup - Amazon EKS クラスターバックアップのパフォーマンス改善</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+
+    h1, .title {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 12px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      text-align: right;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .icon-text {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      color: var(--aws-light-gray);
+    }
+
+    .arrow {
+      color: var(--aws-orange);
+      font-size: 20px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    /* Before/After comparison */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-card h3 {
+      color: var(--aws-red);
+      margin-top: 0;
+    }
+
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-card h3 {
+      color: var(--aws-green);
+      margin-top: 0;
+    }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* Feature cards */
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 12px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .feature-card-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Use case cards */
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+
+    .usecase-title {
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Table */
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+    }
+
+    .info-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .info-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--aws-light-gray);
+    }
+
+    .info-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Check items */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon {
+      color: var(--aws-green);
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .cross-icon {
+      color: var(--aws-red);
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    /* Limitations */
+    .limitation-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 6px;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 26px;
+      }
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      .header {
+        flex-direction: column;
+      }
+      .subtitle {
+        text-align: left;
+        margin-top: 8px;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <span class="service-badge">AWS Backup</span>
+        <h1>🛡️ Amazon EKS クラスターバックアップのパフォーマンス改善</h1>
+      </div>
+      <div class="subtitle">2026-05-05<br>最大 10 倍高速化</div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>AWS Backup for Amazon EKS において、クラスター状態のバックアップが<span class="highlight">最大 10 倍高速化</span>されるパフォーマンス改善が発表された。大量の Namespace と Kubernetes リソースを持つ Amazon EKS クラスターのバックアップが大幅に高速化され、最大規模のクラスターではバックアップウィンドウが<span class="highlight">数日から数時間</span>に短縮される。</p>
+      <p>この改善は、AWS Backup for Amazon EKS がサポートされているすべての AWS リージョンにおいて、<span class="highlight">追加コストなし</span>で自動的に有効化される。</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="section">
+      <h2>📊 数字で見るアップデート</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-number">10x</span>
+          <span class="stat-label">最大バックアップ速度改善</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number">数日→数時間</span>
+          <span class="stat-label">大規模クラスターの<br>バックアップウィンドウ</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number">$0</span>
+          <span class="stat-label">追加コスト不要</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Before/After -->
+    <div class="section">
+      <h2>🔄 Before / After 比較</h2>
+      <div class="comparison-grid">
+        <div class="before-card">
+          <h3>❌ Before</h3>
+          <div class="check-item"><span class="cross-icon">✗</span><span>大規模 EKS クラスターのバックアップに数日かかる</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>長いバックアップウィンドウで運用スケジュール調整が困難</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>バックアップ処理中のリソース消費が長時間発生</span></div>
+        </div>
+        <div class="after-card">
+          <h3>✅ After</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span>クラスター状態のバックアップが最大 10 倍高速化</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>バックアップウィンドウが数日から数時間に短縮</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>追加コストなしで自動有効化、設定変更不要</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph EKS["⚙️ Amazon EKS クラスター"]
+        direction LR
+        NS1["📁 Namespace A"]
+        NS2["📁 Namespace B"]
+        NS3["📁 Namespace N"]
+        NS1 ~~~ NS2 ~~~ NS3
+    end
+
+    subgraph Backup["🛡️ AWS Backup"]
+        direction LR
+        Policy["📋 バックアップポリシー"]
+        Engine["⚡ バックアップエンジン<br/>最大 10x 高速化"]
+        Policy ~~~ Engine
+    end
+
+    subgraph Storage["🗄️ バックアップストレージ"]
+        Vault[("🔒 Backup Vault")]
+    end
+
+    EKS -->|"クラスター状態<br/>Kubernetes リソース"| Engine
+    Engine -->|"高速バックアップ<br/>数日→数時間"| Vault
+    Policy -->|"スケジュール制御"| Engine
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef process fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class EKS cloud
+    class Backup cloud
+    class Storage cloud
+    class NS1,NS2,NS3 compute
+    class Policy,Engine process
+    class Vault storage
+        </pre>
+      </div>
+      <p style="font-size: 14px; color: var(--aws-light-gray); margin-top: 8px;">AWS Backup が Amazon EKS クラスターの状態 (Namespace、Deployment、ConfigMap 等の Kubernetes リソース) を高速にバックアップし、Backup Vault に保存するフロー。エンジン部分のパフォーマンスが最大 10 倍改善された。</p>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="feature-card">
+        <div class="feature-card-title">🚀 バックアップ速度の 10 倍改善</div>
+        <p style="margin: 4px 0;">クラスター状態のバックアップ処理が最大 10 倍高速化。大量の Namespace と Kubernetes リソースを持つクラスターで最も効果を発揮し、最大規模のクラスターではバックアップウィンドウが数日から数時間に短縮。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">🔄 自動有効化</div>
+        <p style="margin: 4px 0;">既存の AWS Backup for EKS ユーザーは設定変更不要。すべての対応リージョンで自動的に改善が適用され、追加コストなし。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">🏢 一元的なデータ保護</div>
+        <p style="margin: 4px 0;">ポリシーベースのバックアップ管理。Amazon EKS を含むコンピュート、ストレージ、データベースサービス全体を一元管理し、コンプライアンス要件への対応を支援。</p>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <h3>バックアップ対象リソース</h3>
+      <table class="info-table">
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>バックアップ対象</td><td>EKS クラスター状態 (Kubernetes リソース)</td></tr>
+        <tr><td>対象リソース例</td><td>Namespace、Deployment、Service、ConfigMap、Secret 等</td></tr>
+        <tr><td>速度改善</td><td><span class="highlight">最大 10 倍高速化</span></td></tr>
+        <tr><td>改善前 (大規模)</td><td>数日</td></tr>
+        <tr><td>改善後 (大規模)</td><td>数時間</td></tr>
+        <tr><td>追加コスト</td><td>なし</td></tr>
+        <tr><td>有効化方法</td><td>自動 (設定変更不要)</td></tr>
+      </table>
+
+      <h3 style="margin-top: 24px;">バックアップ方式</h3>
+      <table class="info-table">
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>管理方式</td><td>ポリシーベース</td></tr>
+        <tr><td>サービスタイプ</td><td>フルマネージド</td></tr>
+        <tr><td>バックアップスコープ</td><td>クラスター状態 (Kubernetes API オブジェクト)</td></tr>
+        <tr><td>永続ボリューム</td><td>EBS スナップショットとして別途バックアップ</td></tr>
+      </table>
+    </div>
+
+    <!-- Setup Guide -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>Amazon EKS クラスターが稼働していること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>AWS Backup サービスが有効化されていること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>適切な IAM ロールが設定されていること</span></div>
+
+      <h3 style="margin-top: 20px;">ステップ 1: バックアッププランの作成</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">AWS CLI - バックアッププラン作成</span>
+        </div>
+        <pre><code class="language-bash">aws backup create-backup-plan --backup-plan '{
+  "BackupPlanName": "EKS-Daily-Backup",
+  "Rules": [
+    {
+      "RuleName": "DailyEKSBackup",
+      "TargetBackupVaultName": "Default",
+      "ScheduleExpression": "cron(0 2 * * ? *)",
+      "StartWindowMinutes": 60,
+      "CompletionWindowMinutes": 720,
+      "Lifecycle": {
+        "DeleteAfterDays": 30
+      }
+    }
+  ]
+}'</code></pre>
+      </div>
+      <p style="font-size: 14px;">EKS クラスターの日次バックアッププランを作成。毎日 UTC 2:00 に開始、30 日間保持。</p>
+
+      <h3 style="margin-top: 20px;">ステップ 2: EKS クラスターをリソースに割り当て</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">AWS CLI - リソース割り当て</span>
+        </div>
+        <pre><code class="language-bash">aws backup create-backup-selection --backup-plan-id &lt;plan-id&gt; --backup-selection '{
+  "SelectionName": "EKS-Clusters",
+  "IamRoleArn": "arn:aws:iam::&lt;account-id&gt;:role/AWSBackupDefaultServiceRole",
+  "Resources": [
+    "arn:aws:eks:&lt;region&gt;:&lt;account-id&gt;:cluster/&lt;cluster-name&gt;"
+  ]
+}'</code></pre>
+      </div>
+
+      <h3 style="margin-top: 20px;">ステップ 3: バックアップジョブの確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">AWS CLI - ジョブ確認</span>
+        </div>
+        <pre><code class="language-bash">aws backup list-backup-jobs --by-resource-type EKS --by-state COMPLETED</code></pre>
+      </div>
+      <p style="font-size: 14px;">パフォーマンス改善により、以前よりも大幅に短い時間でジョブが完了していることを確認できる。</p>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <h3>ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>運用効率の向上</strong>: バックアップウィンドウの短縮により、メンテナンス時間の削減と可用性の向上</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス対応の強化</strong>: 短時間でバックアップが完了するため、より頻繁なバックアップスケジュールの設定が可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト最適化</strong>: 追加コストなしで即座にパフォーマンス改善の恩恵を受けられる</span></div>
+
+      <h3 style="margin-top: 20px;">技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>大規模クラスター対応</strong>: 数千の Namespace や大量の Kubernetes リソースを持つクラスターでも実用的なバックアップ時間を実現</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>設定不要</strong>: 自動的に有効化されるため、運用チームの作業負荷なし</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>RPO の改善</strong>: バックアップ頻度を上げることが容易になり、Recovery Point Objective の短縮が可能</span></div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <h3>制限事項</h3>
+      <div class="limitation-item"><span class="cross-icon">⚠</span><span>パフォーマンス改善はクラスター状態 (Kubernetes リソース) のバックアップに適用。永続ボリューム (EBS) のバックアップは別途管理が必要</span></div>
+      <div class="limitation-item"><span class="cross-icon">⚠</span><span>AWS Backup for Amazon EKS がサポートされているリージョンでのみ利用可能</span></div>
+      <div class="limitation-item"><span class="cross-icon">⚠</span><span>バックアップ対象は Kubernetes API オブジェクトであり、コンテナイメージ自体はバックアップに含まれない</span></div>
+
+      <h3 style="margin-top: 20px;">考慮すべき点</h3>
+      <div class="limitation-item"><span>💡</span><span>大規模クラスターのリストア時間は今回のアップデートでは言及されていないため、リストア性能は別途検証が必要</span></div>
+      <div class="limitation-item"><span>💡</span><span>バックアップ中のクラスターへの負荷影響について、本番環境では事前にテストすることを推奨</span></div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+      <div class="usecase-card">
+        <div class="usecase-title">📦 ユースケース 1: 大規模マルチテナント EKS クラスターのバックアップ</div>
+        <p><strong>シナリオ</strong>: 数百の Namespace を持つマルチテナント EKS クラスターを運用。以前はバックアップに数日かかり日次バックアップの実施が困難だった。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">6 時間ごとのバックアップ設定</span>
+          </div>
+          <pre><code class="language-bash">aws backup create-backup-plan --backup-plan '{
+  "BackupPlanName": "MultiTenant-EKS-Backup",
+  "Rules": [
+    {
+      "RuleName": "FrequentBackup",
+      "TargetBackupVaultName": "EKS-Vault",
+      "ScheduleExpression": "cron(0 */6 * * ? *)",
+      "Lifecycle": {
+        "DeleteAfterDays": 7
+      }
+    }
+  ]
+}'</code></pre>
+        </div>
+        <p><strong>効果</strong>: バックアップが 6 時間ごとに実行可能となり、RPO を大幅に短縮。日中のバックアップも業務に影響なく実施可能。</p>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">🌍 ユースケース 2: 災害復旧 (DR) 戦略の強化</div>
+        <p><strong>シナリオ</strong>: 複数リージョンにまたがる DR 戦略において、EKS クラスター状態のバックアップを定期的にコピーする必要がある。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">クロスリージョン DR バックアップ</span>
+          </div>
+          <pre><code class="language-bash">aws backup create-backup-plan --backup-plan '{
+  "BackupPlanName": "EKS-DR-Backup",
+  "Rules": [
+    {
+      "RuleName": "DR-CrossRegion",
+      "TargetBackupVaultName": "Primary-Vault",
+      "ScheduleExpression": "cron(0 0 * * ? *)",
+      "CopyActions": [
+        {
+          "DestinationBackupVaultArn": "arn:aws:backup:us-west-2:&lt;account-id&gt;:backup-vault:DR-Vault",
+          "Lifecycle": {
+            "DeleteAfterDays": 14
+          }
+        }
+      ]
+    }
+  ]
+}'</code></pre>
+        </div>
+        <p><strong>効果</strong>: バックアップの高速化により、日次でのクロスリージョンコピーが実用的に。DR リージョンへの最新状態の反映が迅速になり、障害発生時の復旧準備が向上。</p>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">🔄 ユースケース 3: CI/CD パイプラインでのクラスター状態保護</div>
+        <p><strong>シナリオ</strong>: 頻繁なデプロイを行う環境で、デプロイ前にクラスター状態のバックアップを取得し、問題発生時のロールバックに備えたい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">デプロイ前オンデマンドバックアップ</span>
+          </div>
+          <pre><code class="language-bash"># デプロイ前にオンデマンドバックアップを実行
+aws backup start-backup-job \
+  --resource-arn "arn:aws:eks:ap-northeast-1:&lt;account-id&gt;:cluster/production" \
+  --iam-role-arn "arn:aws:iam::&lt;account-id&gt;:role/AWSBackupDefaultServiceRole" \
+  --backup-vault-name "Pre-Deploy-Vault" \
+  --lifecycle DeleteAfterDays=3</code></pre>
+        </div>
+        <p><strong>効果</strong>: パフォーマンス改善によりオンデマンドバックアップが短時間で完了するため、デプロイパイプラインへの組み込みが現実的に。問題発生時は直前の状態に迅速にロールバック可能。</p>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金情報</h2>
+      <p>パフォーマンス改善は<span class="highlight">追加コストなし</span>で提供される。従来の AWS Backup for EKS の料金体系が引き続き適用。</p>
+      <table class="info-table">
+        <tr><th>使用量</th><th>月額料金 (概算)</th></tr>
+        <tr><td>EKS クラスター状態バックアップストレージ</td><td>$0.05/GB (リージョンにより異なる)</td></tr>
+        <tr><td>クロスリージョンコピー</td><td>データ転送量に応じた料金</td></tr>
+      </table>
+      <p style="font-size: 13px; margin-top: 8px;">※ 最新の料金情報は <a href="https://aws.amazon.com/backup/pricing/" target="_blank" class="aws-link">AWS Backup 料金ページ</a> を参照</p>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>🌐 利用可能リージョン</h2>
+      <p>AWS Backup for Amazon EKS がサポートされているすべての AWS リージョンで利用可能。東京リージョン (ap-northeast-1) を含む主要リージョンで利用できる。追加の設定は不要で、自動的に有効化される。</p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="feature-card">
+        <div class="feature-card-title">⚙️ Amazon EKS</div>
+        <p style="margin: 4px 0;">AWS 上で Kubernetes クラスターを運用するためのマネージドサービス。今回のバックアップ対象。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">🔒 AWS Backup Vault</div>
+        <p style="margin: 4px 0;">バックアップデータの保存先。暗号化やアクセス制御を提供。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">💾 Amazon EBS</div>
+        <p style="margin: 4px 0;">EKS の永続ボリュームとして使用。EBS スナップショットは AWS Backup で別途管理。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-title">🏢 AWS Organizations</div>
+        <p style="margin: 4px 0;">組織全体のバックアップポリシーを一元管理する際に使用。</p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul style="list-style: none; padding: 0; margin: 4px 0;">
+        <li style="margin: 4px 0;"><a href="https://aws.amazon.com/about-aws/whats-new/2026/05/aws-backup-amazon-eks-performance-improvement/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li style="margin: 4px 0;"><a href="https://docs.aws.amazon.com/aws-backup/latest/devguide/whatisbackup.html" target="_blank" rel="noopener noreferrer">AWS Backup ドキュメント</a></li>
+        <li style="margin: 4px 0;"><a href="https://docs.aws.amazon.com/aws-backup/latest/devguide/working-with-other-services.html#working-with-eks" target="_blank" rel="noopener noreferrer">AWS Backup for Amazon EKS ドキュメント</a></li>
+        <li style="margin: 4px 0;"><a href="https://aws.amazon.com/backup/pricing/" target="_blank" rel="noopener noreferrer">AWS Backup 料金ページ</a></li>
+      </ul>
+      <p style="margin-top: 12px; color: rgba(213, 219, 219, 0.6);">Generated: 2026-05-05</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
