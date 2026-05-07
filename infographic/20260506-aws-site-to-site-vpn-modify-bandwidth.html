@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Site-to-Site VPN - 既存 VPN 接続のトンネル帯域幅変更</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left {
+      flex: 1;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .date-badge {
+      color: var(--aws-light-gray);
+      font-size: 14px;
+      background: var(--aws-dark-squid);
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 153, 0, 0.05);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card p {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box h3 {
+      color: var(--aws-red);
+      font-size: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-box h3 {
+      color: var(--aws-green);
+      font-size: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .before-box ul, .after-box ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .before-box li, .after-box li {
+      font-size: 14px;
+      margin-bottom: 8px;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .before-box li::before {
+      content: "✗";
+      position: absolute;
+      left: 0;
+      color: var(--aws-red);
+      font-weight: bold;
+    }
+
+    .after-box li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: var(--aws-green);
+      font-weight: bold;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Table */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .data-table th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      padding: 12px;
+      text-align: left;
+      border-bottom: 2px solid var(--aws-orange);
+      font-weight: 600;
+    }
+
+    .data-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+    }
+
+    .data-table tr:hover td {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    /* Use cases */
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 16px 0;
+    }
+
+    .usecase-card h3 {
+      color: var(--aws-white);
+      font-size: 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .usecase-card p {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 8px;
+    }
+
+    .usecase-card .effect {
+      background: rgba(29, 129, 2, 0.1);
+      border-left: 3px solid var(--aws-green);
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 12px;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Region tags */
+    .region-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .region-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .region-item .region-label {
+      color: var(--aws-teal);
+      font-weight: 500;
+      min-width: 100px;
+    }
+
+    /* Constraints list */
+    .constraint-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .constraint-list li {
+      font-size: 14px;
+      margin-bottom: 10px;
+      padding-left: 24px;
+      position: relative;
+    }
+
+    .constraint-list li::before {
+      content: "⚠";
+      position: absolute;
+      left: 0;
+    }
+
+    /* Merit list */
+    .merit-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .merit-list li {
+      font-size: 14px;
+      margin-bottom: 10px;
+      padding-left: 24px;
+      position: relative;
+    }
+
+    .merit-list li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: var(--aws-green);
+      font-weight: bold;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    .footer-links {
+      list-style: none;
+      padding: 0;
+      margin-top: 8px;
+    }
+
+    .footer-links li {
+      margin-bottom: 6px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 24px;
+      }
+
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .flow-diagram {
+        flex-direction: column;
+      }
+
+      .flow-arrow {
+        transform: rotate(90deg);
+      }
+
+      .header {
+        flex-direction: column;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">AWS Site-to-Site VPN</span>
+        <h1>🔒 既存 VPN 接続のトンネル帯域幅変更</h1>
+        <p style="color: var(--aws-light-gray); font-size: 15px; margin-top: 8px;">接続を再作成せずに帯域幅を standard / large 間で柔軟にスケール</p>
+      </div>
+      <div class="date-badge">📅 2026-05-06</div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>AWS Site-to-Site VPN で、既存の VPN 接続のトンネル帯域幅を <span class="highlight">standard (最大 1.25 Gbps)</span> と <span class="highlight">large (最大 5 Gbps)</span> の間で変更できるようになりました。接続を削除・再作成することなく、帯域幅を柔軟にスケールできます。</p>
+
+      <div class="stats-grid" style="margin-top: 20px;">
+        <div class="stat-card">
+          <div class="stat-value">5 Gbps</div>
+          <div class="stat-label">トンネルあたり最大帯域幅 (large)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">10 Gbps</div>
+          <div class="stat-label">接続あたり最大帯域幅 (2 トンネル)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">1 API</div>
+          <div class="stat-label">コール変更で完了</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Before/After -->
+    <div class="section">
+      <h2>🔄 Before / After 比較</h2>
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before</h3>
+          <ul>
+            <li>帯域幅変更には VPN 接続を削除して再作成が必要</li>
+            <li>新しいトンネル IP が生成され、オンプレミス VPN デバイスの再設定が必要</li>
+            <li>ファイアウォールルール変更とセキュリティチーム調整が発生</li>
+            <li>ダウンタイムとオペレーションの複雑さで迅速なスケーリングが困難</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ After</h3>
+          <ul>
+            <li>modify-vpn-connection-options コマンドで帯域幅を直接変更</li>
+            <li>トンネル IP、CIDR、事前共有鍵、全設定が保持される</li>
+            <li>オンプレミス VPN デバイスやファイアウォール変更が不要</li>
+            <li>ビジネス要件に応じた迅速な帯域幅スケーリングが可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p style="margin-bottom: 16px;">管理者が <code style="background: rgba(255,153,0,0.15); padding: 2px 6px; border-radius: 4px;">modify-vpn-connection-options</code> コマンドで帯域幅を変更すると、既存のトンネル IP アドレスや設定を保持したまま帯域幅がアップグレードまたはダウングレードされます。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph OnPrem["🏢 オンプレミス"]
+        CGW["🔌 カスタマーゲートウェイ<br/>設定変更不要"]
+        FW["🛡️ ファイアウォール<br/>ルール変更不要"]
+    end
+
+    subgraph AWS["☁️ AWS"]
+        subgraph VPN["🔒 Site-to-Site VPN"]
+            direction LR
+            T1["📡 トンネル 1<br/>IP アドレス保持"]
+            T2["📡 トンネル 2<br/>IP アドレス保持"]
+            T1 ~~~ T2
+        end
+        TGW["🔀 Transit Gateway<br/>/ Cloud WAN"]
+        VPC["🌐 VPC"]
+    end
+
+    subgraph Modify["⚙️ 帯域幅変更操作"]
+        API["📋 modify-vpn-connection-options<br/>--tunnel-bandwidth large/standard"]
+    end
+
+    CGW <-->|"IPsec トンネル"| VPN
+    FW --- CGW
+    VPN --> TGW
+    TGW --> VPC
+    API -->|"帯域幅変更"| VPN
+
+    classDef onprem fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef aws fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef vpn fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef tgw fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef modify fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef vpc fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+
+    class OnPrem onprem
+    class AWS aws
+    class VPN,T1,T2 vpn
+    class TGW tgw
+    class Modify,API modify
+    class VPC vpc
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="card">
+        <div class="card-title">🔧 インプレース帯域幅変更</div>
+        <p>既存の VPN 接続を削除せずに帯域幅を standard から large、または large から standard に変更可能。両方のトンネルが同じ帯域幅設定でなければならず、Transit Gateway または Cloud WAN にアタッチされた VPN 接続でのみ利用可能。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔐 設定の完全保持</div>
+        <p>トンネル IP アドレス、CIDR ブロック、事前共有鍵 (Pre-Shared Key)、ルーティング設定、IKE/IPsec パラメータなど全ての設定が変更なしで継続。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📊 帯域幅オプション</div>
+        <p>standard: トンネルあたり最大 1.25 Gbps (デフォルト)、large: トンネルあたり最大 5 Gbps。2 本のトンネルで合計最大 10 Gbps の帯域幅を実現。</p>
+      </div>
+    </div>
+
+    <!-- Technical Specifications -->
+    <div class="section">
+      <h2>📐 技術仕様</h2>
+      <h3 style="color: var(--aws-white); font-size: 16px; margin-bottom: 12px;">帯域幅オプション比較</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>standard</th>
+            <th>large</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>トンネルあたり最大帯域幅</td>
+            <td>1.25 Gbps</td>
+            <td><strong style="color: var(--aws-orange);">5 Gbps</strong></td>
+          </tr>
+          <tr>
+            <td>接続あたり最大帯域幅</td>
+            <td>2.5 Gbps</td>
+            <td><strong style="color: var(--aws-orange);">10 Gbps</strong></td>
+          </tr>
+          <tr>
+            <td>対応アタッチメント</td>
+            <td>Transit Gateway / Cloud WAN / Virtual Private Gateway</td>
+            <td>Transit Gateway / Cloud WAN のみ</td>
+          </tr>
+          <tr>
+            <td>Accelerated VPN</td>
+            <td style="color: var(--aws-green);">サポート</td>
+            <td style="color: var(--aws-red);">非サポート</td>
+          </tr>
+          <tr>
+            <td>MTU</td>
+            <td>1,500 bytes</td>
+            <td>1,500 bytes</td>
+          </tr>
+          <tr>
+            <td>接続料金</td>
+            <td>標準料金</td>
+            <td>$0.60/hr</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--aws-white); font-size: 16px; margin-top: 24px; margin-bottom: 12px;">制約事項</h3>
+      <ul class="constraint-list">
+        <li>Transit Gateway または Cloud WAN へのアタッチメントが必須</li>
+        <li>両トンネルとも同一帯域幅設定が必要</li>
+        <li>カスタマーゲートウェイは固定 IP アドレスのみ (IP なし CGW は非対応)</li>
+        <li>Accelerated VPN は Large Bandwidth Tunnel では非対応</li>
+        <li>NAT-T ポートはトンネル確立中の変更に非対応</li>
+        <li>断片化が必要なパケットはパフォーマンス低下の可能性あり</li>
+      </ul>
+    </div>
+
+    <!-- Configuration -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3 style="color: var(--aws-white); font-size: 16px; margin-bottom: 12px;">前提条件</h3>
+      <ul class="merit-list" style="margin-bottom: 20px;">
+        <li>既存の Site-to-Site VPN 接続が Transit Gateway または Cloud WAN にアタッチされていること</li>
+        <li>カスタマーゲートウェイに固定 IP アドレスが設定されていること</li>
+        <li>IAM に <code style="background: rgba(255,153,0,0.15); padding: 2px 6px; border-radius: 4px;">ec2:ModifyVpnConnectionOptions</code> 権限があること</li>
+      </ul>
+
+      <h3 style="color: var(--aws-white); font-size: 16px; margin-bottom: 12px;">操作フロー</h3>
+      <div class="flow-diagram">
+        <div class="flow-step">📋 現在の設定確認<br/><small style="color: var(--aws-light-gray);">describe-vpn-connections</small></div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">⚙️ 帯域幅変更<br/><small style="color: var(--aws-light-gray);">modify-vpn-connection-options</small></div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">✅ 変更結果確認<br/><small style="color: var(--aws-light-gray);">describe-vpn-connections</small></div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Step 1: 現在の帯域幅設定を確認</span>
+        </div>
+        <pre><code class="language-bash">aws ec2 describe-vpn-connections \
+    --vpn-connection-ids vpn-1234567890abcdef0 \
+    --query 'VpnConnections[0].Options.TunnelOptions[].TunnelBandwidth'</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Step 2: 帯域幅を変更</span>
+        </div>
+        <pre><code class="language-bash">aws ec2 modify-vpn-connection-options \
+    --vpn-connection-id vpn-1234567890abcdef0 \
+    --tunnel-bandwidth large</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Step 3: 変更結果の確認</span>
+        </div>
+        <pre><code class="language-bash">aws ec2 describe-vpn-connections \
+    --vpn-connection-ids vpn-1234567890abcdef0 \
+    --query 'VpnConnections[0].{State:State,TunnelBandwidth:Options.TunnelOptions[0].TunnelBandwidth,Tunnel1IP:VgwTelemetry[0].OutsideIpAddress,Tunnel2IP:VgwTelemetry[1].OutsideIpAddress}'</code></pre>
+      </div>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div>
+          <h3 style="color: var(--aws-white); font-size: 16px; margin-bottom: 12px;">📈 ビジネス面</h3>
+          <ul class="merit-list">
+            <li><strong>運用コスト削減</strong>: メンテナンスウィンドウやチーム間調整が不要</li>
+            <li><strong>ダウンタイム最小化</strong>: 接続再作成不要でサービス中断リスク低減</li>
+            <li><strong>俊敏なスケーリング</strong>: ビジネスイベントや季節変動に迅速対応</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="color: var(--aws-white); font-size: 16px; margin-bottom: 12px;">🔧 技術面</h3>
+          <ul class="merit-list">
+            <li><strong>設定の一貫性</strong>: IP アドレスや暗号化パラメータが保持</li>
+            <li><strong>ECMP 代替</strong>: 複雑な ECMP 設定なしで高帯域幅を実現</li>
+            <li><strong>オペレーション簡素化</strong>: 単一 API コールで完了</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Demerits -->
+    <div class="section">
+      <h2>⚠️ デメリット・考慮事項</h2>
+      <ul class="constraint-list">
+        <li>Virtual Private Gateway にアタッチされた VPN 接続では利用不可 (Transit Gateway / Cloud WAN 必須)</li>
+        <li>両トンネルが同一帯域幅必要。片方だけのアップグレードは不可</li>
+        <li>IP アドレスなしのカスタマーゲートウェイでは Large Bandwidth Tunnel 使用不可</li>
+        <li>Accelerated VPN との併用は不可</li>
+        <li>Large Bandwidth Tunnel は接続料金が高い ($0.60/hr vs 標準料金)</li>
+        <li>帯域幅変更中にトンネルの短時間中断の可能性あり (冗長構成を推奨)</li>
+        <li>MTU は 1,500 bytes。フラグメンテーションが必要なパケットではパフォーマンス低下の可能性</li>
+      </ul>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase-card">
+        <h3>🛒 季節変動への対応</h3>
+        <p>EC サイトのブラックフライデーやセール期間中に、オンプレミスのデータセンターと AWS 間のデータ転送量が大幅に増加するケース。セール開始前に帯域幅を拡大し、終了後に縮小してコスト最適化。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">セール期間の帯域幅制御</span>
+          </div>
+          <pre><code class="language-bash"># セール開始前に帯域幅を拡大
+aws ec2 modify-vpn-connection-options \
+    --vpn-connection-id vpn-1234567890abcdef0 \
+    --tunnel-bandwidth large
+
+# セール終了後に帯域幅を縮小してコスト最適化
+aws ec2 modify-vpn-connection-options \
+    --vpn-connection-id vpn-1234567890abcdef0 \
+    --tunnel-bandwidth standard</code></pre>
+        </div>
+        <div class="effect">✅ オンプレミス側の設定変更なしで、ピーク時に最大 10 Gbps の帯域幅を確保し、通常時はコストを抑制</div>
+      </div>
+
+      <div class="usecase-card">
+        <h3>🔗 Direct Connect バックアップの強化</h3>
+        <p>10 Gbps の Direct Connect をプライマリとし、Site-to-Site VPN をバックアップとして構成。フェイルオーバー時に帯域幅を動的に確保。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">Direct Connect 障害時の帯域幅制御</span>
+          </div>
+          <pre><code class="language-bash"># Direct Connect 障害検知時に VPN 帯域幅をアップグレード
+aws ec2 modify-vpn-connection-options \
+    --vpn-connection-id vpn-backup-connection \
+    --tunnel-bandwidth large
+
+# Direct Connect 復旧後にコスト最適化
+aws ec2 modify-vpn-connection-options \
+    --vpn-connection-id vpn-backup-connection \
+    --tunnel-bandwidth standard</code></pre>
+        </div>
+        <div class="effect">✅ Direct Connect 障害時にも高帯域幅バックアップを動的に確保し、ビジネス継続性を維持</div>
+      </div>
+
+      <div class="usecase-card">
+        <h3>🚀 段階的なクラウド移行</h3>
+        <p>大規模データ移行プロジェクトで、移行フェーズに応じてオンプレミスから AWS への転送帯域幅を段階的に増加。移行期間中のみ高帯域幅を確保し、完了後は standard に戻してコスト最適化。</p>
+        <div class="effect">✅ コストを最適化しながら移行スケジュールを短縮</div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金情報</h2>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>帯域幅設定</th>
+            <th>接続料金 (時間あたり)</th>
+            <th>月額概算 (730 時間)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>standard (最大 1.25 Gbps)</td>
+            <td>標準 VPN 接続料金</td>
+            <td>リージョンにより異なる</td>
+          </tr>
+          <tr>
+            <td><strong style="color: var(--aws-orange);">large (最大 5 Gbps)</strong></td>
+            <td><strong style="color: var(--aws-orange);">$0.60/hr</strong></td>
+            <td><strong style="color: var(--aws-orange);">約 $438/月</strong></td>
+          </tr>
+        </tbody>
+      </table>
+      <ul style="margin-top: 12px; list-style: none; padding: 0;">
+        <li style="font-size: 14px; margin-bottom: 6px;">→ データ転送料金は別途発生 (EC2 Data Transfer Out 料金に準拠)</li>
+        <li style="font-size: 14px; margin-bottom: 6px;">→ 帯域幅変更操作自体に追加料金は発生しない</li>
+      </ul>
+    </div>
+
+    <!-- Regions -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p style="margin-bottom: 12px;"><span class="highlight">東京リージョン (ap-northeast-1) で利用可能</span></p>
+      <div class="region-grid">
+        <div class="region-item">
+          <span class="region-label">🇺🇸 米国</span>
+          <span>US East (N. Virginia, Ohio), US West (N. California)</span>
+        </div>
+        <div class="region-item">
+          <span class="region-label">🏛️ Gov</span>
+          <span>AWS GovCloud (US-West)</span>
+        </div>
+        <div class="region-item">
+          <span class="region-label">🇪🇺 欧州</span>
+          <span>Frankfurt, London, Paris, Spain, Stockholm</span>
+        </div>
+        <div class="region-item">
+          <span class="region-label">🌏 APAC</span>
+          <span>Hong Kong, Hyderabad, Jakarta, Malaysia, Mumbai, New Zealand, Osaka, Seoul, Sydney, Taipei, Thailand, Tokyo</span>
+        </div>
+        <div class="region-item">
+          <span class="region-label">🌍 その他</span>
+          <span>Africa (Cape Town), Mexico (Central), South America (Sao Paulo)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="card">
+          <div class="card-title">🔀 AWS Transit Gateway</div>
+          <p>Large Bandwidth Tunnel を利用するために必要なルーティングハブ。複数 VPC と VPN 接続を集約管理。</p>
+        </div>
+        <div class="card">
+          <div class="card-title">🌐 AWS Cloud WAN</div>
+          <p>グローバルネットワーク構築・管理サービス。Large Bandwidth Tunnel の接続先として利用可能。</p>
+        </div>
+        <div class="card">
+          <div class="card-title">🔌 AWS Direct Connect</div>
+          <p>専用線接続サービス。Site-to-Site VPN と組み合わせて冗長性を確保するアーキテクチャで使用。</p>
+        </div>
+        <div class="card">
+          <div class="card-title">📊 VPN CloudWatch メトリクス</div>
+          <p>トンネルの帯域幅使用率を監視し、スケーリング判断に活用。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul class="footer-links">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/05/aws-site-to-site-vpn-modify-bandwidth/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/vpn/latest/s2svpn/VPNTunnels.html" target="_blank" rel="noopener noreferrer">AWS Site-to-Site VPN ドキュメント - トンネルオプション</a></li>
+        <li><a href="https://docs.aws.amazon.com/cli/latest/reference/ec2/modify-vpn-connection-options.html" target="_blank" rel="noopener noreferrer">AWS CLI リファレンス - modify-vpn-connection-options</a></li>
+        <li><a href="https://aws.amazon.com/vpn/pricing/" target="_blank" rel="noopener noreferrer">AWS VPN 料金ページ</a></li>
+      </ul>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon ElastiCache - リアルタイム全文検索、完全一致検索、数値範囲検索</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left { flex: 1; }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .date-badge {
+      color: var(--aws-light-gray);
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 12px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-card h4 {
+      color: var(--aws-red);
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-card h4 {
+      color: var(--aws-green);
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .before-card ul, .after-card ul {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 14px;
+    }
+
+    .before-card li, .after-card li {
+      margin-bottom: 8px;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Feature cards */
+    .feature-cards {
+      display: grid;
+      gap: 12px;
+    }
+
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .feature-card-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .feature-card-desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin: 0;
+    }
+
+    .feature-card-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .tag {
+      background: rgba(0, 161, 201, 0.15);
+      color: var(--aws-teal);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    /* Tables */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    thead th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    tbody td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--aws-light-gray);
+    }
+
+    tbody tr:hover {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    /* Use cases */
+    .usecase-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.08), rgba(255, 173, 51, 0.04));
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+
+    .usecase-card h4 {
+      color: var(--aws-orange);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+
+    .usecase-card p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code blocks */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Pros/Cons */
+    .pros-cons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .pros-card {
+      background: rgba(29, 129, 2, 0.08);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .cons-card {
+      background: rgba(209, 50, 18, 0.08);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .pros-card h4 {
+      color: var(--aws-green);
+      margin: 0 0 12px 0;
+      font-size: 15px;
+    }
+
+    .cons-card h4 {
+      color: var(--aws-red);
+      margin: 0 0 12px 0;
+      font-size: 15px;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: var(--aws-green); }
+    .cross-icon { color: var(--aws-red); }
+
+    /* Links */
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    .links-list {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0;
+    }
+
+    .links-list li {
+      margin: 6px 0;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 { font-size: 24px; }
+      .before-after { grid-template-columns: 1fr; }
+      .pros-cons { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .flow-diagram { flex-direction: column; }
+      .flow-arrow { transform: rotate(90deg); }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">Amazon ElastiCache</span>
+        <h1>🔍 リアルタイム全文検索、完全一致検索、数値範囲検索</h1>
+        <p style="margin: 0; font-size: 14px;">キャッシュ内で直接マイクロ秒レベルの検索を実現 - 追加費用なし</p>
+      </div>
+      <div class="date-badge">📅 2026-05-06</div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon ElastiCache が、キャッシュ内で直接リアルタイムの<span class="highlight">全文検索</span>、<span class="highlight">完全一致検索</span>、<span class="highlight">数値範囲検索</span>をサポート。別途検索サービスを用意する必要なく、テラバイト規模のデータに対してマイクロ秒レベルのレイテンシと毎秒数百万回の検索オペレーションスループットを実現する。</p>
+      <p>さらに、ベクトル類似検索と組み合わせた<span class="highlight">ハイブリッドクエリ</span>により、正確な条件指定とセマンティックな意図の両方を捉えた高精度な検索結果を提供する。本機能は <span class="highlight">ElastiCache バージョン 9.0 for Valkey</span> で利用可能であり、追加費用なしで提供される。</p>
+
+      <div class="before-after">
+        <div class="before-card">
+          <h4>❌ Before</h4>
+          <ul>
+            <li>キーバリューストアのみ。複雑な検索には OpenSearch 等の別サービスが必要</li>
+            <li>属性ベースの検索にはアプリ側ロジック実装やデータの二重管理が必要</li>
+            <li>低レイテンシ検索と高スループットの両立が困難でアーキテクチャが複雑化</li>
+          </ul>
+        </div>
+        <div class="after-card">
+          <h4>✅ After</h4>
+          <ul>
+            <li>キャッシュ内で直接検索可能。別サービスの構築・管理が不要</li>
+            <li>書き込み完了と同時に検索可能 (read-after-write 一貫性)</li>
+            <li>全文・完全一致・数値範囲・ベクトル検索を単一クエリで組み合わせ</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="section">
+      <h2>📊 パフォーマンスベンチマーク</h2>
+      <p style="font-size: 13px; color: var(--aws-light-gray); margin-bottom: 16px;">1 シャード、cache.r7g.2xlarge、レプリカなし、1.3M ドキュメント (約 1GB)</p>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">0.135ms</div>
+          <div class="stat-label">P50 レイテンシ (テキスト検索)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">60,000</div>
+          <div class="stat-label">QPS (テキスト検索、300 clients)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">52,632</div>
+          <div class="stat-label">QPS (ハイブリッドクエリ)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">$0</div>
+          <div class="stat-label">追加費用</div>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>クエリタイプ</th>
+              <th>P50 レイテンシ</th>
+              <th>P99 レイテンシ</th>
+              <th>QPS (300 clients)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>テキスト検索 (完全一致)</td>
+              <td>0.135 ms</td>
+              <td>0.255 ms</td>
+              <td>60,000</td>
+            </tr>
+            <tr>
+              <td>プレフィックスマッチング</td>
+              <td>0.135 ms</td>
+              <td>0.279 ms</td>
+              <td>57,692</td>
+            </tr>
+            <tr>
+              <td>数値範囲検索</td>
+              <td>0.175 ms</td>
+              <td>0.199 ms</td>
+              <td>24,087</td>
+            </tr>
+            <tr>
+              <td>ハイブリッドクエリ (テキスト + 数値)</td>
+              <td>0.135 ms</td>
+              <td>0.295 ms</td>
+              <td>52,632</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Architecture -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>アプリケーションが ElastiCache にデータを書き込むと同期的にインデックスが更新され、即座に全文検索、完全一致検索、数値範囲検索、ベクトル検索が利用可能になる。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph App["⚡ アプリケーション層"]
+        direction LR
+        Client["👤 クライアント"]
+        AppServer["🖥️ アプリケーション"]
+        Client ~~~ AppServer
+    end
+
+    subgraph ElastiCache["☁️ Amazon ElastiCache for Valkey 9.0"]
+        direction LR
+        subgraph Search["🔍 検索エンジン"]
+            FTS["📝 全文検索"]
+            Exact["🎯 完全一致検索"]
+            Numeric["📊 数値範囲検索"]
+            Vector["🧠 ベクトル検索"]
+            FTS ~~~ Exact ~~~ Numeric ~~~ Vector
+        end
+        Index["📋 リアルタイムインデックス"]
+        Cache["🗄️ インメモリデータストア"]
+    end
+
+    AppServer -->|"FT.SEARCH クエリ"| Search
+    AppServer -->|"HSET 書き込み"| Cache
+    Cache -->|"同期インデックス更新"| Index
+    Index --> Search
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef search fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class App layer
+    class ElastiCache cloud
+    class Search layer
+    class Client,AppServer compute
+    class FTS,Exact,Numeric,Vector search
+    class Index,Cache storage
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="feature-cards">
+        <div class="feature-card">
+          <div class="feature-card-title">📝 全文検索 (Full-text Search)</div>
+          <p class="feature-card-desc">プレフィックスマッチング (タイプアヘッド)、ファジーマッチング (タイプミス許容)、近接マッチング (SLOP) に対応。TextField 属性に対して動作する。</p>
+          <div class="feature-card-tags">
+            <span class="tag">prefix</span>
+            <span class="tag">fuzzy</span>
+            <span class="tag">proximity</span>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">🎯 完全一致検索 (Exact-match Search)</div>
+          <p class="feature-card-desc">ユーザー名、コンテンツ ID、ジャンル、ブランド名などの正確な値で即座にルックアップ。TagField 属性に対して動作する。</p>
+          <div class="feature-card-tags">
+            <span class="tag">TagField</span>
+            <span class="tag">exact-match</span>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">📊 数値範囲検索 (Numeric Range Search)</div>
+          <p class="feature-card-desc">トランザクション額、日付範囲、プレイヤースコアなどの数値属性によるフィルタリングとソート。NumericField 属性に対して動作する。</p>
+          <div class="feature-card-tags">
+            <span class="tag">NumericField</span>
+            <span class="tag">range filter</span>
+            <span class="tag">sort</span>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">🧠 ハイブリッド検索 (Hybrid Search)</div>
+          <p class="feature-card-desc">テキスト、タグ、数値フィルタとベクトル類似検索を単一クエリで組み合わせ。セマンティックな関連性とビジネス制約の両方を満たす結果を取得する。</p>
+          <div class="feature-card-tags">
+            <span class="tag">vector</span>
+            <span class="tag">KNN</span>
+            <span class="tag">cosine similarity</span>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">🔄 リアルタイムインデックス</div>
+          <p class="feature-card-desc">書き込み完了と同時に検索可能 (read-after-write consistency)。マルチスレッドによる並行インデックス処理。マルチキートランザクションや Lua スクリプトでも一貫性を保証する。</p>
+          <div class="feature-card-tags">
+            <span class="tag">read-after-write</span>
+            <span class="tag">multi-thread</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>インデックスフィールドタイプ</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>フィールドタイプ</th>
+              <th>用途</th>
+              <th>検索方法</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="highlight">TextField</span></td>
+              <td>タイトル、説明文</td>
+              <td>全文検索、プレフィックス、ファジー</td>
+            </tr>
+            <tr>
+              <td><span class="highlight">TagField</span></td>
+              <td>ブランド、カテゴリ、色</td>
+              <td>完全一致検索</td>
+            </tr>
+            <tr>
+              <td><span class="highlight">NumericField</span></td>
+              <td>価格、評価、在庫数</td>
+              <td>範囲フィルタ、ソート</td>
+            </tr>
+            <tr>
+              <td><span class="highlight">VectorField</span></td>
+              <td>埋め込みベクトル</td>
+              <td>KNN 類似検索</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>対応コマンド</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>コマンド</th>
+              <th>用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>FT.CREATE</code></td><td>インデックス作成</td></tr>
+            <tr><td><code>FT.SEARCH</code></td><td>検索実行</td></tr>
+            <tr><td><code>FT.DROPINDEX</code></td><td>インデックス削除</td></tr>
+            <tr><td><code>FT.INFO</code></td><td>インデックス情報の取得</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>スケーリング</h3>
+      <div class="check-item"><span class="check-icon">→</span><span>レプリカ追加: シャードあたり最大 5 レプリカ (結果整合性)</span></div>
+      <div class="check-item"><span class="check-icon">→</span><span>シャード追加: メモリ容量拡張 (クライアントコード変更不要)</span></div>
+      <div class="check-item"><span class="check-icon">→</span><span>シングルスロットインデックス: ファンアウトオーバーヘッド排除で最低レイテンシ実現</span></div>
+    </div>
+
+    <!-- Setup -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>AWS アカウントと AWS CLI が設定済み</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ElastiCache レプリケーショングループを作成する IAM 権限</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>同じ VPC 内の EC2 インスタンスまたは接続可能なアプリケーション</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>Python 3.9 以降と valkey-py バージョン 6.1.1 以降</span></div>
+
+      <h3>Step 1: クラスター作成</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ElastiCache for Valkey 9.0 クラスターの作成</span>
+        </div>
+        <pre><code class="language-bash">aws elasticache create-replication-group \
+  --replication-group-id my-search-cluster \
+  --replication-group-description "Valkey cluster with search" \
+  --engine valkey \
+  --engine-version 9.0 \
+  --transit-encryption-enabled \
+  --cache-node-type cache.r7g.large \
+  --replicas-per-node-group 0</code></pre>
+      </div>
+
+      <h3>Step 2: 検索インデックスの作成</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">インデックス定義 (valkey-py)</span>
+        </div>
+        <pre><code class="language-python">import valkey
+from valkey.commands.search.field import TextField, TagField, NumericField, VectorField
+from valkey.commands.search.indexDefinition import IndexDefinition, IndexType
+
+client = valkey.Valkey(
+    host="your-cluster-endpoint.cache.amazonaws.com",
+    port=6379,
+    decode_responses=False,
+    ssl=True,
+    ssl_cert_reqs="required"
+)
+
+# インデックス作成
+client.ft("products_index").create_index(
+    fields=[
+        TextField("title"),
+        TextField("description"),
+        TagField("brand", separator=","),
+        NumericField("price"),
+        NumericField("rating"),
+        VectorField("embedding", "FLAT", {
+            "TYPE": "FLOAT32",
+            "DIM": 64,
+            "DISTANCE_METRIC": "COSINE"
+        })
+    ],
+    definition=IndexDefinition(
+        prefix=["product:"],
+        index_type=IndexType.HASH
+    )
+)</code></pre>
+      </div>
+
+      <h3>Step 3: 検索の実行</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">各種検索クエリ例</span>
+        </div>
+        <pre><code class="language-python">from valkey.commands.search.query import Query
+
+# 全文検索 (プレフィックスマッチ)
+results = client.ft("products_index").search(
+    Query("wire*").return_fields("title").paging(0, 5)
+)
+
+# ハイブリッドクエリ (テキスト + 数値範囲)
+results = client.ft("products_index").search(
+    Query("@title:headphones @price:[50 150] @rating:[4.0 5.0]")
+    .return_fields("title", "brand", "price", "rating")
+    .paging(0, 5)
+)
+
+# ファジーマッチング (タイプミス許容)
+results = client.ft("products_index").search(
+    Query("%wireles% %headphoens%")
+    .return_fields("title", "brand", "price")
+    .paging(0, 5)
+)</code></pre>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+      <div class="usecase-card">
+        <h4>🛒 E コマースの商品検索エンジン</h4>
+        <p>数百万の商品カタログに対してタイプアヘッド検索、ファセット絞り込み、類似商品レコメンデーションを提供。別途 OpenSearch を構築せずに、マイクロ秒レベルの応答速度で商品検索体験を実現。インフラ運用コストの削減とユーザー体験の向上を両立する。</p>
+      </div>
+      <div class="usecase-card">
+        <h4>🤖 AI エージェントのメモリシステム</h4>
+        <p>AI エージェントが過去のインタラクションからコンテキストに応じた応答を提供。スコープ属性とセマンティック関連性でメモリを検索し、会話パス上の低レイテンシ要件を満たしながらトークンコスト削減と応答品質向上を実現する。</p>
+      </div>
+      <div class="usecase-card">
+        <h4>🎮 リアルタイムリーダーボードと金融取引フィルタリング</h4>
+        <p>ゲームプラットフォームでのスコアランキングや、金融プラットフォームでの取引額・期間による取引検索を低レイテンシで実現。スコア更新が即座にリーダーボードに反映され、リージョンやスコア帯によるリアルタイムフィルタリングが可能。</p>
+      </div>
+    </div>
+
+    <!-- Pros/Cons -->
+    <div class="section">
+      <h2>⚖️ メリット・デメリット</h2>
+      <div class="pros-cons">
+        <div class="pros-card">
+          <h4>✅ メリット</h4>
+          <div class="check-item"><span class="check-icon">✓</span><span>インフラコスト削減: 別途検索サービス不要</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>開発生産性向上: キャッシュと検索を統合</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>マイクロ秒レベルのリアルタイム体験</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>read-after-write 一貫性保証</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>毎秒数百万 QPS の高スループット</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>柔軟なハイブリッド検索</span></div>
+        </div>
+        <div class="cons-card">
+          <h4>⚠️ 制限事項・注意点</h4>
+          <div class="check-item"><span class="cross-icon">!</span><span>ノードベースクラスターのみ対応</span></div>
+          <div class="check-item"><span class="cross-icon">!</span><span>Valkey 9.0 以降が必須</span></div>
+          <div class="check-item"><span class="cross-icon">!</span><span>レプリカ読み取りは結果整合性</span></div>
+          <div class="check-item"><span class="cross-icon">!</span><span>ファジーマッチングは計算コスト高</span></div>
+          <div class="check-item"><span class="cross-icon">!</span><span>Redis → Valkey エンジン変更が必要</span></div>
+          <div class="check-item"><span class="cross-icon">!</span><span>インデックスサイズがメモリ容量に影響</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>検索機能は<span class="highlight">追加費用なし</span>で利用可能。通常の ElastiCache for Valkey のノード料金のみが適用される。</p>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>ノードタイプ</th>
+              <th>月額料金 (概算、東京リージョン)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>cache.r7g.large (2 vCPU, 13.07 GiB)</td>
+              <td>約 $200</td>
+            </tr>
+            <tr>
+              <td>cache.r7g.xlarge (4 vCPU, 26.32 GiB)</td>
+              <td>約 $400</td>
+            </tr>
+            <tr>
+              <td>cache.r7g.2xlarge (8 vCPU, 52.82 GiB)</td>
+              <td>約 $800</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size: 13px; margin-top: 8px;">※ インデックスデータは通常のメモリ容量を消費するため、検索ワークロードに応じたノードサイズの選定が必要。</p>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>すべての商用 AWS リージョン、AWS GovCloud (US) リージョン、中国リージョンで利用可能。</p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div class="feature-cards">
+        <div class="feature-card">
+          <div class="feature-card-title">🧠 ElastiCache for Valkey ベクトル検索</div>
+          <p class="feature-card-desc">同じ Valkey 9.0 エンジンで提供されるベクトル類似検索機能。ハイブリッド検索と組み合わせて利用可能。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">🔎 Amazon OpenSearch Service</div>
+          <p class="feature-card-desc">フルマネージド検索・分析サービス。より高度な検索機能が必要な場合の選択肢。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">🗄️ Amazon MemoryDB</div>
+          <p class="feature-card-desc">永続性を持つインメモリデータベース。データの耐久性が必要な場合の代替。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">📊 ElastiCache Aggregations</div>
+          <p class="feature-card-desc">同じ Valkey 9.0 で提供されるサーバーサイド集計機能。リアルタイム分析とレポーティング向け。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <h2 style="font-size: 16px;">📎 出典・参考リンク</h2>
+      <ul class="links-list">
+        <li>📢 <a href="https://aws.amazon.com/about-aws/whats-new/2026/05/amazon-elasticache-enchanced-search/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li>📝 <a href="https://aws.amazon.com/blogs/database/enhanced-search-for-amazon-elasticache/" target="_blank" rel="noopener noreferrer">AWS Blog - Enhanced search for Amazon ElastiCache</a></li>
+        <li>📖 <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/search.html" target="_blank" rel="noopener noreferrer">ドキュメント - Search in ElastiCache</a></li>
+        <li>💰 <a href="https://aws.amazon.com/elasticache/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a></li>
+        <li>💻 <a href="https://github.com/aws-samples/amazon-elasticache-samples" target="_blank" rel="noopener noreferrer">ElastiCache サンプルコード (GitHub)</a></li>
+      </ul>
+      <p style="margin-top: 16px; font-size: 11px; color: rgba(213, 219, 219, 0.6);">Generated from AWS News Summary Report | 2026-05-06</p>
+    </footer>
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

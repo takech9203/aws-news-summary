@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon ElastiCache - リアルタイム集計クエリのサポート</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+        :root {
+            --aws-squid-ink: #232F3E;
+            --aws-dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --aws-white: #FFFFFF;
+            --aws-light-gray: #D5DBDB;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--aws-squid-ink);
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            color: var(--aws-light-gray);
+            font-size: 16px;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header-left {
+            flex: 1;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--aws-white);
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+
+        .service-badge {
+            display: inline-block;
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .header-meta {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            text-align: right;
+        }
+
+        h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--aws-orange);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section {
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .highlight {
+            background-color: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        /* Overview summary */
+        .overview-text {
+            font-size: 16px;
+            line-height: 1.8;
+            margin-bottom: 20px;
+        }
+
+        /* Before/After comparison */
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .comparison {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .comparison-before {
+            background: rgba(209, 50, 18, 0.1);
+            border: 1px solid rgba(209, 50, 18, 0.4);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .comparison-after {
+            background: rgba(29, 129, 2, 0.1);
+            border: 1px solid rgba(29, 129, 2, 0.4);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .comparison-label {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .comparison-before .comparison-label {
+            color: var(--aws-red);
+        }
+
+        .comparison-after .comparison-label {
+            color: var(--aws-green);
+        }
+
+        .comparison ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .comparison li {
+            padding: 4px 0;
+            font-size: 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
+
+        .comparison-before li::before {
+            content: "\2717";
+            color: var(--aws-red);
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .comparison-after li::before {
+            content: "\2713";
+            color: var(--aws-green);
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        /* Stats cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+        }
+
+        /* Feature cards */
+        .feature-card {
+            background: var(--aws-dark-squid);
+            border-left: 4px solid var(--aws-orange);
+            border-radius: 0 8px 8px 0;
+            padding: 16px 20px;
+            margin: 12px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .feature-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--aws-white);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .feature-desc {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            line-height: 1.6;
+        }
+
+        .feature-desc ul {
+            list-style: none;
+            padding: 0;
+            margin-top: 6px;
+        }
+
+        .feature-desc li {
+            padding: 3px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
+
+        .feature-desc li::before {
+            content: "\2192";
+            color: var(--aws-orange);
+            flex-shrink: 0;
+        }
+
+        /* Use case cards */
+        .usecase-card {
+            background: rgba(255, 153, 0, 0.08);
+            border: 1px solid rgba(255, 153, 0, 0.25);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 12px 0;
+        }
+
+        .usecase-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--aws-smile-orange);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .usecase-desc {
+            font-size: 14px;
+            color: var(--aws-light-gray);
+            margin-bottom: 12px;
+        }
+
+        .usecase-effect {
+            font-size: 13px;
+            color: var(--aws-green);
+            padding: 8px 12px;
+            background: rgba(29, 129, 2, 0.1);
+            border-radius: 4px;
+            border-left: 3px solid var(--aws-green);
+        }
+
+        /* Tech specs table */
+        .spec-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        .spec-table th,
+        .spec-table td {
+            padding: 10px 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 14px;
+        }
+
+        .spec-table th {
+            color: var(--aws-orange);
+            font-weight: 600;
+            width: 35%;
+        }
+
+        .spec-table td {
+            color: var(--aws-light-gray);
+        }
+
+        /* Code block */
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+
+        .code-title {
+            color: var(--aws-light-gray);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        /* Mermaid container */
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Merits / Demerits */
+        .merit-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .merit-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .merit-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--aws-green);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .demerit-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--aws-red);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .merit-list, .demerit-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .merit-list li, .demerit-list li {
+            padding: 6px 0;
+            font-size: 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
+
+        .merit-list li::before {
+            content: "\2713";
+            color: var(--aws-green);
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .demerit-list li::before {
+            content: "\26A0";
+            flex-shrink: 0;
+        }
+
+        /* Pricing */
+        .pricing-note {
+            background: rgba(255, 153, 0, 0.08);
+            border: 1px solid rgba(255, 153, 0, 0.2);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 12px;
+            font-size: 14px;
+        }
+
+        .pricing-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        .pricing-table th,
+        .pricing-table td {
+            padding: 10px 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 14px;
+        }
+
+        .pricing-table th {
+            color: var(--aws-orange);
+            font-weight: 600;
+        }
+
+        /* Region badge */
+        .region-badge {
+            display: inline-block;
+            background: rgba(0, 161, 201, 0.15);
+            border: 1px solid rgba(0, 161, 201, 0.3);
+            color: var(--aws-teal);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            margin: 4px;
+        }
+
+        /* Related services */
+        .related-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .related-card:last-child {
+            border-bottom: none;
+        }
+
+        .related-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .related-name {
+            font-weight: 600;
+            color: var(--aws-white);
+            font-size: 14px;
+        }
+
+        .related-desc {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+            margin-top: 2px;
+        }
+
+        /* Flow diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+
+        .flow-step {
+            background: var(--aws-dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 100px;
+            font-size: 14px;
+        }
+
+        .flow-arrow {
+            color: var(--aws-orange);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 32px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            color: var(--aws-light-gray);
+        }
+
+        footer a {
+            color: var(--aws-teal);
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        footer a:hover {
+            color: var(--aws-smile-orange);
+        }
+
+        .footer-links {
+            list-style: none;
+            padding: 0;
+            margin-top: 8px;
+        }
+
+        .footer-links li {
+            padding: 4px 0;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <span class="service-badge">Amazon ElastiCache</span>
+                <h1>&#x1F4CA; リアルタイム集計クエリのサポート</h1>
+                <p style="color: var(--aws-light-gray); font-size: 14px; margin-top: 4px;">Valkey 9.0 でインメモリ集計をネイティブサポート</p>
+            </div>
+            <div class="header-meta">
+                <div>2026 年 5 月 6 日</div>
+                <div style="color: var(--aws-orange);">Aggregations</div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">&#x00B5;s</div>
+                <div class="stat-label">レイテンシー<br>マイクロ秒レベル</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">TB</div>
+                <div class="stat-label">データ規模<br>テラバイトスケール対応</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">$0</div>
+                <div class="stat-label">追加料金<br>既存料金内で利用可能</div>
+            </div>
+        </div>
+
+        <!-- Overview -->
+        <div class="section" style="margin-top: 24px;">
+            <h2>&#x2601;&#xFE0F; 概要</h2>
+            <p class="overview-text">
+                Amazon ElastiCache がリアルタイム集計クエリをサポートしました。キャッシュ内のデータに対して<span class="highlight">フィルタリング、グループ化、変換、集約を単一のクエリで直接実行</span>できるようになり、別途分析エンジンを用意することなく、テラバイト規模のデータに対してマイクロ秒レベルのレイテンシーで集計処理が可能です。
+            </p>
+
+            <div class="comparison">
+                <div class="comparison-before">
+                    <div class="comparison-label">&#x274C; Before</div>
+                    <ul>
+                        <li>アプリ側でデータ取得後に集計ロジックを実装</li>
+                        <li>別途分析エンジンやストリーム処理基盤が必要</li>
+                        <li>複数コマンドの組み合わせによる横断クエリ</li>
+                        <li>データ鮮度とパフォーマンスのトレードオフ</li>
+                    </ul>
+                </div>
+                <div class="comparison-after">
+                    <div class="comparison-label">&#x2705; After</div>
+                    <ul>
+                        <li>単一クエリでフィルタ・グループ化・集約が完結</li>
+                        <li>分析エンジン不要でアーキテクチャ簡素化</li>
+                        <li>テラバイト規模でマイクロ秒レスポンス</li>
+                        <li>書き込み即座反映で常に最新データを集計</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="section">
+            <h2>&#x1F3D7;&#xFE0F; アーキテクチャ図</h2>
+            <p style="font-size: 14px; margin-bottom: 12px;">アプリケーションから ElastiCache に対して単一の集計クエリを発行し、インメモリでフィルタリング・グループ化・変換を実行後、マイクロ秒レベルのレイテンシーでリアルタイム結果を返却します。</p>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    subgraph App["&#x1F5A5;&#xFE0F; アプリケーション層"]
+        direction LR
+        Web["&#x1F310; Web アプリ"]
+        API["&#x1F50C; API サーバー"]
+        AI["&#x1F916; AI パーソナライゼーション"]
+        Web ~~~ API ~~~ AI
+    end
+
+    subgraph ElastiCache["&#x1F5C4;&#xFE0F; Amazon ElastiCache for Valkey 9.0"]
+        direction LR
+        subgraph Data["&#x1F4CB; データ格納"]
+            Hash["Hash"]
+            JSON["JSON"]
+            Set["Set"]
+        end
+        subgraph Aggregation["&#x26A1; 集計エンジン"]
+            Filter["&#x1F50D; フィルタリング"]
+            Group["&#x1F4CA; グループ化"]
+            Transform["&#x1F504; 変換・集約"]
+        end
+        Data --> Aggregation
+    end
+
+    subgraph Results["&#x1F4C8; リアルタイム結果"]
+        direction LR
+        Facet["ファセット<br/>ナビゲーション"]
+        Leader["リーダー<br/>ボード"]
+        Trend["トレンド<br/>分析"]
+        Facet ~~~ Leader ~~~ Trend
+    end
+
+    App -->|"集計クエリ<br/>単一リクエスト"| ElastiCache
+    ElastiCache -->|"マイクロ秒<br/>レスポンス"| Results
+    Results --> App
+
+    classDef app fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef cache fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef result fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class App app
+    class ElastiCache cache
+    class Results result
+                </pre>
+            </div>
+        </div>
+
+        <!-- Key Features -->
+        <div class="section">
+            <h2>&#x2B50; 主要機能</h2>
+
+            <div class="feature-card">
+                <div class="feature-title">&#x1F504; 単一クエリでの集計処理</div>
+                <div class="feature-desc">
+                    <ul>
+                        <li>フィルタリング、グループ化、変換、集約を 1 回のクエリで実行</li>
+                        <li>複数コマンドの組み合わせが不要で開発者の生産性が向上</li>
+                        <li>完了した書き込みを即座に反映した一貫性のある結果を返却</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-title">&#x26A1; マイクロ秒レベルのレイテンシー</div>
+                <div class="feature-desc">
+                    <ul>
+                        <li>テラバイト規模のデータに対してもマイクロ秒レベルのレスポンス</li>
+                        <li>インメモリ処理による高速集計でリアルタイムユースケースに対応</li>
+                        <li>従来の分析エンジンと比較して大幅なレイテンシー改善</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-title">&#x1F30D; 幅広いユースケース対応</div>
+                <div class="feature-desc">
+                    <ul>
+                        <li>ファセットナビゲーション、カテゴリカウント、ロールアップ</li>
+                        <li>リーダーボード、トレンドコンテンツ、人気カテゴリ表示</li>
+                        <li>AI パーソナライゼーション向け検索結果サマリー</li>
+                        <li>運用ダッシュボード、ビジネスアナリティクス</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Specifications -->
+        <div class="section">
+            <h2>&#x1F527; 技術仕様</h2>
+            <table class="spec-table">
+                <tr><th>対応エンジン</th><td>Valkey 9.0 以上</td></tr>
+                <tr><th>クラスタータイプ</th><td>ノードベースクラスター</td></tr>
+                <tr><th>追加料金</th><td>なし</td></tr>
+                <tr><th>レイテンシー</th><td>マイクロ秒レベル</td></tr>
+                <tr><th>データ規模</th><td>テラバイトスケール対応</td></tr>
+                <tr><th>データ一貫性</th><td>完了した書き込みを即座に反映</td></tr>
+            </table>
+            <p style="font-size: 13px; margin-top: 16px; padding: 12px; background: rgba(140, 79, 255, 0.1); border-radius: 6px; border-left: 3px solid var(--aws-purple);">
+                <strong style="color: var(--aws-purple);">Valkey について:</strong> Valkey は Redis の最もオープンでベンダーニュートラルな OSS 代替であり、ElastiCache で推奨されるエンジンです。Linux Foundation の下で開発されており、既存の Redis OSS クライアントとの互換性を維持しています。
+            </p>
+        </div>
+
+        <!-- Setup Guide -->
+        <div class="section">
+            <h2>&#x1F6E0;&#xFE0F; 設定方法</h2>
+
+            <p style="font-size: 14px; margin-bottom: 16px;"><strong style="color: var(--aws-white);">前提条件:</strong> AWS アカウント、ElastiCache 操作権限 (IAM)、VPC 内のサブネットグループ</p>
+
+            <h3 style="font-size: 16px; color: var(--aws-white); margin: 16px 0 8px;">Step 1: 新しい Valkey 9.0 クラスターの作成</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">新規クラスター作成</span>
+                </div>
+                <pre><code class="language-bash">aws elasticache create-replication-group \
+  --replication-group-id my-valkey-cluster \
+  --replication-group-description "Valkey 9.0 with aggregations" \
+  --engine valkey \
+  --engine-version 9.0 \
+  --cache-node-type cache.r7g.large \
+  --num-cache-clusters 3</code></pre>
+            </div>
+
+            <h3 style="font-size: 16px; color: var(--aws-white); margin: 16px 0 8px;">Step 2: 既存クラスターのアップグレード</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Bash</span>
+                    <span class="code-title">既存クラスターを Valkey 9.0 へアップグレード</span>
+                </div>
+                <pre><code class="language-bash">aws elasticache modify-replication-group \
+  --replication-group-id my-existing-cluster \
+  --engine-version 9.0 \
+  --apply-immediately</code></pre>
+            </div>
+
+            <h3 style="font-size: 16px; color: var(--aws-white); margin: 16px 0 8px;">Step 3: 集計クエリの実行</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">Redis</span>
+                    <span class="code-title">FT.AGGREGATE コマンド例</span>
+                </div>
+                <pre><code class="language-sql">FT.AGGREGATE my-index "*"
+  GROUPBY 1 @category
+  REDUCE COUNT 0 AS count
+  SORTBY 2 @count DESC
+  LIMIT 0 10</code></pre>
+            </div>
+        </div>
+
+        <!-- Use Cases -->
+        <div class="section">
+            <h2>&#x1F4A1; ユースケース</h2>
+
+            <div class="usecase-card">
+                <div class="usecase-title">&#x1F6D2; EC サイトのファセットナビゲーション</div>
+                <div class="usecase-desc">大規模な EC サイトで商品検索結果にカテゴリ別のカウントやフィルター条件を動的に表示</div>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Redis</span>
+                        <span class="code-title">ファセットカウント取得</span>
+                    </div>
+                    <pre><code class="language-sql">FT.AGGREGATE products-index "@brand:{Nike}"
+  GROUPBY 1 @category
+  REDUCE COUNT 0 AS product_count
+  SORTBY 2 @product_count DESC</code></pre>
+                </div>
+                <div class="usecase-effect">&#x2192; Elasticsearch 不要、キャッシュ内で直接ファセットカウントを取得しマイクロ秒レスポンスで商品一覧を表示</div>
+            </div>
+
+            <div class="usecase-card">
+                <div class="usecase-title">&#x1F3AE; リアルタイムリーダーボード</div>
+                <div class="usecase-desc">ゲームやストリーミングサービスでリアルタイムのランキングやトレンドコンテンツを表示</div>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Redis</span>
+                        <span class="code-title">トレンドランキング取得</span>
+                    </div>
+                    <pre><code class="language-sql">FT.AGGREGATE content-index "*"
+  APPLY "hour(@timestamp)" AS hour
+  GROUPBY 2 @content_id @hour
+  REDUCE SUM 1 @views AS total_views
+  SORTBY 2 @total_views DESC
+  LIMIT 0 20</code></pre>
+                </div>
+                <div class="usecase-effect">&#x2192; 追加のストリーム処理パイプラインなしでリアルタイムランキングを実現</div>
+            </div>
+
+            <div class="usecase-card">
+                <div class="usecase-title">&#x1F916; AI パーソナライゼーション向けデータサマリー</div>
+                <div class="usecase-desc">AI ベースの推薦エンジンにユーザーの行動データや商品属性のサマリーを高速に提供</div>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Redis</span>
+                        <span class="code-title">ユーザー行動サマリー</span>
+                    </div>
+                    <pre><code class="language-sql">FT.AGGREGATE user-activity-index "@user_id:{user123}"
+  GROUPBY 1 @item_category
+  REDUCE COUNT 0 AS interaction_count
+  REDUCE AVG 1 @rating AS avg_rating
+  SORTBY 2 @interaction_count DESC
+  LIMIT 0 5</code></pre>
+                </div>
+                <div class="usecase-effect">&#x2192; AI モデルへの入力データをキャッシュから直接集計し推薦レスポンスのレイテンシーを大幅削減</div>
+            </div>
+        </div>
+
+        <!-- Merits / Demerits -->
+        <div class="section">
+            <h2>&#x2696;&#xFE0F; メリットと制約事項</h2>
+            <div class="merit-grid">
+                <div class="merit-section">
+                    <h3>&#x2705; メリット</h3>
+                    <ul class="merit-list">
+                        <li>分析エンジン不要でアーキテクチャ簡素化・コスト削減</li>
+                        <li>マイクロ秒レスポンスでリアルタイム UX を実現</li>
+                        <li>追加料金なしで新機能を利用可能</li>
+                        <li>ネットワークラウンドトリップ不要のインメモリ処理</li>
+                        <li>書き込み即反映でデータ一貫性を保証</li>
+                        <li>テラバイト規模でスケーラブルに対応</li>
+                    </ul>
+                </div>
+                <div class="demerit-section">
+                    <h3>&#x26A0;&#xFE0F; 制約事項・考慮点</h3>
+                    <ul class="demerit-list">
+                        <li>ノードベースクラスターのみ対応 (Serverless は対象外)</li>
+                        <li>Valkey 9.0 以上が必要 (アップグレード要)</li>
+                        <li>Memcached / Redis OSS エンジンでは利用不可</li>
+                        <li>既存 Redis OSS クラスターから Valkey への移行が必要な場合あり</li>
+                        <li>複雑なクエリはノードの CPU 使用率に影響の可能性</li>
+                        <li>インデックス設計が集計パフォーマンスに影響</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="section">
+            <h2>&#x1F4B0; 料金情報</h2>
+            <div class="pricing-note">
+                <p><strong style="color: var(--aws-orange);">集計機能自体に追加料金は発生しません。</strong>既存の Amazon ElastiCache ノードベースクラスターの料金体系がそのまま適用されます。</p>
+            </div>
+            <table class="pricing-table">
+                <tr>
+                    <th>インスタンスタイプ</th>
+                    <th>月額料金 (概算、us-east-1)</th>
+                </tr>
+                <tr>
+                    <td>cache.r7g.large (3 ノード)</td>
+                    <td style="color: var(--aws-orange);">約 $450</td>
+                </tr>
+                <tr>
+                    <td>cache.r7g.xlarge (3 ノード)</td>
+                    <td style="color: var(--aws-orange);">約 $900</td>
+                </tr>
+            </table>
+            <p style="font-size: 12px; color: var(--aws-light-gray); margin-top: 8px;">* 料金はノードタイプ、ノード数、リージョンにより異なります</p>
+        </div>
+
+        <!-- Available Regions -->
+        <div class="section">
+            <h2>&#x1F30F; 利用可能リージョン</h2>
+            <p style="font-size: 14px; margin-bottom: 12px;">すべての商用 AWS リージョン、AWS GovCloud (US) リージョン、および China リージョンで利用可能です。</p>
+            <div>
+                <span class="region-badge">All Commercial Regions</span>
+                <span class="region-badge">GovCloud (US)</span>
+                <span class="region-badge">China Regions</span>
+            </div>
+        </div>
+
+        <!-- Related Services -->
+        <div class="section">
+            <h2>&#x1F517; 関連サービス</h2>
+            <div class="related-card">
+                <div class="related-icon">&#x1F5C4;&#xFE0F;</div>
+                <div>
+                    <div class="related-name">Amazon MemoryDB</div>
+                    <div class="related-desc">永続性を備えたインメモリデータベース。集計機能の対応状況は今後の発表に注目</div>
+                </div>
+            </div>
+            <div class="related-card">
+                <div class="related-icon">&#x1F50D;</div>
+                <div>
+                    <div class="related-name">Amazon OpenSearch Service</div>
+                    <div class="related-desc">全文検索と分析エンジン。ElastiCache 集計は OpenSearch に比べてレイテンシーが低いが、全文検索機能は限定的</div>
+                </div>
+            </div>
+            <div class="related-card">
+                <div class="related-icon">&#x1F4BE;</div>
+                <div>
+                    <div class="related-name">Amazon DynamoDB</div>
+                    <div class="related-desc">NoSQL データベース。DynamoDB Streams と組み合わせて ElastiCache の集計用データを同期するパターンが有効</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p style="font-weight: 600; margin-bottom: 8px;">&#x1F4CE; 出典・参考リンク</p>
+            <ul class="footer-links">
+                <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/05/amazon-elasticache-aggregations/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+                <li><a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/WhatIs.html" target="_blank" rel="noopener noreferrer">ElastiCache ドキュメント</a></li>
+                <li><a href="https://aws.amazon.com/elasticache/pricing/" target="_blank" rel="noopener noreferrer">ElastiCache 料金ページ</a></li>
+            </ul>
+            <p style="margin-top: 12px; font-size: 11px; color: rgba(213, 219, 219, 0.6);">Generated on 2026-05-07</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>
