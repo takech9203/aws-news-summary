@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Redshift - COPY クエリに対するコンカレンシースケーリングのサポート</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left {
+      flex: 1;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 8px 0;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .date-badge {
+      color: var(--aws-light-gray);
+      font-size: 14px;
+      text-align: right;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-card h3 {
+      color: var(--aws-red);
+      margin-top: 0;
+    }
+
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-card h3 {
+      color: var(--aws-green);
+      margin-top: 0;
+    }
+
+    .before-card ul, .after-card ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .before-card li, .after-card li {
+      margin: 6px 0;
+      font-size: 14px;
+    }
+
+    .feature-cards {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .feature-card-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feature-card-desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    .feature-card-desc ul {
+      margin: 8px 0 0 0;
+      padding-left: 20px;
+    }
+
+    .feature-card-desc li {
+      margin: 4px 0;
+    }
+
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 16px 0;
+    }
+
+    .usecase-title {
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .usecase-scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 12px;
+    }
+
+    .usecase-effect {
+      font-size: 14px;
+      color: var(--aws-green);
+      font-weight: 500;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+      font-weight: 600;
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--aws-light-gray);
+    }
+
+    tr:hover td {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    .new-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-left: 8px;
+    }
+
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon {
+      color: var(--aws-green);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .cross-icon {
+      color: var(--aws-red);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    .warning-box {
+      background: rgba(255, 153, 0, 0.1);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+
+    .warning-box-title {
+      color: var(--aws-orange);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .limitation-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .limitation-icon {
+      color: var(--aws-orange);
+      flex-shrink: 0;
+    }
+
+    .pricing-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .pricing-card {
+      background: rgba(0, 161, 201, 0.08);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .pricing-card h4 {
+      color: var(--aws-teal);
+      margin: 0 0 8px 0;
+      font-size: 14px;
+    }
+
+    .pricing-card p {
+      margin: 4px 0;
+      font-size: 14px;
+    }
+
+    .region-tag {
+      display: inline-block;
+      background: rgba(29, 129, 2, 0.15);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      color: var(--aws-green);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+      margin: 4px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    @media (max-width: 768px) {
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+      .pricing-info {
+        grid-template-columns: 1fr;
+      }
+      .stats-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      h1 {
+        font-size: 24px;
+      }
+      .header {
+        flex-direction: column;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">Amazon Redshift</span>
+        <h1>COPY クエリに対するコンカレンシースケーリングのサポート</h1>
+        <p style="margin: 4px 0; color: var(--aws-light-gray); font-size: 14px;">Concurrency Scaling for COPY - Batch Workloads</p>
+      </div>
+      <div class="date-badge">
+        2026 年 5 月 7 日
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon Redshift のコンカレンシースケーリング機能が拡張され、<span class="highlight">Parquet および ORC ファイル形式</span>での S3 からの COPY クエリによる大量データ取り込みワークロードをサポート。ピーク時でもデータパイプラインがインジェスト速度とクエリパフォーマンスのどちらかを犠牲にする必要がなくなった。</p>
+
+      <div class="before-after">
+        <div class="before-card">
+          <h3>Before</h3>
+          <ul>
+            <li>COPY での Parquet/ORC 取り込みはスケーリング対象外</li>
+            <li>メインクラスターのリソースに制約</li>
+            <li>ピーク時にインジェスト遅延が発生</li>
+            <li>読み取り/書き込みのリソース競合</li>
+            <li>手動クラスターリサイズが必要</li>
+          </ul>
+        </div>
+        <div class="after-card">
+          <h3>After</h3>
+          <ul>
+            <li>Parquet/ORC の COPY がスケーリング対象に</li>
+            <li>自動で追加コンピュート容量をプロビジョニング</li>
+            <li>複数ファイルの同時ロードが遅延なし</li>
+            <li>手動リサイズ/スケジューリング不要</li>
+            <li>Serverless/Provisioned 両対応</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="section">
+      <h2>📊 ポイント</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">0</div>
+          <div class="stat-label">コード変更不要</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">32</div>
+          <div class="stat-label">最大コンピュートノード数</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">1h/日</div>
+          <div class="stat-label">無料スケーリングクレジット</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">全リージョン</div>
+          <div class="stat-label">利用可能</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>WLM キューでコンカレンシースケーリングを有効化すると、ピーク時に自動的にスケーリングクラスターがプロビジョニングされ、COPY クエリが振り分けられる。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph DataSources["Data Source S3"]
+        direction LR
+        Parquet["Parquet"]
+        ORC["ORC"]
+        Parquet ~~~ ORC
+    end
+
+    subgraph Redshift["Amazon Redshift"]
+        direction TB
+        WLM["WLM Queue<br/>Concurrency Scaling = auto"]
+
+        subgraph MainCluster["Main Cluster"]
+            Main["COPY Query"]
+        end
+
+        subgraph CSCluster["Concurrency Scaling Cluster"]
+            CS["Additional COPY Query<br/>Auto Provisioned"]
+        end
+
+        WLM -->|Normal| Main
+        WLM -->|Peak<br/>Auto Route| CS
+    end
+
+    DataSources --> WLM
+
+    subgraph Downstream["Downstream"]
+        direction LR
+        Analytics["Analytics"]
+        ETL["ETL Pipeline"]
+        Report["Reporting"]
+        Analytics ~~~ ETL ~~~ Report
+    end
+
+    Main --> Downstream
+    CS --> Downstream
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef scaling fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef output fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class DataSources cloud
+    class Parquet,ORC storage
+    class Redshift cloud
+    class WLM compute
+    class MainCluster,Main process
+    class CSCluster,CS scaling
+    class Downstream cloud
+    class Analytics,ETL,Report output
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="feature-cards">
+        <div class="feature-card">
+          <div class="feature-card-title">🗂️ Parquet/ORC 形式の COPY サポート</div>
+          <div class="feature-card-desc">
+            <ul>
+              <li>Amazon S3 からの Parquet/ORC ファイルでの COPY クエリがコンカレンシースケーリング対象に追加</li>
+              <li>複数ファイルの並列ロードがキューイング遅延なく実行可能</li>
+              <li>バッチワークロードにおける COPY パフォーマンスが大幅に向上</li>
+            </ul>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">🔄 自動スケーリング</div>
+          <div class="feature-card-desc">
+            <ul>
+              <li><strong>Serverless</strong>: デマンドに基づいて自動的にスケーリングを有効化/無効化</li>
+              <li><strong>Provisioned</strong>: 事前設定された構成に基づいてスケーリングを制御</li>
+              <li>手動でのクラスターリサイズやワークロードスケジューリングが不要</li>
+            </ul>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">🚀 ゼロオペレーションオーバーヘッド</div>
+          <div class="feature-card-desc">
+            <ul>
+              <li>既存のコンカレンシースケーリング設定がそのまま適用</li>
+              <li>マイグレーションや設定変更は不要</li>
+              <li>コンカレンシースケーリングを有効にするだけで即座にインジェストワークロードに適用</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specifications -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <h3>対応ファイル形式と要件</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対応ファイル形式</td><td>Parquet、ORC</td></tr>
+        <tr><td>データソース</td><td>Amazon S3</td></tr>
+        <tr><td>対象コマンド</td><td>COPY</td></tr>
+        <tr><td>対応ノードタイプ</td><td>RA3 (ra3.large, ra3.xlplus, ra3.4xlarge, ra3.16xlarge)</td></tr>
+        <tr><td>対応デプロイメント</td><td>Serverless、Provisioned</td></tr>
+        <tr><td>最大ノード数</td><td>32 コンピュートノード</td></tr>
+        <tr><td>クラスター要件</td><td>マルチノードクラスター (シングルノード不可)</td></tr>
+      </table>
+
+      <h3>コンカレンシースケーリング対象操作一覧</h3>
+      <table>
+        <tr><th>操作</th><th>読み取り</th><th>書き込み</th><th>備考</th></tr>
+        <tr><td>SELECT</td><td style="text-align:center; color: var(--aws-green);">&#9675;</td><td style="text-align:center;">-</td><td>従来からサポート</td></tr>
+        <tr><td>COPY (Parquet/ORC from S3)</td><td style="text-align:center;">-</td><td style="text-align:center; color: var(--aws-green);">&#9675;</td><td><span class="new-badge">NEW</span></td></tr>
+        <tr><td>COPY (その他形式)</td><td style="text-align:center;">-</td><td style="text-align:center; color: var(--aws-green);">&#9675;</td><td>従来からサポート</td></tr>
+        <tr><td>INSERT</td><td style="text-align:center;">-</td><td style="text-align:center; color: var(--aws-green);">&#9675;</td><td>従来からサポート</td></tr>
+        <tr><td>DELETE</td><td style="text-align:center;">-</td><td style="text-align:center; color: var(--aws-green);">&#9675;</td><td>従来からサポート</td></tr>
+        <tr><td>UPDATE</td><td style="text-align:center;">-</td><td style="text-align:center; color: var(--aws-green);">&#9675;</td><td>従来からサポート</td></tr>
+        <tr><td>CTAS</td><td style="text-align:center;">-</td><td style="text-align:center; color: var(--aws-green);">&#9675;</td><td>従来からサポート</td></tr>
+        <tr><td>VACUUM</td><td style="text-align:center;">-</td><td style="text-align:center; color: var(--aws-green);">&#9675;</td><td>従来からサポート</td></tr>
+      </table>
+    </div>
+
+    <!-- Setup -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">&#10003;</span><span>Amazon Redshift RA3 ノードタイプのクラスター、または Serverless ワークグループ</span></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><span>マルチノードクラスター構成 (Provisioned の場合)</span></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><span>Amazon S3 へのアクセス権限 (IAM ロール)</span></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><span>制限的な VPC エンドポイントポリシーの調整 (必要に応じて)</span></div>
+
+      <h3>WLM キュー設定 (Provisioned)</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">WLM Configuration</span>
+        </div>
+        <pre><code class="language-json">{
+  "WLMConfiguration": [
+    {
+      "queue_name": "etl_queue",
+      "concurrency_scaling": "auto",
+      "query_group": ["etl", "data_ingestion"],
+      "slots": 5
+    }
+  ]
+}</code></pre>
+      </div>
+
+      <h3>COPY コマンド実行例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">Parquet ファイルの COPY</span>
+        </div>
+        <pre><code class="language-sql">-- データ取り込みクエリを特定のキューに振り分け
+SET query_group TO 'data_ingestion';
+
+-- S3 からの COPY コマンドを実行
+COPY my_table
+FROM 's3://my-bucket/data/'
+IAM_ROLE 'arn:aws:iam::123456789012:role/MyRedshiftRole'
+FORMAT AS PARQUET;</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">Serverless での ORC ファイル COPY</span>
+        </div>
+        <pre><code class="language-sql">-- Serverless ではデフォルトでコンカレンシースケーリングが有効
+-- 追加設定なしで COPY クエリが自動スケーリングの対象
+COPY my_table
+FROM 's3://my-bucket/data/files/'
+IAM_ROLE 'arn:aws:iam::123456789012:role/MyRedshiftServerlessRole'
+FORMAT AS ORC;</code></pre>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+      <div class="usecase-card">
+        <div class="usecase-title">1. リアルタイムデータレイク取り込み</div>
+        <div class="usecase-scenario">IoT デバイスや Web アプリケーションから S3 に Parquet ファイルが出力され、5 分ごとに Redshift へ COPY で取り込むパイプライン。日中のピーク時にはファイル数が 10 倍に増加。</div>
+        <div class="usecase-effect">&#10003; ピーク時でもインジェスト遅延が解消、ダッシュボードのデータ鮮度が 5 分以内に維持</div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-title">2. 大規模 ETL バッチ処理</div>
+        <div class="usecase-scenario">毎日深夜に数百 GB の ORC ファイルを Redshift にロードする ETL ジョブ。同時にレポート生成クエリも実行されるため、リソース競合により完了時間が不安定。</div>
+        <div class="usecase-effect">&#10003; レポートクエリとリソース競合せずに ETL ジョブが安定して完了、朝のレポート配信 SLA を確実に遵守</div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-title">3. 高頻度レポーティング基盤</div>
+        <div class="usecase-scenario">金融機関で取引データを 1 分間隔で S3 に Parquet 形式で出力し Redshift に取り込み。市場オープン時間帯にデータ量が急増し、多数のアナリストが同時にクエリを実行。</div>
+        <div class="usecase-effect">&#10003; 市場オープン時のスパイクでもインジェストと分析クエリが互いに影響せず、リアルタイムデータにアクセス可能</div>
+      </div>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>&#9989; メリット</h2>
+      <div class="before-after">
+        <div style="background: rgba(29, 129, 2, 0.08); border: 1px solid rgba(29, 129, 2, 0.3); border-radius: 8px; padding: 16px;">
+          <h3 style="color: var(--aws-green); margin-top: 0;">ビジネス面</h3>
+          <div class="check-item"><span class="check-icon">&#10003;</span><span>データ鮮度の向上: リアルタイムに近い分析が可能</span></div>
+          <div class="check-item"><span class="check-icon">&#10003;</span><span>運用コスト削減: 手動リサイズ/スケジュール管理不要</span></div>
+          <div class="check-item"><span class="check-icon">&#10003;</span><span>SLA 遵守: トラフィックスパイク時も処理時間が安定</span></div>
+        </div>
+        <div style="background: rgba(0, 161, 201, 0.08); border: 1px solid rgba(0, 161, 201, 0.3); border-radius: 8px; padding: 16px;">
+          <h3 style="color: var(--aws-teal); margin-top: 0;">技術面</h3>
+          <div class="check-item"><span class="check-icon">&#10003;</span><span>リソース競合の解消: 独立コンピュートで相互影響なし</span></div>
+          <div class="check-item"><span class="check-icon">&#10003;</span><span>スループット向上: 並列 COPY で取り込み時間短縮</span></div>
+          <div class="check-item"><span class="check-icon">&#10003;</span><span>ゼロコード変更: 設定のみで有効化</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>&#9888;&#65039; 制限事項・注意点</h2>
+      <div class="warning-box">
+        <div class="warning-box-title">制限事項</div>
+        <div class="limitation-item"><span class="limitation-icon">&#8226;</span><span>RA3 ノードタイプのみサポート (DC2 ノードでは非対応)</span></div>
+        <div class="limitation-item"><span class="limitation-icon">&#8226;</span><span>シングルノードクラスターでは利用不可</span></div>
+        <div class="limitation-item"><span class="limitation-icon">&#8226;</span><span>制限的な IAM ポリシー (aws:sourceVpc, aws:sourceVpce, aws:sourceIp) が設定されている場合、COPY クエリがスケーリングクラスターに送信されない可能性</span></div>
+        <div class="limitation-item"><span class="limitation-icon">&#8226;</span><span>インターリーブソートキーを使用するテーブルへの COPY は非対応</span></div>
+        <div class="limitation-item"><span class="limitation-icon">&#8226;</span><span>DISTSTYLE ALL のテーブルへの書き込みは非対応</span></div>
+        <div class="limitation-item"><span class="limitation-icon">&#8226;</span><span>COPY での ANALYZE オプションはスケーリングクラスターで非対応</span></div>
+        <div class="limitation-item"><span class="limitation-icon">&#8226;</span><span>Identity 列を持つテーブルへの書き込みは非対応</span></div>
+      </div>
+      <div class="warning-box" style="margin-top: 16px;">
+        <div class="warning-box-title">考慮すべき点</div>
+        <div class="limitation-item"><span class="limitation-icon">&#8226;</span><span>スケーリングクラスターでの実行時間に対して追加料金が発生 (1 日あたりの無料クレジットあり)</span></div>
+        <div class="limitation-item"><span class="limitation-icon">&#8226;</span><span>制限的なネットワーク/VPC 構成で IAM ポリシーの調整が必要になる場合がある</span></div>
+        <div class="limitation-item"><span class="limitation-icon">&#8226;</span><span>明示的トランザクション内で非サポート DDL と COPY を混在させると、スケーリングクラスターで実行されない</span></div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金情報</h2>
+      <div class="pricing-info">
+        <div class="pricing-card">
+          <h4>Provisioned</h4>
+          <p><strong>無料クレジット</strong>: 1 日 1 時間分/クラスター</p>
+          <p><strong>課金単位</strong>: 秒単位 (アクティブ処理時間)</p>
+          <p><strong>対象</strong>: 読み取り/書き込み両方が同一プールから消費</p>
+        </div>
+        <div class="pricing-card">
+          <h4>Serverless</h4>
+          <p><strong>料金</strong>: RPU 使用量として通常の料金に含まれる</p>
+          <p><strong>追加設定</strong>: 不要 (デマンドベースで自動スケーリング)</p>
+        </div>
+      </div>
+      <table>
+        <tr><th>使用量</th><th>月額料金 (概算)</th></tr>
+        <tr><td>1 日 1 時間以内の利用</td><td style="color: var(--aws-green);">追加料金なし (無料クレジット内)</td></tr>
+        <tr><td>1 日平均 2 時間の利用 (ra3.xlplus)</td><td>クラスターのオンデマンド料金に準じた追加料金</td></tr>
+      </table>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>すべての AWS 商用リージョンおよび AWS GovCloud (US) リージョンで利用可能。</p>
+      <div style="margin-top: 12px;">
+        <span class="region-tag">ap-northeast-1 (東京)</span>
+        <span class="region-tag">全商用リージョン</span>
+        <span class="region-tag">GovCloud (US)</span>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div class="feature-cards">
+        <div class="feature-card">
+          <div class="feature-card-title">Amazon Redshift Serverless</div>
+          <div class="feature-card-desc">デマンドベースで自動的にコンカレンシースケーリングが動作するサーバーレスオプション</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">Amazon S3</div>
+          <div class="feature-card-desc">データ取り込み元のオブジェクトストレージ。Parquet/ORC 形式でのデータ格納に使用</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">AWS Glue</div>
+          <div class="feature-card-desc">ETL パイプラインの構築に使用、Redshift への COPY コマンドを発行するジョブを管理</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">Amazon Redshift WLM</div>
+          <div class="feature-card-desc">ワークロード管理機能。コンカレンシースケーリングのキュー設定を制御</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">Amazon Redshift Spectrum</div>
+          <div class="feature-card-desc">S3 上のデータを直接クエリする機能。COPY による取り込みとの使い分けが重要</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul style="list-style: none; padding: 0; margin: 8px 0;">
+        <li style="margin: 4px 0;"><a href="https://aws.amazon.com/about-aws/whats-new/2026/05/concurrencyscaling-support-for-copy" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li style="margin: 4px 0;"><a href="https://docs.aws.amazon.com/redshift/latest/dg/concurrency-scaling.html" target="_blank" rel="noopener noreferrer">Amazon Redshift コンカレンシースケーリング ドキュメント</a></li>
+        <li style="margin: 4px 0;"><a href="https://aws.amazon.com/redshift/pricing/" target="_blank" rel="noopener noreferrer">Amazon Redshift 料金ページ</a></li>
+      </ul>
+      <p style="margin-top: 12px; color: rgba(213, 219, 219, 0.6);">Generated on 2026-05-08</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
