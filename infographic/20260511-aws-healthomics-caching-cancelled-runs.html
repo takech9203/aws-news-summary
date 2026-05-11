@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS HealthOmics - キャンセルされたワークフロー実行のキャッシュサポート</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left {
+      flex: 1;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+
+    .date-badge {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      background: rgba(255, 255, 255, 0.08);
+      padding: 6px 12px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    h2, .section-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 600px) {
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .before-card {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-card h3 {
+      color: var(--aws-red);
+      margin: 0 0 12px 0;
+      font-size: 16px;
+    }
+
+    .after-card {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-card h3 {
+      color: var(--aws-green);
+      margin: 0 0 12px 0;
+      font-size: 16px;
+    }
+
+    .before-card ul, .after-card ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .before-card li, .after-card li {
+      margin-bottom: 8px;
+    }
+
+    /* Feature cards */
+    .feature-cards {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .feature-card {
+      background: rgba(255, 153, 0, 0.05);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+    }
+
+    .feature-card h4 {
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feature-card p, .feature-card ul {
+      margin: 0;
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    .feature-card ul {
+      padding-left: 20px;
+    }
+
+    .feature-card li {
+      margin-bottom: 4px;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 600px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--aws-orange);
+    }
+
+    /* Use case cards */
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .usecase-card h4 {
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+
+    .usecase-card .scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 12px;
+    }
+
+    .usecase-card .effect {
+      font-size: 14px;
+      color: var(--aws-green);
+      font-weight: 500;
+    }
+
+    /* Table */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--aws-light-gray);
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Merit/Demerit */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 600px) {
+      .merit-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .merit-card {
+      background: rgba(29, 129, 2, 0.08);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .merit-card h4 {
+      color: var(--aws-green);
+      margin: 0 0 12px 0;
+      font-size: 15px;
+    }
+
+    .demerit-card {
+      background: rgba(209, 50, 18, 0.06);
+      border: 1px solid rgba(209, 50, 18, 0.25);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .demerit-card h4 {
+      color: var(--aws-red);
+      margin: 0 0 12px 0;
+      font-size: 15px;
+    }
+
+    .merit-card ul, .demerit-card ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 14px;
+    }
+
+    .merit-card li, .demerit-card li {
+      margin-bottom: 6px;
+    }
+
+    /* Region grid */
+    .region-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 8px;
+      margin: 16px 0;
+    }
+
+    .region-item {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .region-code {
+      color: var(--aws-teal);
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Links */
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    footer ul {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0;
+    }
+
+    footer li {
+      margin-bottom: 6px;
+    }
+
+    /* Pricing */
+    .pricing-note {
+      background: rgba(0, 161, 201, 0.08);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .pricing-note strong {
+      color: var(--aws-teal);
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">AWS HealthOmics</span>
+        <h1>&#x1F9EC; キャンセルされたワークフロー実行のキャッシュサポート</h1>
+        <p style="margin: 0; font-size: 15px; color: var(--aws-light-gray);">完了済みタスク出力を自動保存し、キャンセル地点から再開可能に</p>
+      </div>
+      <div class="date-badge">&#x1F4C5; 2026-05-11</div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>&#x1F4CB; 概要</h2>
+      <p>AWS HealthOmics が、キャンセルされたワークフロー実行の<span class="highlight">完了済みタスク出力をキャッシュ</span>する機能をサポート。ワークフローがキャンセルされた場合でも、既に完了しているタスクの出力が顧客の S3 バケットに自動保存され、再実行時にキャンセル地点から処理を再開できるようになった。</p>
+      <p style="font-size: 14px;">AWS HealthOmics は HIPAA 対応のフルマネージドバイオインフォマティクスワークフローサービスであり、ヘルスケアおよびライフサイエンス分野で大規模な科学的発見を加速するために活用されている。</p>
+
+      <div class="before-after">
+        <div class="before-card">
+          <h3>&#x274C; Before (アップデート前)</h3>
+          <ul>
+            <li>キャンセル時に完了済みタスクの出力が保存されない</li>
+            <li>再実行時にすべてのタスクを最初から実行し直す必要あり</li>
+            <li>長時間タスクの再計算によるコスト増大</li>
+            <li>中間ファイルの確認ができず、デバッグが困難</li>
+          </ul>
+        </div>
+        <div class="after-card">
+          <h3>&#x2705; After (アップデート後)</h3>
+          <ul>
+            <li>完了済みタスクの出力が S3 バケットに自動保存</li>
+            <li>再実行時にキャンセル地点から処理を再開</li>
+            <li>未完了タスクのみが実行されコスト削減</li>
+            <li>中間ファイルを検査してデバッグが効率化</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>&#x1F3D7;&#xFE0F; アーキテクチャ図</h2>
+      <p style="font-size: 14px; margin-bottom: 16px;">キャンセルされたワークフローの完了済みタスク出力が S3 に自動保存され、再実行時にキャッシュから復元される流れ。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+sequenceDiagram
+    participant U as &#x1F464; ユーザー
+    participant HO as &#x26A1; HealthOmics
+    participant S3 as &#x1FAA3; S3 バケット
+
+    U->>HO: ワークフロー実行開始<br/>cacheBehavior: CACHE_ALWAYS
+    HO->>HO: タスク A 実行完了
+    HO->>HO: タスク B 実行完了
+    HO->>HO: タスク C 実行中...
+    U->>HO: ワークフローキャンセル
+    HO->>S3: タスク A, B の出力を保存
+    Note over HO,S3: 完了済みタスクのキャッシュを自動保存
+    U->>HO: ワークフロー再実行<br/>cacheId 指定
+    HO->>S3: キャッシュ済みタスク出力を取得
+    Note over HO: タスク A, B はスキップ
+    HO->>HO: タスク C から実行再開
+    HO-->>U: ワークフロー完了
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>&#x1F527; 主要機能</h2>
+      <div class="feature-cards">
+        <div class="feature-card">
+          <h4>&#x1F4BE; キャンセル済み実行の完了タスク出力キャッシュ</h4>
+          <ul>
+            <li>キャッシュ有効時にワークフローがキャンセルされると、完了済みタスクの出力が自動保存</li>
+            <li>保存先は顧客が指定した S3 バケット</li>
+            <li>追加の設定変更なしで既存のキャッシュ設定が適用</li>
+          </ul>
+        </div>
+        <div class="feature-card">
+          <h4>&#x23E9; キャンセル地点からの再開</h4>
+          <ul>
+            <li>再実行時に cacheId を指定することで、前回のキャンセル地点から処理を再開</li>
+            <li>完了済みタスクは再計算されず、キャッシュ出力が再利用</li>
+            <li>未完了タスクのみが新たに実行される</li>
+          </ul>
+        </div>
+        <div class="feature-card">
+          <h4>&#x1F50D; 中間ファイルの検査</h4>
+          <ul>
+            <li>キャッシュされた中間ファイルをデバッグ目的で検査可能</li>
+            <li>ワークフロー開発時の反復的なデバッグサイクルを効率化</li>
+            <li>タスク単位での出力確認が可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>&#x2699;&#xFE0F; 技術仕様</h2>
+      <h3 style="color: var(--aws-white); font-size: 16px; margin-bottom: 12px;">キャッシュ動作の設定</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>項目</th>
+              <th>詳細</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>cacheBehavior</td>
+              <td><code style="color: var(--aws-orange);">CACHE_ON_FAILURE</code> または <code style="color: var(--aws-orange);">CACHE_ALWAYS</code></td>
+            </tr>
+            <tr>
+              <td>保存先</td>
+              <td>顧客指定の S3 バケット (outputUri)</td>
+            </tr>
+            <tr>
+              <td>対応ワークフロー言語</td>
+              <td>Nextflow, WDL, CWL</td>
+            </tr>
+            <tr>
+              <td>キャッシュ対象</td>
+              <td>キャンセル時点で完了していたタスクの出力</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="color: var(--aws-white); font-size: 16px; margin: 20px 0 12px 0;">キャッシュ設定パラメータ</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">キャッシュ設定例</span>
+        </div>
+        <pre><code class="language-json">{
+  "cacheId": "string",
+  "cacheBehavior": "CACHE_ALWAYS",
+  "outputUri": "s3://my-bucket/workflow-outputs/",
+  "retentionMode": "RETAIN"
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Setup Steps -->
+    <div class="section">
+      <h2>&#x1F6E0;&#xFE0F; 設定方法</h2>
+      <p style="font-size: 14px; margin-bottom: 16px;"><strong style="color: var(--aws-white);">前提条件:</strong> AWS HealthOmics が利用可能なリージョンの AWS アカウント、ワークフロー実行用の IAM ロール、キャッシュ出力保存用の S3 バケットが必要。</p>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Step 1: キャッシュ用の Run Cache を作成</span>
+        </div>
+        <pre><code class="language-bash">aws omics create-run-cache \
+  --cache-s3-uri s3://my-bucket/run-cache/ \
+  --name "my-workflow-cache"</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Step 2: キャッシュ有効でワークフローを実行</span>
+        </div>
+        <pre><code class="language-bash">aws omics start-run \
+  --workflow-id "1234567" \
+  --role-arn "arn:aws:iam::123456789012:role/OmicsRole" \
+  --output-uri "s3://my-bucket/outputs/" \
+  --cache-id "cache-id-from-step1" \
+  --cache-behavior "CACHE_ALWAYS" \
+  --parameters file://params.json</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Step 3: キャンセル後の再実行 (同じ cache-id を指定)</span>
+        </div>
+        <pre><code class="language-bash">aws omics start-run \
+  --workflow-id "1234567" \
+  --role-arn "arn:aws:iam::123456789012:role/OmicsRole" \
+  --output-uri "s3://my-bucket/outputs/" \
+  --cache-id "cache-id-from-step1" \
+  --cache-behavior "CACHE_ALWAYS" \
+  --parameters file://params.json</code></pre>
+      </div>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>&#x1F4C8; メリット</h2>
+      <div class="merit-grid">
+        <div class="merit-card">
+          <h4>&#x1F4BC; ビジネス面</h4>
+          <ul>
+            <li><strong>コスト削減:</strong> 完了済みタスクの再計算が不要。長時間ゲノム解析で大幅なコスト削減</li>
+            <li><strong>開発サイクル短縮:</strong> デバッグと修正を迅速に行え、製品化までの時間を短縮</li>
+            <li><strong>研究の加速:</strong> 大規模パイプラインの効率的な反復実行で科学的発見が加速</li>
+          </ul>
+        </div>
+        <div class="merit-card">
+          <h4>&#x1F4BB; 技術面</h4>
+          <ul>
+            <li><strong>中間結果の可視性:</strong> S3 から中間ファイルを直接検査可能</li>
+            <li><strong>柔軟なワークフロー管理:</strong> キャンセルと再実行が効率化、リソース最適化</li>
+            <li><strong>マルチ言語サポート:</strong> Nextflow, WDL, CWL の全てで利用可能</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">&#x1F4B0;</div>
+          <div class="stat-value">コスト削減</div>
+          <div class="stat-label">完了済みタスクの再計算が不要</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">&#x23F1;&#xFE0F;</div>
+          <div class="stat-value">時間短縮</div>
+          <div class="stat-label">キャンセル地点からの再開</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">&#x1F50D;</div>
+          <div class="stat-value">デバッグ効率化</div>
+          <div class="stat-label">中間ファイルの検査が可能</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>&#x26A0;&#xFE0F; 制約事項・考慮点</h2>
+      <div class="demerit-card">
+        <h4>&#x1F6AB; 制限事項</h4>
+        <ul>
+          <li>キャッシュ動作を有効にしていない既存の実行には遡って適用されない</li>
+          <li>キャッシュ出力は S3 に保存されるため、ストレージコストが発生</li>
+          <li>キャッシュの有効性はタスクの入力パラメータに依存。入力変更時はキャッシュ無効</li>
+        </ul>
+      </div>
+      <div style="margin-top: 16px; background: rgba(255, 153, 0, 0.06); border: 1px solid rgba(255, 153, 0, 0.2); border-radius: 8px; padding: 16px;">
+        <h4 style="color: var(--aws-orange); margin: 0 0 8px 0; font-size: 15px;">&#x1F4A1; 考慮すべき点</h4>
+        <ul style="margin: 0; padding-left: 18px; font-size: 14px;">
+          <li>S3 バケットのライフサイクルポリシーを設定し、不要なキャッシュのストレージコストを管理</li>
+          <li>大規模なゲノムデータセットの中間出力はサイズが大きくなる可能性があるため、ストレージ容量を事前に計画</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>&#x1F3AF; ユースケース</h2>
+      <div class="usecase-card">
+        <h4>&#x1F9EC; ユースケース 1: ゲノム解析パイプラインのデバッグ</h4>
+        <p class="scenario">新しいゲノム変異解析パイプラインの開発中に後段タスクでエラーが発生。全体 8 時間のパイプラインで、エラーは 6 時間目のタスクで発生。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">初回実行 + エラー修正後の再実行</span>
+          </div>
+          <pre><code class="language-bash"># 初回実行 (キャッシュ有効)
+aws omics start-run \
+  --workflow-id "variant-calling-wf" \
+  --cache-id "dev-cache-001" \
+  --cache-behavior "CACHE_ALWAYS" \
+  --parameters '{"sample": "NA12878", "reference": "hg38"}'
+
+# エラー確認後にキャンセルし、修正版を再実行
+# 最初の 6 時間分のタスクはスキップされる</code></pre>
+        </div>
+        <p class="effect">&#x2705; 効果: 8 時間のパイプラインで 6 時間分の計算を節約し、デバッグサイクルを 2 時間に短縮</p>
+      </div>
+
+      <div class="usecase-card">
+        <h4>&#x1F4B3; ユースケース 2: コスト管理によるワークフロー中断と再開</h4>
+        <p class="scenario">大規模な WGS (全ゲノムシーケンシング) 解析を実行中に、予算上限に達したため一時的にワークフローをキャンセルする必要がある。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">予算管理によるキャンセルと再実行</span>
+          </div>
+          <pre><code class="language-bash"># 予算上限到達時にキャンセル
+aws omics cancel-run --id "run-12345"
+
+# 次月の予算が割り当てられた後に再実行
+aws omics start-run \
+  --workflow-id "wgs-pipeline" \
+  --cache-id "budget-managed-cache" \
+  --cache-behavior "CACHE_ALWAYS" \
+  --parameters file://wgs-params.json</code></pre>
+        </div>
+        <p class="effect">&#x2705; 効果: 予算管理と計算効率を両立し、完了ステップのコストを重複して支払う必要がない</p>
+      </div>
+
+      <div class="usecase-card">
+        <h4>&#x1F4CA; ユースケース 3: マルチサンプル解析での段階的実行</h4>
+        <p class="scenario">CWL ワークフローで 100 サンプルのバッチ解析を実行中に、優先度の高いジョブが入ったためワークフローをキャンセル。後で残りのサンプルを処理。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">優先ジョブのためのキャンセルと再開</span>
+          </div>
+          <pre><code class="language-bash"># 優先ジョブのためにキャンセル
+aws omics cancel-run --id "batch-run-001"
+
+# 優先ジョブ完了後に再開 - 処理済みサンプルはスキップ
+aws omics start-run \
+  --workflow-id "multi-sample-analysis" \
+  --cache-id "batch-cache-001" \
+  --cache-behavior "CACHE_ALWAYS" \
+  --parameters file://batch-params.json</code></pre>
+        </div>
+        <p class="effect">&#x2705; 効果: リソースの優先度管理が柔軟になり、処理済みタスクの再実行コストを回避</p>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>&#x1F4B0; 料金情報</h2>
+      <div class="pricing-note">
+        <strong>&#x2139;&#xFE0F; キャッシュ機能自体には追加料金は発生しない。</strong> ただし、以下の関連コストが発生する。
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>項目</th>
+              <th>料金</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>HealthOmics ワークフロー実行</td>
+              <td>使用した OMICS CPUhour および GPUhour に基づく</td>
+            </tr>
+            <tr>
+              <td>S3 キャッシュストレージ</td>
+              <td>S3 標準ストレージ料金 (例: $0.023/GB/月、us-east-1)</td>
+            </tr>
+            <tr>
+              <td>S3 データ取得</td>
+              <td>S3 GET リクエスト料金</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size: 14px; color: var(--aws-green); margin-top: 12px;">&#x1F4A1; キャッシュにより再計算を回避できるため、特に長時間ワークフローではコンピューティング費用の削減がストレージコストを大幅に上回る。</p>
+    </div>
+
+    <!-- Regions -->
+    <div class="section">
+      <h2>&#x1F30D; 利用可能リージョン</h2>
+      <p style="font-size: 14px; margin-bottom: 16px;">本機能は AWS HealthOmics が利用可能なすべてのリージョンで提供。</p>
+      <div class="region-grid">
+        <div class="region-item">
+          <span>&#x1F1FA;&#x1F1F8; 米国東部 (バージニア北部)</span>
+          <span class="region-code">us-east-1</span>
+        </div>
+        <div class="region-item">
+          <span>&#x1F1FA;&#x1F1F8; 米国西部 (オレゴン)</span>
+          <span class="region-code">us-west-2</span>
+        </div>
+        <div class="region-item">
+          <span>&#x1F1EA;&#x1F1FA; 欧州 (フランクフルト)</span>
+          <span class="region-code">eu-central-1</span>
+        </div>
+        <div class="region-item">
+          <span>&#x1F1EA;&#x1F1FA; 欧州 (アイルランド)</span>
+          <span class="region-code">eu-west-1</span>
+        </div>
+        <div class="region-item">
+          <span>&#x1F1EA;&#x1F1FA; 欧州 (ロンドン)</span>
+          <span class="region-code">eu-west-2</span>
+        </div>
+        <div class="region-item">
+          <span>&#x1F1EE;&#x1F1F1; イスラエル (テルアビブ)</span>
+          <span class="region-code">il-central-1</span>
+        </div>
+        <div class="region-item">
+          <span>&#x1F1F8;&#x1F1EC; アジアパシフィック (シンガポール)</span>
+          <span class="region-code">ap-southeast-1</span>
+        </div>
+        <div class="region-item">
+          <span>&#x1F1F0;&#x1F1F7; アジアパシフィック (ソウル)</span>
+          <span class="region-code">ap-northeast-2</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>&#x1F517; 関連サービス</h2>
+      <div class="feature-cards">
+        <div class="feature-card">
+          <h4>&#x1FAA3; Amazon S3</h4>
+          <p>キャッシュされたタスク出力の保存先。ライフサイクルポリシーによるコスト最適化が可能。</p>
+        </div>
+        <div class="feature-card">
+          <h4>&#x1F4E6; AWS HealthOmics Run Cache</h4>
+          <p>ワークフロー実行間でタスク出力を共有するためのキャッシュリソース。</p>
+        </div>
+        <div class="feature-card">
+          <h4>&#x26A1; AWS HealthOmics Batch Run</h4>
+          <p>複数ワークフロー実行のバッチ処理機能。キャッシュと組み合わせてさらなる効率化が可能。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p><strong>&#x1F4CE; 出典:</strong></p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/05/aws-healthomics-caching-cancelled-runs/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/omics/latest/dev/what-is-service.html" target="_blank" rel="noopener noreferrer">AWS HealthOmics ドキュメント</a></li>
+        <li><a href="https://aws.amazon.com/omics/pricing/" target="_blank" rel="noopener noreferrer">AWS HealthOmics 料金ページ</a></li>
+      </ul>
+      <p style="margin-top: 12px; color: rgba(213, 219, 219, 0.6);">Generated from AWS News Summary Report | 2026-05-11</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

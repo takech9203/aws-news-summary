@@ -5,6 +5,14 @@
 
 ## 2026 年
 
+- [2026-05-11 - Amazon SageMaker Studio - G6 インスタンスのリージョン拡大](2026/2026-05-11-g6-region-expansion-sagemaker-studio-notebooks.md)
+- [2026-05-11 - Amazon SageMaker Studio - G6e インスタンスのリージョン拡大](2026/2026-05-11-g6e-region-expansion-sagemaker-studio-notebooks.md)
+- [2026-05-11 - Amazon Aurora DSQL - 5 つの追加 AWS リージョンで利用可能に](2026/2026-05-11-amazon-aurora-dsql-five-additional-aws-regions.md)
+- [2026-05-11 - Claude Platform on AWS - 一般提供開始](2026/2026-05-11-claude-platform-aws.md)
+- [2026-05-11 - Amazon SageMaker Studio - P4de インスタンスのリージョン拡張](2026/2026-05-11-p4de-region-expansion-sagemaker-studio-notebooks.md)
+- [2026-05-11 - AWS Transform - コンテナ化機能の追加](2026/2026-05-11-aws-transform-containerization.md)
+- [2026-05-11 - AWS HealthOmics - キャンセルされたワークフロー実行のキャッシュサポート](2026/2026-05-11-aws-healthomics-caching-cancelled-runs.md)
+- [2026-05-11 - AWS WAF - 動的ラベル補間 (Dynamic Label Interpolation)](2026/2026-05-11-aws-waf-dynamic-label-interpolation.md)
 - [2026-05-08 - AWS IAM Policy Autopilot - Java サポートと Terraform 連携ポリシー生成](2026/2026-05-08-iam-policy-autopilot.md)
 - [2026-05-08 - AWS Service Catalog - Asia Pacific (ニュージーランド) および Canada West (カルガリー) リージョンで利用可能に](2026/2026-05-08-aws-service-catalog-calgary-new-zealand-regions.md)
 - [2026-05-08 - Kiro - 有料プラン $20 サインアップボーナスの導入](2026/2026-05-08-kiro-new-paid-tier-bonus.md)
