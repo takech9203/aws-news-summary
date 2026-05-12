@@ -5,9 +5,22 @@
 
 ## 2026 年
 
+- [2026-05-12 - AWS Lambda - Lambda Managed Instances でのスケジュールスケーリング](2026/2026-05-12-aws-lambda-managed-instances.md)
+- [2026-05-12 - Kiro - Requirements Analysis: 要件バグをコードになる前に発見する](2026/2026-05-12-kiro-deep-spec-analysis.md)
+- [2026-05-12 - Amazon CloudFront - Premium フラットレートプランの使用量レベル設定機能](2026/2026-05-12-cloudfront-configurable-premium-flat-rate-plans.md)
+- [2026-05-12 - Karpenter - Amazon Application Recovery Controller ゾーンシフト対応](2026/2026-05-12-karpenter-arc-zonal-shift.md)
+- [2026-05-12 - Kiro CLI - MCP OAuth Client ID, KIRO_HOME 環境変数、TUI キーバインド設定](2026/2026-05-12-kiro-changelog-2026-05-12.md)
+- [2026-05-12 - Amazon Redshift - RG インスタンス (AWS Graviton 搭載)](2026/2026-05-12-amazon-redshift-rg-instances-powered-by-graviton.md)
+- [2026-05-12 - Amazon EventBridge Scheduler - SDK インテグレーション拡張 (619 新規 API アクション)](2026/2026-05-12-amazon-eventbridge-sdk-integrations.md)
+- [2026-05-12 - Kiro - スペック駆動開発の高速化とインテリジェント化](2026/2026-05-12-kiro-faster-smarter-specs.md)
+- [2026-05-12 - Amazon SageMaker Feature Store - SageMaker Python SDK v3 サポート](2026/2026-05-12-amazon-sagemaker-feature-store-pyv3.md)
 - [2026-05-11 - Amazon SageMaker Studio - G6 インスタンスのリージョン拡大](2026/2026-05-11-g6-region-expansion-sagemaker-studio-notebooks.md)
 - [2026-05-11 - Amazon SageMaker Studio - G6e インスタンスのリージョン拡大](2026/2026-05-11-g6e-region-expansion-sagemaker-studio-notebooks.md)
+- [2026-05-11 - ENA Express - アベイラビリティゾーン間トラフィックのサポート](2026/2026-05-11-ena-express-availability-zones.md)
+- [2026-05-11 - Amazon SageMaker Unified Studio - Getting Started チュートリアルおよびプロダクト内リリースノートの追加](2026/2026-05-11-smus-getting-started.md)
 - [2026-05-11 - Amazon Aurora DSQL - 5 つの追加 AWS リージョンで利用可能に](2026/2026-05-11-amazon-aurora-dsql-five-additional-aws-regions.md)
+- [2026-05-11 - Amazon SageMaker Studio - P6-B200 インスタンスのリージョン拡大](2026/2026-05-11-p6-b200-region-expansion-sagemaker-studio-notebooks.md)
+- [2026-05-11 - Amazon Route 53 Domains - 34 の新しいトップレベルドメインをサポート](2026/2026-05-11-amazon-route-53-domains.md)
 - [2026-05-11 - Claude Platform on AWS - 一般提供開始](2026/2026-05-11-claude-platform-aws.md)
 - [2026-05-11 - Amazon SageMaker Studio - P4de インスタンスのリージョン拡張](2026/2026-05-11-p4de-region-expansion-sagemaker-studio-notebooks.md)
 - [2026-05-11 - AWS Transform - コンテナ化機能の追加](2026/2026-05-11-aws-transform-containerization.md)
