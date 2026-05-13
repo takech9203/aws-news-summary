@@ -5,13 +5,19 @@
 
 ## 2026 年
 
+- [2026-05-13 - Amazon RDS for Oracle - M8i/R8i インスタンスで Oracle SE2 License Included をサポート](2026/2026-05-13-amazon-oracle-m8i-r8i-license-included.md)
+- [2026-05-13 - Amazon FSx for OpenZFS - 共有 VPC での Multi-AZ ファイルシステム作成サポート](2026/2026-05-13-amazon-fsx-openzfs-multi-az-vpcs.md)
+- [2026-05-12 - Amazon Connect Customer - SDK による Cases と Customer Profiles のカスタムエージェントアプリケーション埋め込み](2026/2026-05-12-amazon-connect-sdk-cases-customer-profiles.md)
 - [2026-05-12 - AWS Lambda - Lambda Managed Instances でのスケジュールスケーリング](2026/2026-05-12-aws-lambda-managed-instances.md)
 - [2026-05-12 - Kiro - Requirements Analysis: 要件バグをコードになる前に発見する](2026/2026-05-12-kiro-deep-spec-analysis.md)
 - [2026-05-12 - Amazon CloudFront - Premium フラットレートプランの使用量レベル設定機能](2026/2026-05-12-cloudfront-configurable-premium-flat-rate-plans.md)
+- [2026-05-12 - Amazon SageMaker Studio - P5.48xl インスタンスのリージョン拡大](2026/2026-05-12-p5-48xl-region-expansion-sagemaker-studio-notebooks.md)
 - [2026-05-12 - Karpenter - Amazon Application Recovery Controller ゾーンシフト対応](2026/2026-05-12-karpenter-arc-zonal-shift.md)
 - [2026-05-12 - Kiro CLI - MCP OAuth Client ID, KIRO_HOME 環境変数、TUI キーバインド設定](2026/2026-05-12-kiro-changelog-2026-05-12.md)
 - [2026-05-12 - Amazon Redshift - RG インスタンス (AWS Graviton 搭載)](2026/2026-05-12-amazon-redshift-rg-instances-powered-by-graviton.md)
 - [2026-05-12 - Amazon EventBridge Scheduler - SDK インテグレーション拡張 (619 新規 API アクション)](2026/2026-05-12-amazon-eventbridge-sdk-integrations.md)
+- [2026-05-12 - AWS Security Agent - Full Repository Code Review](2026/2026-05-12-aws-security-agent-full-repository-code-review.md)
+- [2026-05-12 - Amazon SageMaker Notebook Instances - G6 インスタンスのリージョン拡大](2026/2026-05-12-g6-region-expansion-sagemaker-notebook-instances.md)
 - [2026-05-12 - Kiro - スペック駆動開発の高速化とインテリジェント化](2026/2026-05-12-kiro-faster-smarter-specs.md)
 - [2026-05-12 - Amazon SageMaker Feature Store - SageMaker Python SDK v3 サポート](2026/2026-05-12-amazon-sagemaker-feature-store-pyv3.md)
 - [2026-05-11 - Amazon SageMaker Studio - G6 インスタンスのリージョン拡大](2026/2026-05-11-g6-region-expansion-sagemaker-studio-notebooks.md)
