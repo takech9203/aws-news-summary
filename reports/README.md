@@ -5,6 +5,12 @@
 
 ## 2026 年
 
+- [2026-05-15 - Amazon Managed Grafana - Grafana バージョン 12.4 へのインプレースアップグレード](2026/2026-05-15-amazon-managed-grafana-v12-update.md)
+- [2026-05-15 - AWS Interconnect - Oracle Cloud Infrastructure (OCI) とのマルチクラウド接続がパブリックプレビュー開始](2026/2026-05-15-aws-announces-AWS-interconnect-multicloud-oci-preview.md)
+- [2026-05-15 - Amazon RDS for PostgreSQL - Extended Support マイナーバージョン 11.22/12.22/13.23 リリース](2026/2026-05-15-amazon-rds-postgresql-extended-support.md)
+- [2026-05-15 - Amazon EMR Serverless - 6 つの追加リージョンで利用可能に](2026/2026-05-15-amazon-emr-serverless-aws-regions.md)
+- [2026-05-15 - AWS Organizations - サービスコントロールポリシー (SCP) クォータの引き上げ](2026/2026-05-15-aws-organizations-increased-scp-quotas.md)
+- [2026-05-15 - Amazon Connect Cases - 関連アイテムの編集とケース削除がエージェントワークスペースから可能に](2026/2026-05-15-amazon-connect-cases-related-item.md)
 - [2026-05-14 - Amazon SageMaker JumpStart - エージェンティックコーディングおよび効率的 AI モデルの追加](2026/2026-05-14-agentic-reasoning-models-on-sagemaker-jumpstart.md)
 - [2026-05-14 - AWS CloudFormation - Fn::GetStackOutput によるクロスアカウント/クロスリージョンスタック出力参照](2026/2026-05-14-aws-cloudformation-cdk-stack.md)
 - [2026-05-14 - Amazon SageMaker AI - Qwen3.6 サーバーレスモデルカスタマイズ](2026/2026-05-14-amazon-sagemaker-ft-qwen3-6.md)
@@ -16,12 +22,14 @@
 - [2026-05-14 - AWS RTB Fabric - カスタムドメインによるリアルタイムビディングワークロードのサポート](2026/2026-05-14-aws-rtb-fabric-custom-domains.md)
 - [2026-05-14 - Amazon EC2 M3 Ultra Mac Instances - 一般提供開始](2026/2026-05-14-amazon-ec2-m3-ultra-mac-instances-generally-available.md)
 - [2026-05-14 - Amazon Connect Customer - エージェント自身のパフォーマンス評価閲覧権限](2026/2026-05-14-amazon-connect-customer-permission-view-own-performance-evaluations.md)
+- [2026-05-14 - Amazon EC2 - High Memory U7i/U7in インスタンスが欧州 (パリ) リージョンで利用可能に](2026/2026-05-14-amazon-ec2-u7i-aws-europe-paris.md)
 - [2026-05-14 - Amazon Bedrock - Advanced Prompt Optimization and Migration Tool](2026/2026-05-14-amazon-bedrock-advanced-prompt-optimization-migration-tool.md)
 - [2026-05-14 - AWS Transform - 開発者ツール統合 (Kiro, Claude, Cursor, Codex 対応)](2026/2026-05-14-aws-transform-developer-tools.md)
 - [2026-05-14 - Amazon Application Recovery Controller (ARC) - Lambda イベントソースマッピング実行ブロック](2026/2026-05-14-region-switch-lambda-esm-execution-block.md)
 - [2026-05-14 - Amazon CloudFront - Viewer mTLS パススルーモード](2026/2026-05-14-amazon-cloudfront-mtls-passthrough.md)
 - [2026-05-14 - AWS Transform - Visual Studio 向けエージェント型 AI アシスタント](2026/2026-05-14-aws-transform-ai-assistant.md)
 - [2026-05-14 - Amazon RDS for PostgreSQL - マイナーバージョン 18.4, 17.10, 16.14, 15.18, 14.23 サポート](2026/2026-05-14-amazon-rds-postgresql.md)
+- [2026-05-14 - Amazon EC2 X8aedz - ヨーロッパ (アイルランド) リージョンで利用可能に](2026/2026-05-14-amazon-ec2-x8aedz-europe-ireland.md)
 - [2026-05-13 - Amazon SageMaker Data Agent - IAM Identity Center ドメインでの利用開始](2026/2026-05-13-amazon-sagemaker-data-agent-idc.md)
 - [2026-05-13 - Amazon FSx for OpenZFS - 共有 VPC での Multi-AZ ファイルシステム作成サポート](2026/2026-05-13-amazon-fsx-openzfs-multi-az-vpcs.md)
 - [2026-05-13 - Amazon RDS for Oracle - M8i/R8i インスタンスで Oracle SE2 License Included をサポート](2026/2026-05-13-amazon-oracle-m8i-r8i-license-included.md)
