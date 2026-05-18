@@ -5,6 +5,10 @@
 
 ## 2026 年
 
+- [2026-05-18 - Amazon Redshift - Iceberg テーブルへの ALTER TABLE サポートと AWS Glue Data Catalog マウント経由の書き込み](2026/2026-05-18-amazon-redshift-alter-table-iceberg.md)
+- [2026-05-18 - AWS SAM CLI - CloudFormation Language Extensions サポート](2026/2026-05-18-aws-sam-cli-cloudformation.md)
+- [2026-05-18 - Amazon EVS - 環境あたり最大 32 ホストのサポート](2026/2026-05-18-amazon-evs-32-hosts.md)
+- [2026-05-18 - Amazon SageMaker Studio - Flexible Training Plans による GPU キャパシティ予約サポート](2026/2026-05-18-amazon-sagemaker-training-plan-support-for-studio.md)
 - [2026-05-15 - Amazon Managed Grafana - Grafana バージョン 12.4 へのインプレースアップグレード](2026/2026-05-15-amazon-managed-grafana-v12-update.md)
 - [2026-05-15 - AWS Interconnect - Oracle Cloud Infrastructure (OCI) とのマルチクラウド接続がパブリックプレビュー開始](2026/2026-05-15-aws-announces-AWS-interconnect-multicloud-oci-preview.md)
 - [2026-05-15 - Amazon RDS for PostgreSQL - Extended Support マイナーバージョン 11.22/12.22/13.23 リリース](2026/2026-05-15-amazon-rds-postgresql-extended-support.md)

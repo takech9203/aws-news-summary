@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon Redshift - Iceberg テーブルへの ALTER TABLE サポートと awsdatacatalog マウント経由の書き込み</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+        :root {
+            --aws-squid-ink: #232F3E;
+            --aws-dark-squid: #1A242F;
+            --aws-orange: #FF9900;
+            --aws-smile-orange: #FFAD33;
+            --aws-white: #FFFFFF;
+            --aws-light-gray: #D5DBDB;
+            --aws-teal: #00A1C9;
+            --aws-purple: #8C4FFF;
+            --aws-green: #1D8102;
+            --aws-red: #D13212;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--aws-squid-ink);
+            font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            color: var(--aws-light-gray);
+            font-size: 16px;
+            line-height: 1.6;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .header {
+            margin-bottom: 32px;
+            padding-bottom: 24px;
+            border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+        }
+
+        .header-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .service-badge {
+            background: var(--aws-orange);
+            color: var(--aws-squid-ink);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .date-badge {
+            color: var(--aws-light-gray);
+            font-size: 14px;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--aws-white);
+            margin: 12px 0 8px 0;
+            line-height: 1.3;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: var(--aws-light-gray);
+            margin: 0;
+        }
+
+        h2 {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--aws-orange);
+            margin: 0 0 16px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--aws-white);
+            margin: 16px 0 8px 0;
+        }
+
+        .section {
+            background: var(--aws-dark-squid);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .highlight {
+            background-color: rgba(255, 153, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--aws-orange);
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+            border-left: 4px solid var(--aws-orange);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .card-title {
+            font-weight: 600;
+            color: var(--aws-white);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .before-after {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .before-box {
+            background: rgba(209, 50, 18, 0.1);
+            border: 1px solid rgba(209, 50, 18, 0.4);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .after-box {
+            background: rgba(29, 129, 2, 0.1);
+            border: 1px solid rgba(29, 129, 2, 0.4);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .before-box h3, .after-box h3 {
+            margin-top: 0;
+            font-size: 16px;
+        }
+
+        .before-box h3 {
+            color: var(--aws-red);
+        }
+
+        .after-box h3 {
+            color: var(--aws-green);
+        }
+
+        .before-box ul, .after-box ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .before-box li, .after-box li {
+            margin: 6px 0;
+            font-size: 14px;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .usecase-card {
+            background: rgba(255, 153, 0, 0.05);
+            border: 1px solid rgba(255, 153, 0, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 12px 0;
+        }
+
+        .usecase-card h3 {
+            color: var(--aws-orange);
+            margin-top: 0;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th {
+            background: rgba(255, 153, 0, 0.15);
+            color: var(--aws-orange);
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--aws-light-gray);
+        }
+
+        tr:hover td {
+            background: rgba(255, 153, 0, 0.05);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--aws-orange);
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--aws-light-gray);
+            margin-top: 4px;
+        }
+
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+
+        .flow-step {
+            background: var(--aws-dark-squid);
+            border: 2px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 100px;
+        }
+
+        .flow-arrow {
+            color: var(--aws-orange);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .mermaid-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 153, 0, 0.3);
+            overflow-x: auto;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .code-header {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+
+        .code-title {
+            color: var(--aws-light-gray);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 16px !important;
+        }
+
+        .check-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        .check-icon {
+            color: var(--aws-green);
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .aws-link {
+            color: var(--aws-teal);
+            text-decoration: none;
+        }
+
+        .aws-link:hover {
+            color: var(--aws-smile-orange);
+            text-decoration: underline;
+        }
+
+        .merit-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .merit-box {
+            background: rgba(29, 129, 2, 0.05);
+            border: 1px solid rgba(29, 129, 2, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .merit-box h3 {
+            color: var(--aws-green);
+            margin-top: 0;
+            font-size: 16px;
+        }
+
+        .demerit-box {
+            background: rgba(255, 153, 0, 0.05);
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .demerit-box h3 {
+            color: var(--aws-orange);
+            margin-top: 0;
+            font-size: 16px;
+        }
+
+        .pricing-info {
+            background: rgba(0, 161, 201, 0.05);
+            border: 1px solid rgba(0, 161, 201, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        .region-badge {
+            display: inline-block;
+            background: rgba(140, 79, 255, 0.1);
+            border: 1px solid rgba(140, 79, 255, 0.3);
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 13px;
+            color: var(--aws-purple);
+            margin: 4px;
+        }
+
+        footer {
+            margin-top: 32px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            color: var(--aws-light-gray);
+        }
+
+        footer a {
+            color: var(--aws-teal);
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 24px; }
+            .before-after { grid-template-columns: 1fr; }
+            .merit-section { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .flow-diagram { flex-direction: column; }
+            .flow-arrow { transform: rotate(90deg); }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-meta">
+                <span class="service-badge">Amazon Redshift</span>
+                <span class="date-badge">2026-05-18</span>
+            </div>
+            <h1>Iceberg テーブルへの ALTER TABLE サポートと AWS Glue Data Catalog マウント経由の書き込み</h1>
+            <p class="subtitle">Apache Iceberg テーブルの DDL サポートおよび awsdatacatalog マウント経由の書き込みアクセス</p>
+        </div>
+
+        <!-- Overview -->
+        <div class="section">
+            <h2>📋 概要</h2>
+            <p>Amazon Redshift が Apache Iceberg テーブルに対する <span class="highlight">ALTER TABLE DDL</span> ステートメントのサポートと、AWS Glue Data Catalog (<span class="highlight">awsdatacatalog</span>) マウントを介した直接書き込み機能を追加。外部スキーマを作成することなく、Redshift の変換結果をデータレイクに直接書き込み、他のエンジンからクエリ可能な状態にできる。</p>
+            <p>データレイクアーキテクチャにおいて Redshift を中核の ETL/ELT エンジンとして活用するユーザーに特に有用。AWS Lake Formation と連携した Iceberg テーブルのフェデレーテッドアクセス管理にも対応。</p>
+
+            <div class="before-after">
+                <div class="before-box">
+                    <h3>&#x274C; Before</h3>
+                    <ul>
+                        <li>Iceberg テーブルの構造変更にはテーブルとデータを削除して再作成が必要</li>
+                        <li>データパイプラインに複雑性とレイテンシが追加され運用負荷が高い</li>
+                        <li>Iceberg テーブルへ書き込むには外部スキーマの作成が必要</li>
+                        <li>パーティション戦略の変更がデータ量の増加に伴い困難</li>
+                    </ul>
+                </div>
+                <div class="after-box">
+                    <h3>&#x2705; After</h3>
+                    <ul>
+                        <li>ALTER TABLE でスキーマ、パーティション、プロパティをインプレース変更可能</li>
+                        <li>awsdatacatalog マウント経由で外部スキーマなしに直接書き込み可能</li>
+                        <li>テーブル再作成なしにパーティション戦略を動的に適応</li>
+                        <li>EMR や Athena など他の Iceberg 対応エンジンとの互換性を維持</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="section">
+            <h2>📊 アップデート効果</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-value">0</span>
+                    <span class="stat-label">外部スキーマ作成の必要性</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">8 種類</span>
+                    <span class="stat-label">サポートされる ALTER TABLE 操作</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">秒単位</span>
+                    <span class="stat-label">スキーマ変更のリードタイム</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">全リージョン</span>
+                    <span class="stat-label">利用可能範囲</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="section">
+            <h2>🏗️ アーキテクチャ図</h2>
+            <p>Redshift から awsdatacatalog マウントを通じて Iceberg テーブルへ直接書き込み、ALTER TABLE でスキーマ変更を行う。変更後のテーブルは他の Iceberg 対応エンジンからもクエリ可能。</p>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    subgraph Redshift["⚡ Amazon Redshift"]
+        Query["📝 ALTER TABLE / INSERT<br/>DDL & DML"]
+    end
+
+    subgraph GlueCatalog["📚 AWS Glue Data Catalog"]
+        Mount["🔗 awsdatacatalog マウント"]
+        Meta["📋 Iceberg メタデータ"]
+    end
+
+    subgraph LakeFormation["🔒 AWS Lake Formation"]
+        Perms["🛡️ アクセス権限管理"]
+    end
+
+    subgraph DataLake["🪣 データレイク S3"]
+        Iceberg["🧊 Iceberg テーブル"]
+    end
+
+    subgraph Consumers["🔍 クエリエンジン"]
+        direction LR
+        EMR["⚙️ Amazon EMR"]
+        Athena["🔎 Amazon Athena"]
+        Other["📊 その他の Iceberg 対応エンジン"]
+        EMR ~~~ Athena ~~~ Other
+    end
+
+    Query --> Mount
+    Mount --> Meta
+    Meta --> Iceberg
+    LakeFormation -.-> Mount
+    Perms -.-> Iceberg
+    Iceberg --> Consumers
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef catalog fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef security fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef consumer fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Redshift compute
+    class GlueCatalog catalog
+    class LakeFormation security
+    class DataLake storage
+    class Consumers consumer
+                </pre>
+            </div>
+        </div>
+
+        <!-- Key Features -->
+        <div class="section">
+            <h2>🚀 主要機能</h2>
+            <div class="feature-grid">
+                <div class="card">
+                    <div class="card-title">🔗 awsdatacatalog マウント経由の書き込みアクセス</div>
+                    <ul style="margin: 8px 0; padding-left: 20px; font-size: 14px;">
+                        <li>自動マウントされた awsdatacatalog を通じて Iceberg テーブルへ直接書き込み可能</li>
+                        <li>外部スキーマの作成が不要</li>
+                        <li>Redshift の変換結果をデータレイクに直接ランディング</li>
+                        <li>AWS Lake Formation と連携したフェデレーテッドテーブルに特に有用</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <div class="card-title">📝 ALTER TABLE DDL サポート</div>
+                    <ul style="margin: 8px 0; padding-left: 20px; font-size: 14px;">
+                        <li>Iceberg テーブルのスキーマ、パーティション、テーブルプロパティの変更が可能</li>
+                        <li>テーブルとデータの再作成が不要</li>
+                        <li>クロスエンジン互換性を維持したままテーブル構造を変更</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <div class="card-title">🔒 Lake Formation 権限統合</div>
+                    <ul style="margin: 8px 0; padding-left: 20px; font-size: 14px;">
+                        <li>Iceberg テーブルへの書き込み操作に Lake Formation の権限が適用</li>
+                        <li>一貫したアクセス制御を維持しながらデータレイクへの書き込みが可能</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Specifications -->
+        <div class="section">
+            <h2>🔧 技術仕様 - サポートされる ALTER TABLE 操作</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>操作</th>
+                            <th>説明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>ADD COLUMN</code></td>
+                            <td>Iceberg テーブルに新しいカラムを追加</td>
+                        </tr>
+                        <tr>
+                            <td><code>DROP COLUMN</code></td>
+                            <td>既存のカラムを削除</td>
+                        </tr>
+                        <tr>
+                            <td><code>ALTER COLUMN</code></td>
+                            <td>カラムの定義を変更</td>
+                        </tr>
+                        <tr>
+                            <td><code>RENAME COLUMN</code></td>
+                            <td>カラム名を変更</td>
+                        </tr>
+                        <tr>
+                            <td><code>SET TABLE PROPERTIES</code></td>
+                            <td>デフォルトの圧縮タイプなどのプロパティを上書き</td>
+                        </tr>
+                        <tr>
+                            <td><code>ADD PARTITION FIELD</code></td>
+                            <td>新しいパーティションフィールドを追加</td>
+                        </tr>
+                        <tr>
+                            <td><code>DROP PARTITION FIELD</code></td>
+                            <td>既存のパーティションフィールドを削除</td>
+                        </tr>
+                        <tr>
+                            <td><code>REPLACE PARTITION FIELD</code></td>
+                            <td>パーティションフィールドを置換</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Configuration Steps -->
+        <div class="section">
+            <h2>⚙️ 設定方法</h2>
+
+            <h3>前提条件</h3>
+            <div class="check-item"><span class="check-icon">&#x2714;</span><span>Amazon Redshift クラスターまたは Redshift Serverless ワークグループが稼働していること</span></div>
+            <div class="check-item"><span class="check-icon">&#x2714;</span><span>AWS Glue Data Catalog に Iceberg テーブルが登録されていること</span></div>
+            <div class="check-item"><span class="check-icon">&#x2714;</span><span>Redshift クラスターの IAM ロールに Glue Data Catalog および S3 へのアクセス権限が付与されていること</span></div>
+            <div class="check-item"><span class="check-icon">&#x2714;</span><span>Lake Formation を使用する場合、適切な権限が設定されていること</span></div>
+
+            <h3>ステップ 1: awsdatacatalog マウント経由で Iceberg テーブルを参照</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">SQL</span>
+                    <span class="code-title">テーブル参照</span>
+                </div>
+                <pre><code class="language-sql">-- awsdatacatalog マウントを使用してテーブルを参照
+SELECT * FROM awsdatacatalog.my_database.my_iceberg_table LIMIT 10;</code></pre>
+            </div>
+
+            <h3>ステップ 2: Iceberg テーブルへの書き込み</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">SQL</span>
+                    <span class="code-title">データ書き込み</span>
+                </div>
+                <pre><code class="language-sql">-- Redshift の変換結果を Iceberg テーブルに書き込み
+INSERT INTO awsdatacatalog.my_database.my_iceberg_table
+SELECT
+    customer_id,
+    order_date,
+    total_amount,
+    CURRENT_TIMESTAMP AS processed_at
+FROM staging_orders
+WHERE order_date >= DATEADD(day, -1, CURRENT_DATE);</code></pre>
+            </div>
+
+            <h3>ステップ 3: ALTER TABLE でスキーマ変更</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">SQL</span>
+                    <span class="code-title">スキーマ変更</span>
+                </div>
+                <pre><code class="language-sql">-- カラムの追加
+ALTER TABLE awsdatacatalog.my_database.my_iceberg_table
+ADD COLUMN region VARCHAR(50);
+
+-- カラム名の変更
+ALTER TABLE awsdatacatalog.my_database.my_iceberg_table
+RENAME COLUMN total_amount TO order_total;
+
+-- 圧縮タイプの変更
+ALTER TABLE awsdatacatalog.my_database.my_iceberg_table
+SET TABLE PROPERTIES ('write.parquet.compression-codec' = 'zstd');
+
+-- パーティションフィールドの追加
+ALTER TABLE awsdatacatalog.my_database.my_iceberg_table
+ADD PARTITION FIELD month(order_date);</code></pre>
+            </div>
+        </div>
+
+        <!-- Lake Formation Permission -->
+        <div class="section">
+            <h2>🛡️ Lake Formation 権限設定</h2>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">JSON</span>
+                    <span class="code-title">Lake Formation 権限設定例</span>
+                </div>
+                <pre><code class="language-json">{
+  "Principal": {
+    "DataLakePrincipalIdentifier": "arn:aws:iam::123456789012:role/RedshiftRole"
+  },
+  "Resource": {
+    "Table": {
+      "DatabaseName": "my_database",
+      "Name": "my_iceberg_table",
+      "CatalogId": "123456789012"
+    }
+  },
+  "Permissions": [
+    "SELECT",
+    "INSERT",
+    "ALTER",
+    "DROP"
+  ]
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- Use Cases -->
+        <div class="section">
+            <h2>💡 ユースケース</h2>
+
+            <div class="usecase-card">
+                <h3>1. データレイクへの ETL パイプライン簡素化</h3>
+                <p>データエンジニアリングチームが Redshift で変換処理を行い、結果を Iceberg テーブルに書き戻してデータサイエンスチームが EMR で分析する。</p>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">SQL</span>
+                        <span class="code-title">集計結果をデータレイクに直接書き込み</span>
+                    </div>
+                    <pre><code class="language-sql">-- Redshift で集計・変換してデータレイクに直接書き込み
+INSERT INTO awsdatacatalog.analytics_db.daily_metrics
+SELECT
+    date_trunc('day', event_time) AS metric_date,
+    product_category,
+    COUNT(*) AS event_count,
+    SUM(revenue) AS total_revenue
+FROM raw_events
+WHERE event_time >= DATEADD(day, -1, CURRENT_DATE)
+GROUP BY 1, 2;</code></pre>
+                </div>
+                <p style="font-size: 14px; color: var(--aws-green);">&#x2192; 外部スキーマ作成や別途 ETL ツールでの書き込みが不要になり、パイプラインのステップ数と管理コストを削減</p>
+            </div>
+
+            <div class="usecase-card">
+                <h3>2. スキーマエボリューションへの対応</h3>
+                <p>ビジネス要件の変化により、既存の Iceberg テーブルにカラムを追加し、パーティション戦略を月次から日次に変更する必要がある。</p>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">SQL</span>
+                        <span class="code-title">スキーマエボリューション</span>
+                    </div>
+                    <pre><code class="language-sql">-- 新しいビジネス要件に合わせてカラムを追加
+ALTER TABLE awsdatacatalog.sales_db.transactions
+ADD COLUMN loyalty_tier VARCHAR(20);
+
+-- データ量増加に伴いパーティション粒度を変更
+ALTER TABLE awsdatacatalog.sales_db.transactions
+REPLACE PARTITION FIELD month(transaction_date)
+WITH day(transaction_date);</code></pre>
+                </div>
+                <p style="font-size: 14px; color: var(--aws-green);">&#x2192; テーブルとデータの削除・再作成が不要になり、スキーマ変更のリードタイムを数時間から数秒に短縮</p>
+            </div>
+
+            <div class="usecase-card">
+                <h3>3. Lake Formation による統合ガバナンス</h3>
+                <p>複数の部門が Redshift、EMR、Athena を使い分けてデータレイクの Iceberg テーブルにアクセスする環境で、Lake Formation で一元的にアクセス制御を行う。</p>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">SQL</span>
+                        <span class="code-title">ガバナンス統合</span>
+                    </div>
+                    <pre><code class="language-sql">-- Lake Formation 権限で保護された Iceberg テーブルに書き込み
+INSERT INTO awsdatacatalog.governed_db.customer_360
+SELECT
+    customer_id,
+    segment,
+    lifetime_value,
+    last_activity_date
+FROM redshift_staging.customer_analysis;</code></pre>
+                </div>
+                <p style="font-size: 14px; color: var(--aws-green);">&#x2192; Lake Formation の権限モデルにより、Redshift からの書き込みも他のエンジンからのアクセスも統一的に管理でき、ガバナンスが向上</p>
+            </div>
+        </div>
+
+        <!-- Merits & Demerits -->
+        <div class="section">
+            <h2>&#x2696;&#xFE0F; メリットと制約事項</h2>
+            <div class="merit-section">
+                <div class="merit-box">
+                    <h3>&#x2705; ビジネスメリット</h3>
+                    <ul style="padding-left: 20px; font-size: 14px;">
+                        <li>データパイプラインの簡素化 - 運用コスト削減</li>
+                        <li>ダウンタイムの排除 - データ可用性向上</li>
+                        <li>マルチエンジン活用の促進</li>
+                    </ul>
+                    <h3 style="margin-top: 16px;">&#x2705; 技術メリット</h3>
+                    <ul style="padding-left: 20px; font-size: 14px;">
+                        <li>外部スキーマ不要 - 設定手順が大幅に簡素化</li>
+                        <li>クロスエンジン互換性の維持</li>
+                        <li>動的パーティション管理</li>
+                        <li>Lake Formation による一貫したアクセス制御</li>
+                    </ul>
+                </div>
+                <div class="demerit-box">
+                    <h3>&#x26A0;&#xFE0F; 制限事項</h3>
+                    <ul style="padding-left: 20px; font-size: 14px;">
+                        <li>Iceberg テーブルフォーマット固有の制約に従う必要あり</li>
+                        <li>awsdatacatalog マウントは Glue Data Catalog に登録されたテーブルのみ対象</li>
+                        <li>Lake Formation 使用時は事前の権限設定が必要</li>
+                    </ul>
+                    <h3 style="margin-top: 16px;">&#x26A0;&#xFE0F; 考慮すべき点</h3>
+                    <ul style="padding-left: 20px; font-size: 14px;">
+                        <li>外部スキーマからの移行計画の検討</li>
+                        <li>パーティション変更後のコンパクションが必要な場合あり</li>
+                        <li>他の Iceberg 対応エンジンとの互換性テストを推奨</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="section">
+            <h2>💰 料金情報</h2>
+            <div class="pricing-info">
+                <p style="font-size: 18px; font-weight: 600; color: var(--aws-green); margin-top: 0;">本機能自体に追加料金は発生しない</p>
+                <p>通常の Amazon Redshift の利用料金が適用される。</p>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>項目</th>
+                            <th>料金体系</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Redshift クエリ実行</td>
+                            <td>既存の Redshift クラスターまたは Serverless の料金</td>
+                        </tr>
+                        <tr>
+                            <td>S3 ストレージ</td>
+                            <td>Iceberg テーブルのデータ保存に対する S3 料金</td>
+                        </tr>
+                        <tr>
+                            <td>Glue Data Catalog</td>
+                            <td>カタログ内のオブジェクト保存およびアクセスリクエスト料金</td>
+                        </tr>
+                        <tr>
+                            <td>Lake Formation</td>
+                            <td>追加料金なし (基盤サービスの料金のみ)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Region Availability -->
+        <div class="section">
+            <h2>🌍 利用可能リージョン</h2>
+            <p><span class="region-badge">全リージョン対応</span></p>
+            <p>Amazon Redshift が利用可能なすべての AWS リージョンで使用可能。</p>
+        </div>
+
+        <!-- Related Services -->
+        <div class="section">
+            <h2>🔗 関連サービス</h2>
+            <div class="feature-grid">
+                <div class="card">
+                    <div class="card-title">📚 AWS Glue Data Catalog</div>
+                    <p style="margin: 4px 0; font-size: 14px;">Iceberg テーブルのメタデータ管理およびカタログサービスとして機能</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">🔒 AWS Lake Formation</div>
+                    <p style="margin: 4px 0; font-size: 14px;">Iceberg テーブルへの書き込み操作に対するきめ細かなアクセス制御を提供</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">⚙️ Amazon EMR</div>
+                    <p style="margin: 4px 0; font-size: 14px;">Redshift で変更した Iceberg テーブルを Spark ベースの処理で利用可能</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">🔎 Amazon Athena</div>
+                    <p style="margin: 4px 0; font-size: 14px;">Redshift で変更した Iceberg テーブルをサーバーレスクエリで参照可能</p>
+                </div>
+                <div class="card">
+                    <div class="card-title">🪣 Amazon S3</div>
+                    <p style="margin: 4px 0; font-size: 14px;">Iceberg テーブルの実データの保存先</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p><strong>&#x1F4CE; 出典:</strong></p>
+            <ul style="list-style: none; padding: 0; margin: 8px 0;">
+                <li style="margin: 4px 0;">&#x2022; <a href="https://aws.amazon.com/about-aws/whats-new/2026/05/amazon-redshift-alter-table-iceberg/" target="_blank" rel="noopener noreferrer">公式発表 - What's New</a></li>
+                <li style="margin: 4px 0;">&#x2022; <a href="https://docs.aws.amazon.com/redshift/latest/dg/c-getting-started-using-spectrum-iceberg.html" target="_blank" rel="noopener noreferrer">Referencing Iceberg tables in Amazon Redshift - ドキュメント</a></li>
+                <li style="margin: 4px 0;">&#x2022; <a href="https://docs.aws.amazon.com/redshift/latest/dg/r_ALTER_TABLE.html" target="_blank" rel="noopener noreferrer">Altering table definitions - ドキュメント</a></li>
+                <li style="margin: 4px 0;">&#x2022; <a href="https://aws.amazon.com/redshift/pricing/" target="_blank" rel="noopener noreferrer">Amazon Redshift 料金ページ</a></li>
+            </ul>
+            <p style="margin-top: 12px; color: rgba(213, 219, 219, 0.6);">Generated: 2026-05-18 | AWS News Infographic</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>
