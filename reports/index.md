@@ -5,9 +5,19 @@
 
 ## 2026 年
 
+- [2026-05-19 - Amazon Managed Grafana - デュアルスタック接続 (IPv6 および IPv4) サポート](2026/2026-05-19-amazon-managed-grafana-ipv6.md)
+- [2026-05-19 - Amazon ECS - サービスデプロイメントの一時停止・再開コントロール](2026/2026-05-19-amazon-ecs-pause-continue-deployments.md)
+- [2026-05-19 - Kiro - セッション安定性、停止制御、モバイルレイアウト修正](2026/2026-05-19-kiro-changelog-2026-05-19.md)
+- [2026-05-19 - Amazon MWAA - Apache Airflow 3.2 サポート](2026/2026-05-19-amazon-mwaa-now-supports-apache-airflow-3-2.md)
+- [2026-05-19 - Amazon Inspector - アジアパシフィック (台北) リージョン対応](2026/2026-05-19-amazon-inspector-taipei.md)
 - [2026-05-18 - Amazon Redshift - Iceberg テーブルへの ALTER TABLE サポートと AWS Glue Data Catalog マウント経由の書き込み](2026/2026-05-18-amazon-redshift-alter-table-iceberg.md)
+- [2026-05-18 - AWS Glue - zero-ETL インテグレーション アジアパシフィック (ムンバイ) リージョン対応](2026/2026-05-18-aws-glue-zero-etl-mumbai-region.md)
 - [2026-05-18 - AWS SAM CLI - CloudFormation Language Extensions サポート](2026/2026-05-18-aws-sam-cli-cloudformation.md)
+- [2026-05-18 - AWS Management Console - Local Zones リージョンセレクター統合](2026/2026-05-18-aws-local-zones-region-selector.md)
+- [2026-05-18 - Kiro - Kiro Web](2026/2026-05-18-kiro-introducing-kiro-web.md)
 - [2026-05-18 - Amazon EVS - 環境あたり最大 32 ホストのサポート](2026/2026-05-18-amazon-evs-32-hosts.md)
+- [2026-05-18 - AWS Secrets Manager Agent - プリフェッチと IAM ロール引き受け機能](2026/2026-05-18-secrets-manager-agent-prefetch-and-role-assumption.md)
+- [2026-05-18 - Amazon Lightsail - CDN ディストリビューションが IPv6 専用インスタンスをオリジンとしてサポート](2026/2026-05-18-amazon-lightsail-cdn-ipv6.md)
 - [2026-05-18 - Amazon SageMaker Studio - Flexible Training Plans による GPU キャパシティ予約サポート](2026/2026-05-18-amazon-sagemaker-training-plan-support-for-studio.md)
 - [2026-05-15 - Amazon Managed Grafana - Grafana バージョン 12.4 へのインプレースアップグレード](2026/2026-05-15-amazon-managed-grafana-v12-update.md)
 - [2026-05-15 - AWS Interconnect - Oracle Cloud Infrastructure (OCI) とのマルチクラウド接続がパブリックプレビュー開始](2026/2026-05-15-aws-announces-AWS-interconnect-multicloud-oci-preview.md)

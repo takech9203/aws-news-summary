@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon ECS - サービスデプロイメントの一時停止・再開コントロール</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .header-meta {
+      text-align: right;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .date {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 12px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 153, 0, 0.05);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box h3 {
+      color: var(--aws-red);
+      margin-top: 0;
+      font-size: 16px;
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-box h3 {
+      color: var(--aws-green);
+      margin-top: 0;
+      font-size: 16px;
+    }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li {
+      margin-bottom: 8px;
+    }
+
+    /* Mermaid container */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Feature cards grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .feature-card {
+      background: rgba(255, 153, 0, 0.05);
+      border-radius: 8px;
+      padding: 16px;
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .feature-card .icon {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    .feature-card .title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+
+    .feature-card .desc {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Table styles */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid var(--aws-orange);
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+    }
+
+    tr:hover td {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    /* Use case */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .usecase-title {
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .usecase-scenario {
+      font-size: 14px;
+      margin-bottom: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    .usecase-effect {
+      font-size: 14px;
+      color: var(--aws-green);
+      font-weight: 500;
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Merits/Demerits */
+    .merit-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    .merit-icon {
+      color: var(--aws-green);
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .demerit-icon {
+      color: var(--aws-red);
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* Region badge */
+    .region-badge {
+      display: inline-block;
+      background: rgba(0, 161, 201, 0.15);
+      color: var(--aws-teal);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+      margin: 4px;
+      border: 1px solid rgba(0, 161, 201, 0.3);
+    }
+
+    /* Pricing */
+    .pricing-highlight {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      text-align: center;
+    }
+
+    .pricing-highlight .price-text {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--aws-green);
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 { font-size: 24px; }
+      .before-after { grid-template-columns: 1fr; }
+      .features-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .header { flex-direction: column; }
+      .header-meta { text-align: left; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>&#x23F8;&#xFE0F; Amazon ECS - サービスデプロイメントの一時停止・再開コントロール</h1>
+        <p style="margin: 8px 0 0 0; color: var(--aws-light-gray); font-size: 15px;">PAUSE デプロイメントライフサイクルフックと ContinueServiceDeployment API</p>
+      </div>
+      <div class="header-meta">
+        <div class="service-badge">Amazon ECS</div>
+        <div class="date">2026-05-19</div>
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>&#x1F4CB; 概要</h2>
+      <p>Amazon ECS がサービスデプロイメントの進行中に<span class="highlight">一時停止 (Pause)</span> と<span class="highlight">再開 (Continue)</span> を制御する新機能をリリース。デプロイメントの重要なステージにおいて、手動承認ワークフロー、運用チェック、統合テスト、カスタムオートメーションなどの判断ポイントを導入できるようになる。</p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>&#x274C; Before</h3>
+          <ul>
+            <li>手動承認ポイントには外部 CI/CD ツールに依存が必要</li>
+            <li>ECS ネイティブのデプロイ途中で検証を挟む仕組みがなかった</li>
+            <li>カナリア/ブルーグリーンデプロイ中の手動品質確認タイミングを制御不可</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>&#x2705; After</h3>
+          <ul>
+            <li>ECS ネイティブに PAUSE フックでデプロイ一時停止ポイントを設定可能</li>
+            <li>EventBridge 連携で自動化ワークフローや承認システムをトリガー</li>
+            <li>最大 14 日間のタイムアウト設定と自動続行/ロールバックアクション</li>
+            <li>既存のトラフィックシフト、ベイクタイム、アラーム、サーキットブレーカーと併用可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="section">
+      <h2>&#x1F4CA; 数字で見るアップデート</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">14 日</div>
+          <div class="stat-label">最大タイムアウト期間</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">4 種</div>
+          <div class="stat-label">対応デプロイ戦略</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">$0</div>
+          <div class="stat-label">追加料金なし</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture -->
+    <div class="section">
+      <h2>&#x1F3D7;&#xFE0F; アーキテクチャ図</h2>
+      <p style="font-size: 14px; margin-bottom: 16px;">Amazon ECS デプロイメントが PAUSE フックに到達した際のイベントフロー。EventBridge 経由で外部システムと連携し、ContinueServiceDeployment API で制御する。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+sequenceDiagram
+    participant Dev as 👤 開発者/CI
+    participant ECS as ⚡ Amazon ECS
+    participant EB as 📡 EventBridge
+    participant Auto as 🔧 自動化ワークフロー
+    participant Approve as ✅ 承認システム
+
+    Dev->>ECS: デプロイメント開始
+    ECS->>ECS: タスク配置・トラフィックシフト
+    Note over ECS: PAUSE フックに到達
+    ECS->>EB: デプロイ一時停止イベント発行
+    EB->>Auto: ワークフロートリガー
+    Auto->>Auto: 統合テスト実行
+    Auto->>Approve: テスト結果通知
+    alt 承認
+        Approve->>ECS: ContinueServiceDeployment API action: CONTINUE
+        ECS->>ECS: デプロイメント続行
+        Note over ECS: デプロイ完了
+    else 却下
+        Approve->>ECS: ContinueServiceDeployment API action: ROLLBACK
+        ECS->>ECS: ロールバック実行
+    else タイムアウト
+        Note over ECS: 設定されたタイムアウトアクション実行
+    end
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>&#x2B50; 主要機能</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="icon">&#x23F8;&#xFE0F;</div>
+          <div class="title">PAUSE デプロイメントライフサイクルフック</div>
+          <div class="desc">デプロイ設定に PAUSE フックを構成可能。Rolling、Blue/Green、Linear、Canary すべてのデプロイ戦略で利用可能。</div>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#x1F4E1;</div>
+          <div class="title">ContinueServiceDeployment API</div>
+          <div class="desc">一時停止中のデプロイメントを続行またはロールバック。ECS コンソール、AWS CLI、SDK から呼び出し可能。</div>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#x26A1;</div>
+          <div class="title">EventBridge イベント連携</div>
+          <div class="desc">一時停止状態に移行した際にイベントを発行。Lambda、Step Functions、SNS など任意のターゲットに接続可能。</div>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#x23F0;</div>
+          <div class="title">タイムアウト制御</div>
+          <div class="desc">最大 14 日間のタイムアウト期間を設定可能。タイムアウト時のアクション (自動続行/自動ロールバック) を構成可能。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>&#x1F527; 技術仕様</h2>
+
+      <h3>デプロイ戦略との組み合わせ</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>デプロイ戦略</th>
+            <th>PAUSE フック対応</th>
+            <th>説明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Rolling</td>
+            <td style="color: var(--aws-green);">&#x2705; 対応</td>
+            <td>ローリングアップデート中の指定ポイントで一時停止</td>
+          </tr>
+          <tr>
+            <td>Blue/Green</td>
+            <td style="color: var(--aws-green);">&#x2705; 対応</td>
+            <td>トラフィック切り替え前後のチェックポイント</td>
+          </tr>
+          <tr>
+            <td>Linear</td>
+            <td style="color: var(--aws-green);">&#x2705; 対応</td>
+            <td>段階的トラフィックシフトの各ステップで一時停止可能</td>
+          </tr>
+          <tr>
+            <td>Canary</td>
+            <td style="color: var(--aws-green);">&#x2705; 対応</td>
+            <td>カナリアトラフィック投入後の検証ポイント</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>PAUSE フック設定パラメータ</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>詳細</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>タイムアウト期間</td>
+            <td>最大 14 日間</td>
+          </tr>
+          <tr>
+            <td>タイムアウトアクション</td>
+            <td>CONTINUE または ROLLBACK</td>
+          </tr>
+          <tr>
+            <td>対応 API</td>
+            <td>ContinueServiceDeployment</td>
+          </tr>
+          <tr>
+            <td>イベント連携</td>
+            <td>Amazon EventBridge</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>API 変更履歴</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>サービス</th>
+            <th>変更内容</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>2026/05/19</td>
+            <td>ecs</td>
+            <td>ContinueServiceDeployment API 追加、PAUSE ライフサイクルフック設定パラメータ追加</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Configuration -->
+    <div class="section">
+      <h2>&#x2699;&#xFE0F; 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <ul style="font-size: 14px;">
+        <li>Amazon ECS クラスターが作成済みであること</li>
+        <li>ECS サービスがデプロイメント設定を使用していること</li>
+        <li>ContinueServiceDeployment API を呼び出すための IAM 権限が付与されていること</li>
+        <li>EventBridge ルールを設定する場合は、適切な IAM ロールが必要</li>
+      </ul>
+
+      <h3>ステップ 1: PAUSE フック付きデプロイメント設定の作成</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">PAUSE フック設定</span>
+        </div>
+        <pre><code class="language-bash">aws ecs update-service \
+  --cluster my-cluster \
+  --service my-service \
+  --deployment-configuration '{
+    "deploymentLifecycleHooks": [
+      {
+        "hookType": "PAUSE",
+        "timeoutDuration": "PT1H",
+        "timeoutAction": "ROLLBACK"
+      }
+    ]
+  }'</code></pre>
+      </div>
+
+      <h3>ステップ 2: EventBridge ルールの設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">EventBridge ルール作成</span>
+        </div>
+        <pre><code class="language-bash">aws events put-rule \
+  --name "ecs-deployment-pause-rule" \
+  --event-pattern '{
+    "source": ["aws.ecs"],
+    "detail-type": ["ECS Deployment State Change"],
+    "detail": {
+      "deploymentStatus": ["PAUSE"]
+    }
+  }'</code></pre>
+      </div>
+
+      <h3>ステップ 3: デプロイメントの続行またはロールバック</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ContinueServiceDeployment API</span>
+        </div>
+        <pre><code class="language-bash"># デプロイメントを続行
+aws ecs continue-service-deployment \
+  --cluster my-cluster \
+  --service my-service \
+  --deployment-id "ecs-svc/1234567890" \
+  --action CONTINUE
+
+# デプロイメントをロールバック
+aws ecs continue-service-deployment \
+  --cluster my-cluster \
+  --service my-service \
+  --deployment-id "ecs-svc/1234567890" \
+  --action ROLLBACK</code></pre>
+      </div>
+
+      <h3>IAM ポリシー例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">必要な IAM 権限</span>
+        </div>
+        <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:ContinueServiceDeployment",
+        "ecs:DescribeServices",
+        "ecs:UpdateService"
+      ],
+      "Resource": "arn:aws:ecs:*:*:service/*"
+    }
+  ]
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Merits & Demerits -->
+    <div class="section">
+      <h2>&#x2696;&#xFE0F; メリット・デメリット</h2>
+
+      <h3>&#x1F4BC; ビジネス面のメリット</h3>
+      <div class="merit-item">
+        <span class="merit-icon">&#x2705;</span>
+        <span><strong>リスク低減</strong>: 本番デプロイ前に手動承認ゲートを設けることで、問題のあるリリースを防止</span>
+      </div>
+      <div class="merit-item">
+        <span class="merit-icon">&#x2705;</span>
+        <span><strong>コンプライアンス対応</strong>: 規制要件に基づく承認プロセスをデプロイフローに組み込み可能</span>
+      </div>
+      <div class="merit-item">
+        <span class="merit-icon">&#x2705;</span>
+        <span><strong>運用の可視性向上</strong>: デプロイの各段階を明示的に制御・追跡でき、監査証跡を残せる</span>
+      </div>
+
+      <h3>&#x1F4BB; 技術面のメリット</h3>
+      <div class="merit-item">
+        <span class="merit-icon">&#x2705;</span>
+        <span><strong>ネイティブ統合</strong>: 外部 CI/CD ツールに依存せず、ECS 標準のデプロイ戦略と一体化</span>
+      </div>
+      <div class="merit-item">
+        <span class="merit-icon">&#x2705;</span>
+        <span><strong>柔軟な自動化</strong>: EventBridge 連携により、Lambda、Step Functions、SNS など任意のサービスと接続</span>
+      </div>
+      <div class="merit-item">
+        <span class="merit-icon">&#x2705;</span>
+        <span><strong>安全なデフォルト</strong>: タイムアウトアクションにより、承認待ちのデッドロックを自動回避</span>
+      </div>
+      <div class="merit-item">
+        <span class="merit-icon">&#x2705;</span>
+        <span><strong>既存機能との共存</strong>: トラフィックシフト、ベイクタイム、CloudWatch アラーム、サーキットブレーカーと併用可能</span>
+      </div>
+
+      <h3>&#x26A0;&#xFE0F; 制限事項・考慮点</h3>
+      <div class="merit-item">
+        <span class="demerit-icon">&#x26A0;&#xFE0F;</span>
+        <span>タイムアウト期間は最大 14 日間まで</span>
+      </div>
+      <div class="merit-item">
+        <span class="demerit-icon">&#x26A0;&#xFE0F;</span>
+        <span>PAUSE フックの数や配置ポイントに制限がある可能性</span>
+      </div>
+      <div class="merit-item">
+        <span class="demerit-icon">&#x26A0;&#xFE0F;</span>
+        <span>CloudFormation でのデプロイ続行操作は不可 (コンソール、CLI、SDK のみ)</span>
+      </div>
+      <div class="merit-item">
+        <span class="demerit-icon">&#x26A0;&#xFE0F;</span>
+        <span>タイムアウト設定が短すぎると意図しないロールバックが発生する可能性</span>
+      </div>
+      <div class="merit-item">
+        <span class="demerit-icon">&#x26A0;&#xFE0F;</span>
+        <span>複数の PAUSE ポイントを設定する場合、全体のデプロイ時間が大幅に延長される</span>
+      </div>
+      <div class="merit-item">
+        <span class="demerit-icon">&#x26A0;&#xFE0F;</span>
+        <span>EventBridge ルール設定が適切でない場合、一時停止通知が届かずタイムアウトまで待機してしまう</span>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>&#x1F3AF; ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">&#x1F3E6; ユースケース 1: 本番環境への手動承認デプロイ</div>
+        <div class="usecase-scenario"><strong>シナリオ</strong>: 金融機関のサービスで、本番環境へのデプロイには変更管理委員会の承認が必要。カナリアデプロイでトラフィックの 10% に新バージョンを投入した後、承認を得てから全トラフィックを切り替えたい。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <span class="code-title">カナリアデプロイ + PAUSE フック設定</span>
+          </div>
+          <pre><code class="language-json">{
+  "deploymentStrategy": "CANARY",
+  "canaryConfig": {
+    "initialTrafficPercentage": 10
+  },
+  "deploymentLifecycleHooks": [
+    {
+      "hookType": "PAUSE",
+      "timeoutDuration": "P7D",
+      "timeoutAction": "ROLLBACK"
+    }
+  ]
+}</code></pre>
+        </div>
+        <div class="usecase-effect">&#x2728; 効果: カナリアトラフィック投入後に自動一時停止し、7 日間の承認猶予を確保。承認が得られなければ自動ロールバック。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">&#x1F916; ユースケース 2: 統合テスト自動化パイプライン</div>
+        <div class="usecase-scenario"><strong>シナリオ</strong>: マイクロサービスアーキテクチャで、新バージョンのデプロイ後に E2E テストスイートを実行し、結果に基づいて自動的にデプロイを続行またはロールバックしたい。</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <span class="code-title">Lambda 関数: EventBridge からトリガー</span>
+          </div>
+          <pre><code class="language-python">import boto3
+
+def handler(event, context):
+    ecs_client = boto3.client('ecs')
+    deployment_id = event['detail']['deploymentId']
+    cluster = event['detail']['clusterArn']
+    service = event['detail']['serviceArn']
+
+    # 統合テスト実行
+    test_result = run_integration_tests()
+
+    # テスト結果に基づいてデプロイを制御
+    action = 'CONTINUE' if test_result.passed else 'ROLLBACK'
+    ecs_client.continue_service_deployment(
+        cluster=cluster,
+        service=service,
+        deploymentId=deployment_id,
+        action=action
+    )</code></pre>
+        </div>
+        <div class="usecase-effect">&#x2728; 効果: デプロイの品質ゲートを自動化し、テスト失敗時は即座にロールバック。人手介入なしでデプロイの安全性を確保。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">&#x1F6D2; ユースケース 3: ブルー/グリーンデプロイでの運用確認</div>
+        <div class="usecase-scenario"><strong>シナリオ</strong>: 大規模な e コマースプラットフォームで、ブルー/グリーンデプロイ時にグリーン環境のメトリクスを一定期間監視してから、本番トラフィックを切り替えたい。</div>
+        <div class="flow-diagram">
+          <div class="flow-step">&#x1F4E1; PAUSE<br/>イベント受信</div>
+          <span class="flow-arrow">&rarr;</span>
+          <div class="flow-step">&#x1F4CA; CloudWatch<br/>メトリクス監視</div>
+          <span class="flow-arrow">&rarr;</span>
+          <div class="flow-step">&#x2705; しきい値<br/>チェック</div>
+          <span class="flow-arrow">&rarr;</span>
+          <div class="flow-step">&#x1F680; Continue<br/>API 呼び出し</div>
+        </div>
+        <div class="usecase-effect">&#x2728; 効果: ベイクタイムに加えてカスタム検証ロジックを挿入可能。ビジネスメトリクスも含めた総合的な判断でデプロイを制御。</div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>&#x1F4B0; 料金</h2>
+      <div class="pricing-highlight">
+        <div class="price-text">PAUSE フック / ContinueServiceDeployment API: 追加料金なし</div>
+        <p style="margin: 8px 0 0 0; font-size: 14px;">標準の Amazon ECS 料金が適用されます</p>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>関連サービス</th>
+            <th>料金</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Amazon ECS (Fargate/EC2)</td>
+            <td>通常の ECS 料金</td>
+          </tr>
+          <tr>
+            <td>Amazon EventBridge</td>
+            <td>イベント配信に対する標準料金</td>
+          </tr>
+          <tr>
+            <td>AWS Lambda (自動化に使用する場合)</td>
+            <td>実行回数・時間に基づく標準料金</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>&#x1F30D; 利用可能リージョン</h2>
+      <p><span class="region-badge">&#x2705; すべての AWS 商用リージョン</span> <span class="region-badge">&#x2705; AWS GovCloud (US)</span></p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>&#x1F517; 関連サービス・機能</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="title">&#x1F4E1; Amazon EventBridge</div>
+          <div class="desc">デプロイ一時停止イベントの配信と自動化ワークフローのトリガー</div>
+        </div>
+        <div class="feature-card">
+          <div class="title">&#x1F504; AWS Step Functions</div>
+          <div class="desc">複雑な承認ワークフローやテストパイプラインのオーケストレーション</div>
+        </div>
+        <div class="feature-card">
+          <div class="title">&#x1F4CA; Amazon CloudWatch</div>
+          <div class="desc">デプロイ中のメトリクス監視とアラーム連携</div>
+        </div>
+        <div class="feature-card">
+          <div class="title">&#x1F6E0;&#xFE0F; AWS CodePipeline</div>
+          <div class="desc">CI/CD パイプラインとの統合による承認ゲートの実装</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p><strong>&#x1F4CE; 出典:</strong></p>
+      <ul style="list-style: none; padding: 0; margin: 8px 0;">
+        <li style="margin-bottom: 4px;"><a href="https://aws.amazon.com/about-aws/whats-new/2026/05/amazon-ecs-pause-continue-deployments/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li style="margin-bottom: 4px;"><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/deployment-type-ecs.html" target="_blank" rel="noopener noreferrer">Amazon ECS デプロイメントドキュメント</a></li>
+        <li style="margin-bottom: 4px;"><a href="https://aws.amazon.com/ecs/pricing/" target="_blank" rel="noopener noreferrer">Amazon ECS 料金ページ</a></li>
+      </ul>
+      <p style="margin-top: 12px; color: rgba(213, 219, 219, 0.6);">Generated: 2026-05-19 | AWS News Infographic</p>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
