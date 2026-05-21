@@ -5,12 +5,19 @@
 
 ## 2026 年
 
+- [2026-05-21 - Amazon Aurora MySQL 8.4 - 一般提供開始](2026/2026-05-21-8-4.md)
+- [2026-05-21 - Amazon SageMaker AI - OpenAI 互換 API サポート](2026/2026-05-21-amazon-sagemaker-ai-openai-apis.md)
+- [2026-05-21 - Amazon RDS Custom for SQL Server - 最新 GDR セキュリティアップデートのサポート](2026/2026-05-21-amazon-custom-sql-server-latest-gdr-updates-microsoft-sql-server.md)
 - [2026-05-20 - AWS Local Zones - イスタンブール (トルコ) の一般提供開始](2026/2026-05-20-aws-local-zones-istanbul-turkiye.md)
 - [2026-05-20 - AWS Transfer Family - Web アプリのマルチリージョンフェデレーション権限](2026/2026-05-20-aws-transfer-family-federated-permissions-across-regions.md)
 - [2026-05-20 - AWS Security Hub - 未使用アクセスによる ID リスク検出](2026/2026-05-20-aws-security-hub-unused-access.md)
+- [2026-05-20 - Amazon SageMaker Unified Studio - データ品質ルールのオーサリングと評価](2026/2026-05-20-smus-data-quality.md)
+- [2026-05-20 - Kiro - 会話の巻き戻し、推論エフォート制御、統合設定メニュー](2026/2026-05-20-kiro-changelog-2026-05-20.md)
+- [2026-05-20 - Amazon Bedrock - リクエストレベルの使用量アトリビューション拡張](2026/2026-05-20-amazon-bedrock-request-level-usage-attribution.md)
 - [2026-05-20 - AWS Billing Conductor - Billing Transfer Inventory による請求可視性の向上](2026/2026-05-20-aws-billing-conductor-billing-transfer.md)
 - [2026-05-20 - Amazon SageMaker HyperPod - 推論ワークロード向けデータキャプチャ](2026/2026-05-20-amazon-sagemaker-hyperpod-data-capture.md)
 - [2026-05-20 - AWS Security Hub Extended - 21 のパートナーソリューションに拡大、9 カテゴリをカバー](2026/2026-05-20-aws-security-hub-extended.md)
+- [2026-05-20 - Amazon DocumentDB - DocumentDB 8.0 でのサーバーレス提供開始](2026/2026-05-20-docdb8-serverless.md)
 - [2026-05-20 - Amazon DynamoDB - ExtendDB オープンソース互換アダプター](2026/2026-05-20-aws-extenddb-dynamodb.md)
 - [2026-05-19 - Amazon Managed Grafana - デュアルスタック接続 (IPv6 および IPv4) サポート](2026/2026-05-19-amazon-managed-grafana-ipv6.md)
 - [2026-05-19 - Amazon ECS - サービスデプロイメントの一時停止・再開コントロール](2026/2026-05-19-amazon-ecs-pause-continue-deployments.md)
