@@ -5,7 +5,20 @@
 
 ## 2026 年
 
+- [2026-05-22 - Amazon WorkSpaces Personal - Linux WorkSpaces のマイグレーション対応](2026/2026-05-22-workspaces-linux-migration.md)
+- [2026-05-22 - AWS Security Agent - ペネトレーションテスト検出結果に対する検証スクリプト機能](2026/2026-05-22-aws-security-agent.md)
+- [2026-05-22 - AWS Clean Rooms - 可変支払い設定のサポート](2026/2026-05-22-aws-clean-rooms-mutable-payments.md)
+- [2026-05-22 - Amazon SageMaker Unified Studio - ドメイン管理機能の Identity Center ドメインへの拡張](2026/2026-05-22-domain-management-iam-idc.md)
+- [2026-05-22 - Amazon SageMaker Unified Studio - IAM ベースドメインでのビジネスメタデータとガバナンス機能](2026/2026-05-22-sagemaker-catalog-iam-domains.md)
+- [2026-05-22 - AWS Transform - エージェント型マイグレーションアセスメント機能](2026/2026-05-22-assessment-capabilities-transform.md)
+- [2026-05-22 - Amazon Keyspaces - アジアパシフィック (マレーシア) およびアジアパシフィック (タイ) リージョン拡大](2026/2026-05-22-amazon-keyspaces-malaysia-thailand.md)
+- [2026-05-22 - AWS Secrets Manager - Datadog および Snowflake PAT 向けマネージド外部シークレットサポート](2026/2026-05-22-secrets-manager-managed-external-secrets-datadog-snowflake.md)
+- [2026-05-21 - Kiro CLI 2.4.0 - 会話の巻き戻し、推論エフォート制御、統合設定メニュー](2026/2026-05-21-kiro-changelog-2026-05-21.md)
 - [2026-05-21 - Amazon Aurora MySQL 8.4 - 一般提供開始](2026/2026-05-21-8-4.md)
+- [2026-05-21 - Amazon EC2 - C7i-flex、M7i-flex、M7i インスタンスがアジアパシフィック (ハイデラバード) リージョンで利用可能に](2026/2026-05-21-amazon-ec2-c7i-flex-m7i-flex-m7i-instances-HYD-region.md)
+- [2026-05-21 - SageMaker Unified Studio - Glue コネクタのクロスサブネットジョブリトライ自動プロビジョニング](2026/2026-05-21-sagemaker-unified-studio-glue.md)
+- [2026-05-21 - Amazon CloudWatch Logs Insights - 新しいクエリコマンドと関数の追加](2026/2026-05-21-amazon-cloudwatch-logs-insights.md)
+- [2026-05-21 - Kiro - テスト駆動開発 (TDD) の Hook 自動化](2026/2026-05-21-kiro-how-tdd-should-feel.md)
 - [2026-05-21 - Amazon SageMaker AI - OpenAI 互換 API サポート](2026/2026-05-21-amazon-sagemaker-ai-openai-apis.md)
 - [2026-05-21 - Amazon RDS Custom for SQL Server - 最新 GDR セキュリティアップデートのサポート](2026/2026-05-21-amazon-custom-sql-server-latest-gdr-updates-microsoft-sql-server.md)
 - [2026-05-20 - AWS Local Zones - イスタンブール (トルコ) の一般提供開始](2026/2026-05-20-aws-local-zones-istanbul-turkiye.md)
