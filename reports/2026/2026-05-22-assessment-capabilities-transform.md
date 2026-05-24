@@ -1,6 +1,6 @@
 # AWS Transform - エージェント型マイグレーションアセスメント機能
 
-**リリース日**: 2026年5月22日
+**リリース日**: 2026 年 5 月 22 日
 **サービス**: AWS Transform
 **機能**: Agentic Migration Assessment Capabilities
 

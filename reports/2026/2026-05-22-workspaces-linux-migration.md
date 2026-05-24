@@ -1,10 +1,10 @@
 # Amazon WorkSpaces Personal - Linux WorkSpaces のマイグレーション対応
 
-**リリース日**: 2026年5月22日
+**リリース日**: 2026 年 5 月 22 日
 **サービス**: Amazon WorkSpaces Personal
 **機能**: WorkSpace Migration for Linux WorkSpaces
 
-[このアップデートのインフォグラフィックを見る](https://takech9203.github.io/aws-news-summary/20260522-workspaces-linux-migration.html)
+📊 [このアップデートのインフォグラフィックを見る](https://takech9203.github.io/aws-news-summary/20260522-workspaces-linux-migration.html)
 
 ## 概要
 
@@ -211,7 +211,7 @@ cat ~/workspace-migration-log-*/user-id-migration.txt
 
 **実装例**:
 ```bash
-# バッチ移行スクリプト (25台ずつ)
+# バッチ移行スクリプト (25 台ずつ)
 for ws_id in $(aws workspaces describe-workspaces \
     --query 'Workspaces[?WorkspaceProperties.OperatingSystemName==`AMAZON_LINUX_2`].WorkspaceId' \
     --output text | head -25); do
@@ -274,7 +274,7 @@ Amazon WorkSpaces Personal が利用可能な全ての AWS 商用リージョン
 
 ## 参考リンク
 
-- [インフォグラフィック](https://takech9203.github.io/aws-news-summary/20260522-workspaces-linux-migration.html)
+- 📊 [インフォグラフィック](https://takech9203.github.io/aws-news-summary/20260522-workspaces-linux-migration.html)
 - [公式発表 (What's New)](https://aws.amazon.com/about-aws/whats-new/2026/05/workspaces-linux-migration)
 - [Migrate a Linux WorkSpace - 管理者ガイド](https://docs.aws.amazon.com/workspaces/latest/adminguide/migrate-linux-workspaces.html)
 - [WorkSpaces Personal 料金ページ](https://aws.amazon.com/workspaces/pricing/)
