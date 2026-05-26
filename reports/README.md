@@ -5,6 +5,11 @@
 
 ## 2026 年
 
+- [2026-05-26 - Amazon EC2 - M8i / M8i-flex インスタンスが GovCloud (US-East) で利用可能に](2026/2026-05-26-amazon-ec2-m8i-m8i-flex-govcloud-east.md)
+- [2026-05-26 - Amazon EC2 - R8i / R8i-flex インスタンスが GovCloud (US-East) で利用可能に](2026/2026-05-26-amazon-ec2-r8i-r8i-flex-govcloud-east.md)
+- [2026-05-26 - Kiro - HIPAA 対象サービスに追加](2026/2026-05-26-kiro-changelog-2026-05-26.md)
+- [2026-05-26 - Amazon VPC IPAM - プール割り当てのタグサポート](2026/2026-05-26-amazon-vpc-ipam-tags.md)
+- [2026-05-26 - Amazon RDS - ENA Express によるマルチ AZ レプリケーション](2026/2026-05-26-amazon-rds-ena-express-multiAZ.md)
 - [2026-05-22 - Amazon WorkSpaces Personal - Linux WorkSpaces のマイグレーション対応](2026/2026-05-22-workspaces-linux-migration.md)
 - [2026-05-22 - AWS Security Agent - ペネトレーションテスト検出結果に対する検証スクリプト機能](2026/2026-05-22-aws-security-agent.md)
 - [2026-05-22 - AWS Clean Rooms - 可変支払い設定のサポート](2026/2026-05-22-aws-clean-rooms-mutable-payments.md)
