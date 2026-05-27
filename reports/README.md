@@ -5,10 +5,18 @@
 
 ## 2026 年
 
+- [2026-05-27 - Amazon SageMaker HyperPod - Slurm クラスター向け MinCount による最小キャパシティ要件](2026/2026-05-27-amazon-sagemaker-hyperpod-mincount.md)
+- [2026-05-27 - Kiro - エンタープライズ対応強化: HIPAA 適格サービス指定とアクティビティレポートのメールアドレス対応](2026/2026-05-27-kiro-changelog-2026-05-27.md)
+- [2026-05-27 - Amazon SageMaker Notebook Instances - P5.4xl / P5en.48xl インスタンスタイプのサポート](2026/2026-05-27-g6-region-expansion-sagemaker-notebook-instances.md)
+- [2026-05-27 - AWS Backup - Multi-party approval での OTP 検証の追加](2026/2026-05-27-aws-backup-otp-multi-party-approval-lag.md)
+- [2026-05-27 - Amazon Connect Customer - 生成 AI によるセルフサービスインタラクションの自動評価](2026/2026-05-27-amazon-connect-customer-gen-AI-evaluations-self-service.md)
+- [2026-05-27 - Amazon EMR - Apache Spark 4.0.2 一般提供開始](2026/2026-05-27-amazon-emr-apache-spark.md)
+- [2026-05-26 - Amazon EC2 X8i インスタンス - 追加リージョンでの提供開始](2026/2026-05-26-amazon-ec2-x8i-instances-SIN-SYD-PDT-region.md)
 - [2026-05-26 - Amazon EC2 - M8i / M8i-flex インスタンスが GovCloud (US-East) で利用可能に](2026/2026-05-26-amazon-ec2-m8i-m8i-flex-govcloud-east.md)
 - [2026-05-26 - Amazon EC2 - R8i / R8i-flex インスタンスが GovCloud (US-East) で利用可能に](2026/2026-05-26-amazon-ec2-r8i-r8i-flex-govcloud-east.md)
 - [2026-05-26 - Kiro - HIPAA 対象サービスに追加](2026/2026-05-26-kiro-changelog-2026-05-26.md)
 - [2026-05-26 - Amazon VPC IPAM - プール割り当てのタグサポート](2026/2026-05-26-amazon-vpc-ipam-tags.md)
+- [2026-05-26 - Amazon GuardDuty Malware Protection for AWS Backup - Amazon S3 継続的バックアップ対応](2026/2026-05-26-amazon-guardduty-aws-backup-s3-continuous.md)
 - [2026-05-26 - Amazon RDS - ENA Express によるマルチ AZ レプリケーション](2026/2026-05-26-amazon-rds-ena-express-multiAZ.md)
 - [2026-05-22 - Amazon WorkSpaces Personal - Linux WorkSpaces のマイグレーション対応](2026/2026-05-22-workspaces-linux-migration.md)
 - [2026-05-22 - AWS Security Agent - ペネトレーションテスト検出結果に対する検証スクリプト機能](2026/2026-05-22-aws-security-agent.md)

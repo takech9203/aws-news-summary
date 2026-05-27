@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon SageMaker HyperPod - MinCount による最小キャパシティ要件</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left {
+      flex: 1;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 12px 0;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .date-badge {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      background: var(--aws-dark-squid);
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 153, 0, 0.05);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-desc {
+      color: var(--aws-light-gray);
+      font-size: 14px;
+    }
+
+    /* Before/After comparison */
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .comparison-before {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .comparison-after {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .comparison-label {
+      font-weight: 700;
+      font-size: 13px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .comparison-before .comparison-label {
+      color: var(--aws-red);
+    }
+
+    .comparison-after .comparison-label {
+      color: var(--aws-green);
+    }
+
+    .comparison ul {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 14px;
+    }
+
+    .comparison li {
+      margin-bottom: 8px;
+    }
+
+    /* Feature cards grid */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .feature-card {
+      background: rgba(255, 153, 0, 0.05);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .feature-card .feature-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .feature-card .feature-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+
+    .feature-card .feature-desc {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Use case cards */
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 16px 0;
+    }
+
+    .usecase-title {
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .usecase-scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 12px;
+    }
+
+    .usecase-effect {
+      font-size: 14px;
+      color: var(--aws-green);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 12px;
+    }
+
+    /* Stats cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* Tables */
+    .table-container {
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-white);
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid var(--aws-orange);
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Mermaid container */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Merit/Demerit list */
+    .merit-list, .demerit-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .merit-list li, .demerit-list li {
+      padding: 8px 0;
+      padding-left: 24px;
+      position: relative;
+      font-size: 14px;
+    }
+
+    .merit-list li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: var(--aws-green);
+      font-weight: 700;
+    }
+
+    .demerit-list li::before {
+      content: "!";
+      position: absolute;
+      left: 4px;
+      color: var(--aws-orange);
+      font-weight: 700;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 { font-size: 24px; }
+      .comparison { grid-template-columns: 1fr; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .header { flex-direction: column; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">Amazon SageMaker HyperPod</span>
+        <h1>Slurm クラスター向け MinCount による最小キャパシティ要件</h1>
+        <div class="subtitle">Minimum Capacity Requirements with Continuous Provisioning</div>
+      </div>
+      <div class="date-badge">2026-05-27</div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        Amazon SageMaker HyperPod の Slurm オーケストレーション環境において、継続的プロビジョニング (Continuous Provisioning) と組み合わせて使用できる<span class="highlight">最小キャパシティ要件 (MinCount)</span> 機能がリリースされました。インスタンスグループが InService ステータスに遷移する前に、最低限プロビジョニングされるべきインスタンス数を指定できます。
+      </p>
+      <p style="font-size:14px; margin-top:12px;">
+        継続的プロビジョニングは 2026 年 3 月にリリースされた機能で、利用可能な部分的キャパシティでクラスターをプロビジョニングし、ジョブを迅速に開始できるようにするものです。MinCount はこの動作に下限値を追加し、クラスターが「準備完了」と見なされる前に保証される最小ノード数を確保します。
+      </p>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">3h</div>
+          <div class="stat-label">タイムアウト<br>自動ロールバック</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">0~N</div>
+          <div class="stat-label">MinCount 設定範囲<br>0 ~ InstanceCount</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">All</div>
+          <div class="stat-label">対応リージョン<br>HyperPod 全リージョン</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Before/After -->
+    <div class="section">
+      <h2>🔄 Before / After 比較</h2>
+      <div class="comparison">
+        <div class="comparison-before">
+          <div class="comparison-label">❌ Before</div>
+          <ul>
+            <li>1 台でも起動すればクラスターが InService に遷移</li>
+            <li>分散トレーニングに必要な最小ノード数が揃う前にジョブスケジューリング開始</li>
+            <li>SLA やコスト効率目標の最小 GPU 数を保証する仕組みがない</li>
+            <li>不完全な状態での InService で手動確認が必要</li>
+          </ul>
+        </div>
+        <div class="comparison-after">
+          <div class="comparison-label">✅ After</div>
+          <ul>
+            <li>MinInstanceCount で最小インスタンス数確保まで InService 遷移をブロック</li>
+            <li>固定ノード数が揃ってからジョブスケジューリング開始</li>
+            <li>3 時間タイムアウトで自動ロールバック、無期限待機を防止</li>
+            <li>MinCount 達成後も TargetCount まで段階的スケールアップ継続</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p style="font-size:14px; margin-bottom:16px;">MinCount プロビジョニングフロー: API リクエスト後、インスタンスグループは Creating/Updating ステータスで MinCount の閾値が満たされるのを待ちます。閾値達成で InService に遷移し、3 時間のタイムアウトで自動ロールバックが実行されます。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Request["📋 リクエスト"]
+        API["🔌 CreateCluster / UpdateCluster API<br/>MinInstanceCount 指定"]
+    end
+
+    subgraph Provisioning["⚙️ プロビジョニングフェーズ"]
+        Start["🚀 インスタンス起動開始"]
+        Check{"🔍 CurrentCount<br/>≥ MinCount?"}
+        Creating["⏳ Creating / Updating ステータス<br/>ミューテーション操作ブロック"]
+        Timer{"⏰ 3 時間<br/>経過?"}
+    end
+
+    subgraph Success["✅ 成功パス"]
+        InService["🟢 InService ステータス<br/>ジョブスケジューリング開始"]
+        Continue["📈 追加インスタンス起動継続<br/>TargetCount まで"]
+    end
+
+    subgraph Rollback["🔄 ロールバックパス"]
+        RollbackAction["⚠️ 自動ロールバック<br/>前回の正常状態に復元"]
+        RollbackNew["新規: MinCount=0, TargetCount=0"]
+        RollbackExisting["既存: 前回 InService 時の値に復元"]
+    end
+
+    API --> Start
+    Start --> Creating
+    Creating --> Check
+    Check -->|Yes| InService
+    Check -->|No| Timer
+    Timer -->|No| Creating
+    Timer -->|Yes| RollbackAction
+    InService --> Continue
+    RollbackAction --> RollbackNew
+    RollbackAction --> RollbackExisting
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef success fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class Request cloud
+    class Provisioning,Success,Rollback layer
+    class API compute
+    class Start,Creating internal
+    class Check,Timer decision
+    class InService,Continue success
+    class RollbackAction,RollbackNew,RollbackExisting warning
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🎯</div>
+          <div class="feature-title">最小キャパシティ要件</div>
+          <div class="feature-desc">MinInstanceCount パラメータで最小プロビジョニング数を 0 ~ InstanceCount の間で指定。デフォルトは Compute: 0、Controller/Login: 1</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <div class="feature-title">ステータス管理とミューテーション制御</div>
+          <div class="feature-desc">MinCount 未達成時は Creating/Updating ステータスを維持。BatchAddClusterNodes 等の操作がブロックされ、削除と MinCount/TargetCount 変更のみ許可</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <div class="feature-title">自動ロールバック機構</div>
+          <div class="feature-desc">3 時間以内に MinCount 未達成で自動ロールバック。新規は (0,0) にリセット、既存は前回 InService 時の値に復元</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📡</div>
+          <div class="feature-title">イベント通知</div>
+          <div class="feature-desc">最小キャパシティ達成時・ロールバック開始時にイベント発行。ListClusterEvents API で進捗監視可能</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specifications -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <h3>MinCount パラメータ仕様</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>項目</th>
+              <th>詳細</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>パラメータ名</td>
+              <td><code>MinInstanceCount</code></td>
+            </tr>
+            <tr>
+              <td>対象 API</td>
+              <td><code>CreateCluster</code>、<code>UpdateCluster</code></td>
+            </tr>
+            <tr>
+              <td>有効範囲</td>
+              <td>0 ~ <code>InstanceCount</code></td>
+            </tr>
+            <tr>
+              <td>デフォルト値</td>
+              <td>0 (Compute)、1 (Controller/Login)</td>
+            </tr>
+            <tr>
+              <td>前提条件</td>
+              <td><code>NodeProvisioningMode</code> が <code>Continuous</code> に設定</td>
+            </tr>
+            <tr>
+              <td>タイムアウト</td>
+              <td>3 時間</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>インスタンスグループステータス遷移</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>ステータス</th>
+              <th>条件</th>
+              <th>許可される操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Creating</td>
+              <td>新規作成時、CurrentCount &lt; MinCount</td>
+              <td>MinCount/TargetCount 変更、削除</td>
+            </tr>
+            <tr>
+              <td>Updating</td>
+              <td>更新時、CurrentCount &lt; MinCount</td>
+              <td>MinCount/TargetCount 変更、削除</td>
+            </tr>
+            <tr>
+              <td>InService</td>
+              <td>MinCount &le; CurrentCount &le; TargetCount</td>
+              <td>全ての操作</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Configuration / Code Sample -->
+    <div class="section">
+      <h2>💻 設定方法</h2>
+      <h3>前提条件</h3>
+      <ul class="merit-list">
+        <li>SageMaker HyperPod クラスターが Slurm オーケストレーションで構成されていること</li>
+        <li>NodeProvisioningMode が Continuous に設定されていること</li>
+        <li>Slurm プロビジョニングパラメータが API ペイロードの SlurmConfig フィールドで提供されていること</li>
+        <li>適切な IAM 実行ロールが設定されていること</li>
+      </ul>
+
+      <h3>API リクエスト例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">CreateCluster - MinCount 設定付き</span>
+        </div>
+        <pre><code class="language-json">{
+    "ClusterName": "distributed-training-cluster",
+    "NodeProvisioningMode": "Continuous",
+    "Orchestrator": { "Slurm": {} },
+    "InstanceGroups": [
+        {
+            "InstanceGroupName": "controller",
+            "InstanceType": "ml.c5.xlarge",
+            "InstanceCount": 1,
+            "SlurmConfig": {"NodeType": "Controller"},
+            "LifeCycleConfig": {
+                "SourceS3Uri": "s3://my-bucket/scripts/",
+                "OnCreate": "on_create.sh"
+            },
+            "ExecutionRole": "arn:aws:iam::111122223333:role/my-role"
+        },
+        {
+            "InstanceGroupName": "gpu-workers",
+            "InstanceType": "ml.p5.48xlarge",
+            "MinInstanceCount": 8,
+            "InstanceCount": 16,
+            "SlurmConfig": {
+                "NodeType": "Compute",
+                "PartitionNames": ["training"]
+            },
+            "LifeCycleConfig": {
+                "SourceS3Uri": "s3://my-bucket/scripts/",
+                "OnCreate": "on_create.sh"
+            },
+            "ExecutionRole": "arn:aws:iam::111122223333:role/my-role"
+        }
+    ],
+    "VpcConfig": {
+        "SecurityGroupIds": ["sg-12345678"],
+        "Subnets": ["subnet-12345678"]
+    }
+}</code></pre>
+      </div>
+
+      <h3>CLI コマンド</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">クラスター作成と監視</span>
+        </div>
+        <pre><code class="language-bash"># クラスター作成
+aws sagemaker create-cluster \
+    --cli-input-json file://create_cluster.json
+
+# プロビジョニング進捗の監視
+aws sagemaker describe-cluster \
+    --cluster-name distributed-training-cluster
+
+# イベント監視
+aws sagemaker list-cluster-events \
+    --cluster-name distributed-training-cluster</code></pre>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase-card">
+        <div class="usecase-title">1. PyTorch FSDP による大規模言語モデルトレーニング</div>
+        <div class="usecase-scenario">70B パラメータの LLM を PyTorch FSDP で分散トレーニング。16 ノードを計画しているが、最低 8 ノードでトレーニング設定を調整して開始可能。<br><code>MinInstanceCount: 8, InstanceCount: 16</code></div>
+        <div class="usecase-effect">✅ 8 ノード確保でトレーニング開始。残り 8 ノードは非同期追加。部分キャパシティでの無効なジョブ開始を防止</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">2. NVIDIA NeMo による Megatron 並列トレーニング</div>
+        <div class="usecase-scenario">テンソル並列度 8、パイプライン並列度 4 の設定で最低 32 GPU (4 ノード x 8 GPU) が必要。部分的なノードでは実行不可。<br><code>MinInstanceCount: 4, InstanceCount: 4</code></div>
+        <div class="usecase-effect">✅ MinCount = InstanceCount で all-or-nothing 動作を実現。3 時間以内に全ノード確保できなければ自動ロールバック</div>
+      </div>
+
+      <div class="usecase-card">
+        <div class="usecase-title">3. SLA 保証付きマルチテナントトレーニング環境</div>
+        <div class="usecase-scenario">複数チームが共有するクラスターで、チーム A に最低 8 ノード、チーム B に最低 4 ノードを保証。各インスタンスグループで個別に MinCount を管理。</div>
+        <div class="usecase-effect">✅ 一方のチームのキャパシティ不足がもう一方に影響しない。SLA の定量的保証が API レベルで実現</div>
+      </div>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <div class="comparison" style="grid-template-columns: 1fr 1fr;">
+        <div>
+          <h3 style="color: var(--aws-orange);">ビジネス面</h3>
+          <ul class="merit-list">
+            <li>SLA 保証の確保: 最小 GPU 数を保証し分散トレーニングジョブの SLA を確実に達成</li>
+            <li>コスト効率の最適化: 必要最小限のリソース確保後にジョブ開始し無駄な実行を防止</li>
+            <li>運用の自動化: 3 時間タイムアウトと自動ロールバックで手動介入なしに異常回復</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="color: var(--aws-orange);">技術面</h3>
+          <ul class="merit-list">
+            <li>分散トレーニングの信頼性向上: PyTorch FSDP、Megatron-LM 等で必要な固定ノード数保証</li>
+            <li>段階的スケーリング: MinCount 達成後も TargetCount まで非同期インスタンス追加</li>
+            <li>イベント駆動型監視: ListClusterEvents API でリアルタイム追跡</li>
+            <li>既存ワークフローとの互換性: MinCount 0 で従来動作を維持</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ 制約事項・注意点</h2>
+      <ul class="demerit-list">
+        <li>MinCount は継続的プロビジョニング (NodeProvisioningMode: Continuous) が有効なクラスターでのみ利用可能</li>
+        <li>レガシーの provisioning_parameters.json を使用するクラスターでは非対応</li>
+        <li>MinCount は永続的な最小キャパシティ保証ではなく、InService 遷移時の閾値のみ保証</li>
+        <li>通常運用中の異常インスタンス交換やメンテナンス時に MinCount を一時的に下回る可能性あり</li>
+        <li>SlurmConfigStrategy パラメータは継続的プロビジョニングと併用不可</li>
+        <li>マルチヘッドノード構成は継続的プロビジョニングでは非対応</li>
+        <li>3 時間のタイムアウトはリージョンのキャパシティ状況によっては不十分な場合あり</li>
+        <li>Creating/Updating 中は一部の管理操作が制限される</li>
+        <li>MinCount = InstanceCount 設定では継続的プロビジョニングのメリットが失われる</li>
+      </ul>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>MinCount 機能自体には<span class="highlight">追加料金なし</span>。SageMaker HyperPod の標準料金体系が適用されます。</p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>項目</th>
+              <th>詳細</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>インスタンス課金</td>
+              <td>ライフサイクルスクリプトの実行開始時点から課金開始</td>
+            </tr>
+            <tr>
+              <td>起動失敗時</td>
+              <td>インスタンス起動に失敗した場合は課金されない</td>
+            </tr>
+            <tr>
+              <td>ロールバック時</td>
+              <td>終了処理に入ったインスタンスはその時点で課金停止</td>
+            </tr>
+            <tr>
+              <td>課金粒度</td>
+              <td>インスタンスレベルの個別メータリング</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <div class="card-title">📈 Amazon SageMaker HyperPod Continuous Provisioning</div>
+        <div class="card-desc">MinCount の前提機能。部分的キャパシティでクラスターを起動し、残りを非同期でプロビジョニング</div>
+      </div>
+      <div class="card">
+        <div class="card-title">⚙️ AWS Slurm オーケストレーション</div>
+        <div class="card-desc">HyperPod のジョブスケジューリングエンジン。MinCount 達成後に Slurm ノードが登録される</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🖥️ Amazon EC2 キャパシティ</div>
+        <div class="card-desc">MinCount のプロビジョニング成否はリージョンの EC2 キャパシティに依存</div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 Amazon CloudWatch</div>
+        <div class="card-desc">ListClusterEvents と組み合わせて MinCount 関連イベントの監視とアラート設定が可能</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🧠 PyTorch FSDP / Megatron-LM / NVIDIA NeMo</div>
+        <div class="card-desc">MinCount の主要ユースケースとなる分散トレーニングフレームワーク</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul style="list-style:none; padding:0; margin:8px 0;">
+        <li style="margin-bottom:4px;"><a href="https://aws.amazon.com/about-aws/whats-new/2026/05/amazon-sagemaker-hyperpod-mincount/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li style="margin-bottom:4px;"><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-scaling-slurm.html#sagemaker-hyperpod-scaling-slurm-mincount" target="_blank" rel="noopener noreferrer">ドキュメント - Minimum capacity requirements (MinCount)</a></li>
+        <li style="margin-bottom:4px;"><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-scaling-slurm.html" target="_blank" rel="noopener noreferrer">ドキュメント - Continuous provisioning for Slurm clusters</a></li>
+      </ul>
+      <p style="margin-top:12px; color: rgba(213,219,219,0.6);">Generated by AWS News Summary | 2026-05-27</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
