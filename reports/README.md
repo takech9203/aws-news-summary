@@ -5,6 +5,17 @@
 
 ## 2026 年
 
+- [2026-05-29 - Amazon Connect Customer - タスクの最大 90 日先までのスケジュール機能](2026/2026-05-29-amazon-connect-customer-tasks-90day-schedule.md)
+- [2026-05-29 - AWS Interconnect - multicloud 無料 500 Mbps ティア提供開始](2026/2026-05-29-aws-interconnect-multicloud-offers-free-500-mbps-tier.md)
+- [2026-05-29 - Amazon S3 Tables - アジアパシフィック 2 リージョンへの拡大](2026/2026-05-29-amazon-s3-tables-aws-regions.md)
+- [2026-05-29 - Amazon RDS for Oracle - 2026 年 4 月 Release Update および Supplemental Patch Bundle サポート](2026/2026-05-29-amazon-rds-oracle-supports-april-2026-release-update-supplemental-patch-bundle.md)
+- [2026-05-29 - AWS Shield Advanced - DDoS 攻撃フローログ](2026/2026-05-29-aws-shield-ddos.md)
+- [2026-05-29 - Amazon Redshift Serverless - 4 RPU 最小キャパシティが 7 リージョンに拡大](2026/2026-05-29-amazon-redshift-serverless-4-rpu-seven-regions.md)
+- [2026-05-29 - Kiro - Thinking Display、Subagent Review Loops、Display Controls](2026/2026-05-29-kiro-changelog-2026-05-29.md)
+- [2026-05-29 - Oracle Database@AWS - 20 リージョンへの拡大](2026/2026-05-29-oracle-database-aws-available-twenty-regions.md)
+- [2026-05-29 - AWS End User Messaging - RCS for Business が 20 か国追加で利用可能に](2026/2026-05-29-aws-rcs-countries.md)
+- [2026-05-28 - Amazon WorkSpaces Applications - Windows Desktop OS サポート追加](2026/2026-05-28-amazon-workspaces-applications-windows-desktop-OS.md)
+- [2026-05-28 - AWS IoT Core - ダイレクトメッセージング (Point-to-Point 通信)](2026/2026-05-28-aws-iot-core-direct-messaging.md)
 - [2026-05-28 - Amazon OpenSearch Serverless - 次世代アーキテクチャの一般提供開始](2026/2026-05-28-amazon-opensearch-serverless-next-generation-generally-available.md)
 - [2026-05-28 - Amazon Connect Customer - 生成 AI による問い合わせ後サマリーの 8 言語対応拡大](2026/2026-05-28-amazon-connect-summary-languages.md)
 - [2026-05-28 - AWS Partner Central - TCV によるディールサイジング機能](2026/2026-05-28-aws-partner-central-opportunity-deal-sizing-tcv.md)
