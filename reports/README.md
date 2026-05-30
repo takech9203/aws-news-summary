@@ -14,6 +14,7 @@
 - [2026-05-29 - Kiro - Thinking Display、Subagent Review Loops、Display Controls](2026/2026-05-29-kiro-changelog-2026-05-29.md)
 - [2026-05-29 - Oracle Database@AWS - 20 リージョンへの拡大](2026/2026-05-29-oracle-database-aws-available-twenty-regions.md)
 - [2026-05-29 - AWS End User Messaging - RCS for Business が 20 か国追加で利用可能に](2026/2026-05-29-aws-rcs-countries.md)
+- [2026-05-29 - Amazon SES - Global Deliverability (受信ボックス配置メトリクスとブロックリストモニタリング)](2026/2026-05-29-amazon-ses-global-deliverability.md)
 - [2026-05-28 - Amazon WorkSpaces Applications - Windows Desktop OS サポート追加](2026/2026-05-28-amazon-workspaces-applications-windows-desktop-OS.md)
 - [2026-05-28 - AWS IoT Core - ダイレクトメッセージング (Point-to-Point 通信)](2026/2026-05-28-aws-iot-core-direct-messaging.md)
 - [2026-05-28 - Amazon OpenSearch Serverless - 次世代アーキテクチャの一般提供開始](2026/2026-05-28-amazon-opensearch-serverless-next-generation-generally-available.md)
