@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Direct Connect - VIF Rate Limiters</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 8px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .date-badge {
+      background: rgba(255, 153, 0, 0.2);
+      border: 1px solid var(--aws-orange);
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-size: 14px;
+      color: var(--aws-orange);
+      font-weight: 600;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 12px 0;
+      border-left: 4px solid var(--aws-orange);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .feature-card h4 {
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+
+    .feature-card p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before h4 {
+      color: var(--aws-red);
+      margin: 0 0 12px 0;
+      font-size: 16px;
+    }
+
+    .after {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after h4 {
+      color: var(--aws-green);
+      margin: 0 0 12px 0;
+      font-size: 16px;
+    }
+
+    .before ul, .after ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .before li, .after li {
+      margin-bottom: 6px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+
+    .usecase-card h4 {
+      color: var(--aws-orange);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+
+    .usecase-card p {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+    }
+
+    .usecase-example {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 4px;
+      padding: 12px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      margin-top: 8px;
+      color: var(--aws-light-gray);
+      white-space: pre-line;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid var(--aws-orange);
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+    }
+
+    tr:hover td {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .check-icon {
+      color: var(--aws-green);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .cross-icon {
+      color: var(--aws-red);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .merit-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .merit-card {
+      background: rgba(29, 129, 2, 0.08);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .merit-card h4 {
+      color: var(--aws-green);
+      margin: 0 0 8px 0;
+      font-size: 15px;
+    }
+
+    .demerit-card {
+      background: rgba(209, 50, 18, 0.08);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .demerit-card h4 {
+      color: var(--aws-red);
+      margin: 0 0 8px 0;
+      font-size: 15px;
+    }
+
+    .merit-card ul, .demerit-card ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 14px;
+    }
+
+    .merit-card li, .demerit-card li {
+      margin-bottom: 6px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    .region-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .region-badge {
+      background: rgba(0, 161, 201, 0.15);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 13px;
+      color: var(--aws-teal);
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    @media (max-width: 768px) {
+      h1 { font-size: 24px; }
+      h2 { font-size: 20px; }
+      .header { flex-direction: column; gap: 12px; }
+      .before-after { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .merit-section { grid-template-columns: 1fr; }
+      .section { padding: 16px; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>🔗 AWS Direct Connect - VIF Rate Limiters</h1>
+        <p class="subtitle">仮想インターフェース単位の帯域幅制御でノイジーネイバー問題を解決</p>
+        <span class="service-badge">AWS Direct Connect</span>
+      </div>
+      <div class="date-badge">2026/06/01</div>
+    </div>
+
+    <!-- Overview Section -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>AWS Direct Connect が、専用接続上の仮想インターフェース (VIF) に対する<span class="highlight">レートリミッター機能</span>をサポートしました。特定の VIF で予期しないトラフィックスパイクが発生した際に、同一接続上の他の VIF が使用する帯域幅を圧迫することを防止できます。</p>
+
+      <div class="before-after">
+        <div class="before">
+          <h4>&#x274C; Before</h4>
+          <ul>
+            <li>1 つの VIF のトラフィックスパイクが接続全体の帯域幅を消費する可能性</li>
+            <li>VIF 間の帯域幅配分を制御する手段がない</li>
+            <li>重要なワークロード用 VIF が他の VIF のバーストにより影響を受ける</li>
+          </ul>
+        </div>
+        <div class="after">
+          <h4>&#x2705; After</h4>
+          <ul>
+            <li>VIF 単位で最大帯域幅を設定しノイジーネイバー問題を防止</li>
+            <li>レート制限超過パケットはドロップされ他 VIF を保護</li>
+            <li>CloudWatch メトリクスで VIF 使用率とドロップ数を監視可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Section -->
+    <div class="section">
+      <h2>📊 数字で見る VIF Rate Limiters</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-value">10 VIF</span>
+          <span class="stat-label">1 接続あたり最大設定数</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">50 Mbps</span>
+          <span class="stat-label">最小帯域幅設定</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">1.6 Tbps</span>
+          <span class="stat-label">最大帯域幅 (LAG 使用時)</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">双方向</span>
+          <span class="stat-label">Ingress + Egress 適用</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>Direct Connect 専用接続上の複数の VIF に対して個別にレートリミットを設定し、CloudWatch で監視する構成</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph OnPrem["🏢 オンプレミスネットワーク"]
+        Router["🔌 カスタマールーター"]
+    end
+
+    subgraph DXConnection["🔗 Direct Connect 専用接続"]
+        direction LR
+        VIF1["📡 VIF 1 - 本番環境<br/>Rate Limit: 500 Mbps"]
+        VIF2["📡 VIF 2 - 開発環境<br/>Rate Limit: 200 Mbps"]
+        VIF3["📡 VIF 3 - バックアップ<br/>Rate Limit: 100 Mbps"]
+        VIF4["📡 VIF 4 - 制限なし"]
+        VIF1 ~~~ VIF2 ~~~ VIF3 ~~~ VIF4
+    end
+
+    subgraph RateLimiter["⚙️ VIF Rate Limiter"]
+        RL["🚦 帯域幅制御<br/>超過パケットドロップ"]
+    end
+
+    subgraph Monitoring["📊 モニタリング"]
+        CW["☁️ Amazon CloudWatch<br/>使用率メトリクス<br/>ドロップパケットカウント"]
+        Alarm["🔔 CloudWatch Alarms"]
+    end
+
+    subgraph AWS["☁️ AWS クラウド"]
+        VPC1["🏗️ VPC - 本番"]
+        VPC2["🏗️ VPC - 開発"]
+        VPC3["🏗️ VPC - DR"]
+    end
+
+    Router --> DXConnection
+    DXConnection --> RateLimiter
+    RateLimiter --> AWS
+    VIF1 -.-> VPC1
+    VIF2 -.-> VPC2
+    VIF3 -.-> VPC3
+    RateLimiter --> CW
+    CW --> Alarm
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef monitor fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef ratelimit fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#E65100
+
+    class OnPrem user
+    class DXConnection layer
+    class AWS cloud
+    class Monitoring monitor
+    class RateLimiter ratelimit
+    class VIF1,VIF2,VIF3,VIF4 compute
+    class CW,Alarm monitor
+    class VPC1,VPC2,VPC3 storage
+    class Router user
+    class RL ratelimit
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>🚀 主要機能</h2>
+
+      <div class="feature-card">
+        <h4>🚦 VIF レートリミッター</h4>
+        <p>専用接続上の個々の VIF に最大帯域幅を設定。1 つの専用接続あたり最大 10 個の VIF にレートリミットを設定可能。双方向 (ingress/egress) でレート制限を適用し、超過トラフィックのパケットドロップにより他の VIF を保護します。</p>
+      </div>
+
+      <div class="feature-card">
+        <h4>📏 柔軟な帯域幅設定</h4>
+        <p>最小 50 Mbps から最大 1.6 Tbps まで設定可能。Link Aggregation Group (LAG) 使用時に最大帯域幅が利用可能で、幅広い容量増分から選択できます。</p>
+      </div>
+
+      <div class="feature-card">
+        <h4>📊 CloudWatch モニタリング統合</h4>
+        <p>トラフィック使用率メトリクス (設定容量に対するパーセンテージ) とドロップパケットカウントメトリクスを提供。カスタムしきい値に基づくアラーム設定が可能です。</p>
+      </div>
+    </div>
+
+    <!-- Technical Specifications -->
+    <div class="section">
+      <h2>⚙️ 技術仕様</h2>
+
+      <h3>レートリミッター仕様</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対象接続タイプ</td><td>専用接続 (Dedicated Connection) のみ</td></tr>
+        <tr><td>最大設定可能 VIF 数</td><td>1 接続あたり 10 VIF</td></tr>
+        <tr><td>最小帯域幅</td><td>50 Mbps</td></tr>
+        <tr><td>最大帯域幅</td><td>1.6 Tbps (LAG 使用時)</td></tr>
+        <tr><td>適用方向</td><td>双方向 (ingress + egress)</td></tr>
+        <tr><td>超過時の動作</td><td>パケットドロップ</td></tr>
+        <tr><td>設定方法</td><td>コンソール、API、SDK</td></tr>
+      </table>
+
+      <h3>CloudWatch メトリクス</h3>
+      <table>
+        <tr><th>メトリクス</th><th>説明</th></tr>
+        <tr><td>トラフィック使用率</td><td>VIF の設定容量に対する使用率 (%)</td></tr>
+        <tr><td>ドロップパケットカウント</td><td>レートリミットにより破棄されたパケット数</td></tr>
+      </table>
+    </div>
+
+    <!-- Configuration -->
+    <div class="section">
+      <h2>🔧 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">&#x2713;</span><span>AWS Direct Connect 専用接続が確立されていること</span></div>
+      <div class="check-item"><span class="check-icon">&#x2713;</span><span>対象の VIF が作成済みであること</span></div>
+      <div class="check-item"><span class="check-icon">&#x2713;</span><span>適切な IAM 権限 (Direct Connect 管理権限) を持っていること</span></div>
+
+      <h3>AWS CLI でのレートリミッター設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">VIF にレートリミッターを設定</span>
+        </div>
+        <pre><code class="language-bash"># VIF にレートリミッターを設定する例
+aws directconnect update-virtual-interface-attributes \
+  --virtual-interface-id dxvif-xxxxxxxx \
+  --rate-limit-mbps 500</code></pre>
+      </div>
+
+      <h3>CloudWatch アラームの設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">VIF 使用率アラームの作成</span>
+        </div>
+        <pre><code class="language-bash"># VIF 使用率に基づくアラームを作成
+aws cloudwatch put-metric-alarm \
+  --alarm-name "DX-VIF-HighUtilization" \
+  --namespace "AWS/DirectConnect" \
+  --metric-name "VifUtilization" \
+  --dimensions Name=VirtualInterfaceId,Value=dxvif-xxxxxxxx \
+  --threshold 80 \
+  --comparison-operator GreaterThanThreshold \
+  --evaluation-periods 3 \
+  --period 300 \
+  --statistic Average \
+  --alarm-actions arn:aws:sns:ap-northeast-1:123456789012:dx-alerts</code></pre>
+      </div>
+    </div>
+
+    <!-- Merits / Demerits -->
+    <div class="section">
+      <h2>⚖️ メリットとデメリット</h2>
+
+      <div class="merit-section">
+        <div class="merit-card">
+          <h4>&#x2705; ビジネス面のメリット</h4>
+          <ul>
+            <li><strong>SLA 保護</strong>: 重要なワークロードの帯域幅を確保し、予測可能なパフォーマンスを提供</li>
+            <li><strong>コスト最適化</strong>: 追加の物理接続を購入せずに帯域幅を効率的に配分</li>
+            <li><strong>運用リスク軽減</strong>: 予期しないトラフィックスパイクによるサービス影響を防止</li>
+          </ul>
+        </div>
+        <div class="merit-card">
+          <h4>&#x2705; 技術面のメリット</h4>
+          <ul>
+            <li><strong>ノイジーネイバー対策</strong>: VIF 間の帯域幅分離により相互影響を排除</li>
+            <li><strong>きめ細かな制御</strong>: VIF 単位で帯域幅を設定し、優先度に応じた配分が可能</li>
+            <li><strong>可観測性の向上</strong>: CloudWatch メトリクスとアラームによるリアルタイム監視</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="merit-section" style="margin-top: 16px;">
+        <div class="demerit-card">
+          <h4>&#x26A0;&#xFE0F; 制限事項</h4>
+          <ul>
+            <li>専用接続のみ対象 (ホスト接続は適用不可)</li>
+            <li>1 接続あたり最大 10 VIF まで</li>
+            <li>超過トラフィックはドロップされるため、バースト必須ワークロードには不向き</li>
+          </ul>
+        </div>
+        <div class="demerit-card">
+          <h4>&#x1F4DD; 考慮すべき点</h4>
+          <ul>
+            <li>設定値が低すぎると正常トラフィックもドロップされる可能性</li>
+            <li>パケットドロップによる TCP 再送でレイテンシー増加のリスク</li>
+            <li>事前のトラフィックパターン分析が必要</li>
+            <li>全 VIF のレートリミット合計が接続容量を超えないよう設計</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+
+      <div class="usecase-card">
+        <h4>🏢 ユースケース 1: マルチテナント環境での帯域幅保証</h4>
+        <p>1 つの Direct Connect 接続を複数の事業部門で共有し、各部門の VIF に帯域幅の最低保証を設定。</p>
+        <div class="usecase-example">専用接続: 10 Gbps
+VIF 1 (本番 - 事業部A): Rate Limit 4 Gbps
+VIF 2 (本番 - 事業部B): Rate Limit 3 Gbps
+VIF 3 (開発環境): Rate Limit 2 Gbps
+VIF 4 (バックアップ): Rate Limit 1 Gbps</div>
+        <p style="margin-top: 8px; font-size: 13px; color: var(--aws-green);">&#x2192; 各事業部門のワークロードが他の部門のスパイクの影響を受けず安定動作</p>
+      </div>
+
+      <div class="usecase-card">
+        <h4>🔒 ユースケース 2: 本番/非本番ワークロードの分離</h4>
+        <p>本番環境と開発環境が同一接続を使用。開発環境の大量データ転送が本番環境に影響を与えるリスクを防止。</p>
+        <div class="usecase-example">専用接続: 10 Gbps
+VIF 1 (本番環境): レートリミットなし (残り帯域すべて使用可能)
+VIF 2 (開発環境): Rate Limit 2 Gbps
+VIF 3 (ステージング): Rate Limit 1 Gbps</div>
+        <p style="margin-top: 8px; font-size: 13px; color: var(--aws-green);">&#x2192; 非本番環境に上限を設け、本番環境の帯域幅を確実に確保</p>
+      </div>
+
+      <div class="usecase-card">
+        <h4>🔄 ユースケース 3: データレプリケーションの帯域幅制御</h4>
+        <p>DR 用データレプリケーション VIF が夜間バッチ処理時に大量転送を行い、同時間帯のオンラインワークロードに影響を与える問題を解決。</p>
+        <div class="usecase-example">専用接続: 10 Gbps
+VIF 1 (オンラインワークロード): レートリミットなし
+VIF 2 (DR レプリケーション): Rate Limit 3 Gbps
+CloudWatch アラーム: VIF 2 使用率 90% で通知</div>
+        <p style="margin-top: 8px; font-size: 13px; color: var(--aws-green);">&#x2192; DR レプリケーションを制限しつつ、異常検知で柔軟に調整</p>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金情報</h2>
+      <p>VIF Rate Limiters 自体の追加料金に関する情報は公式発表では言及されていません。AWS Direct Connect の既存料金体系が適用されます。</p>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>ポート時間料金</td><td>接続容量とタイプに基づく時間課金</td></tr>
+        <tr><td>データ転送 (アウトバウンド)</td><td>AWS からオンプレミスへのデータ転送量に基づく課金</td></tr>
+        <tr><td>VIF Rate Limiters</td><td>追加料金の記載なし (公式発表時点)</td></tr>
+      </table>
+    </div>
+
+    <!-- Regions -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>AWS Direct Connect 専用接続がサポートされるすべての AWS リージョンで利用可能です。</p>
+      <div class="region-badges">
+        <span class="region-badge">全商用リージョン</span>
+        <span class="region-badge">中国リージョン</span>
+      </div>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div class="feature-card">
+        <h4>📊 Amazon CloudWatch</h4>
+        <p>VIF 使用率メトリクスとドロップパケットカウントの監視、アラーム設定</p>
+      </div>
+      <div class="feature-card">
+        <h4>🌐 AWS Direct Connect Gateway</h4>
+        <p>複数リージョンの VPC に対する Direct Connect 接続の集約</p>
+      </div>
+      <div class="feature-card">
+        <h4>🔗 Link Aggregation Group (LAG)</h4>
+        <p>複数の接続を束ねて最大 1.6 Tbps の帯域幅を提供。VIF Rate Limiters と組み合わせて使用可能</p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul style="list-style: none; padding: 0; margin: 8px 0;">
+        <li style="margin-bottom: 4px;">&#x2022; <a href="https://aws.amazon.com/about-aws/whats-new/2026/06/aws-direct-connect-now-supports-vif-rate-limiters/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li style="margin-bottom: 4px;">&#x2022; <a href="https://docs.aws.amazon.com/directconnect/latest/UserGuide/Welcome.html" target="_blank" rel="noopener noreferrer">AWS Direct Connect ドキュメント</a></li>
+        <li style="margin-bottom: 4px;">&#x2022; <a href="https://aws.amazon.com/directconnect/pricing/" target="_blank" rel="noopener noreferrer">AWS Direct Connect 料金</a></li>
+      </ul>
+      <p style="margin-top: 12px; color: rgba(255,255,255,0.4);">Generated: 2026-06-01</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

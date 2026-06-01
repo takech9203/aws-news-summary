@@ -5,6 +5,19 @@
 
 ## 2026 年
 
+- [2026-06-01 - Amazon Bedrock AgentCore Identity - Bring Your Own Secrets 対応](2026/2026-06-01-agentcore-identity-secrets-manager.md)
+- [2026-06-01 - Amazon EC2 M8i / M8i-flex インスタンス - アジアパシフィック (ニュージーランド) リージョンで利用可能に](2026/2026-06-01-amazon-ec2-m8i-m8i-flex-new-zealand.md)
+- [2026-06-01 - Amazon Bedrock - OpenAI GPT-5.5、GPT-5.4、Codex の一般提供開始](2026/2026-06-01-amazon-bedrock-openai-models-codex-generally-available.md)
+- [2026-06-01 - Amazon SES - テナントレベル抑制リスト](2026/2026-06-01-amazon-ses-tenant-level-suppression-lists.md)
+- [2026-06-01 - Amazon Quick Research - カスタマーマネージドキー (CMK) サポート](2026/2026-06-01-amazon-quick-research-cm-keys.md)
+- [2026-06-01 - Amazon Bedrock - bedrock-mantle エンドポイント向け CloudWatch メトリクス](2026/2026-06-01-amazon-bedrock-supports-cloudwatch-metrics-bedrock-mantle-endpoint.md)
+- [2026-06-01 - Amazon SageMaker Unified Studio - IAM パーミッションバウンダリーによる SCP コンプライアンス対応](2026/2026-06-01-amazon-sagemaker-scp.md)
+- [2026-06-01 - Amazon SageMaker HyperPod - EFA-only ネットワークインターフェースサポート](2026/2026-06-01-amazon-sagemaker-hyperpod-efa-only.md)
+- [2026-06-01 - Amazon Quick - VPC 経由での MCP サーバー接続サポート](2026/2026-06-01-amazon-quick-vpc-mcp.md)
+- [2026-06-01 - Amazon EC2 M8azn - Europe (Ireland) リージョンで利用可能に](2026/2026-06-01-amazon-ec2-m8azn-europe-ireland.md)
+- [2026-06-01 - AWS Direct Connect - VIF Rate Limiters](2026/2026-06-01-aws-direct-connect-now-supports-vif-rate-limiters.md)
+- [2026-06-01 - Amazon SageMaker HyperPod - AI コーディングアシスタント向けトラブルシューティングスキル](2026/2026-06-01-amazon-sagemaker-hyperpod-troubleshooting-skills.md)
+- [2026-05-31 - Amazon Inspector - EC2 エージェントベーススキャンの改善 (Inspector VM Scanner)](2026/2026-05-31-amazon-inspector-ec2-agent-scanning-improvements.md)
 - [2026-05-29 - Amazon Connect Customer - タスクの最大 90 日先までのスケジュール機能](2026/2026-05-29-amazon-connect-customer-tasks-90day-schedule.md)
 - [2026-05-29 - AWS Interconnect - multicloud 無料 500 Mbps ティア提供開始](2026/2026-05-29-aws-interconnect-multicloud-offers-free-500-mbps-tier.md)
 - [2026-05-29 - Amazon S3 Tables - アジアパシフィック 2 リージョンへの拡大](2026/2026-05-29-amazon-s3-tables-aws-regions.md)
