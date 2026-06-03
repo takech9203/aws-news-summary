@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARC Region Switch - Aurora Scaling &amp; Neptune Failover</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 8px 0;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      text-align: right;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 16px 16px 16px 20px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .feature-card h4 {
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+
+    .feature-card p, .feature-card ul {
+      margin: 0;
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    .feature-card ul {
+      padding-left: 20px;
+      margin-top: 8px;
+    }
+
+    .feature-card li {
+      margin-bottom: 4px;
+    }
+
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 600px) {
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box h4 {
+      color: var(--aws-red);
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-box h4 {
+      color: var(--aws-green);
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li {
+      margin-bottom: 6px;
+    }
+
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+
+    .usecase-card h4 {
+      color: var(--aws-orange);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+
+    .usecase-card p {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+    }
+
+    .usecase-card .effect {
+      background: rgba(29, 129, 2, 0.1);
+      border-left: 3px solid var(--aws-green);
+      padding: 8px 12px;
+      margin-top: 12px;
+      border-radius: 0 4px 4px 0;
+      font-size: 13px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-card .stat-number {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      display: block;
+    }
+
+    .stat-card .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    .table-container {
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.4);
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--aws-light-gray);
+    }
+
+    tr:hover td {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+      color: var(--aws-white);
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    .warning-box {
+      background: rgba(255, 152, 0, 0.1);
+      border: 1px solid rgba(255, 152, 0, 0.4);
+      border-left: 4px solid #FF9800;
+      border-radius: 0 8px 8px 0;
+      padding: 16px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .warning-box strong {
+      color: #FF9800;
+    }
+
+    .info-box {
+      background: rgba(0, 161, 201, 0.1);
+      border: 1px solid rgba(0, 161, 201, 0.3);
+      border-left: 4px solid var(--aws-teal);
+      border-radius: 0 8px 8px 0;
+      padding: 16px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    .link-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .link-list li {
+      margin-bottom: 8px;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .link-list li::before {
+      content: ">";
+      position: absolute;
+      left: 0;
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 600px) {
+      .merit-grid {
+        grid-template-columns: 1fr;
+      }
+      h1 {
+        font-size: 24px;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <span class="service-badge">Amazon Application Recovery Controller</span>
+        <h1>Region Switch に Aurora スケーリングと Neptune フェイルオーバーを追加</h1>
+      </div>
+      <div class="subtitle">2026-06-03</div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        ARC Region Switch に <span class="highlight">3 つの新しい実行ブロック</span> が追加された。マルチリージョンワークロードにおけるデータベースのスケーリングとフェイルオーバーを自動化し、リージョン障害時のリカバリ時間を大幅に短縮する。
+      </p>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-number">3</span>
+          <span class="stat-label">新規実行ブロック</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number">6</span>
+          <span class="stat-label">更新 API メソッド</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number">全商用</span>
+          <span class="stat-label">対応リージョン</span>
+        </div>
+      </div>
+
+      <h3>Before / After 比較</h3>
+      <div class="before-after">
+        <div class="before-box">
+          <h4>❌ Before</h4>
+          <ul>
+            <li>セカンダリクラスターを手動でスケールアップする必要があった</li>
+            <li>スケーリング完了まで リクエストルーティング不可でリカバリ遅延</li>
+            <li>Neptune フェイルオーバーの種類を手動/スクリプトで判断</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h4>✅ After</h4>
+          <ul>
+            <li>Aurora Serverless/Provisioned のスケーリングが自動実行</li>
+            <li>Neptune フェイルオーバーが計画的/非計画的の両方で自動化</li>
+            <li>クロスアカウントオーケストレーションに対応</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>ARC Region Switch がリージョン障害を検知すると、プランに定義された実行ブロックが順序に従ってセカンダリリージョンのデータベースをスケーリング/フェイルオーバーし、トラフィック受け入れ準備を自動的に完了させる。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Primary["☁️ プライマリリージョン"]
+        direction LR
+        App1["🖥️ アプリケーション"]
+        Aurora1[("📋 Aurora<br/>プライマリ")]
+        Neptune1[("🔗 Neptune<br/>プライマリ")]
+        App1 ~~~ Aurora1 ~~~ Neptune1
+    end
+
+    subgraph Secondary["☁️ セカンダリリージョン"]
+        direction LR
+        App2["🖥️ アプリケーション"]
+        Aurora2[("📋 Aurora<br/>セカンダリ")]
+        Neptune2[("🔗 Neptune<br/>セカンダリ")]
+        App2 ~~~ Aurora2 ~~~ Neptune2
+    end
+
+    subgraph ARC["⚙️ ARC Region Switch"]
+        direction LR
+        Plan["📋 Region Switch Plan"]
+        EB1["⚡ Aurora Serverless<br/>Scaling Block"]
+        EB2["⚡ Aurora Provisioned<br/>Scaling Block"]
+        EB3["⚡ Neptune Global DB<br/>Failover Block"]
+        Plan --- EB1
+        Plan --- EB2
+        Plan --- EB3
+    end
+
+    Alarm(["🚨 リージョン障害検知"]) --> ARC
+    EB1 -->|スケールアップ| Aurora2
+    EB2 -->|スケールアップ| Aurora2
+    EB3 -->|フェイルオーバー| Neptune2
+    Aurora1 -.->|レプリケーション| Aurora2
+    Neptune1 -.->|レプリケーション| Neptune2
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef arc fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef alarm fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#B71C1C
+
+    class Primary,Secondary cloud
+    class App1,App2 compute
+    class Aurora1,Aurora2,Neptune1,Neptune2 database
+    class ARC,Plan,EB1,EB2,EB3 arc
+    class Alarm alarm
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <h4>1. Aurora Serverless スケーリング実行ブロック</h4>
+        <ul>
+          <li>Aurora Serverless v2 のセカンダリクラスターを自動スケールアップ</li>
+          <li><code>targetPercent</code> パラメータでプライマリに対する目標容量の割合を指定</li>
+          <li>グローバルクラスター識別子とリージョンごとの DB クラスター ARN を設定</li>
+          <li>タイムアウト時間の設定に対応</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h4>2. Aurora Provisioned スケーリング実行ブロック</h4>
+        <ul>
+          <li>Aurora Provisioned のセカンダリクラスターのインスタンスサイズを自動適正化</li>
+          <li><code>instanceArns</code> パラメータで対象インスタンスを明示的に指定</li>
+          <li>グローバルクラスター識別子による統合管理</li>
+          <li>リージョンごとの DB クラスター ARN マッピングをサポート</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h4>3. Neptune グローバルデータベースフェイルオーバー実行ブロック</h4>
+        <ul>
+          <li>計画的スイッチオーバー (<code>switchoverOnly</code>) と非計画的フェイルオーバー (<code>failover</code>) の両方をサポート</li>
+          <li><code>ungraceful</code> 設定によりプライマリ応答不能時の動作を定義</li>
+          <li>障害の種類に応じた自動判断で手動スクリプト不要</li>
+          <li>クロスアカウントロールによるマルチアカウント対応</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Technical Specifications -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>実行ブロック設定パラメータ</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>実行ブロック</th>
+              <th>主要パラメータ</th>
+              <th>説明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>AuroraServerlessScaling</td>
+              <td><code>targetPercent</code></td>
+              <td>プライマリに対するスケーリング目標の割合</td>
+            </tr>
+            <tr>
+              <td>AuroraServerlessScaling</td>
+              <td><code>globalClusterIdentifier</code></td>
+              <td>Aurora グローバルクラスターの識別子</td>
+            </tr>
+            <tr>
+              <td>AuroraServerlessScaling</td>
+              <td><code>regionDatabaseClusterArns</code></td>
+              <td>リージョンごとの DB クラスター ARN マッピング</td>
+            </tr>
+            <tr>
+              <td>AuroraProvisionedScaling</td>
+              <td><code>instanceArns</code></td>
+              <td>スケーリング対象のインスタンス ARN マッピング</td>
+            </tr>
+            <tr>
+              <td>AuroraProvisionedScaling</td>
+              <td><code>globalClusterIdentifier</code></td>
+              <td>Aurora グローバルクラスターの識別子</td>
+            </tr>
+            <tr>
+              <td>NeptuneGlobalDatabase</td>
+              <td><code>behavior</code></td>
+              <td><code>switchoverOnly</code> または <code>failover</code></td>
+            </tr>
+            <tr>
+              <td>NeptuneGlobalDatabase</td>
+              <td><code>ungraceful</code></td>
+              <td>非計画的フェイルオーバー時の動作設定</td>
+            </tr>
+            <tr>
+              <td>共通</td>
+              <td><code>crossAccountRole</code></td>
+              <td>クロスアカウント用の IAM ロール ARN</td>
+            </tr>
+            <tr>
+              <td>共通</td>
+              <td><code>externalId</code></td>
+              <td>クロスアカウントアクセス時の外部 ID</td>
+            </tr>
+            <tr>
+              <td>共通</td>
+              <td><code>timeoutMinutes</code></td>
+              <td>実行ブロックのタイムアウト時間</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>更新された API メソッド</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>メソッド</th>
+              <th>変更内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>CreatePlan</code></td>
+              <td>新規実行ブロックタイプの設定パラメータ追加</td>
+            </tr>
+            <tr>
+              <td><code>GetPlan</code></td>
+              <td>レスポンスに新規実行ブロック設定を含む</td>
+            </tr>
+            <tr>
+              <td><code>GetPlanExecution</code></td>
+              <td>実行状態に新規ブロックタイプを含む</td>
+            </tr>
+            <tr>
+              <td><code>GetPlanInRegion</code></td>
+              <td>リージョン固有のプラン情報に新規ブロック含む</td>
+            </tr>
+            <tr>
+              <td><code>ListPlanExecutionEvents</code></td>
+              <td>イベントの executionBlockType に新タイプ追加</td>
+            </tr>
+            <tr>
+              <td><code>UpdatePlan</code></td>
+              <td>既存プランへの新規実行ブロック追加に対応</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>新しい executionBlockType 列挙値</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">executionBlockType</span>
+        </div>
+        <pre><code class="language-json">{
+  "executionBlockType": [
+    "AuroraServerlessScaling",
+    "AuroraProvisionedScaling",
+    "NeptuneGlobalDatabase"
+  ]
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Setup Guide -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <div class="info-box">
+        <strong>前提条件:</strong> ARC Region Switch プランが作成済み / Aurora または Neptune グローバルデータベースがマルチリージョンで構成済み / クロスアカウント使用時は適切な IAM ロールが設定済み
+      </div>
+
+      <h3>Step 1: Aurora Serverless スケーリング実行ブロックの追加</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">Aurora Serverless Scaling Block</span>
+        </div>
+        <pre><code class="language-python">import boto3
+
+client = boto3.client('arc-region-switch')
+
+response = client.create_plan(
+    name='my-multi-region-plan',
+    recoveryApproach='activePassive',
+    primaryRegion='us-east-1',
+    regions=['us-east-1', 'us-west-2'],
+    workflows=[
+        {
+            'workflowTargetAction': 'activate',
+            'workflowTargetRegion': 'us-west-2',
+            'steps': [
+                {
+                    'name': 'scale-aurora-serverless',
+                    'executionBlockType': 'AuroraServerlessScaling',
+                    'executionBlockConfiguration': {
+                        'auroraServerlessScalingConfig': {
+                            'timeoutMinutes': 30,
+                            'globalClusterIdentifier': 'my-global-cluster',
+                            'regionDatabaseClusterArns': {
+                                'us-west-2': 'arn:aws:rds:us-west-2:123456789012:cluster:my-secondary'
+                            },
+                            'targetPercent': 100
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+)</code></pre>
+      </div>
+      <p style="font-size:14px;"><code>targetPercent</code> を調整することで、段階的なスケーリングも可能。</p>
+
+      <h3>Step 2: Neptune グローバルデータベースフェイルオーバー実行ブロック</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">Neptune Global Database Failover Block</span>
+        </div>
+        <pre><code class="language-python">{
+    'name': 'neptune-failover',
+    'executionBlockType': 'NeptuneGlobalDatabase',
+    'executionBlockConfiguration': {
+        'neptuneGlobalDatabaseConfig': {
+            'timeoutMinutes': 20,
+            'globalClusterIdentifier': 'my-neptune-global',
+            'behavior': 'failover',
+            'regionDatabaseClusterArns': {
+                'us-west-2': 'arn:aws:neptune:us-west-2:123456789012:cluster:my-neptune-secondary'
+            },
+            'ungraceful': {
+                'ungraceful': 'failover'
+            }
+        }
+    }
+}</code></pre>
+      </div>
+
+      <h3>Step 3: クロスアカウントオーケストレーションの設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">Cross-Account Configuration</span>
+        </div>
+        <pre><code class="language-python">{
+    'auroraServerlessScalingConfig': {
+        'crossAccountRole': 'arn:aws:iam::987654321098:role/ARC-CrossAccount-Role',
+        'externalId': 'my-external-id-12345',
+        'globalClusterIdentifier': 'my-global-cluster',
+        'regionDatabaseClusterArns': {
+            'us-west-2': 'arn:aws:rds:us-west-2:987654321098:cluster:secondary-cluster'
+        },
+        'targetPercent': 100,
+        'timeoutMinutes': 30
+    }
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+
+      <div class="merit-grid">
+        <div>
+          <h3>ビジネス面</h3>
+          <div class="feature-card">
+            <h4>🚀 リカバリ時間の大幅短縮</h4>
+            <p>手動スケーリング不要で RTO を数分単位で短縮</p>
+          </div>
+          <div class="feature-card">
+            <h4>💰 運用コストの最適化</h4>
+            <p>通常時は縮小維持、フェイルオーバー時に自動スケールアップ</p>
+          </div>
+          <div class="feature-card">
+            <h4>🛡️ ヒューマンエラーの排除</h4>
+            <p>障害時の判断ミスを防止</p>
+          </div>
+        </div>
+        <div>
+          <h3>技術面</h3>
+          <div class="feature-card">
+            <h4>🔗 統一されたオーケストレーション</h4>
+            <p>Aurora と Neptune を単一プラン内で管理</p>
+          </div>
+          <div class="feature-card">
+            <h4>🏢 クロスアカウント対応</h4>
+            <p>マルチアカウント戦略で単一リカバリプランに統合</p>
+          </div>
+          <div class="feature-card">
+            <h4>🔄 計画的/非計画的の両対応</h4>
+            <p>メンテナンスと障害の両シナリオを同一ブロックで制御</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <div class="warning-box">
+        <strong>制限事項:</strong>
+        <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+          <li>既存の Aurora Global Database フェイルオーバー実行ブロック (<code>globalAuroraConfig</code>) とは別機能。スケーリングのみを自動化する点に注意</li>
+          <li>タイムアウト設定値によっては、大規模クラスターのスケーリング完了前にタイムアウトする可能性</li>
+          <li>Neptune の <code>ungraceful</code> フェイルオーバーではデータ損失の可能性あり。RPO 要件を慎重に検討</li>
+        </ul>
+      </div>
+
+      <div class="warning-box">
+        <strong>考慮すべき点:</strong>
+        <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+          <li>クロスアカウントロールの権限設定には最小権限の原則を適用</li>
+          <li>フェイルオーバー後のフォールバック手順は別途計画が必要</li>
+          <li><code>targetPercent</code> の値はワークロード特性に応じてチューニング</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+
+      <div class="usecase-card">
+        <h4>🏦 UC1: コスト最適化されたアクティブ-パッシブ Aurora 構成</h4>
+        <p><strong>シナリオ:</strong> 金融機関が Aurora グローバルデータベースをアクティブ-パッシブで運用。セカンダリリージョンは最小構成で維持し、DR 時には本番同等の処理能力が必要。</p>
+        <div class="effect">
+          <strong>効果:</strong> フェイルオーバー時にセカンダリクラスターが自動的に本番サイズにスケールアップ。手動作業なしに 15 分以内でトラフィック受け入れ準備が完了。
+        </div>
+      </div>
+
+      <div class="usecase-card">
+        <h4>🌐 UC2: マルチアカウント Neptune グラフデータベースの DR</h4>
+        <p><strong>シナリオ:</strong> ソーシャルメディアプラットフォームが Neptune グローバルデータベースで関係性データを管理。本番環境と DR 環境が異なる AWS アカウントに存在。</p>
+        <div class="effect">
+          <strong>効果:</strong> リージョン障害時にアカウントをまたいだ Neptune フェイルオーバーが自動実行。スイッチオーバーかデタッチかの判断含め人的介入なしに復旧完了。
+        </div>
+      </div>
+
+      <div class="usecase-card">
+        <h4>📈 UC3: 段階的スケーリングによるサーバーレス Aurora の復旧</h4>
+        <p><strong>シナリオ:</strong> SaaS プロバイダーが Aurora Serverless v2 でマルチテナント環境を運用。フェイルオーバー時には段階的にトラフィックを移行したい。</p>
+        <div class="effect">
+          <strong>効果:</strong> まず 50% にスケールアップして一部テナントのトラフィックを受け入れ、次に 100% にスケールアップして全トラフィックを処理する段階的復旧を自動化。
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💲 料金</h2>
+      <p>ARC Region Switch の料金は既存の料金体系に準拠。新しい実行ブロック自体に追加料金は発生しない。</p>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>項目</th>
+              <th>説明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ARC Region Switch</td>
+              <td>プランの実行に対する課金</td>
+            </tr>
+            <tr>
+              <td>Aurora スケーリング</td>
+              <td>スケールアップ後のインスタンス/ACU に応じた Aurora 利用料金</td>
+            </tr>
+            <tr>
+              <td>Neptune フェイルオーバー</td>
+              <td>フェイルオーバー後のセカンダリクラスターの利用料金</td>
+            </tr>
+            <tr>
+              <td>クロスアカウント通信</td>
+              <td>IAM ロールの AssumeRole 呼び出し自体は無料</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Region Availability -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>すべての商用リージョンおよび AWS GovCloud (US) リージョンで利用可能。</p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div class="feature-card">
+        <h4>Amazon Aurora Global Database</h4>
+        <p>マルチリージョンで Aurora データベースをレプリケーションする基盤機能。今回のスケーリングブロックの対象。</p>
+      </div>
+      <div class="feature-card">
+        <h4>Amazon Neptune Global Database</h4>
+        <p>マルチリージョンで Neptune グラフデータベースをレプリケーションする機能。今回のフェイルオーバーブロックの対象。</p>
+      </div>
+      <div class="feature-card">
+        <h4>ARC Routing Control</h4>
+        <p>トラフィックルーティングを制御する ARC の機能。データベーススケーリング完了後にルーティングを切り替える用途で組み合わせ可能。</p>
+      </div>
+      <div class="feature-card">
+        <h4>AWS Organizations</h4>
+        <p>クロスアカウントオーケストレーションのためのマルチアカウント管理基盤。</p>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        ARC Region Switch に Aurora スケーリングと Neptune フェイルオーバーの実行ブロックが追加されたことで、マルチリージョンデータベースワークロードの DR 自動化が大幅に強化された。特にアクティブ-パッシブ構成でコスト最適化のためにセカンダリクラスターを縮小運用している組織にとって、フェイルオーバー時のスケーリング自動化は <span class="highlight">RTO 短縮に直結する改善</span> である。
+      </p>
+      <p>
+        マルチリージョン DR 戦略を持つ組織は、既存の Region Switch プランにこれらの新しい実行ブロックを追加し、フェイルオーバー訓練を実施することを推奨する。
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <h3 style="color: var(--aws-orange); font-size: 16px; margin-bottom: 12px;">📎 参考リンク</h3>
+      <ul class="link-list">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/06/region-switch-aurora-scaling-neptune-failover/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/r53recovery/latest/dg/aurora-provisioned-scaling-block.html" target="_blank" rel="noopener noreferrer">Aurora Provisioned Scaling Block ドキュメント</a></li>
+        <li><a href="https://docs.aws.amazon.com/r53recovery/latest/dg/aurora-serverless-scaling-block.html" target="_blank" rel="noopener noreferrer">Aurora Serverless Scaling Block ドキュメント</a></li>
+        <li><a href="https://docs.aws.amazon.com/r53recovery/latest/dg/neptune-global-database-block.html" target="_blank" rel="noopener noreferrer">Neptune Global Database Block ドキュメント</a></li>
+        <li><a href="https://docs.aws.amazon.com/r53recovery/latest/dg/aws-regions-rs.html" target="_blank" rel="noopener noreferrer">サポートリージョン一覧</a></li>
+        <li><a href="https://awsapichanges.com/archive/changes/d1b776-arc-region-switch.html" target="_blank" rel="noopener noreferrer">API 変更履歴</a></li>
+      </ul>
+      <p style="margin-top: 16px; color: rgba(213,219,219,0.6); font-size: 11px;">Generated from AWS News Summary Report | 2026-06-03</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Keyspaces - CDC イテレータポジション</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .header-meta {
+      text-align: right;
+    }
+
+    .date-badge {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 8px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 153, 0, 0.05);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-title {
+      color: var(--aws-red);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .after-title {
+      color: var(--aws-green);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .before ul, .after ul {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 14px;
+    }
+
+    .before li, .after li {
+      margin-bottom: 6px;
+    }
+
+    .feature-cards {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .feature-card {
+      background: rgba(255, 153, 0, 0.05);
+      border-radius: 8px;
+      padding: 20px;
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .feature-card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .feature-card p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .usecase-scenario {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-bottom: 12px;
+    }
+
+    .usecase-effect {
+      font-size: 14px;
+      color: var(--aws-green);
+      font-weight: 600;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .merit-card {
+      background: rgba(29, 129, 2, 0.08);
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid rgba(29, 129, 2, 0.2);
+    }
+
+    .merit-card-title {
+      color: var(--aws-green);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .merit-card p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .warning-card {
+      background: rgba(209, 50, 18, 0.08);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(209, 50, 18, 0.2);
+    }
+
+    .warning-card-title {
+      color: var(--aws-red);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .warning-card p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .pricing-info {
+      background: rgba(0, 161, 201, 0.08);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      border: 1px solid rgba(0, 161, 201, 0.2);
+    }
+
+    .pricing-info p {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 28px;
+      }
+
+      .header {
+        flex-direction: column;
+      }
+
+      .header-meta {
+        text-align: left;
+      }
+
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .merit-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-diagram {
+        flex-direction: column;
+      }
+
+      .flow-arrow {
+        transform: rotate(90deg);
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>🗄️ Amazon Keyspaces - CDC イテレータポジション</h1>
+        <p style="margin: 8px 0 0; color: var(--aws-light-gray);">GetRecords API レスポンスにストリーム位置情報を追加し、アダプティブポーリングを実現</p>
+      </div>
+      <div class="header-meta">
+        <div class="date-badge">2026-06-03</div>
+        <div class="service-badge">Amazon Keyspaces</div>
+      </div>
+    </div>
+
+    <!-- Overview Section -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon Keyspaces (for Apache Cassandra) の Change Data Capture (CDC) ストリームにおいて、<span class="highlight">GetRecords API レスポンスにイテレータポジション情報</span>が追加された。コンシューマがストリームの末端に到達しているか、未処理レコードが残っているかを判定できるようになり、ポーリング頻度の最適化とコスト削減を実現する。</p>
+
+      <div class="before-after">
+        <div class="before">
+          <div class="before-title">❌ Before</div>
+          <ul>
+            <li>固定間隔でポーリングを実行 (新レコードの有無に関わらず)</li>
+            <li>不要なポーリングによるリソース浪費</li>
+            <li>固定間隔による不要な CDC 消費コスト</li>
+            <li>ストリーム内の現在位置を把握する手段がない</li>
+          </ul>
+        </div>
+        <div class="after">
+          <div class="after-title">✅ After</div>
+          <ul>
+            <li>iteratorDescription 構造体でストリーム位置を確認可能</li>
+            <li>AT_TIP / BEHIND_TIP でポーリング頻度を動的に調整</li>
+            <li>不要なポーリング削減で CDC 消費コスト低減</li>
+            <li>効率的なリソース利用とタイムリーなデータ処理を両立</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="section">
+      <h2>📊 期待される効果</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">~90%</div>
+          <div class="stat-label">アイドル時ポーリングコスト削減</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">0 秒</div>
+          <div class="stat-label">BEHIND_TIP 時の待機時間</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">2 値</div>
+          <div class="stat-label">AT_TIP / BEHIND_TIP</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>GetRecords API の呼び出し後、レスポンスに含まれる iteratorPosition の値に応じてポーリング頻度を動的に調整するフロー。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Keyspaces["🗄️ Amazon Keyspaces"]
+        Table["📋 テーブル"]
+        CDC["📡 CDC ストリーム"]
+    end
+
+    subgraph Consumer["⚙️ CDC コンシューマ"]
+        App["🔌 アプリケーション"]
+        Logic["🔀 ポーリングロジック"]
+    end
+
+    subgraph Downstream["📊 ダウンストリーム"]
+        Analytics["📈 分析基盤"]
+        Replication["🔄 レプリケーション"]
+        Event["⚡ イベント駆動"]
+    end
+
+    Table -->|行レベル変更| CDC
+    App -->|GetRecords| CDC
+    CDC -->|"レスポンス + iteratorPosition"| App
+    App --> Logic
+    Logic -->|"AT_TIP: ポーリング間隔を延長"| App
+    Logic -->|"BEHIND_TIP: 即座に再取得"| App
+    App --> Analytics
+    App --> Replication
+    App --> Event
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class Keyspaces cloud
+    class Table,CDC storage
+    class App,Logic compute
+    class Analytics,Replication,Event process
+    class Consumer,Downstream cloud
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="feature-cards">
+        <div class="feature-card">
+          <div class="feature-card-title">🆕 iteratorDescription 構造体の追加</div>
+          <p>GetRecords API レスポンスに新たに iteratorDescription オブジェクトが追加。ストリーム内でのコンシューマの現在位置を示す情報を提供し、既存の changeRecords や nextShardIterator と並列で返却される。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">📍 iteratorPosition フィールド</div>
+          <p><span class="highlight">AT_TIP</span>: ストリーム末端に到達、新しいレコードなし。<span class="highlight">BEHIND_TIP</span>: 未処理レコードが残っている可能性あり。この情報でポーリング戦略を動的に最適化。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-title">🔄 アダプティブポーリング</div>
+          <p>AT_TIP 時にはポーリング間隔を長くしてコスト削減。BEHIND_TIP 時には即座に次のレコードを取得してデータ処理の遅延を最小化。コストとレイテンシのバランスを自動的に最適化可能。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specifications -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <h3>GetRecords レスポンス構造</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>項目</th>
+              <th>詳細</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>新規フィールド</td>
+              <td><span class="highlight">iteratorDescription.iteratorPosition</span></td>
+            </tr>
+            <tr>
+              <td>データ型</td>
+              <td>String (Enum)</td>
+            </tr>
+            <tr>
+              <td>有効値</td>
+              <td>AT_TIP / BEHIND_TIP</td>
+            </tr>
+            <tr>
+              <td>返却位置</td>
+              <td>GetRecords レスポンスのトップレベル</td>
+            </tr>
+            <tr>
+              <td>必須/任意</td>
+              <td>レスポンスに常に含まれる</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>レスポンス例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">AT_TIP - ストリーム末端に到達</span>
+        </div>
+        <pre><code class="language-json">{
+    "changeRecords": [...],
+    "nextShardIterator": "AAAAAAAAAAGQBYshYDEe...",
+    "iteratorDescription": {
+        "iteratorPosition": "AT_TIP"
+    }
+}</code></pre>
+      </div>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">BEHIND_TIP - 未処理レコードあり</span>
+        </div>
+        <pre><code class="language-json">{
+    "changeRecords": [...],
+    "nextShardIterator": "AAAAAAAAAAHRe2Gc9I0...",
+    "iteratorDescription": {
+        "iteratorPosition": "BEHIND_TIP"
+    }
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Implementation Guide -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+      <h3>前提条件</h3>
+      <div class="card">
+        <div class="card-title">📝 必要な準備</div>
+        <ul style="margin: 0; padding-left: 20px; font-size: 14px;">
+          <li>Amazon Keyspaces テーブルで CDC が有効化されていること</li>
+          <li>CDC ストリームが作成済みであること</li>
+          <li>最新の AWS SDK を使用していること (iteratorDescription フィールドのサポートが必要)</li>
+        </ul>
+      </div>
+
+      <h3>ステップ 1: AWS SDK のアップデート</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">SDK アップデート</span>
+        </div>
+        <pre><code class="language-bash"># Python (boto3) の場合
+pip install --upgrade boto3 botocore
+
+# Node.js の場合
+npm install @aws-sdk/client-keyspaces-streams@latest</code></pre>
+      </div>
+
+      <h3>ステップ 2: アダプティブポーリングの実装</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">iteratorPosition に基づくポーリング間隔調整</span>
+        </div>
+        <pre><code class="language-python">import boto3
+import time
+
+client = boto3.client('keyspaces-streams')
+
+def adaptive_poll(shard_iterator):
+    """iteratorPosition に基づいてポーリング間隔を調整"""
+    base_interval = 1.0  # 秒
+    max_interval = 30.0  # 秒
+    current_interval = base_interval
+
+    while True:
+        response = client.get_records(
+            shardIterator=shard_iterator,
+            maxResults=100
+        )
+
+        # レコードの処理
+        for record in response.get('changeRecords', []):
+            process_record(record)
+
+        # イテレータポジションに基づいてポーリング間隔を調整
+        iterator_position = response['iteratorDescription']['iteratorPosition']
+
+        if iterator_position == 'AT_TIP':
+            # ストリーム末端に到達 - 間隔を延長
+            current_interval = min(current_interval * 2, max_interval)
+        elif iterator_position == 'BEHIND_TIP':
+            # 未処理レコードあり - 即座に再取得
+            current_interval = base_interval
+
+        shard_iterator = response['nextShardIterator']
+        time.sleep(current_interval)</code></pre>
+      </div>
+
+      <h3>ステップ 3: コスト最適化ポーリング戦略</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">コスト最適化されたポーリング戦略</span>
+        </div>
+        <pre><code class="language-python">def optimized_poll_strategy(shard_iterator):
+    """コスト最適化されたポーリング戦略"""
+    response = client.get_records(
+        shardIterator=shard_iterator,
+        maxResults=1000  # AT_TIP 時は大きなバッチサイズで確認
+    )
+
+    position = response['iteratorDescription']['iteratorPosition']
+
+    if position == 'AT_TIP':
+        # 新規レコードなし - 次回ポーリングまで待機
+        return {
+            'next_iterator': response['nextShardIterator'],
+            'wait_seconds': 30,
+            'records_processed': 0
+        }
+    else:
+        # BEHIND_TIP - 全レコードを取得するまでループ
+        return {
+            'next_iterator': response['nextShardIterator'],
+            'wait_seconds': 0,  # 即座に次のバッチを取得
+            'records_processed': len(response.get('changeRecords', []))
+        }</code></pre>
+      </div>
+    </div>
+
+    <!-- Adaptive Polling Flow -->
+    <div class="section">
+      <h2>🔀 アダプティブポーリングフロー</h2>
+      <div class="flow-diagram">
+        <div class="flow-step">📡 GetRecords<br/>API 呼び出し</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📍 iteratorPosition<br/>確認</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🔀 ポーリング<br/>間隔調整</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">⏱️ 次の<br/>ポーリング</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
+        <div class="card" style="border-left-color: var(--aws-teal);">
+          <div class="card-title" style="color: var(--aws-teal);">🔵 AT_TIP</div>
+          <p style="margin: 0; font-size: 14px;">ストリーム末端到達。ポーリング間隔を延長 (指数バックオフ: 1s → 2s → 4s → ... → 30s)</p>
+        </div>
+        <div class="card" style="border-left-color: var(--aws-green);">
+          <div class="card-title" style="color: var(--aws-green);">🟢 BEHIND_TIP</div>
+          <p style="margin: 0; font-size: 14px;">未処理レコードあり。即座に再取得 (ベース間隔 1s にリセット)</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <div class="merit-grid">
+        <div class="merit-card">
+          <div class="merit-card-title">💰 コスト削減</div>
+          <p>不要なポーリングリクエストを削減し、CDC 消費コストを直接的に低減</p>
+        </div>
+        <div class="merit-card">
+          <div class="merit-card-title">⚙️ 運用効率の向上</div>
+          <p>固定間隔のチューニングが不要に。運用負荷が軽減される</p>
+        </div>
+        <div class="merit-card">
+          <div class="merit-card-title">📈 スケーラビリティ</div>
+          <p>ワークロードの変動に自動適応。ピーク時もアイドル時も最適動作</p>
+        </div>
+        <div class="merit-card">
+          <div class="merit-card-title">⚡ レイテンシ最適化</div>
+          <p>BEHIND_TIP 時は即座に次のレコードを取得。データ処理のタイムリーさが向上</p>
+        </div>
+        <div class="merit-card">
+          <div class="merit-card-title">🌐 リソース効率</div>
+          <p>不要な API コールを削減し、ネットワーク帯域やコンピュートリソースを効率的に使用</p>
+        </div>
+        <div class="merit-card">
+          <div class="merit-card-title">🧩 実装の簡素化</div>
+          <p>ストリーム位置情報がレスポンスに含まれるため、外部での状態管理が不要</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ 制約事項・注意点</h2>
+      <div class="warning-card">
+        <div class="warning-card-title">🔄 SDK アップデート必須</div>
+        <p>最新の AWS SDK へのアップデートが必要。古い SDK では iteratorDescription フィールドが無視される可能性がある。</p>
+      </div>
+      <div class="warning-card">
+        <div class="warning-card-title">⏱️ AT_TIP の時点性</div>
+        <p>AT_TIP は「現時点で」末端であることを示すのみ。直後に新しいレコードが到着する可能性がある。</p>
+      </div>
+      <div class="warning-card">
+        <div class="warning-card-title">🛠️ 実装はアプリ側の責務</div>
+        <p>ポーリング間隔の最適化ロジックはアプリケーション側で実装する必要がある。</p>
+      </div>
+      <div class="warning-card">
+        <div class="warning-card-title">🚦 スロットリングに注意</div>
+        <p>BEHIND_TIP 時の連続取得はスロットリングに注意が必要。適切なバックオフ戦略を併用すること。</p>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+      <div class="usecase-card">
+        <div class="usecase-title">📈 リアルタイム分析パイプライン</div>
+        <div class="usecase-scenario">Keyspaces テーブルの変更を Amazon Kinesis Data Analytics や Amazon Redshift にリアルタイムで連携するパイプラインを運用。BEHIND_TIP 時はバッチ処理で効率的に大量レコードを処理し、AT_TIP 時は 30 秒待機してリソースを節約。</div>
+        <div class="usecase-effect">→ ピーク時は即座にデータ処理、アイドル時はポーリングコストを最大 90% 削減可能</div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-title">🔄 マルチリージョンレプリケーション</div>
+        <div class="usecase-scenario">複数リージョンにまたがる Keyspaces テーブル間で CDC を利用したカスタムレプリケーションを実装。BEHIND_TIP でレプリケーション遅延を検知してアラート送信、高速で追いつく。AT_TIP で遅延ゼロを確認。</div>
+        <div class="usecase-effect">→ レプリケーション遅延の検知と自動回復が可能。RPO の短縮に貢献</div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-title">⚡ イベント駆動マイクロサービス</div>
+        <div class="usecase-scenario">Keyspaces テーブルの変更をトリガーとして、下流のマイクロサービス群にイベントを配信。AT_TIP 時は 10 秒間隔、BEHIND_TIP 時は 100ms 間隔で高速処理。</div>
+        <div class="usecase-effect">→ イベント配信のレイテンシを最小化しながら、アイドル時のコストを大幅に削減</div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <div class="pricing-info">
+        <p><strong>CDC イテレータポジション機能自体に追加料金は発生しない。</strong></p>
+        <p>CDC ストリームの利用に関する既存の料金体系が適用される。</p>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>項目</th>
+              <th>詳細</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>CDC ストリーム読み取り</td>
+              <td>GetRecords API コール回数に基づく課金</td>
+            </tr>
+            <tr>
+              <td>データ転送</td>
+              <td>読み取ったデータ量に基づく課金</td>
+            </tr>
+            <tr>
+              <td>テーブルストレージ</td>
+              <td>CDC が有効なテーブルの追加ストレージ</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size: 14px; margin-top: 12px;">💡 この機能を活用してポーリング頻度を最適化することで、GetRecords の呼び出し回数を削減し、結果として CDC 消費コストを低減できる。</p>
+    </div>
+
+    <!-- Region Availability -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>Amazon Keyspaces CDC がサポートされている<span class="highlight">すべての AWS リージョン</span>で利用可能。</p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="card">
+          <div class="card-title">📡 Amazon Keyspaces CDC</div>
+          <p style="margin: 0; font-size: 14px;">テーブルの行レベル変更をストリームとしてキャプチャ。今回のアップデートの基盤機能。</p>
+        </div>
+        <div class="card">
+          <div class="card-title">🔄 Amazon DynamoDB Streams</div>
+          <p style="margin: 0; font-size: 14px;">DynamoDB における同様の変更データキャプチャ機能。類似のストリーム位置概念あり。</p>
+        </div>
+        <div class="card">
+          <div class="card-title">🌊 Amazon Kinesis Data Streams</div>
+          <p style="margin: 0; font-size: 14px;">ストリーミングデータの処理基盤。CDC ストリームのダウンストリーム先として利用可能。</p>
+        </div>
+        <div class="card">
+          <div class="card-title">⚡ AWS Lambda</div>
+          <p style="margin: 0; font-size: 14px;">イベント駆動型のサーバーレスコンピューティング。CDC イベントのトリガーとして活用可能。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul style="list-style: none; padding: 0; margin: 8px 0;">
+        <li style="margin-bottom: 4px;">- <a href="https://aws.amazon.com/about-aws/whats-new/2026/06/keyspaces-cdc-iterator-position/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li style="margin-bottom: 4px;">- <a href="https://docs.aws.amazon.com/keyspaces/latest/devguide/keyspaces-records-cdc.html" target="_blank" rel="noopener noreferrer">Amazon Keyspaces CDC ドキュメント</a></li>
+        <li style="margin-bottom: 4px;">- <a href="https://awsapichanges.com/archive/changes/250cdc-cassandra-streams.html" target="_blank" rel="noopener noreferrer">API Changes - GetRecords レスポンスに iteratorDescription を追加</a></li>
+        <li style="margin-bottom: 4px;">- <a href="https://aws.amazon.com/keyspaces/" target="_blank" rel="noopener noreferrer">Amazon Keyspaces 製品ページ</a></li>
+        <li style="margin-bottom: 4px;">- <a href="https://aws.amazon.com/keyspaces/pricing/" target="_blank" rel="noopener noreferrer">Amazon Keyspaces 料金</a></li>
+      </ul>
+      <p style="margin-top: 12px; color: rgba(213, 219, 219, 0.6);">Generated: 2026-06-03 | Amazon Keyspaces CDC Iterator Position Infographic</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
