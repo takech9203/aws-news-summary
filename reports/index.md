@@ -5,11 +5,16 @@
 
 ## 2026 年
 
+- [2026-06-04 - Amazon MQ - AWS European Sovereign Cloud での提供開始](2026/2026-06-04-amazon-mq-eur-sov-cloud.md)
+- [2026-06-04 - AWS Databases on Vercel - リージョン拡大](2026/2026-06-04-aws-databases-vercel-aws-regions.md)
+- [2026-06-04 - Amazon Cognito - マルチリージョンレプリケーション](2026/2026-06-04-amazon-cognito-multi-region.md)
+- [2026-06-04 - Amazon Bedrock - リデザインコンソール (OpenAI / Anthropic 互換 API 対応)](2026/2026-06-04-amazon-bedrock-redesigned-console-optimized-openai-anthropic-compatible-apis.md)
 - [2026-06-03 - AWS Config - 9 つの新しいリソースタイプのサポート追加](2026/2026-06-03-aws-config-new-resource-types.md)
 - [2026-06-03 - AWS IoT Device Management - Connectivity Status API への MQTT セッションデータ追加](2026/2026-06-03-aws-iot-device-management-mqtt.md)
 - [2026-06-03 - AWS IoT Core - 接続性と認証のトラブルシューティング用新規ログイベントタイプ](2026/2026-06-03-aws-iot-core-ping-auth-logs.md)
 - [2026-06-03 - Amazon Application Recovery Controller - Region Switch に Aurora スケーリングと Neptune グローバルデータベースフェイルオーバーを追加](2026/2026-06-03-region-switch-aurora-scaling-neptune-failover.md)
 - [2026-06-03 - Amazon SageMaker Unified Studio - ノートブックスケジューリング機能](2026/2026-06-03-amazon-sagemaker-unified-studio.md)
+- [2026-06-03 - Amazon Bedrock - OpenAI GPT-5.4 が AWS GovCloud (US-West) で一般提供開始](2026/2026-06-03-GPT54-available-in-aws-govcloud-us-west.md)
 - [2026-06-03 - Amazon ECS Managed Instances - AWS Trainium / AWS Inferentia サポート](2026/2026-06-03-amazon-ecs-managed-instances-neuron.md)
 - [2026-06-03 - Amazon RDS for Db2 - IBM Db2 v12.1 および Db2 Community Edition のサポート開始](2026/2026-06-03-amazon-rds-db2-v12-community-edition.md)
 - [2026-06-03 - Amazon SageMaker AI - マルチターン強化学習によるエージェントモデルカスタマイズ](2026/2026-06-03-multi-turn-reinforcement-learning-on-sagemaker-ai.md)
