@@ -5,9 +5,14 @@
 
 ## 2026 年
 
+- [2026-06-05 - AWS MCP Server - クロスアカウント・クロスロールアクセス](2026/2026-06-05-aws-mcp-server.md)
+- [2026-06-05 - Amazon ECS with AWS Fargate - 32vCPU コンピュート構成のサポート](2026/2026-06-05-amazon-ecs-fargate-32vcpu.md)
+- [2026-06-04 - AWS Deadline Cloud - サービスマネージドフリートのプラグイン同期](2026/2026-06-04-deadline-cloud-plugin-sync.md)
 - [2026-06-04 - Amazon MQ - AWS European Sovereign Cloud での提供開始](2026/2026-06-04-amazon-mq-eur-sov-cloud.md)
 - [2026-06-04 - AWS Databases on Vercel - リージョン拡大](2026/2026-06-04-aws-databases-vercel-aws-regions.md)
+- [2026-06-04 - Amazon EKS Capabilities - Amazon CloudWatch Vended Logs によるログ配信サポート](2026/2026-06-04-amazon-eks-capabilities-logging.md)
 - [2026-06-04 - Amazon Cognito - マルチリージョンレプリケーション](2026/2026-06-04-amazon-cognito-multi-region.md)
+- [2026-06-04 - Amazon SageMaker Data Agent - ビジネスコンテキスト統合](2026/2026-06-04-amazon-sagemaker-data-agent-bdc.md)
 - [2026-06-04 - Amazon Bedrock - リデザインコンソール (OpenAI / Anthropic 互換 API 対応)](2026/2026-06-04-amazon-bedrock-redesigned-console-optimized-openai-anthropic-compatible-apis.md)
 - [2026-06-03 - AWS Config - 9 つの新しいリソースタイプのサポート追加](2026/2026-06-03-aws-config-new-resource-types.md)
 - [2026-06-03 - AWS IoT Device Management - Connectivity Status API への MQTT セッションデータ追加](2026/2026-06-03-aws-iot-device-management-mqtt.md)
