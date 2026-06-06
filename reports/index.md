@@ -7,6 +7,8 @@
 
 - [2026-06-05 - AWS MCP Server - クロスアカウント・クロスロールアクセス](2026/2026-06-05-aws-mcp-server.md)
 - [2026-06-05 - Amazon ECS with AWS Fargate - 32vCPU コンピュート構成のサポート](2026/2026-06-05-amazon-ecs-fargate-32vcpu.md)
+- [2026-06-05 - Kiro - Transcript Export, Terminal Titles, and Persistent Model Preferences](2026/2026-06-05-kiro-changelog-2026-06-05.md)
+- [2026-06-05 - Amazon Bedrock AgentCore Runtime - インタラクティブシェル](2026/2026-06-05-amazon-bedrock-agentcore-runtime.md)
 - [2026-06-04 - AWS Deadline Cloud - サービスマネージドフリートのプラグイン同期](2026/2026-06-04-deadline-cloud-plugin-sync.md)
 - [2026-06-04 - Amazon MQ - AWS European Sovereign Cloud での提供開始](2026/2026-06-04-amazon-mq-eur-sov-cloud.md)
 - [2026-06-04 - AWS Databases on Vercel - リージョン拡大](2026/2026-06-04-aws-databases-vercel-aws-regions.md)
