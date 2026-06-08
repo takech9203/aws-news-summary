@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Cost Anomaly Detection - AI を活用したコスト調査機能</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+
+    .header-left {
+      flex: 1;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 8px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 8px;
+    }
+
+    .date-badge {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      background: rgba(255, 255, 255, 0.1);
+      padding: 6px 12px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box h3 {
+      color: var(--aws-red);
+      margin-top: 0;
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-box h3 {
+      color: var(--aws-green);
+      margin-top: 0;
+    }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .before-box li, .after-box li {
+      margin: 6px 0;
+      font-size: 14px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 12px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .feature-card h4 {
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+
+    .feature-card p {
+      color: var(--aws-light-gray);
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.25);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+
+    .usecase-card h4 {
+      color: var(--aws-orange);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+
+    .usecase-card p {
+      color: var(--aws-light-gray);
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .usecase-card .scenario {
+      font-style: italic;
+      margin-bottom: 8px;
+      color: var(--aws-light-gray);
+      opacity: 0.9;
+    }
+
+    .usecase-card .effect {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 153, 0, 0.2);
+      font-weight: 500;
+      color: var(--aws-green);
+    }
+
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+    }
+
+    tr:hover td {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    .pricing-free {
+      color: var(--aws-green);
+      font-weight: 600;
+    }
+
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon {
+      color: var(--aws-green);
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .cross-icon {
+      color: var(--aws-red);
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .warning-box {
+      background: rgba(255, 153, 0, 0.1);
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+
+    .warning-box h4 {
+      color: var(--aws-orange);
+      margin: 0 0 8px 0;
+    }
+
+    .region-badge {
+      display: inline-block;
+      background: rgba(0, 161, 201, 0.15);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      color: var(--aws-teal);
+      font-size: 13px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      margin: 4px;
+    }
+
+    .step-list {
+      counter-reset: step-counter;
+      list-style: none;
+      padding: 0;
+    }
+
+    .step-list li {
+      counter-increment: step-counter;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin: 12px 0;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+    }
+
+    .step-list li::before {
+      content: counter(step-counter);
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .related-services {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .service-tag {
+      background: rgba(140, 79, 255, 0.1);
+      border: 1px solid rgba(140, 79, 255, 0.3);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      font-size: 13px;
+    }
+
+    .service-tag .service-name {
+      color: var(--aws-white);
+      font-weight: 600;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .service-tag .service-desc {
+      color: var(--aws-light-gray);
+      font-size: 12px;
+    }
+
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+      text-decoration: underline;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    @media (max-width: 768px) {
+      h1 { font-size: 24px; }
+      .before-after { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .header { flex-direction: column; gap: 12px; }
+      .flow-diagram { flex-direction: column; }
+      .flow-arrow { transform: rotate(90deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="badge">AWS Cost Anomaly Detection</span>
+        <h1>🤖 AI を活用したコスト調査機能</h1>
+        <p class="subtitle">Amazon Q による根本原因の自動分析 - 数時間の調査を数分に短縮</p>
+      </div>
+      <div class="date-badge">📅 2026-06-08</div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>AWS Cost Anomaly Detection に <span class="highlight">Amazon Q</span> を活用した AI コスト調査機能が追加された。検出されたコスト異常の根本原因を AI が自動分析し、自然言語で分かりやすい説明を<span class="highlight">数分以内</span>に提供する。FinOps 担当者やエンジニアリングチームがアラートから具体的なアクションへ迅速に移行できるようになった。</p>
+      <p>AWS Organizations の CloudTrail 組織証跡を設定している場合は、全メンバーアカウントにまたがる調査が自動的に実行される。</p>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">数時間 → 数分</div>
+          <div class="stat-label">根本原因分析の所要時間</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">無料</div>
+          <div class="stat-label">追加料金なし</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">全リージョン</div>
+          <div class="stat-label">全商用 AWS リージョン対応</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Before/After -->
+    <div class="section">
+      <h2>🔄 Before / After</h2>
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before</h3>
+          <ul>
+            <li>CloudTrail イベントとコストデータの手動相関分析が必要 (数時間)</li>
+            <li>使用量起因か料金変更起因かの判別に複数コンソール画面を行き来</li>
+            <li>マルチアカウント環境では各アカウントの CloudTrail ログを個別確認</li>
+            <li>API コールや IAM プリンシパルへの帰属には専門知識が必要</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ After</h3>
+          <ul>
+            <li>Amazon Q が根本原因を自動分析し、自然言語で数分以内に説明</li>
+            <li>使用量起因か料金起因かを自動判別</li>
+            <li>組織証跡を活用したクロスアカウント調査が全メンバーアカウントで自動実行</li>
+            <li>フォローアップ質問による対話的な深掘り分析が可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>Amazon Q がコスト異常検出のアラートを受け取り、コストデータ・CloudTrail・CloudWatch Logs を相関分析して根本原因を特定し、自然言語で結果を提供する。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph User["👤 FinOps チーム"]
+        Console["🖥️ AWS Billing Console"]
+    end
+
+    subgraph Detection["🔍 異常検出"]
+        CAD["⚠️ Cost Anomaly Detection"]
+    end
+
+    subgraph Investigation["🤖 AI コスト調査"]
+        AQ["🧠 Amazon Q"]
+        Analysis["📊 根本原因分析"]
+    end
+
+    subgraph DataSources["📁 データソース"]
+        direction LR
+        CostData["💰 コストデータ"]
+        CT["📋 CloudTrail"]
+        CW["📝 CloudWatch Logs"]
+        CostData ~~~ CT ~~~ CW
+    end
+
+    subgraph Output["📄 調査結果"]
+        direction LR
+        Cause["🔎 原因判定<br/>使用量/料金"]
+        Attribution["👤 帰属分析<br/>API/IAM"]
+        Followup["💬 フォローアップ<br/>対話"]
+        Cause ~~~ Attribution ~~~ Followup
+    end
+
+    Console --> CAD
+    CAD -->|異常検出| AQ
+    AQ --> Analysis
+    Analysis --> CostData
+    Analysis --> CT
+    Analysis --> CW
+    AQ --> Output
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef detect fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#E65100
+    classDef ai fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#4A148C
+    classDef data fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#1B5E20
+    classDef output fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+
+    class Console user
+    class CAD detect
+    class AQ,Analysis ai
+    class CostData,CT,CW data
+    class Cause,Attribution,Followup output
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <h4>📊 コスト変動の種別判定</h4>
+        <p>使用量起因 (usage-driven) か料金起因 (rate-driven) かを自動判別。API コールの増加やリソースのスケールアップ、料金プランの変更や Savings Plans の期限切れなど、判定結果に基づいて適切な分析アプローチを自動選択する。</p>
+      </div>
+
+      <div class="feature-card">
+        <h4>🎯 貢献要因の特定</h4>
+        <p>異常に寄与しているサービス、アカウント、リージョンを自動識別。各要因のコスト影響度を定量的に提示し、マルチアカウント環境でも組織全体を横断的に分析する。</p>
+      </div>
+
+      <div class="feature-card">
+        <h4>🔗 CloudTrail 相関分析</h4>
+        <p>使用量起因の変動に対して CloudTrail イベントと自動相関。特定の API コールへの帰属を実現し、コスト変動を引き起こした IAM プリンシパルを特定する。</p>
+      </div>
+
+      <div class="feature-card">
+        <h4>💬 対話型フォローアップ</h4>
+        <p>調査結果に対してフォローアップ質問を投げかけることが可能。パターンの探索や特定リソースへの深掘りに対応し、自然言語でのやり取りにより技術的背景がなくても利用可能。</p>
+      </div>
+    </div>
+
+    <!-- Technical Specifications -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>分析の仕組み</h3>
+      <div class="table-wrapper">
+        <table>
+          <tr><th>項目</th><th>詳細</th></tr>
+          <tr><td>分析エンジン</td><td><span class="highlight">Amazon Q</span></td></tr>
+          <tr><td>対応する異常タイプ</td><td>使用量起因、料金起因</td></tr>
+          <tr><td>データソース</td><td>コストデータ、CloudTrail、CloudWatch Logs</td></tr>
+          <tr><td>クロスアカウント対応</td><td>組織証跡で自動対応</td></tr>
+          <tr><td>応答時間</td><td>数分以内</td></tr>
+          <tr><td>対話機能</td><td>フォローアップ質問対応</td></tr>
+        </table>
+      </div>
+
+      <h3>前提条件</h3>
+      <div class="table-wrapper">
+        <table>
+          <tr><th>条件</th><th>詳細</th></tr>
+          <tr><td>Cost Anomaly Detection</td><td>有効化済みであること</td></tr>
+          <tr><td>CloudTrail</td><td>使用量起因分析には有効な証跡が必要</td></tr>
+          <tr><td>組織証跡</td><td>クロスアカウント分析には Organization Trail が必要</td></tr>
+          <tr><td>CloudWatch Logs</td><td>組織証跡のログ配信先として設定</td></tr>
+        </table>
+      </div>
+
+      <h3>API 変更履歴</h3>
+      <div class="table-wrapper">
+        <table>
+          <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+          <tr><td>2026/06/03</td><td>AWS Cost Explorer Service</td><td>3 updated methods - Savings Plans 購入分析にターゲットカバレッジベースの分析タイプを追加</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Setup Steps -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>AWS Cost Anomaly Detection が有効化されていること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>AWS CloudTrail の証跡が有効であること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>クロスアカウント調査には AWS Organizations の組織証跡を CloudWatch Logs に配信する設定が必要</span></div>
+
+      <h3>手順</h3>
+      <ol class="step-list">
+        <li><strong>Cost Anomaly Detection でアラートを確認</strong><br>AWS Billing and Cost Management コンソールにアクセスし、Cost Anomaly Detection の画面で検出された異常を確認する。</li>
+        <li><strong>Amazon Q による調査を開始</strong><br>検出された異常に対して「Investigate with Amazon Q」を選択する。Amazon Q がコストデータと CloudTrail イベントの相関分析を自動的に開始する。</li>
+        <li><strong>調査結果の確認とフォローアップ</strong><br>数分以内に自然言語による根本原因の説明が表示される。必要に応じてフォローアップ質問を行い、詳細なパターンや特定リソースについて深掘りする。</li>
+      </ol>
+    </div>
+
+    <!-- Merits -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+
+      <h3>ビジネス面</h3>
+      <div class="feature-card">
+        <h4>⏱️ 調査時間の大幅短縮</h4>
+        <p>数時間かかっていた根本原因分析が数分に短縮され、迅速な意思決定が可能に。</p>
+      </div>
+      <div class="feature-card">
+        <h4>💰 追加コスト不要</h4>
+        <p>全商用リージョンで追加料金なしで利用可能。</p>
+      </div>
+      <div class="feature-card">
+        <h4>🚀 FinOps の効率化</h4>
+        <p>アラートからアクションまでの時間を削減し、コスト最適化サイクルを加速。</p>
+      </div>
+
+      <h3>技術面</h3>
+      <div class="feature-card">
+        <h4>🔄 自動クロスアカウント分析</h4>
+        <p>組織証跡を活用した全メンバーアカウントの横断調査が自動化。</p>
+      </div>
+      <div class="feature-card">
+        <h4>🔍 API コール/IAM プリンシパルの特定</h4>
+        <p>コスト変動を具体的な操作者・操作に帰属可能。</p>
+      </div>
+      <div class="feature-card">
+        <h4>💬 対話型インターフェース</h4>
+        <p>フォローアップ質問により、追加のスクリプト作成や手動分析が不要。</p>
+      </div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>使用量起因の分析には有効な CloudTrail 証跡が必要</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>クロスアカウント調査には組織証跡の CloudWatch Logs への配信設定が必須</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>料金起因の変動に対しては CloudTrail 相関分析は実施されない</span></div>
+
+      <h3>考慮すべき点</h3>
+      <div class="warning-box">
+        <h4>💡 注意事項</h4>
+        <ul>
+          <li>クロスアカウント調査時に CloudWatch Logs Insights のスキャン料金が発生する可能性がある</li>
+          <li>分析精度は CloudTrail ログの保持期間と配信設定に依存する</li>
+          <li>Amazon Q との対話は英語が主要言語として想定される</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+
+      <div class="usecase-card">
+        <h4>📈 ユースケース 1: 予期しない EC2 コスト増加の調査</h4>
+        <p class="scenario">月次コストレポートで EC2 の費用が前月比 40% 増加したアラートを受信。</p>
+        <p>Amazon Q の分析結果: 原因は usage-driven。EC2 (us-east-1) で auto-scaling-role による RunInstances API コール増加が検出され、Auto Scaling グループの設定変更による最大インスタンス数の増加が原因と特定。</p>
+        <p class="effect">✅ 効果: 従来は CloudTrail ログを手動検索して特定に数時間を要していた原因が、数分で特定される。</p>
+      </div>
+
+      <div class="usecase-card">
+        <h4>🏢 ユースケース 2: マルチアカウント環境での異常コスト特定</h4>
+        <p class="scenario">組織の合計コストが急増し、どのメンバーアカウントが原因か不明な状態。</p>
+        <p>Amazon Q の分析結果: 開発チーム A のアカウントで新しい IAM ロールによる Amazon Bedrock InvokeModel API の大量呼び出しを検出。6 月 3 日 14:00 UTC に開始、デプロイメントパイプラインの実行と一致。</p>
+        <p class="effect">✅ 効果: 組織全体の可視性を維持しながら、具体的なアカウント・ユーザー・タイミングまで迅速に特定できる。</p>
+      </div>
+
+      <div class="usecase-card">
+        <h4>💳 ユースケース 3: 料金変更起因のコスト増加調査</h4>
+        <p class="scenario">S3 のコストが増加したが、使用パターンに変化がない。</p>
+        <p>Amazon Q の分析結果: 原因は rate-driven。Savings Plans の期限切れによりオンデマンド料金が適用。影響リージョン: ap-northeast-1。Savings Plans の再購入または新規購入を推奨。</p>
+        <p class="effect">✅ 効果: 料金起因と使用量起因を即座に判別でき、適切な対応策を迅速に決定できる。</p>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>AI を活用したコスト調査機能自体は<span class="highlight">追加料金なし</span>で利用可能。</p>
+
+      <div class="table-wrapper">
+        <table>
+          <tr><th>ケース</th><th>料金</th></tr>
+          <tr><td>AI コスト調査機能の利用</td><td class="pricing-free">無料</td></tr>
+          <tr><td>クロスアカウント調査 (組織証跡 + CloudWatch Logs)</td><td>CloudWatch Logs Insights の標準料金 (スキャンデータ量に基づく)</td></tr>
+        </table>
+      </div>
+
+      <div class="warning-box">
+        <h4>📝 参考料金</h4>
+        <p>CloudWatch Logs Insights: スキャンされたデータ 1 GB あたり $0.0076 (東京リージョン)</p>
+      </div>
+    </div>
+
+    <!-- Region -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p><span class="region-badge">全ての商用 AWS リージョンで利用可能</span></p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div class="related-services">
+        <div class="service-tag">
+          <span class="service-name">AWS Cost Anomaly Detection</span>
+          <span class="service-desc">コスト異常の自動検出基盤</span>
+        </div>
+        <div class="service-tag">
+          <span class="service-name">Amazon Q</span>
+          <span class="service-desc">AI 分析・自然言語対話エンジン</span>
+        </div>
+        <div class="service-tag">
+          <span class="service-name">AWS CloudTrail</span>
+          <span class="service-desc">API コール記録・IAM 追跡</span>
+        </div>
+        <div class="service-tag">
+          <span class="service-name">CloudWatch Logs Insights</span>
+          <span class="service-desc">クロスアカウントログクエリ</span>
+        </div>
+        <div class="service-tag">
+          <span class="service-name">AWS Organizations</span>
+          <span class="service-desc">マルチアカウント一括調査基盤</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>AWS Cost Anomaly Detection の AI コスト調査機能は、コスト異常の根本原因分析を<span class="highlight">数時間から数分に短縮</span>する画期的なアップデートである。追加料金なしで全商用リージョンから利用可能であり、特にマルチアカウント環境を運用する組織にとって FinOps ワークフローの大幅な効率化が期待できる。</p>
+      <p>Cost Anomaly Detection を既に利用している組織は、<strong>CloudTrail 組織証跡の設定を確認し、本機能を活用したコスト調査プロセスの迅速化を検討すべき</strong>である。</p>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul style="list-style: none; padding: 0; margin: 8px 0;">
+        <li style="margin: 4px 0;">→ <a href="https://aws.amazon.com/about-aws/whats-new/2026/06/aws-ai-powered-cost-investigations/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li style="margin: 4px 0;">→ <a href="https://docs.aws.amazon.com/cost-management/latest/userguide/ce-anomaly-investigation.html" target="_blank" rel="noopener noreferrer">ドキュメント - Investigating anomaly root causes with Amazon Q</a></li>
+        <li style="margin: 4px 0;">→ <a href="https://aws.amazon.com/aws-cost-management/aws-cost-anomaly-detection/" target="_blank" rel="noopener noreferrer">AWS Cost Anomaly Detection</a></li>
+        <li style="margin: 4px 0;">→ <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer">料金ページ - CloudWatch</a></li>
+      </ul>
+      <p style="margin-top: 12px; opacity: 0.7;">Generated: 2026-06-08 | AWS News Summary Infographic</p>
+    </footer>
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+</body>
+</html>

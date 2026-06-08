@@ -5,6 +5,17 @@
 
 ## 2026 年
 
+- [2026-06-08 - Amazon MSK Express Brokers - Kafka Streams 自動トピック作成サポート](2026/2026-06-08-aws-msk-express-topic-support-kstreams.md)
+- [2026-06-08 - Amazon RDS for SQL Server - AWS Transform での移行コスト評価機能](2026/2026-06-08-amazon-rds-sql-server-cost-assessment-aws-transform.md)
+- [2026-06-08 - Amazon Aurora DSQL - JSONB データ型サポート (圧縮対応)](2026/2026-06-08-amazon-aurora-dsql-supports-jsonb.md)
+- [2026-06-08 - AWS Savings Plans Purchase Analyzer - ターゲットカバレッジ分析](2026/2026-06-08-aws-savings-plans-coverage.md)
+- [2026-06-08 - Amazon Redshift - 手動スナップショットのインクリメンタル課金モデル](2026/2026-06-08-amazon-redshift-incremental-manual-snapshots.md)
+- [2026-06-08 - Amazon RDS for PostgreSQL - PostgreSQL 19 Beta 1 プレビュー提供開始](2026/2026-06-08-postgresql-19-beta-1-amazon-rds-database-preview-environment.md)
+- [2026-06-08 - Amazon DocumentDB - エンジンマイナーバージョン 5.0.1 のサポート開始](2026/2026-06-08-amazon-documentdb-engine-minor-version-5-0-1.md)
+- [2026-06-08 - AWS Cost Anomaly Detection - AI を活用したコスト調査機能](2026/2026-06-08-aws-ai-powered-cost-investigations.md)
+- [2026-06-08 - Amazon Connect - AI エージェントトレース詳細 (セルフサービス音声対話向け)](2026/2026-06-08-amazon-connect-ai-agent-traces.md)
+- [2026-06-08 - AWS Transform MGN - AWS Application Migration Service のリブランド](2026/2026-06-08-aws-transform-mgn-rebrand.md)
+- [2026-06-08 - AWS Compute Optimizer - 6 つの追加リソースタイプに対するアイドルリソース推奨の提供開始](2026/2026-06-08-aws-compute-optimizer-six-new-idle.md)
 - [2026-06-05 - AWS MCP Server - クロスアカウント・クロスロールアクセス](2026/2026-06-05-aws-mcp-server.md)
 - [2026-06-05 - Amazon ECS with AWS Fargate - 32vCPU コンピュート構成のサポート](2026/2026-06-05-amazon-ecs-fargate-32vcpu.md)
 - [2026-06-05 - Kiro - Transcript Export, Terminal Titles, and Persistent Model Preferences](2026/2026-06-05-kiro-changelog-2026-06-05.md)

@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Redshift - 手動スナップショットのインクリメンタル課金モデル</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .header-meta {
+      text-align: right;
+    }
+
+    .service-badge {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 8px;
+    }
+
+    .date {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin-bottom: 12px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .feature-card {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+      border-left: 4px solid var(--aws-orange);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .feature-card h4 {
+      color: var(--aws-white);
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+    }
+
+    .feature-card p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 600px) {
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box h4 {
+      color: var(--aws-red);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .after-box h4 {
+      color: var(--aws-green);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li {
+      margin-bottom: 6px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 700px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.2);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+    }
+
+    .usecase-card h4 {
+      color: var(--aws-orange);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .usecase-card p {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+    }
+
+    .usecase-card .effect {
+      background: rgba(29, 129, 2, 0.1);
+      border-left: 3px solid var(--aws-green);
+      padding: 8px 12px;
+      margin-top: 12px;
+      border-radius: 0 4px 4px 0;
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin: 16px 0;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 2px solid rgba(255, 153, 0, 0.3);
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--aws-light-gray);
+    }
+
+    tr:hover td {
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .check-icon {
+      color: var(--aws-green);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .cross-icon {
+      color: var(--aws-red);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    .limitations-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .limitations-list li {
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .limitations-list li:last-child {
+      border-bottom: none;
+    }
+
+    .related-services {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .related-service-item {
+      background: rgba(255, 153, 0, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .related-service-item strong {
+      color: var(--aws-white);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    footer a:hover {
+      color: var(--aws-smile-orange);
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>📸 Amazon Redshift<br>手動スナップショットのインクリメンタル課金</h1>
+      </div>
+      <div class="header-meta">
+        <div class="service-badge">Amazon Redshift</div>
+        <div class="date">2026-06-08</div>
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>Amazon Redshift は、<span class="highlight">Redshift Serverless</span> および <span class="highlight">Redshift RG インスタンス</span>における手動スナップショットの課金モデルを刷新した。複数のスナップショット間で共有されるデータブロックは一度だけ課金される「インクリメンタル課金」方式に変更され、追加の操作なしにストレージコストの削減を享受できる。</p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h4>❌ Before</h4>
+          <ul>
+            <li>各スナップショットが合計サイズで個別に課金</li>
+            <li>重複データブロックが二重、三重に課金</li>
+            <li>コスト抑制のためスナップショット頻度を制限</li>
+            <li>柔軟なスナップショット戦略が取りづらい</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h4>✅ After</h4>
+          <ul>
+            <li>共有される重複データブロックは一度だけ課金</li>
+            <li>複数スナップショット保持コストが大幅削減</li>
+            <li>頻繁な取得でも比例的コスト増加なし</li>
+            <li>既存・新規スナップショットに自動適用</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="section">
+      <h2>📊 コスト削減効果</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">76%</div>
+          <div class="stat-label">コスト削減率<br>100GB x 5 スナップショット<br>日次変更率 5% の場合</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">88%</div>
+          <div class="stat-label">コスト削減率<br>1TB x 10 スナップショット<br>日次変更率 2% の場合</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">95%</div>
+          <div class="stat-label">コスト削減率<br>500GB x 24 スナップショット<br>時間変更率 0.5% の場合</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>従来は各スナップショットの合計サイズがそのまま課金対象だったが、新モデルではスナップショット間で重複するデータブロックが重複排除され、ユニークなデータブロックのみが課金される。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart LR
+    subgraph Before["&#10060; 従来の課金モデル"]
+        direction TB
+        S1B["&#128248; Snapshot A&lt;br/&gt;100GB"]
+        S2B["&#128248; Snapshot B&lt;br/&gt;100GB"]
+        S3B["&#128248; Snapshot C&lt;br/&gt;100GB"]
+        BillB["&#128176; 課金: 300GB"]
+    end
+
+    subgraph After["&#9989; 新しいインクリメンタル課金"]
+        direction TB
+        S1A["&#128248; Snapshot A&lt;br/&gt;100GB"]
+        S2A["&#128248; Snapshot B&lt;br/&gt;+10GB 差分"]
+        S3A["&#128248; Snapshot C&lt;br/&gt;+5GB 差分"]
+        BillA["&#128176; 課金: 115GB&lt;br/&gt;ユニークブロックのみ"]
+    end
+
+    Before -.->|"課金方式の変更"| After
+
+    classDef before fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#B71C1C
+    classDef after fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#1B5E20
+    classDef bill fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#E65100
+    classDef billGood fill:#E8F5E9,stroke:#4CAF50,stroke-width:2px,color:#1B5E20
+
+    class S1B,S2B,S3B before
+    class S1A,S2A,S3A after
+    class BillB bill
+    class BillA billGood
+        </pre>
+      </div>
+    </div>
+
+    <!-- Key Features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <h4>🔄 データブロックレベルの重複排除課金</h4>
+        <p>複数の手動スナップショット間で同一のデータブロックは一度だけ課金。スナップショットの増分データ (変更されたブロック) のみが追加課金の対象となり、ブロックレベルでの重複排除により最大限のコスト効率を実現。</p>
+      </div>
+
+      <div class="feature-card">
+        <h4>🔧 既存スナップショットへの自動適用</h4>
+        <p>新規作成のスナップショットだけでなく、既存の手動スナップショットにも自動適用。ユーザー側でのオプトインや設定変更は不要で、即座にコスト削減効果が反映される。</p>
+      </div>
+
+      <div class="feature-card">
+        <h4>☁️ Serverless と RG インスタンスの両方に対応</h4>
+        <p>Amazon Redshift Serverless および Redshift RG (Graviton ベース) インスタンスの手動スナップショットに適用。両方のデプロイメントモデルで同一の課金ロジックが使用される。</p>
+      </div>
+    </div>
+
+    <!-- Technical Specs -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>課金モデルの比較</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>従来モデル</th>
+            <th>新モデル</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>課金単位</td>
+            <td>スナップショットごとの合計サイズ</td>
+            <td>全体のユニークデータブロック</td>
+          </tr>
+          <tr>
+            <td>重複データの扱い</td>
+            <td>各スナップショットで個別に課金</td>
+            <td>一度だけ課金</td>
+          </tr>
+          <tr>
+            <td>対象サービス</td>
+            <td>-</td>
+            <td>Redshift Serverless / RG インスタンス</td>
+          </tr>
+          <tr>
+            <td>適用方法</td>
+            <td>-</td>
+            <td>自動 (操作不要)</td>
+          </tr>
+          <tr>
+            <td>適用範囲</td>
+            <td>-</td>
+            <td>既存 + 新規スナップショット</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>スナップショットストレージ料金</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>リージョン</th>
+            <th>料金</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>US East (Ohio)</td>
+            <td>$0.023/GB-月</td>
+          </tr>
+          <tr>
+            <td>US East (N. Virginia)</td>
+            <td>$0.024/GB-月</td>
+          </tr>
+          <tr>
+            <td>その他のリージョン</td>
+            <td>リージョンにより異なる</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>対象外のインスタンスタイプ</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>インスタンスタイプ</th>
+            <th>スナップショット課金方式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>RA3</td>
+            <td>標準 S3 料金でバックアップストレージとして課金</td>
+          </tr>
+          <tr>
+            <td>DC/DS (旧世代)</td>
+            <td>プロビジョニングストレージ超過分を標準 S3 料金で課金</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Configuration -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+      <p>新しい課金モデルは自動適用されるため、追加の設定は不要。以下のコマンドで現在のスナップショット使用状況とコスト効果を確認できる。</p>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Serverless スナップショット一覧の確認</span>
+        </div>
+        <pre><code class="language-bash"># Redshift Serverless のスナップショット一覧を確認
+aws redshift-serverless list-snapshots \
+  --namespace-name my-namespace
+
+# Provisioned クラスター (RG) のスナップショット一覧を確認
+aws redshift describe-cluster-snapshots \
+  --cluster-identifier my-cluster \
+  --snapshot-type manual</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">手動スナップショットの作成</span>
+        </div>
+        <pre><code class="language-bash"># Serverless の手動スナップショットを作成
+aws redshift-serverless create-snapshot \
+  --namespace-name my-namespace \
+  --snapshot-name my-manual-snapshot-$(date +%Y%m%d)</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">コスト効果の確認</span>
+        </div>
+        <pre><code class="language-bash"># AWS Cost Explorer でスナップショットストレージコストを確認
+aws ce get-cost-and-usage \
+  --time-period Start=2026-06-01,End=2026-06-30 \
+  --granularity MONTHLY \
+  --metrics "UnblendedCost" \
+  --filter '{"Dimensions":{"Key":"SERVICE","Values":["Amazon Redshift"]}}'</code></pre>
+      </div>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+
+      <h3>ビジネス面</h3>
+      <div class="check-item">
+        <span class="check-icon">✓</span>
+        <span><strong>ストレージコスト削減</strong>: 複数の手動スナップショットを保持する場合、重複データの課金が排除されるため大幅なコスト削減</span>
+      </div>
+      <div class="check-item">
+        <span class="check-icon">✓</span>
+        <span><strong>RPO の改善</strong>: コスト増加を気にせずより頻繁にスナップショットを取得でき、データ損失リスクを最小化</span>
+      </div>
+      <div class="check-item">
+        <span class="check-icon">✓</span>
+        <span><strong>運用の柔軟性向上</strong>: ディザスタリカバリ、テスト、長期保存など複数の目的で手動スナップショットを活用しやすくなる</span>
+      </div>
+
+      <h3>技術面</h3>
+      <div class="check-item">
+        <span class="check-icon">✓</span>
+        <span><strong>ゼロオペレーション</strong>: 既存スナップショットに自動適用。移行作業やコード変更が不要</span>
+      </div>
+      <div class="check-item">
+        <span class="check-icon">✓</span>
+        <span><strong>ブロックレベルの効率化</strong>: データブロック単位での重複排除により、ストレージ利用効率が最大化</span>
+      </div>
+      <div class="check-item">
+        <span class="check-icon">✓</span>
+        <span><strong>柔軟なバックアップ戦略</strong>: 時間帯別、日次、週次など複数の保持ポリシーを組み合わせたスナップショット戦略が低コストで実現可能</span>
+      </div>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ 制限事項・注意点</h2>
+      <ul class="limitations-list">
+        <li><span class="cross-icon">✗</span><span>RA3 インスタンスや旧世代 (DC/DS) のスナップショットには適用されない</span></li>
+        <li><span class="cross-icon">✗</span><span>自動スナップショットではなく手動スナップショットのみが対象</span></li>
+        <li><span class="cross-icon">✗</span><span>コスト削減効果はスナップショット間のデータ変更量に依存するため、変更量が多い場合は効果が限定的</span></li>
+        <li><span class="cross-icon">⚠</span><span>スナップショット間のデータ変更率が高いワークロードでは、コスト削減効果が小さくなる可能性がある</span></li>
+        <li><span class="cross-icon">⚠</span><span>Cost Explorer でのコスト表示が従来と異なるため、コスト分析の基準を見直す必要がある場合がある</span></li>
+        <li><span class="cross-icon">⚠</span><span>RA3 インスタンスを使用している場合は本アップデートの恩恵を受けられないため、RG への移行を検討する際の考慮要素となる</span></li>
+      </ul>
+    </div>
+
+    <!-- Use Cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase-card">
+        <h4>🏦 ユースケース 1: ディザスタリカバリの強化</h4>
+        <p>金融機関がコンプライアンス要件に基づき、1 時間ごとの手動スナップショットを保持する必要がある。従来は 24 スナップショット/日 x 全データサイズで課金されていた。</p>
+        <div class="effect">
+          <strong>効果:</strong> 日次変更率が 5% のワークロードの場合、従来の 24 倍課金から約 1.2 倍程度の課金に削減。RPO を 24 時間から 1 時間に短縮しつつコストを大幅に抑制。
+        </div>
+      </div>
+
+      <div class="usecase-card">
+        <h4>🧪 ユースケース 2: テスト環境の効率的な管理</h4>
+        <p>開発チームが本番データのスナップショットを複数保持し、各機能ブランチのテスト用にリストアしている。</p>
+        <div class="effect">
+          <strong>効果:</strong> 複数のテスト用スナップショットが実質的に差分のみの課金になるため、チームメンバー全員が独自のテスト環境を持てるようになる。
+        </div>
+      </div>
+
+      <div class="usecase-card">
+        <h4>📦 ユースケース 3: 長期保存とコンプライアンス対応</h4>
+        <p>監査要件により月次のデータスナップショットを 7 年間保持する必要がある組織。</p>
+        <div class="effect">
+          <strong>効果:</strong> 84 か月分のスナップショットを保持する場合、テーブル構造やマスターデータなど変更の少ないデータブロックが重複排除されるため、従来比で大幅なコスト削減が可能。
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing Examples -->
+    <div class="section">
+      <h2>💰 料金比較</h2>
+      <p>手動スナップショットのストレージ料金は、スナップショット全体で使用されるユニークデータブロックの合計サイズに基づいて計算される。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>シナリオ</th>
+            <th>従来の課金</th>
+            <th>新モデルの課金</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>100GB x 5 スナップショット<br>(日次変更率 5%)</td>
+            <td>$11.50/月<br>(500GB x $0.023)</td>
+            <td>$2.76/月<br>(120GB x $0.023)</td>
+          </tr>
+          <tr>
+            <td>1TB x 10 スナップショット<br>(日次変更率 2%)</td>
+            <td>$235.52/月<br>(10TB x $0.023)</td>
+            <td>$27.85/月<br>(約 1.18TB x $0.023)</td>
+          </tr>
+          <tr>
+            <td>500GB x 24 スナップショット<br>(時間変更率 0.5%)</td>
+            <td>$276.48/月<br>(12TB x $0.023)</td>
+            <td>$14.95/月<br>(約 650GB x $0.023)</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="font-size: 13px; color: rgba(213, 219, 219, 0.7);">※ US East (Ohio) リージョン ($0.023/GB-月) での概算。実際のコストはデータ変更パターンにより変動する。</p>
+    </div>
+
+    <!-- Region Availability -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>Amazon Redshift Serverless および Redshift RG インスタンスが利用可能な<span class="highlight">すべての AWS 商用リージョン</span>および <span class="highlight">AWS GovCloud (US) リージョン</span>で利用可能。</p>
+    </div>
+
+    <!-- Related Services -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div class="related-services">
+        <div class="related-service-item">
+          <strong>☁️ Redshift Serverless</strong>
+          サーバーレスデプロイメント<br>本アップデートの直接対象
+        </div>
+        <div class="related-service-item">
+          <strong>⚙️ Redshift RG</strong>
+          Graviton ベースインスタンス<br>本アップデートの直接対象
+        </div>
+        <div class="related-service-item">
+          <strong>🗄️ AWS Backup</strong>
+          バックアップライフサイクル管理
+        </div>
+        <div class="related-service-item">
+          <strong>📅 Amazon EventBridge</strong>
+          スナップショット作成の<br>自動化スケジューリング
+        </div>
+        <div class="related-service-item">
+          <strong>📊 AWS Cost Explorer</strong>
+          コスト効果の<br>モニタリング
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul style="list-style: none; padding: 0; margin: 4px 0;">
+        <li style="margin-bottom: 4px;"><a href="https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-redshift-incremental-manual-snapshots/" target="_blank" rel="noopener noreferrer">AWS What's New - Amazon Redshift Incremental Manual Snapshots</a></li>
+        <li style="margin-bottom: 4px;"><a href="https://aws.amazon.com/redshift/pricing/" target="_blank" rel="noopener noreferrer">Amazon Redshift 料金ページ</a></li>
+        <li><a href="https://docs.aws.amazon.com/redshift/latest/mgmt/working-with-snapshots.html" target="_blank" rel="noopener noreferrer">Amazon Redshift スナップショットドキュメント</a></li>
+      </ul>
+      <p style="margin-top: 12px; color: rgba(213, 219, 219, 0.5);">Generated: 2026-06-08</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
