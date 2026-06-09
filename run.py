@@ -54,8 +54,8 @@ DEFAULT_PROMPT_TEMPLATE = (
 )
 
 # モデル設定: 品質重視で Opus を使用、スロットリング時は Sonnet にフォールバック。
-PRIMARY_MODEL = "global.anthropic.claude-opus-4-6-v1"
-FALLBACK_MODEL = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+PRIMARY_MODEL = "global.anthropic.claude-opus-4-8"
+FALLBACK_MODEL = "global.anthropic.claude-sonnet-4-6"
 
 # オーケストレーターと report-generator サブエージェントが使用するツール。
 # Claude Code 組み込みのファイル操作・Web アクセス用ツール。
