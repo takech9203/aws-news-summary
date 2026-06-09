@@ -1,308 +1,259 @@
 # Amazon RDS for SQL Server - AWS Transform での移行コスト評価機能
 
-**リリース日**: 2026年6月8日
+**リリース日**: 2026 年 6 月 8 日
 **サービス**: Amazon RDS for SQL Server / AWS Transform
-**機能**: オンプレミス SQL Server から RDS for SQL Server への TCO 評価
+**機能**: AWS Transform での RDS for SQL Server 移行 TCO 評価
 
 📊 [このアップデートのインフォグラフィックを見る](https://takech9203.github.io/aws-news-summary/20260608-amazon-rds-sql-server-cost-assessment-aws-transform.html)
+<!-- INFOGRAPHIC_BASE_URL は環境変数から取得 -->
 
 ## 概要
 
-Amazon RDS for SQL Server の移行コスト評価機能が AWS Transform で利用可能になった。この機能により、オンプレミスの SQL Server データベースを RDS for SQL Server に移行する際の総所有コスト (TCO) を AI エージェントを活用して見積もることができる。
+Amazon RDS for SQL Server が AWS Transform 上で TCO (総所有コスト) 評価機能を提供開始しました。これにより、オンプレミスの SQL Server データベースを RDS for SQL Server へ移行する際のコストを事前に見積もれるようになりました。AWS Transform は AI 搭載エージェントを活用してオンプレミスの SQL Server 環境を分析し、ワークロード要件を満たしつつコストを削減する最適なデータベースインスタンスの推奨構成を提示します。
 
-AWS Transform は AI パワードエージェントを使用してオンプレミスの SQL Server 環境を分析し、ワークロード要件を満たしつつコストを削減する最適なデータベースインスタンスの推奨を提供する。さらに、AI を活用した What-if 分析により、異なるオプションの評価、コスト比較、最適な移行パスの選択が可能になる。
+AI を活用した What-if 分析 (仮説検証) により、複数の選択肢を評価し、コストを比較して、移行に最適なオプションを選択できます。今回の評価機能は、既存の SQL Server ライセンスを活用できる BYOM (Bring Your Own Media) と、ライセンス込みの LI (License Included) の両方のオプションに対応しています。評価には、On-Demand 料金と比較して最大 20% の削減が可能な Database Savings Plans を使ったコスト最適化や、AWS Migration Acceleration Program (MAP) の対象判定が含まれます。
+
+移行担当者やソリューションアーキテクトは、RVTools エクスポート、CMDB データ、AWS Transform ディスカバリツールのエクスポート、その他のサードパーティ製ディスカバリツールなど、手元にある任意のデータ形式から評価を開始できます。RDS for SQL Server は AWS Transform の既存の移行評価機能群に加わり、Amazon EC2、Amazon FSx、Amazon S3、EC2 上の SQL Server、仮想デスクトップのコストモデリングと組み合わせて What-if シナリオで検討できます。
 
 **アップデート前の課題**
 
-- オンプレミス SQL Server から RDS for SQL Server への移行コストを正確に見積もるには、手動で複雑な計算が必要だった
-- ワークロードに最適なインスタンスタイプの選定に専門知識と時間を要した
-- ライセンスオプション (BYOM vs LI) の比較や Savings Plans 適用後のコスト試算が煩雑だった
-- 複数の移行シナリオを比較検討する統合的なツールがなかった
+今回のアップデート以前、オンプレミスの SQL Server を RDS for SQL Server へ移行する際のコスト評価には以下のような課題がありました。
+
+- 移行後のコストを見積もるために、インスタンスサイズやライセンス形態を手作業で見積もる必要があった
+- BYOM と LI のどちらが有利か、ワークロードごとに比較検討する手段が限られていた
+- Database Savings Plans や MAP による削減効果を移行計画に組み込んで定量的に評価することが難しかった
+- データベースの移行コストと、EC2 や FSx など他のサービスのコストを 1 つのシナリオで統合的に比較できなかった
 
 **アップデート後の改善**
 
-- AI エージェントが自動でオンプレミス環境を分析し、最適なインスタンス推奨を提供
-- What-if 分析でリージョン、リソース使用率、料金条件を変更したシナリオを即座に比較可能
-- Database Savings Plans や MAP プログラムの適用を含めた包括的なコスト最適化を提示
-- RVTools、CMDB、AWS Transform ディスカバリーツールなど多様なデータ形式に対応
+今回のアップデートにより、以下が可能になりました。
+
+- AI 搭載エージェントがオンプレミス環境を分析し、ワークロード要件に合った最適なインスタンスを自動推奨する
+- BYOM と LI の両オプションを同一シナリオで比較し、最適なライセンス戦略を選択できる
+- Database Savings Plans (最大 20% 削減) と MAP の対象判定を評価に組み込める
+- RDS for SQL Server を EC2、FSx、S3、EC2 上の SQL Server、仮想デスクトップと組み合わせた What-if シナリオで統合的にコストを比較できる
 
 ## アーキテクチャ図
 
 ```mermaid
 flowchart TD
     subgraph OnPrem["🏢 オンプレミス環境"]
+        SQL["🗄️ SQL Server<br/>データベース"]
+    end
+
+    subgraph Discovery["📥 ディスカバリデータ"]
         direction LR
-        SQL["🗄️ SQL Server"]
-        Tools["🔍 ディスカバリーツール"]
-        SQL ~~~ Tools
+        D1["RVTools エクスポート"]
+        D2["CMDB データ"]
+        D3["AWS Transform<br/>ディスカバリツール"]
+        D1 ~~~ D2 ~~~ D3
     end
 
-    subgraph Input["📥 データ入力"]
-        direction LR
-        RV["📋 RVTools"]
-        CMDB["📋 CMDB"]
-        Disc["📋 AWS Transform<br/>ディスカバリー"]
-        Third["📋 サードパーティ"]
-        RV ~~~ CMDB ~~~ Disc ~~~ Third
+    subgraph Transform["☁️ AWS Transform"]
+        Agent["🤖 AI エージェント<br/>環境分析"]
+        Assess["📊 TCO 評価<br/>BYOM / LI"]
+        WhatIf["🔀 What-if 分析<br/>コスト比較"]
     end
 
-    subgraph Transform["⚙️ AWS Transform"]
-        AI["🤖 AI エージェント<br/>環境分析"]
-        Recommend["📊 インスタンス推奨"]
-        WhatIf["🔄 What-if 分析"]
-        AI --> Recommend
-        Recommend --> WhatIf
-    end
+    Result(["💡 最適なインスタンス推奨<br/>Savings Plans / MAP 適用"])
 
-    subgraph Options["💰 コストモデル"]
-        direction LR
-        BYOM["🔑 BYOM<br/>既存ライセンス"]
-        LI["📄 License Included"]
-        SP["💵 Savings Plans<br/>最大20%割引"]
-        MAP["🎫 MAP プログラム<br/>クレジット適用"]
-        BYOM ~~~ LI ~~~ SP ~~~ MAP
-    end
+    SQL --> D1
+    SQL --> D2
+    SQL --> D3
+    D1 --> Agent
+    D2 --> Agent
+    D3 --> Agent
+    Agent --> Assess
+    Assess --> WhatIf
+    WhatIf --> Result
 
-    subgraph Target["☁️ AWS"]
-        RDS["🗄️ RDS for SQL Server"]
-        EC2["⚡ Amazon EC2"]
-        FSx["📁 Amazon FSx"]
-        S3["🪣 Amazon S3"]
-    end
-
-    OnPrem --> Input
-    Input --> Transform
-    Transform --> Options
-    Options --> Target
-
+    classDef onprem fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
     classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
-    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
-    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
-    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
     classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
-    classDef process fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
 
-    class OnPrem,Target cloud
-    class Input,Options layer
-    class Transform process
-    class AI,Recommend,WhatIf compute
-    class RDS,EC2,FSx,S3 storage
-    class RV,CMDB,Disc,Third,SQL,Tools input
-    class BYOM,LI,SP,MAP input
+    class OnPrem onprem
+    class Discovery,Transform cloud
+    class D1,D2,D3,SQL input
+    class Agent,Assess process
+    class WhatIf decision
+    class Result input
 ```
 
-オンプレミス SQL Server 環境のデータを AWS Transform に入力すると、AI エージェントが分析を行い、複数のコストモデルを比較した上で最適な移行先を推奨するフローを示している。
+オンプレミスのディスカバリデータを AWS Transform に取り込み、AI エージェントが分析して TCO 評価と What-if 分析を行い、最適なインスタンス推奨を導き出す流れを示しています。
 
 ## サービスアップデートの詳細
 
 ### 主要機能
 
-1. **AI パワード環境分析**
-   - オンプレミス SQL Server 環境を自動で分析
-   - ワークロード要件に基づいた最適なデータベースインスタンスの推奨
-   - コスト削減を考慮したインスタンスサイジング
+1. **AI 搭載による TCO 評価**
+   - AI エージェントがオンプレミスの SQL Server 環境を分析する
+   - ワークロード要件を満たしつつコストを削減する最適なデータベースインスタンスを推奨する
+   - オンプレミスから RDS for SQL Server への移行コストを事前に見積もれる
 
-2. **What-if 分析**
-   - 複数のコストモデルを同時に比較可能
-   - カスタマイズ可能な前提条件: リージョン、リソース使用率、料金条件
-   - 異なるシナリオの即時比較と最適解の選択
+2. **BYOM と LI の両ライセンスオプション対応**
+   - BYOM (Bring Your Own Media): 既存の SQL Server ライセンスを持ち込んで活用できる
+   - LI (License Included): SQL Server ライセンスを RDS の料金に含める形態
+   - 両オプションのコストを比較し、最適なライセンス戦略を選択できる
 
-3. **多様なデータ入力形式のサポート**
+3. **コスト最適化と移行支援プログラムの統合**
+   - Database Savings Plans により On-Demand 料金と比較して最大 20% の削減が可能
+   - AWS Migration Acceleration Program (MAP) の対象判定を含む
+   - 移行コストを抑えるための定量的な評価を提供する
+
+4. **AI を活用した What-if 分析**
+   - リージョン、リソース使用率、料金条件などの前提条件をカスタマイズして複数のコストモデルを比較できる
+   - RDS for SQL Server を EC2、FSx、S3、EC2 上の SQL Server、仮想デスクトップのコストモデリングと組み合わせられる
+   - 移行に最適なオプションを根拠を持って選択できる
+
+5. **柔軟なデータ入力**
    - RVTools エクスポート
-   - 構成管理データベース (CMDB) エクスポート
-   - AWS Transform ディスカバリーツールからのエクスポート
-   - その他のサードパーティディスカバリーツール
-
-4. **ライセンスオプション対応**
-   - Bring Your Own Media (BYOM): 既存の SQL Server ライセンスを持ち込み
-   - License Included (LI): ライセンス込みオプション
-
-5. **コスト最適化機能**
-   - Database Savings Plans: On-Demand 料金と比較して最大 20% の節約
-   - AWS Migration Acceleration Program (MAP): 移行コストを相殺するクレジットとサポートの適格性評価
-
-6. **他サービスとの統合評価**
-   - Amazon EC2、Amazon FSx、Amazon S3、SQL Server on EC2、仮想デスクトップとの組み合わせ評価
-   - クラウド価値提案の柱: スタッフ生産性、運用レジリエンス、ビジネスアジリティ、サステナビリティ
+   - CMDB データ
+   - AWS Transform ディスカバリツールのエクスポート
+   - その他のサードパーティ製ディスカバリツール
 
 ## 技術仕様
 
-### サポートされるデータ形式
+### ライセンスオプションの比較
 
-| データソース | 説明 |
+| 項目 | BYOM (Bring Your Own Media) | LI (License Included) |
+|------|------------------------------|------------------------|
+| ライセンス | 既存の SQL Server ライセンスを持ち込み | RDS 料金にライセンスを含む |
+| 適したケース | ライセンスモビリティ権を持つ既存ライセンス資産がある場合 | 新規にライセンスを調達したい場合 |
+| 評価対応 | AWS Transform で評価対応 | AWS Transform で評価対応 |
+
+### コスト最適化要素
+
+| 項目 | 詳細 |
 |------|------|
-| RVTools | VMware 環境のインベントリエクスポート |
-| CMDB | 構成管理データベースからのエクスポート |
-| AWS Transform ディスカバリーツール | AWS 提供のディスカバリーツール出力 |
-| サードパーティツール | その他の検出ツールからのエクスポート |
+| Database Savings Plans | On-Demand 料金と比較して最大 20% の削減が可能 |
+| MAP | AWS Migration Acceleration Program の対象判定。移行コストの相殺に向けたクレジットと支援 |
+| What-if 分析 | リージョン、リソース使用率、料金条件をカスタマイズした複数モデルの比較 |
 
-### ライセンスモデル比較
+### 評価対象サービス (What-if シナリオでの組み合わせ)
 
-| 項目 | BYOM | License Included |
-|------|------|------|
-| SQL Server ライセンス | 既存ライセンスを使用 | AWS が提供 |
-| 適用シナリオ | Software Assurance 保有時 | 新規ライセンス不要な場合 |
-| コスト構造 | インスタンス料金のみ | インスタンス + ライセンス料金 |
-
-### What-if シナリオのカスタマイズ可能パラメータ
-
-| パラメータ | 説明 |
-|------|------|
-| リージョン | デプロイ先の AWS リージョン |
-| リソース使用率 | CPU、メモリ、ストレージの想定使用率 |
-| 料金条件 | On-Demand、Savings Plans、リザーブドインスタンス |
-| ライセンスモデル | BYOM または License Included |
-| MAP 適用 | Migration Acceleration Program の適格性 |
-
-### API 変更履歴
-
-| 日付 | サービス | 変更内容 |
-|------|----------|----------|
-| 2026/06/08 | [Application Migration Service](https://awsapichanges.com/archive/changes/a09b61-mgn.html) | 4 updated api methods - AWS Transform ディスカバリーツールをネットワーク移行の入力ソースとしてサポート |
+| サービス | 対象 |
+|----------|------|
+| Amazon RDS for SQL Server | 今回追加 |
+| Amazon EC2 | 既存対応 |
+| Amazon FSx | 既存対応 |
+| Amazon S3 | 既存対応 |
+| SQL Server on EC2 | 既存対応 |
+| Virtual Desktops (仮想デスクトップ) | 既存対応 |
 
 ## 設定方法
 
 ### 前提条件
 
-1. AWS アカウント
-2. AWS Transform コンソールへのアクセス権限
-3. オンプレミス SQL Server 環境のインベントリデータ (RVTools、CMDB 等)
+1. AWS Transform を利用可能な AWS アカウントとアクセス権限
+2. オンプレミス SQL Server 環境のディスカバリデータ (RVTools、CMDB、AWS Transform ディスカバリツール、サードパーティツールのいずれか)
+3. 移行対象ワークロードの要件 (パフォーマンス、可用性など) の把握
 
 ### 手順
 
-#### ステップ 1: AWS Transform コンソールにアクセス
+#### ステップ 1: AWS Transform コンソールにサインインする
 
-AWS マネジメントコンソールにサインインし、AWS Transform コンソールを開く。左メニューから「Migration Assessment」を選択する。
+AWS Transform コンソールにサインインし、[Migration Assessment] を選択します。移行評価ワークフローを開始する起点となります。
 
-#### ステップ 2: データのインポート
+#### ステップ 2: ディスカバリデータを取り込む
 
-```
-RVTools、CMDB、AWS Transform ディスカバリーツール、
-またはサードパーティツールからエクスポートしたデータをアップロード
-```
+手元のディスカバリデータ (RVTools エクスポート、CMDB データ、AWS Transform ディスカバリツールのエクスポートなど) を AWS Transform に取り込みます。AI エージェントがこのデータを基にオンプレミス環境を分析します。
 
-サポートされる形式のいずれかでオンプレミス SQL Server 環境のインベントリデータをインポートする。
+#### ステップ 3: RDS for SQL Server 評価を実行し What-if 分析で比較する
 
-#### ステップ 3: 評価の実行
-
-AI エージェントがインポートされたデータを分析し、ワークロード要件に基づいた最適なインスタンス推奨を生成する。
-
-#### ステップ 4: What-if シナリオの作成
-
-リージョン、リソース使用率、料金条件などのパラメータを調整し、複数のコストモデルを比較する。BYOM と License Included の両方のオプションで評価を実施する。
-
-#### ステップ 5: コスト最適化の確認
-
-Database Savings Plans (最大 20% 割引) や MAP プログラムの適格性を含めた最適化提案を確認し、最終的な移行計画を決定する。
+RDS for SQL Server の評価を実行し、BYOM と LI のライセンスオプション、Database Savings Plans、MAP の対象判定を含む推奨構成を確認します。What-if 分析でリージョンやリソース使用率などの前提条件を変えながら複数のコストモデルを比較し、最適なオプションを選択します。必要に応じて EC2 や FSx など他サービスのコストモデルと組み合わせて統合的に評価します。
 
 ## メリット
 
 ### ビジネス面
 
-- **移行判断の迅速化**: AI による自動分析で、従来数週間かかっていた TCO 評価を短期間で完了
-- **コスト最適化の最大化**: Savings Plans や MAP プログラムを含めた包括的なコスト分析で、最大限の節約を実現
-- **リスクの低減**: データに基づいた客観的な移行判断により、過小・過大なサイジングのリスクを最小化
+- **移行コストの可視化**: 移行前に TCO を見積もることで、投資判断や予算策定の精度が向上する
+- **ライセンス費用の最適化**: BYOM と LI を比較し、既存ライセンス資産を最大限に活用できる
+- **削減効果の定量化**: Database Savings Plans (最大 20% 削減) と MAP を組み込み、コスト削減の根拠を提示できる
 
 ### 技術面
 
-- **多様なデータソース対応**: RVTools、CMDB 等の既存ツールのデータをそのまま活用可能
-- **統合的な移行計画**: EC2、FSx、S3 等の他サービスとの組み合わせ評価が一元的に実施可能
-- **柔軟なシナリオ比較**: What-if 分析で複数の移行パスを同時に評価し、最適解を選択
+- **AI による最適化推奨**: ワークロード要件に合ったインスタンスを AI エージェントが自動で推奨する
+- **統合的なシナリオ評価**: データベースだけでなく EC2、FSx、S3 などを含めた全体コストを 1 つのシナリオで評価できる
+- **柔軟なデータ入力**: 既存のディスカバリツールの出力をそのまま活用でき、追加の準備作業が少ない
 
 ## デメリット・制約事項
 
 ### 制限事項
 
-- AWS Transform が提供されているリージョンでのみ利用可能
-- 評価の精度はインポートするデータの品質に依存
-- AI による推奨は参考値であり、実際のワークロードでの検証が必要
+- AWS Transform が提供されているリージョンでのみ移行評価機能を利用できる
+- 評価結果はディスカバリデータの精度に依存するため、入力データの品質が重要となる
+- MAP の対象判定や Savings Plans の適用は条件に基づくため、実際の適用可否は別途確認が必要
 
 ### 考慮すべき点
 
-- オンプレミス環境のデータ収集にはディスカバリーツールの事前セットアップが必要な場合がある
-- 複雑なライセンス体系 (Enterprise Agreement 等) の場合、BYOM の適用可否について追加確認が必要
-- TCO 評価にはネットワーク転送コストやデータ移行にかかる一時的なコストは含まれない可能性がある
+- 評価結果はあくまで見積もりであり、実際の運用コストは移行後の利用状況により変動する
+- BYOM を選択する場合、SQL Server ライセンスのライセンスモビリティ権など利用条件の確認が必要
 
 ## ユースケース
 
-### ユースケース 1: 大規模 SQL Server 環境の一括移行計画
+### ユースケース 1: オンプレミス SQL Server の RDS 移行コスト試算
 
-**シナリオ**: 数十台のオンプレミス SQL Server を保有する企業が、データセンター契約更新前にクラウド移行のコスト効果を評価したい。
-
-**実装例**:
-```
-1. RVTools で全 SQL Server のインベントリを収集・エクスポート
-2. AWS Transform にデータをインポート
-3. AI エージェントによる分析で各サーバーの最適インスタンス推奨を取得
-4. What-if 分析でリージョン別・Savings Plans 適用時のコストを比較
-5. MAP プログラムの適格性を確認し、移行クレジットを考慮した最終コストを算出
-```
-
-**効果**: 手動計算では数週間かかる TCO 分析を AI が自動化し、データに基づいた移行判断を迅速に実施
-
-### ユースケース 2: ライセンス最適化の検討
-
-**シナリオ**: Software Assurance を保有する企業が、既存ライセンスの持ち込み (BYOM) と License Included のどちらが有利か判断したい。
+**シナリオ**: データセンター撤退に伴い、オンプレミスで稼働する多数の SQL Server データベースを RDS for SQL Server へ移行したい。移行前に総コストと最適なインスタンス構成を把握したい。
 
 **実装例**:
 ```
-1. CMDB から SQL Server ライセンス情報とインスタンス情報をエクスポート
-2. AWS Transform で BYOM シナリオと LI シナリオの両方を作成
-3. 各シナリオに Savings Plans を適用したコストを比較
-4. ライセンス更新時期を考慮した長期コストモデルを評価
+1. RVTools で既存環境をエクスポート
+2. AWS Transform の Migration Assessment にデータを取り込む
+3. RDS for SQL Server 評価で推奨インスタンスと TCO を確認
 ```
 
-**効果**: ライセンスコストを含めた総合的な比較により、3-5 年間で最もコスト効率の高いオプションを特定
+**効果**: 手作業の見積もりを排除し、AI による推奨構成と定量的な TCO に基づいて移行計画を策定できる
 
-### ユースケース 3: 段階的移行における優先順位付け
+### ユースケース 2: BYOM と LI のライセンス戦略比較
 
-**シナリオ**: 移行を段階的に進めるため、コスト削減効果の高いワークロードから優先的に移行したい。
+**シナリオ**: 既存の SQL Server ライセンスを保有しているが、RDS 移行時に持ち込むべきか、ライセンス込みプランにすべきか判断したい。
 
 **実装例**:
 ```
-1. AWS Transform ディスカバリーツールで全環境を自動検出
-2. 各ワークロードの移行後コスト削減率を AI が算出
-3. What-if 分析で移行順序ごとの累積節約額をシミュレーション
-4. MAP プログラム適用による初期コスト軽減を加味して最終的な移行ロードマップを策定
+1. What-if シナリオで BYOM オプションのコストモデルを作成
+2. 同じワークロードで LI オプションのコストモデルを作成
+3. 両者を比較し、Database Savings Plans 適用後のコストを評価
 ```
 
-**効果**: データドリブンな優先順位付けにより、移行の早い段階からコスト削減効果を実現
+**効果**: ライセンス資産を最大限に活用しつつ、最もコスト効率の高いライセンス形態を根拠を持って選択できる
+
+### ユースケース 3: マルチサービス移行の統合コスト評価
+
+**シナリオ**: SQL Server データベースだけでなく、アプリケーションサーバー (EC2)、ファイルストレージ (FSx)、オブジェクトストレージ (S3) を含めた Windows ワークロード全体を移行する際の総コストを把握したい。
+
+**実装例**:
+```
+1. AWS Transform で RDS for SQL Server 評価を実行
+2. 同一の What-if シナリオに EC2、FSx、S3 のコストモデルを追加
+3. リージョンや利用率の前提条件を変えて複数案を比較
+```
+
+**効果**: ワークロード全体の移行コストを 1 つのシナリオで統合的に評価し、最適な構成を選択できる
 
 ## 料金
 
-AWS Transform のコスト評価機能自体の利用料金は公式発表では明示されていない。評価後に選択する RDS for SQL Server の料金体系は以下の通り。
-
-### コスト最適化オプション
-
-| オプション | 節約率 | 説明 |
-|--------|--------|------|
-| On-Demand | - | 従量課金、コミットメントなし |
-| Database Savings Plans | 最大 20% | 1 年または 3 年のコミットメント |
-| MAP プログラム | 追加クレジット | 移行コストを相殺するクレジットとサポート |
+AWS Transform の移行評価機能の利用に関する料金は AWS Transform の料金体系に従います。評価で推奨される RDS for SQL Server のコストには、Database Savings Plans (On-Demand 料金と比較して最大 20% 削減) や MAP による移行コストの相殺が反映されます。詳細な料金は AWS Transform および Amazon RDS for SQL Server の料金ページを参照してください。
 
 ## 利用可能リージョン
 
-AWS Transform が提供されている全リージョンで利用可能。具体的なリージョン一覧は [AWS Transform のリージョン対応ドキュメント](https://docs.aws.amazon.com/transform/latest/userguide/regions.html) を参照。
+AWS Transform の移行評価機能は、AWS Transform が提供されているすべての AWS リージョンで利用可能です。
 
 ## 関連サービス・機能
 
-- **AWS Transform**: クラウド移行のための TCO 評価とビジネスケース構築プラットフォーム
-- **Amazon RDS for SQL Server**: フルマネージドの SQL Server データベースサービス
-- **AWS Migration Acceleration Program (MAP)**: 移行を加速するためのクレジット・サポートプログラム
-- **AWS Application Migration Service (MGN)**: サーバー移行の自動化サービス
-- **Database Savings Plans**: データベースサービスの長期コミットメント割引
-- **Amazon EC2**: SQL Server on EC2 としての移行先オプション
-- **Amazon FSx**: ファイルストレージの移行先オプション
+- **AWS Transform**: AI 搭載エージェントによる企業 IT 変革プラットフォーム。今回の RDS for SQL Server 評価機能の提供基盤
+- **Amazon RDS for SQL Server**: 今回の評価対象となるマネージドリレーショナルデータベースサービス
+- **AWS Migration Acceleration Program (MAP)**: 移行コストの相殺に向けたクレジットと支援を提供するプログラム
+- **Database Savings Plans**: On-Demand 料金と比較して最大 20% の削減を提供するコスト最適化プラン
 
 ## 参考リンク
 
 - 📊 [インフォグラフィック](https://takech9203.github.io/aws-news-summary/20260608-amazon-rds-sql-server-cost-assessment-aws-transform.html)
 - [公式発表 (What's New)](https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-rds-sql-server-cost-assessment-aws-transform/)
-- [AWS Transform 入門ガイド](https://docs.aws.amazon.com/transform/latest/userguide/getting-started.html)
-- [AWS Transform 移行評価ドキュメント](https://docs.aws.amazon.com/transform/latest/userguide/transform-app-assessments.html)
-- [AWS Transform リージョン対応](https://docs.aws.amazon.com/transform/latest/userguide/regions.html)
-- [AWS クラウドバリュープロポジション](https://aws.amazon.com/executive-insights/content/business-value-on-aws/)
+- [AWS Transform](https://aws.amazon.com/transform/)
+- [Amazon RDS for SQL Server](https://aws.amazon.com/rds/sqlserver/)
 
 ## まとめ
 
-Amazon RDS for SQL Server の AWS Transform でのコスト評価機能は、オンプレミス SQL Server の移行を検討する企業にとって強力なツールとなる。AI エージェントによる自動分析と What-if シナリオの比較機能により、データに基づいた迅速な移行判断が可能になった。SQL Server の移行を計画している組織は、まず AWS Transform コンソールにアクセスし、既存のインベントリデータ (RVTools や CMDB) をインポートして TCO 評価を開始することを推奨する。
+今回のアップデートにより、オンプレミス SQL Server から RDS for SQL Server への移行コストを、AI 搭載エージェントを活用して事前に評価できるようになりました。BYOM と LI の比較、Database Savings Plans や MAP による削減効果の組み込み、他サービスを含む What-if 分析により、移行計画の精度が大きく向上します。SQL Server の移行を検討している場合は、AWS Transform コンソールの Migration Assessment から手元のディスカバリデータを使って評価を開始することを推奨します。

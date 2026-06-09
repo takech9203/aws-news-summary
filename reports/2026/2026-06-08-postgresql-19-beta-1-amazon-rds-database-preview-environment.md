@@ -1,329 +1,242 @@
 # Amazon RDS for PostgreSQL - PostgreSQL 19 Beta 1 プレビュー提供開始
 
-**リリース日**: 2026年6月8日
+**リリース日**: 2026 年 6 月 8 日
 **サービス**: Amazon RDS for PostgreSQL
-**機能**: PostgreSQL 19 Beta 1 (Database Preview Environment)
+**機能**: PostgreSQL 19 Beta 1 (Amazon RDS Database Preview Environment)
 
 📊 [このアップデートのインフォグラフィックを見る](https://takech9203.github.io/aws-news-summary/20260608-postgresql-19-beta-1-amazon-rds-database-preview-environment.html)
+<!-- INFOGRAPHIC_BASE_URL は環境変数から取得 -->
 
 ## 概要
 
-Amazon RDS Database Preview Environment で PostgreSQL 19 Beta 1 が利用可能になった。これにより、PostgreSQL 19 のプレリリースバージョンを Amazon RDS 上で事前評価できるようになる。PostgreSQL 19 は 2026 年 9 月〜10 月の正式リリースに先立ち、6 月 4 日にコミュニティからベータ版が公開されたばかりの最新メジャーバージョンである。
+Amazon RDS for PostgreSQL 19 Beta 1 が Amazon RDS Database Preview Environment で利用可能になりました。これにより、お客様はマネージドデータベースサービスである Amazon RDS 上で、正式リリース前の PostgreSQL 19 を評価できます。本番環境に影響を与えることなく、新バージョンの新機能や互換性を事前に検証できる点が大きな価値です。
 
-PostgreSQL 19 の最大の特徴は、SQL Property Graph Queries (SQL/PGQ) によるネイティブグラフクエリサポートの追加である。これにより、複雑なリレーションシップのトラバーサルを標準 SQL 内で直接表現でき、別途グラフデータベースを構築したりデータを同期したりする必要がなくなる。また、REPACK CONCURRENTLY によるノンブロッキングテーブル再構築、ロジカルレプリケーションのシーケンス自動同期、再起動なしでのロジカルレプリケーション有効化など、運用面の大幅な改善も含まれている。
+PostgreSQL 19 は、いくつかの注目すべき機能を追加しています。SQL Property Graph Queries (SQL/PGQ) によるネイティブなグラフクエリのサポートにより、複雑なリレーションシップの探索を標準 SQL で直接表現できます。また、テーブルの再構築と未使用ストレージの再利用を行う並行テーブル再パッキング (concurrent table repacking) により、定期的なテーブルメンテナンス中も本番データベースをアクセス可能な状態に保てます。さらに、ロジカルレプリケーションがシーケンス値をレプリカに自動同期するようになり、メジャーバージョンアップグレードのカットオーバー後の手動シーケンス調整が不要になります。
+
+本機能の対象は、新バージョンの検証を計画しているデータベース管理者、開発者、ソリューションアーキテクトです。Amazon RDS Database Preview Environment のデータベースインスタンスは最大 60 日間保持され、保持期間経過後は自動的に削除されます。料金は米国東部 (オハイオ) リージョンの料金に従います。
 
 **アップデート前の課題**
 
-- グラフクエリを実行するには専用のグラフデータベースを別途構築し、PostgreSQL からデータを同期する必要があった
-- テーブルの VACUUM FULL やリビルドはテーブルロックが必要で、本番環境で実行するとダウンタイムが発生していた
-- メジャーバージョンアップグレード後にシーケンス値を手動で調整する必要があった
-- ロジカルレプリケーションを有効化するにはサーバーの再起動が必要だった
+これまでの PostgreSQL では、以下のような課題がありました。
+
+- グラフ構造のデータに対する複雑なリレーションシップ探索を行うには、アプリケーション側で独自のロジックを構築するか、専用のグラフデータベースとデータを同期する必要があった
+- テーブルの再構築やストレージ再利用のためのメンテナンス操作は排他ロックを伴い、実行中は本番データベースへのアクセスが制限された
+- メジャーバージョンアップグレードのカットオーバー後、ロジカルレプリケーションではシーケンス値が同期されないため、手動でのシーケンス調整が必要だった
+- ロジカルレプリケーションを有効化するにはサーバーの再起動が必要で、計画的なダウンタイムが発生していた
 
 **アップデート後の改善**
 
-- SQL/PGQ により PostgreSQL 内でグラフパターンマッチングが直接実行可能になった
-- REPACK CONCURRENTLY でテーブルへのアクセスを維持したまま再構築・ストレージ回収が可能になった
-- ロジカルレプリケーションでシーケンス値がレプリカに自動同期されるようになった
-- wal_level=replica の状態からサーバー再起動なしでロジカルレプリケーションを動的に有効化できるようになった
+PostgreSQL 19 Beta 1 のプレビュー提供により、以下が可能になりました。
+
+- SQL/PGQ により、複雑なリレーションシップ探索を標準 SQL で直接表現でき、別途アプリケーションロジックの構築や 2 つのデータベース間のデータ同期が不要になった
+- 並行テーブル再パッキングにより、定期的なテーブルメンテナンス中も本番データベースをアクセス可能な状態に保てるようになった
+- ロジカルレプリケーションがシーケンス値をレプリカに自動同期するため、アップグレードカットオーバー後の手動シーケンス調整が不要になった
+- ロジカルレプリケーションをサーバーの再起動なしで動的に有効化できるようになり、計画的なダウンタイムが削減された
 
 ## アーキテクチャ図
 
 ```mermaid
 flowchart TD
-    subgraph Preview["☁️ RDS Database Preview Environment"]
-        direction LR
-        RDS["🐘 RDS PostgreSQL 19<br/>Beta 1"]
-        Features["⚡ 新機能評価"]
-        RDS ~~~ Features
+    subgraph Preview["☁️ Amazon RDS Database Preview Environment 米国東部 オハイオ"]
+        PG19["🐘 PostgreSQL 19 Beta 1<br/>RDS インスタンス"]
+        subgraph Features["✨ PostgreSQL 19 新機能"]
+            direction LR
+            F1["🔗 SQL/PGQ<br/>グラフクエリ"]
+            F2["🔧 並行テーブル<br/>再パッキング"]
+            F3["🔁 ロジカルレプリケーション<br/>強化"]
+            F1 ~~~ F2 ~~~ F3
+        end
+        PG19 --> Features
     end
 
-    subgraph PG19["🆕 PostgreSQL 19 主要機能"]
-        direction LR
-        Graph["🔗 SQL/PGQ<br/>グラフクエリ"]
-        Repack["📦 REPACK<br/>CONCURRENTLY"]
-        LogRep["🔄 ロジカルレプリケーション<br/>シーケンス同期"]
-        Graph ~~~ Repack ~~~ LogRep
-    end
-
-    User(["👤 開発者"]) --> Preview
-    Preview --> PG19
-    Preview -->|"最大 60 日間保持"| Delete["🗑️ 自動削除"]
+    Dev(["👤 開発者 / DBA"]) --> PG19
+    PG19 -.->|最大 60 日後に<br/>自動削除| Deleted["🗑️ 自動削除"]
 
     classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
-    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
-    classDef feature fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
     classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
-    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#E65100
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
 
     class Preview cloud
-    class RDS,Features compute
-    class Graph,Repack,LogRep feature
-    class User user
-    class Delete warning
+    class Features layer
+    class PG19 database
+    class F1,F2,F3 process
+    class Dev user
+    class Deleted warning
 ```
 
-RDS Database Preview Environment で PostgreSQL 19 Beta 1 を評価し、正式リリース前に新機能の互換性やパフォーマンスを検証できる構成を示している。
+開発者や DBA が Amazon RDS Database Preview Environment に PostgreSQL 19 Beta 1 のインスタンスを作成し、新機能を検証する流れを示しています。プレビュー環境のインスタンスは最大 60 日後に自動削除されます。
 
 ## サービスアップデートの詳細
 
 ### 主要機能
 
-1. **SQL Property Graph Queries (SQL/PGQ)**
-   - SQL 標準に準拠したプロパティグラフクエリをネイティブサポート
-   - `CREATE PROPERTY GRAPH` でグラフスキーマを定義し、グラフパターンマッチングを標準 SQL 内で実行可能
-   - 別途グラフデータベースを構築・同期する必要が不要に
-   - ソーシャルネットワーク分析、不正検知、推薦システムなどのユースケースに最適
+1. **SQL Property Graph Queries (SQL/PGQ) によるネイティブグラフクエリ**
+   - 複雑なリレーションシップの探索を標準 SQL で直接表現できる
+   - 別途アプリケーションロジックを構築する必要がなくなる
+   - 専用のグラフデータベースとデータを同期する必要がなくなり、データの一元管理が可能になる
 
-2. **REPACK CONCURRENTLY によるノンブロッキングテーブル再構築**
-   - テーブルのリビルドと未使用ストレージの回収を本番稼働中に実行可能
-   - VACUUM FULL と異なりテーブルロックが不要
-   - ルーチンメンテナンス中もデータベースへのアクセスを維持
+2. **並行テーブル再パッキング (concurrent table repacking)**
+   - テーブルを再構築し、未使用ストレージを再利用する
+   - 定期的なテーブルメンテナンス中も本番データベースをアクセス可能な状態に保てる
+   - 従来の排他ロックを伴うメンテナンス操作によるダウンタイムを回避できる
 
-3. **ロジカルレプリケーションのシーケンス自動同期**
-   - シーケンス値がレプリカに自動的に同期
-   - メジャーバージョンアップグレードのカットオーバー後に手動でシーケンスを調整する作業が不要に
-   - `CREATE PUBLICATION ... EXCEPT` で特定テーブルを除外したパブリケーションも可能に
+3. **ロジカルレプリケーションのシーケンス値自動同期**
+   - シーケンス値をレプリカに自動同期する
+   - メジャーバージョンアップグレードのカットオーバー後の手動シーケンス調整が不要になる
+   - アップグレード作業のリスクと手間を低減する
 
 4. **ロジカルレプリケーションの動的有効化**
-   - `wal_level=replica` の状態からサーバー再起動なしでロジカルレプリケーションを有効化
-   - 計画的ダウンタイムを削減
-   - 新しい読み取り専用パラメータ `effective_wal_level` で現在有効な WAL レベルを確認可能
-
-5. **パフォーマンス改善**
-   - 外部キーチェック付き INSERT で最大 2 倍のパフォーマンス向上
-   - パラレル autovacuum (`autovacuum_max_parallel_workers` で設定)
-   - Anti-join 最適化、インクリメンタルソートの拡張適用
-   - Eager aggregation (`enable_eager_aggregate`) による高速行処理
-   - LISTEN/NOTIFY のマルチチャネルワークロードでのスケーラビリティ改善
-
-6. **開発者体験の向上**
-   - `INSERT ... ON CONFLICT DO SELECT ... RETURNING` で競合行を返却可能
-   - `GROUP BY ALL` による自動グルーピング
-   - `WAIT FOR LSN` コマンドでレプリカ上の read-your-writes パターンを実現
-   - jsonpath に `lower()`, `upper()`, `replace()` 等の文字列関数を追加
-   - テンポラルクエリで `UPDATE`/`DELETE` の `FOR PORTION OF` 句をサポート
-
-7. **セキュリティ強化**
-   - Server Name Indication (SNI) サポートによるホスト名別 TLS 証明書の提示
-   - パスワード有効期限警告 (`password_expiration_warning_threshold`)
-   - MD5 認証の非推奨化警告
-   - RADIUS 認証の削除
+   - サーバーの再起動なしでロジカルレプリケーションを有効化できる
+   - 計画的なダウンタイムを削減する
 
 ## 技術仕様
 
-### Database Preview Environment の制約
+### Amazon RDS Database Preview Environment の特性
 
 | 項目 | 詳細 |
 |------|------|
-| インスタンス保持期間 | 最大 60 日間 |
-| 期間経過後 | 自動削除 |
-| スナップショット | Preview Environment 内でのみ利用可能 |
-| データ移行 | PostgreSQL dump/load で Import/Export 可能 |
-| 料金体系 | US East (Ohio) リージョンの料金に準拠 |
+| エンジンバージョン | PostgreSQL 19 Beta 1 (正式リリース前) |
+| インスタンス保持期間 | 最大 60 日間 (経過後に自動削除) |
+| 提供リージョン | 米国東部 (オハイオ) |
+| 料金 | 米国東部 (オハイオ) リージョンの料金に準拠 |
+| データのインポート / エクスポート | PostgreSQL の dump および load 機能を利用可能 |
+| スナップショットの利用範囲 | プレビュー環境内でのインスタンス作成・復元のみに利用可能 |
 
-### PostgreSQL 19 の主要な設定パラメータ
+### PostgreSQL 19 の主な新機能
 
-| パラメータ | 説明 |
-|-----------|------|
-| `autovacuum_max_parallel_workers` | パラレル autovacuum のワーカー数 |
-| `enable_eager_aggregate` | Eager aggregation の有効化 |
-| `effective_wal_level` | 現在有効な WAL レベル (読み取り専用) |
-| `password_expiration_warning_threshold` | パスワード有効期限警告の日数 (デフォルト: 7) |
-| `default_toast_compression` | TOAST 圧縮のデフォルト (lz4 に変更) |
-| `io_min_workers` / `io_max_workers` | 非同期 I/O ワーカーの自動スケール範囲 |
+| 機能 | 概要 |
+|------|------|
+| SQL/PGQ | 標準 SQL によるネイティブなグラフクエリのサポート |
+| 並行テーブル再パッキング | アクセスを維持したままテーブル再構築とストレージ再利用 |
+| シーケンス値の自動同期 | ロジカルレプリケーションでシーケンス値を自動同期 |
+| 動的なロジカルレプリケーション | サーバー再起動なしでの有効化 |
 
 ## 設定方法
 
 ### 前提条件
 
-1. AWS アカウントを持っていること
-2. Amazon RDS Database Preview Environment へのアクセス権限があること
-3. 評価目的であることを理解していること (本番利用不可)
+1. AWS アカウントと、Amazon RDS の操作権限を持つ IAM ユーザーまたはロール
+2. 米国東部 (オハイオ) リージョンの利用
+3. プレビュー環境のインスタンスは本番利用を想定していないことの理解
 
 ### 手順
 
-#### ステップ 1: RDS Database Preview Environment にアクセス
+#### ステップ 1: Amazon RDS Database Preview Environment へアクセス
 
-```bash
-# AWS CLI で Preview Environment のエンドポイントを使用
-# Preview Environment 専用のコンソール URL にアクセス
-# https://us-east-2.console.aws.amazon.com/rds-preview/home
-```
+AWS マネジメントコンソールで Amazon RDS のコンソールを開き、Database Preview Environment に切り替えます。プレビュー環境は通常の本番環境とは分離されており、専用のコンソール画面から操作します。
 
-RDS Database Preview Environment は通常の RDS コンソールとは別のインターフェースで提供される。US East (Ohio) リージョンで利用可能である。
+#### ステップ 2: PostgreSQL 19 Beta 1 インスタンスの作成
 
-#### ステップ 2: PostgreSQL 19 Beta 1 インスタンスを作成
+データベースの作成時に、エンジンとして PostgreSQL を選択し、バージョンとして PostgreSQL 19 Beta 1 を指定します。インスタンスクラスやストレージなどのパラメータを設定して、インスタンスを起動します。
 
-```bash
-aws rds create-db-instance \
-  --db-instance-identifier my-pg19-beta-test \
-  --db-instance-class db.m6g.large \
-  --engine postgres \
-  --engine-version 19.0 \
-  --master-username postgres \
-  --master-user-password <your-password> \
-  --allocated-storage 100 \
-  --endpoint-url https://rds-preview.us-east-2.amazonaws.com
-```
+#### ステップ 3: 新機能の検証とデータの投入
 
-Preview Environment 用のエンドポイント URL を指定して DB インスタンスを作成する。エンジンバージョンとして PostgreSQL 19 を指定する。
-
-#### ステップ 3: SQL/PGQ グラフクエリの評価例
-
-```sql
--- プロパティグラフの作成
-CREATE PROPERTY GRAPH social_network
-  VERTEX TABLES (
-    users KEY (user_id)
-      LABEL Person PROPERTIES (name, age)
-  )
-  EDGE TABLES (
-    friendships KEY (friendship_id)
-      SOURCE KEY (user_id_1) REFERENCES users (user_id)
-      DESTINATION KEY (user_id_2) REFERENCES users (user_id)
-      LABEL Knows
-  );
-
--- グラフパターンマッチングクエリ
-SELECT p1.name, p2.name
-FROM social_network GRAPH_TABLE (
-  MATCH (p1:Person)-[:Knows]->(p2:Person)
-  WHERE p1.age > 30
-  COLUMNS (p1.name, p2.name)
-);
-```
-
-SQL/PGQ を使用してリレーショナルテーブル上にグラフ構造を定義し、標準 SQL でグラフパターンマッチングを実行する。
-
-#### ステップ 4: REPACK CONCURRENTLY の評価例
-
-```sql
--- テーブルをノンブロッキングで再構築
-REPACK TABLE large_table CONCURRENTLY;
-```
-
-本番環境を想定した負荷テスト中に REPACK CONCURRENTLY を実行し、テーブルへのアクセスが維持されることを確認する。
+PostgreSQL の dump および load 機能を使用して、検証対象のデータをインポートします。投入したデータに対して SQL/PGQ によるグラフクエリや並行テーブル再パッキングなどの新機能を検証します。検証完了後、必要なデータは dump 機能でエクスポートしておきます。プレビュー環境のインスタンスは最大 60 日で自動削除されるため、重要なデータを残さないよう注意してください。
 
 ## メリット
 
 ### ビジネス面
 
-- **事前評価によるリスク低減**: 正式リリース前に互換性やパフォーマンスを検証でき、アップグレード計画を早期に策定可能
-- **グラフデータベースコストの削減**: SQL/PGQ により別途グラフデータベースを運用する必要がなくなり、インフラコストと運用負荷を削減
-- **ダウンタイムの短縮**: REPACK CONCURRENTLY とロジカルレプリケーションの動的有効化により、メンテナンスウィンドウを最小化
+- **本番移行前の早期検証**: 正式リリース前に PostgreSQL 19 の新機能を評価でき、本番移行の計画を前倒しで進められる
+- **マネージドサービスでの検証**: フルマネージドな Amazon RDS 上で検証できるため、検証環境の構築・運用負荷が低い
+- **アップグレード作業の効率化**: シーケンス値の自動同期や動的なロジカルレプリケーションにより、将来のメジャーバージョンアップグレードのダウンタイムとリスクを低減できる
 
 ### 技術面
 
-- **統合データモデル**: グラフクエリとリレーショナルクエリを同一データベースで実行可能
-- **運用の簡素化**: シーケンス自動同期によりメジャーバージョンアップグレードの手順が大幅に簡略化
-- **パフォーマンス向上**: パラレル autovacuum、Eager aggregation、外部キーチェック最適化などにより全体的なスループットが向上
-- **標準 SQL 準拠**: SQL/PGQ は SQL 標準に準拠しており、ベンダーロックインのリスクが低い
+- **グラフ処理の簡素化**: SQL/PGQ により、専用のグラフデータベースを併用せずに標準 SQL でグラフクエリを実行できる
+- **可用性の向上**: 並行テーブル再パッキングにより、メンテナンス中もデータベースへのアクセスを維持できる
+- **運用の自動化**: ロジカルレプリケーションのシーケンス同期が自動化され、手動調整によるヒューマンエラーを防げる
 
 ## デメリット・制約事項
 
 ### 制限事項
 
-- Preview Environment のインスタンスは最大 60 日で自動削除される
-- Preview Environment で作成したスナップショットは Preview Environment 内でのみ利用可能
-- 本番ワークロードには使用不可 (ベータ版のため)
-- 利用可能リージョンは US East (Ohio) のみ
-- PostgreSQL 19 はベータ版であり、正式リリースまでに仕様変更の可能性がある
+- プレビュー環境のデータベースインスタンスは最大 60 日間で自動削除される
+- プレビュー環境で作成したスナップショットは、同一のプレビュー環境内でのインスタンス作成・復元にのみ利用できる
+- 提供リージョンは米国東部 (オハイオ) に限定される
+- Beta 版であるため、本番ワークロードでの利用は推奨されない
 
 ### 考慮すべき点
 
-- SQL/PGQ の実装はベータ段階であり、パフォーマンス特性が最終版と異なる可能性がある
-- 既存のアプリケーションやエクステンションとの互換性を十分にテストする必要がある
-- JIT がデフォルト無効化されたため、JIT に依存していたワークロードはパフォーマンス影響を確認する必要がある
-- RADIUS 認証が削除されたため、RADIUS を使用している環境はアップグレード前に認証方式の変更が必要
+- Beta 1 は正式リリース前のバージョンであり、機能や仕様が正式リリースまでに変更される可能性がある
+- 重要なデータはプレビュー環境に残さず、dump 機能でエクスポートして保管する必要がある
+- プレビュー環境から本番環境への直接的なアップグレードパスはないため、検証結果をもとに正式リリース後に改めて移行を計画する
 
 ## ユースケース
 
-### ユースケース 1: ソーシャルグラフ分析の統合
+### ユースケース 1: グラフ構造データの SQL/PGQ への移行検証
 
-**シナリオ**: SNS アプリケーションでユーザー間の友達関係や推薦を分析するために、PostgreSQL とは別に Neo4j を運用していた。データ同期のラグやインフラコストが課題となっていた。
-
-**実装例**:
-```sql
--- 友達の友達を探す (2 ホップ)
-SELECT DISTINCT p3.name
-FROM social_network GRAPH_TABLE (
-  MATCH (p1:Person)-[:Knows]->(p2:Person)-[:Knows]->(p3:Person)
-  WHERE p1.name = 'Alice' AND p3.name <> 'Alice'
-  COLUMNS (p3.name)
-);
-```
-
-**効果**: グラフデータベースの運用コスト削減、データ同期ラグの解消、SQL スキルのみでグラフクエリを記述可能
-
-### ユースケース 2: ゼロダウンタイムメジャーバージョンアップグレード
-
-**シナリオ**: 大規模な EC サイトのデータベースを PostgreSQL 18 から 19 にアップグレードする際、ロジカルレプリケーションを使用した Blue/Green デプロイメントを計画している。
+**シナリオ**: ソーシャルネットワークや推薦エンジンなど、リレーションシップ探索が中心のアプリケーションで、専用グラフデータベースと PostgreSQL を併用している。SQL/PGQ への一本化を検討している。
 
 **実装例**:
-```sql
--- PostgreSQL 19 でロジカルレプリケーションを動的に有効化 (再起動不要)
-ALTER SYSTEM SET wal_level = 'logical';
--- effective_wal_level で確認
-SHOW effective_wal_level;
-
--- シーケンスも自動同期されるため、カットオーバー時の手動調整が不要
-CREATE SUBSCRIPTION upgrade_sub
-  CONNECTION 'host=old-primary dbname=mydb'
-  PUBLICATION all_tables;
+```
+1. プレビュー環境に PostgreSQL 19 Beta 1 インスタンスを作成
+2. 既存のリレーションシップデータを dump / load でインポート
+3. SQL/PGQ を用いたグラフクエリで探索処理を再実装し、結果と性能を検証
 ```
 
-**効果**: アップグレード時のダウンタイムを数秒レベルに短縮、シーケンス不整合によるエラーリスクを排除
+**効果**: アプリケーションロジックやデータ同期処理を削減し、データストアを PostgreSQL に一元化できる見通しを立てられる
 
-### ユースケース 3: 大規模テーブルのオンラインメンテナンス
+### ユースケース 2: メンテナンスダウンタイムの削減検証
 
-**シナリオ**: 数百 GB のログテーブルで UPDATE/DELETE が頻繁に発生し、テーブルの肥大化 (bloat) が進行しているが、VACUUM FULL はテーブルロックが必要なため営業時間中に実行できない。
+**シナリオ**: 大規模テーブルの肥大化により、定期的なメンテナンス操作の実行時にダウンタイムが発生している。
 
 **実装例**:
-```sql
--- ノンブロッキングでテーブルを再構築
-REPACK TABLE access_logs CONCURRENTLY;
-
--- パラレル autovacuum で大規模テーブルの VACUUM を高速化
-ALTER SYSTEM SET autovacuum_max_parallel_workers = 4;
-SELECT pg_reload_conf();
+```
+1. プレビュー環境で対象テーブルを再現
+2. 並行テーブル再パッキングを実行し、アクセス可能性とストレージ再利用効果を検証
+3. メンテナンスウィンドウへの影響を測定
 ```
 
-**効果**: メンテナンスウィンドウ不要でテーブルサイズを最適化、I/O パフォーマンスの継続的な維持
+**効果**: メンテナンス中もアクセスを維持できることを確認し、本番運用での可用性向上を見込める
+
+### ユースケース 3: メジャーバージョンアップグレードのリハーサル
+
+**シナリオ**: ロジカルレプリケーションを用いたメジャーバージョンアップグレードを計画しているが、シーケンス値の手動調整やレプリケーション有効化時の再起動が運用上の負担となっている。
+
+**実装例**:
+```
+1. プレビュー環境で PostgreSQL 19 Beta 1 を用意
+2. ロジカルレプリケーションを動的に有効化し、再起動が不要であることを確認
+3. カットオーバー後にシーケンス値が自動同期されることを検証
+```
+
+**効果**: アップグレード手順を簡素化し、計画ダウンタイムと手動作業を削減できる
 
 ## 料金
 
-Database Preview Environment は US East (Ohio) リージョンの Amazon RDS for PostgreSQL の標準料金に準拠する。
+Amazon RDS Database Preview Environment のデータベースインスタンスは、米国東部 (オハイオ) リージョンの Amazon RDS for PostgreSQL の料金に従って課金されます。プレビュー環境専用の特別料金や割引はなく、通常の RDS インスタンス、ストレージ、I/O などの料金が適用されます。
 
 ### 料金例
 
-| インスタンスクラス | 月額料金 (概算) |
-|-------------------|----------------|
-| db.m6g.large (2 vCPU, 8 GiB) | 約 $135/月 (オンデマンド) |
-| db.m6g.xlarge (4 vCPU, 16 GiB) | 約 $270/月 (オンデマンド) |
-| db.r6g.large (2 vCPU, 16 GiB) | 約 $170/月 (オンデマンド) |
+| 使用量 | 月額料金 (概算) |
+|--------|------------------|
+| インスタンス料金 | 米国東部 (オハイオ) リージョンの RDS for PostgreSQL 料金に準拠 |
+| ストレージ / I/O 料金 | 通常の RDS 料金体系に準拠 |
 
-※ Preview Environment は評価目的のため、最大 60 日間のみ課金される。ストレージ料金は別途発生する。
+正確な料金は Amazon RDS for PostgreSQL の料金ページを参照してください。
 
 ## 利用可能リージョン
 
-Amazon RDS Database Preview Environment は US East (Ohio) リージョンで利用可能である。
+Amazon RDS Database Preview Environment は **米国東部 (オハイオ)** リージョンで提供されています。本機能の評価は同リージョンで実施します。
 
 ## 関連サービス・機能
 
-- **Amazon RDS for PostgreSQL**: PostgreSQL のフルマネージドデータベースサービス。PostgreSQL 19 の正式リリース後に本番環境で利用可能になる予定
-- **Amazon Aurora PostgreSQL**: PostgreSQL 互換の高性能データベース。将来的に PostgreSQL 19 互換バージョンの提供が見込まれる
-- **Amazon Neptune**: フルマネージドグラフデータベース。SQL/PGQ の登場により、シンプルなグラフワークロードでは RDS PostgreSQL への統合が選択肢になる
-- **AWS Database Migration Service (DMS)**: ロジカルレプリケーションと組み合わせたデータベース移行に利用可能
-- **Amazon RDS Blue/Green Deployments**: メジャーバージョンアップグレード時のダウンタイム最小化に活用
+- **Amazon RDS for PostgreSQL**: 本機能の対象となるマネージド PostgreSQL データベースサービス
+- **Amazon Aurora PostgreSQL**: 高可用性とスケーラビリティを備えた PostgreSQL 互換のマネージドデータベース。本番移行先の選択肢として検討可能
+- **AWS Database Migration Service (DMS)**: 検証後の本番移行やデータ移行に活用できるサービス
 
 ## 参考リンク
 
 - 📊 [インフォグラフィック](https://takech9203.github.io/aws-news-summary/20260608-postgresql-19-beta-1-amazon-rds-database-preview-environment.html)
 - [公式発表 (What's New)](https://aws.amazon.com/about-aws/whats-new/2026/06/postgresql-19-beta-1-amazon-rds-database-preview-environment/)
-- [PostgreSQL 19 Beta 1 Released (コミュニティ)](https://www.postgresql.org/about/news/postgresql-19-beta-1-released-3313/)
-- [Amazon RDS Database Preview Environment ドキュメント](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts.General.DBVersions)
+- [Amazon RDS for PostgreSQL ドキュメント](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html)
+- [Amazon RDS Database Preview Environment ドキュメント](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.RDS_Fea_Regions_DB-eng.Feature.PreviewEnvironment.html)
 - [Amazon RDS for PostgreSQL 料金ページ](https://aws.amazon.com/rds/postgresql/pricing/)
 
 ## まとめ
 
-PostgreSQL 19 Beta 1 が Amazon RDS Database Preview Environment で利用可能になったことで、SQL/PGQ によるネイティブグラフクエリ、REPACK CONCURRENTLY によるノンブロッキングテーブル再構築、ロジカルレプリケーションのシーケンス自動同期と動的有効化など、PostgreSQL 19 の革新的な新機能を早期に評価できるようになった。特にグラフデータベースの代替としての可能性を検証したい組織や、メジャーバージョンアップグレード戦略を計画中のチームは、60 日間の Preview Environment を活用して互換性テストを開始することを推奨する。正式リリースは 2026 年 9 月〜10 月が予定されている。
+PostgreSQL 19 Beta 1 が Amazon RDS Database Preview Environment で利用可能になり、SQL/PGQ によるネイティブグラフクエリ、並行テーブル再パッキング、ロジカルレプリケーションの強化といった注目機能をマネージド環境で事前検証できるようになりました。本番移行を見据えるお客様は、米国東部 (オハイオ) リージョンのプレビュー環境で早期に互換性と性能を評価することを推奨します。プレビュー環境のインスタンスは最大 60 日で自動削除されるため、重要なデータは必ずエクスポートして保管してください。
