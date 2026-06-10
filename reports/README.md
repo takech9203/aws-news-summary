@@ -5,6 +5,9 @@
 
 ## 2026 年
 
+- [2026-06-10 - AWS Cost and Usage Report 2.0 - テーブル設定の更新サポート](2026/2026-06-10-aws-cost-usage-report.md)
+- [2026-06-10 - Amazon EC2 - M9g および M9gd 汎用インスタンス](2026/2026-06-10-ec2-m9g-m9gd-instances-graviton5-processors-available.md)
+- [2026-06-09 - Amazon FSx for OpenZFS - Intelligent-Tiering ストレージクラスの提供リージョン拡大](2026/2026-06-09-amazon-fsx-openzfs.md)
 - [2026-06-09 - Claude Fable 5 - 初の一般提供 Mythos クラスモデル](2026/2026-06-09-claude-fable-5-aws.md)
 - [2026-06-09 - AWS Backup - Amazon EKS サポートが AWS European Sovereign Cloud (Germany) リージョンで利用可能に](2026/2026-06-09-aws-backup-amazon-eks-aws-european-sovereign-cloud.md)
 - [2026-06-09 - AWS FinOps Agent - コスト管理を自動化するエージェント](2026/2026-06-09-aws-finops-agent-preview.md)
