@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Elastic Beanstalk - Logs タブで CloudWatch Logs を統合表示</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  background-image: radial-gradient(circle at 15% 10%, rgba(255,153,0,0.08), transparent 40%),
+                    radial-gradient(circle at 85% 90%, rgba(0,161,201,0.08), transparent 40%);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.7;
+  padding: 24px;
+  margin: 0;
+}
+
+.container { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-bottom: 3px dashed rgba(255,153,0,0.4);
+  padding-bottom: 20px;
+}
+
+.header-left { flex: 1; min-width: 280px; }
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+  letter-spacing: 0.5px;
+}
+
+h1, .title {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.subtitle { font-size: 15px; color: var(--aws-light-gray); text-align: right; }
+.subtitle .date { color: var(--aws-orange); font-weight: 600; }
+
+h2, .section-title {
+  font-size: 23px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  margin: 0 0 18px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+h3 {
+  font-size: 18px;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 12px;
+  padding: 26px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+}
+
+.section::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 24px; bottom: 24px;
+  width: 4px;
+  border-radius: 4px;
+  background: linear-gradient(var(--aws-orange), var(--aws-smile-orange));
+  opacity: 0.6;
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.22);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-smile-orange);
+}
+
+code.inline {
+  background: rgba(0,161,201,0.15);
+  color: var(--aws-teal);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+}
+
+/* Before / After */
+.ba-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 18px;
+}
+.ba-box {
+  border-radius: 10px;
+  padding: 18px;
+}
+.ba-before { background: rgba(209,50,18,0.12); border: 1px solid rgba(209,50,18,0.45); }
+.ba-after { background: rgba(29,129,2,0.12); border: 1px solid rgba(29,129,2,0.5); }
+.ba-box h4 { margin: 0 0 12px 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.ba-before h4 { color: #ff7a5c; }
+.ba-after h4 { color: #6fd44f; }
+.ba-box ul { margin: 0; padding-left: 4px; list-style: none; }
+.ba-box li { margin: 8px 0; padding-left: 22px; position: relative; font-size: 14px; }
+.ba-before li::before { content: "✗"; position: absolute; left: 0; color: var(--aws-red); font-weight: 700; }
+.ba-after li::before { content: "✓"; position: absolute; left: 0; color: var(--aws-green); font-weight: 700; }
+
+/* Feature cards */
+.feature-card {
+  background: rgba(255,153,0,0.06);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.feature-card h4 { margin: 0 0 8px 0; color: var(--aws-white); font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.feature-card ul { margin: 6px 0 0 0; padding-left: 20px; }
+.feature-card li { margin: 4px 0; font-size: 14px; }
+
+/* Use case cards */
+.usecase {
+  background: linear-gradient(135deg, rgba(255,153,0,0.12), rgba(255,173,51,0.05));
+  border: 1px solid rgba(255,153,0,0.35);
+  border-radius: 10px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase h4 { margin: 0 0 10px 0; color: var(--aws-smile-orange); font-size: 16px; }
+.usecase .scenario { font-size: 14px; color: var(--aws-light-gray); margin: 6px 0; }
+.usecase .effect {
+  margin-top: 10px;
+  background: rgba(29,129,2,0.15);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-left: 3px solid var(--aws-green);
+}
+.usecase .effect b { color: #6fd44f; }
+
+/* flow steps inside usecase */
+.mini-steps { margin: 8px 0; counter-reset: step; }
+.mini-steps .ms { display: flex; align-items: flex-start; gap: 10px; margin: 6px 0; font-size: 14px; }
+.mini-steps .ms .num {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  border-radius: 50%;
+  font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* table */
+table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+th { background: rgba(255,153,0,0.18); color: var(--aws-orange); text-align: left; padding: 10px 12px; }
+td { padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.1); vertical-align: top; }
+td code, th code { font-family: 'Courier New', monospace; color: var(--aws-teal); font-size: 13px; }
+tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+
+/* two col grid for benefits / limits */
+.col2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.subcard { background: rgba(255,255,255,0.03); border-radius: 8px; padding: 16px; border: 1px solid rgba(255,255,255,0.07); }
+.subcard h4 { margin: 0 0 10px 0; font-size: 15px; }
+.subcard ul { margin: 0; padding-left: 18px; }
+.subcard li { margin: 7px 0; font-size: 14px; }
+.subcard.warn { border-color: rgba(255,153,0,0.4); }
+
+/* steps flow */
+.flow-diagram { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 22px 0; }
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 10px;
+  padding: 14px 18px;
+  text-align: center;
+  min-width: 130px;
+  font-size: 14px;
+}
+.flow-step .big { display: block; font-size: 22px; margin-bottom: 4px; }
+.flow-arrow { color: var(--aws-orange); font-size: 26px; font-weight: bold; }
+
+/* code block */
+.code-block { background: #1a1a2e; border-radius: 8px; overflow: hidden; margin: 16px 0; border: 1px solid rgba(255,153,0,0.2); }
+.code-header { background: #11162b; padding: 8px 16px; display: flex; justify-content: space-between; font-size: 12px; }
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; padding: 16px !important; }
+
+/* stat cards */
+.stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-top: 8px; }
+.stat {
+  background: linear-gradient(135deg, rgba(255,153,0,0.18), rgba(0,161,201,0.1));
+  border-radius: 10px;
+  padding: 18px;
+  text-align: center;
+  border: 1px solid rgba(255,153,0,0.3);
+}
+.stat .num { font-size: 26px; font-weight: 700; color: var(--aws-orange); display:block; }
+.stat .lbl { font-size: 13px; color: var(--aws-light-gray); margin-top: 4px; }
+
+.mermaid-container { background: #FFFFFF; border-radius: 12px; padding: 24px; margin: 20px 0; border: 2px solid rgba(255,153,0,0.3); overflow-x: auto; }
+.mermaid { display: flex; justify-content: center; }
+
+.note {
+  background: rgba(0,161,201,0.1);
+  border-left: 4px solid var(--aws-teal);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 14px 0;
+  font-size: 14px;
+}
+
+.region-badge {
+  display: inline-block;
+  background: rgba(0,161,201,0.15);
+  border: 1px solid rgba(0,161,201,0.4);
+  color: var(--aws-teal);
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 13px;
+  margin: 4px 6px 4px 0;
+}
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+footer { margin-top: 28px; padding-top: 18px; border-top: 2px dashed rgba(255,255,255,0.2); font-size: 13px; color: var(--aws-light-gray); }
+footer ul { list-style: none; padding: 0; margin: 8px 0 0 0; }
+footer li { margin: 6px 0; padding-left: 20px; position: relative; }
+footer li::before { content: "📎"; position: absolute; left: 0; }
+
+@media (max-width: 720px) {
+  .ba-grid, .col2, .stats { grid-template-columns: 1fr; }
+  h1, .title { font-size: 24px; }
+  .subtitle { text-align: left; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-left">
+      <span class="service-badge">AWS Elastic Beanstalk</span>
+      <h1>☁️ コンソールの Logs タブで<br/>CloudWatch Logs を統合表示</h1>
+    </div>
+    <div class="subtitle">
+      リリース日<br/>
+      <span class="date">2026 年 6 月 11 日</span>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      AWS Elastic Beanstalk は、環境ごとの <span class="highlight">Logs タブ</span>に Amazon CloudWatch Logs との統合機能を追加しました。
+      これにより、Elastic Beanstalk コンソールを離れることなく、環境がストリーミングしている CloudWatch のログイベントを直接確認できるようになりました。
+    </p>
+    <p>
+      Logs タブ内で<span class="highlight">ロググループの選択・ログストリームの切り替え・フィルタリング</span>を行い、必要に応じて CloudWatch コンソールへスムーズに遷移できます。
+      日常的にトラブルシューティングを行う開発者・運用担当者・ソリューションアーキテクトの<span class="highlight">コンテキストスイッチ削減</span>を目的としています。
+    </p>
+
+    <div class="ba-grid">
+      <div class="ba-box ba-before">
+        <h4>🔴 Before（課題）</h4>
+        <ul>
+          <li>ログ確認のたびに CloudWatch コンソールへ移動が必要だった</li>
+          <li>対象ロググループ・ログストリームを自力で探す必要があった</li>
+          <li>コンソール間移動でコンテキストスイッチが発生し効率が低下</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <h4>🟢 After（改善）</h4>
+        <ul>
+          <li>Logs タブで CloudWatch ログイベントを直接閲覧できる</li>
+          <li><code class="inline">aws/elasticbeanstalk/&lt;env-name&gt;/*</code> に一致するロググループを自動表示</li>
+          <li>ストリーム切り替え・フィルタリング・Logs Insights への直接リンクが利用可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <p>Elastic Beanstalk 環境がストリーミングしたログを、コンソールの Logs タブから CloudWatch Logs を経由して直接参照する流れを示しています。</p>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 開発者 / 運用担当者"])
+
+    subgraph EBConsole["☁️ Elastic Beanstalk コンソール"]
+        LogsTab["📑 Logs タブ"]
+        LogGroupSel["📂 ロググループ選択"]
+        StreamDrop["🔽 ログストリームドロップダウン"]
+        ViewIn["🔗 View in CloudWatch ドロップダウン"]
+    end
+
+    subgraph CWLogs["☁️ Amazon CloudWatch Logs"]
+        LG[("📋 ロググループ<br/>aws/elasticbeanstalk/env-name/*")]
+        Insights["🔍 CloudWatch Logs Insights"]
+    end
+
+    EBEnv["⚙️ Elastic Beanstalk 環境<br/>EC2 インスタンス"]
+
+    User --> LogsTab
+    LogsTab --> LogGroupSel
+    LogGroupSel --> StreamDrop
+    StreamDrop -.->|ログイベント取得| LG
+    LogsTab --> ViewIn
+    ViewIn -.->|直接リンク| LG
+    ViewIn -.->|直接リンク| Insights
+    EBEnv -->|ログストリーミング| LG
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+
+    class EBConsole,CWLogs cloud
+    class LogsTab,LogGroupSel,StreamDrop,ViewIn process
+    class Insights internal
+    class LG database
+    class User user
+    class EBEnv compute
+      </pre>
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="feature-card">
+      <h4>📂 Logs タブでのロググループ表示</h4>
+      <ul>
+        <li>環境がログをストリーミングしているロググループを Logs タブに表示</li>
+        <li><code class="inline">aws/elasticbeanstalk/&lt;env-name&gt;/*</code> プレフィックスに一致するロググループも表示</li>
+        <li>CloudWatch コンソールへ移動せずに対象ロググループを把握できる</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h4>🔽 ログストリームの選択と切り替え</h4>
+      <ul>
+        <li>ロググループを選択すると、属するログストリームを閲覧できる</li>
+        <li>既定では最も直近にアクティブだったストリームが選択される</li>
+        <li>ドロップダウンでストリーム間の切り替えと結果のフィルタリングが可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h4>🔗 View in CloudWatch ドロップダウン</h4>
+      <ul>
+        <li>ロググループ / ログストリーム / Logs Insights への直接リンクを提供</li>
+        <li>より詳細な分析が必要な場合に CloudWatch コンソールへスムーズに遷移</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📋 ロググループの命名規則</h3>
+    <p>Linux プラットフォームでは、インスタンス上のログファイルのパスにプレフィックスを付与してロググループ名が決まります。</p>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>ロググループプレフィックス</td><td><code>aws/elasticbeanstalk/&lt;env-name&gt;/*</code></td></tr>
+      <tr><td>Linux のロググループ名</td><td><code>/aws/elasticbeanstalk/{environment_name}</code> + オンインスタンスのログファイルパス</td></tr>
+      <tr><td>既定で選択されるストリーム</td><td>最も直近にアクティブなログストリーム</td></tr>
+      <tr><td>切り替え操作</td><td>ログストリームドロップダウンによる選択とフィルタリング</td></tr>
+      <tr><td>外部遷移</td><td>View in CloudWatch（ロググループ / ログストリーム / Logs Insights）</td></tr>
+    </table>
+    <div class="note">
+      💡 例: Linux 環境で <code class="inline">/var/log/nginx/error.log</code> を取得する場合、ロググループ名は
+      <code class="inline">/aws/elasticbeanstalk/{environment_name}/var/log/nginx/error.log</code> となります。
+    </div>
+
+    <h3>🔒 IAM 権限</h3>
+    <p>Logs タブで CloudWatch のログを表示するには、ログのストリーミングが有効化されている必要があります。<code class="inline">AWSElasticBeanstalkWebTier</code> または <code class="inline">AWSElasticBeanstalkWorkerTier</code> の管理ポリシー、もしくは以下の権限がインスタンスプロファイルに必要です。</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">インスタンスプロファイルに必要な権限</span>
+      </div>
+      <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": [
+        "*"
+      ]
+    }
+  ]
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🚀 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="col2">
+      <div class="subcard">
+        <ul>
+          <li>Elastic Beanstalk 環境が作成済みであること</li>
+          <li>インスタンスログの CloudWatch Logs へのストリーミングが有効化されていること</li>
+          <li>インスタンスプロファイルに CloudWatch Logs への書き込み権限が付与されていること</li>
+        </ul>
+      </div>
+      <div class="subcard">
+        <div class="flow-diagram" style="margin:0; flex-direction:column; gap:8px;">
+          <div class="flow-step"><span class="big">1️⃣</span>ストリーミング有効化</div>
+          <span class="flow-arrow">↓</span>
+          <div class="flow-step"><span class="big">2️⃣</span>Logs タブで確認</div>
+          <span class="flow-arrow">↓</span>
+          <div class="flow-step"><span class="big">3️⃣</span>必要に応じ CloudWatch へ</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>① インスタンスログのストリーミングを有効化</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">EB CLI でストリーミングを有効化</span>
+      </div>
+      <pre><code class="language-bash">eb logs --cloudwatch-logs enable</code></pre>
+    </div>
+    <p style="font-size:14px;">コンソールから設定する場合は、環境の <span class="highlight">[Configuration]</span> → <span class="highlight">[Updates, monitoring, and logging]</span> カテゴリで <span class="highlight">[Log streaming]</span> を有効にします。</p>
+
+    <h3>② Logs タブでログを確認</h3>
+    <p style="font-size:14px;">対象環境を開き <span class="highlight">[Logs]</span> タブを選択。表示されたロググループ一覧から確認したいものを選ぶと、ログストリームとログイベントが表示されます。既定では最も直近にアクティブなストリームが選択されます。</p>
+
+    <h3>③ 必要に応じて CloudWatch へ遷移</h3>
+    <p style="font-size:14px;">詳細分析が必要な場合は <span class="highlight">[View in CloudWatch]</span> ドロップダウンから、ロググループ・ログストリーム・CloudWatch Logs Insights への直接リンクを選択します。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="col2">
+      <div class="subcard">
+        <h4 style="color:var(--aws-orange);">📈 ビジネス面</h4>
+        <ul>
+          <li><b>運用効率の向上</b>: コンソール間移動が不要になり調査時間を短縮</li>
+          <li><b>トラブルシューティングの迅速化</b>: Logs タブから即座にログ確認し障害対応を加速</li>
+          <li><b>学習コストの低減</b>: CloudWatch に不慣れでも EB コンソール内で参照可能</li>
+        </ul>
+      </div>
+      <div class="subcard">
+        <h4 style="color:var(--aws-teal);">⚙️ 技術面</h4>
+        <ul>
+          <li><b>コンテキストスイッチの削減</b>: 環境単位でロググループが整理表示される</li>
+          <li><b>柔軟なログ参照</b>: ストリーム切り替えやフィルタリングを Logs タブから直接実行</li>
+          <li><b>詳細分析への導線</b>: Logs Insights への直接リンクで高度なクエリへスムーズに移行</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="col2">
+      <div class="subcard warn">
+        <h4 style="color:var(--aws-smile-orange);">🚧 制限事項</h4>
+        <ul>
+          <li>表示には事前にインスタンスログのストリーミング有効化が必要</li>
+          <li>ストリーミング対象はプラットフォームごとの既定ファイルに限定</li>
+          <li>カスタムログは統合では直接サポートされない（CloudWatch エージェントの個別設定が必要）</li>
+        </ul>
+      </div>
+      <div class="subcard warn">
+        <h4 style="color:var(--aws-smile-orange);">🔍 考慮すべき点</h4>
+        <ul>
+          <li>多数インスタンス同時起動時、CloudWatch API がスロットリングされる可能性</li>
+          <li>rsyslog / journald の既定レート制限でログ欠落や断続が発生する場合がある</li>
+          <li>CloudWatch Logs の保持期間・ライフサイクル設定で保存挙動が変わる</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>① 本番環境の障害調査</h4>
+      <p class="scenario"><b>シナリオ</b>: 本番環境でアプリケーションエラーが発生し、原因を素早く特定したい。</p>
+      <div class="mini-steps">
+        <div class="ms"><span class="num">1</span>対象環境を開く</div>
+        <div class="ms"><span class="num">2</span>Logs タブで該当ロググループを選ぶ</div>
+        <div class="ms"><span class="num">3</span>直近のログストリームでエラーを確認</div>
+      </div>
+      <div class="effect">✨ <b>効果</b>: CloudWatch へ移動せずにエラーログを確認でき、初動対応を迅速化。</div>
+    </div>
+
+    <div class="usecase">
+      <h4>② 複数ストリームの横断確認</h4>
+      <p class="scenario"><b>シナリオ</b>: 複数インスタンスにまたがる環境で、特定時間帯のログを横断的に確認したい。</p>
+      <div class="mini-steps">
+        <div class="ms"><span class="num">1</span>ロググループを選択</div>
+        <div class="ms"><span class="num">2</span>ドロップダウンでストリームを切り替え</div>
+        <div class="ms"><span class="num">3</span>キーワードでフィルタリングして抽出</div>
+      </div>
+      <div class="effect">✨ <b>効果</b>: ストリームを Logs タブ内で切り替えながら確認でき、調査効率が向上。</div>
+    </div>
+
+    <div class="usecase">
+      <h4>③ 高度なログ分析への移行</h4>
+      <p class="scenario"><b>シナリオ</b>: ログの傾向を集計し、特定パターンの発生頻度を分析したい。</p>
+      <div class="mini-steps">
+        <div class="ms"><span class="num">1</span>対象ロググループを選択</div>
+        <div class="ms"><span class="num">2</span>View in CloudWatch から Logs Insights を選ぶ</div>
+        <div class="ms"><span class="num">3</span>クエリで集計・分析を実行</div>
+      </div>
+      <div class="effect">✨ <b>効果</b>: Logs タブから直接 Logs Insights へ遷移し、クエリベースの詳細分析へ移行。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金 & 利用可能リージョン</h2>
+    <div class="col2">
+      <div class="subcard">
+        <h4 style="color:var(--aws-green);">💵 料金</h4>
+        <p style="font-size:14px; margin:0;">
+          本機能自体に<span class="highlight">追加料金はありません</span>。Elastic Beanstalk の利用にも追加費用はかからず、ログのストリーミングと保存には
+          <b>Amazon CloudWatch Logs の標準料金</b>が適用されます。取り込みデータ量・保存量・Logs Insights でのスキャンデータ量に応じて課金されます。
+        </p>
+      </div>
+      <div class="subcard">
+        <h4 style="color:var(--aws-teal);">🌍 リージョン</h4>
+        <p style="font-size:14px; margin:0 0 8px 0;">Elastic Beanstalk が利用可能なすべての商用リージョンおよび GovCloud (US) リージョンの、すべてのプラットフォームブランチで利用可能。</p>
+        <span class="region-badge">全 AWS 商用リージョン</span>
+        <span class="region-badge">AWS GovCloud (US)</span>
+        <span class="region-badge">全プラットフォームブランチ</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="feature-card">
+      <h4>📊 Amazon CloudWatch Logs</h4>
+      <p style="font-size:14px; margin:0;">Elastic Beanstalk 環境のログを保存・参照するためのバックエンドサービス。</p>
+    </div>
+    <div class="feature-card">
+      <h4>🔍 Amazon CloudWatch Logs Insights</h4>
+      <p style="font-size:14px; margin:0;">ロググループに対してクエリベースの分析を実行する機能。</p>
+    </div>
+    <div class="feature-card">
+      <h4>❤️ AWS Elastic Beanstalk Enhanced Health</h4>
+      <p style="font-size:14px; margin:0;">拡張ヘルスを有効化すると、環境のヘルス情報も CloudWatch Logs へストリーミングできる。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      今回のアップデートにより、Elastic Beanstalk コンソールの <span class="highlight">Logs タブから CloudWatch のログイベントを直接確認</span>でき、ログ調査時のコンテキストスイッチが大幅に削減されます。
+    </p>
+    <p>
+      すべての商用リージョンと GovCloud (US) で<span class="highlight">追加料金なく</span>利用できるため、運用中の環境ではインスタンスログのストリーミングを有効化し、Logs タブを活用したトラブルシューティングフローへの移行を検討することをおすすめします。
+    </p>
+  </div>
+
+  <footer>
+    <p style="color:var(--aws-orange); font-weight:600;">出典・参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/06/elastic-beanstalk-cloudwatch-logs/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/AWSHowTo.cloudwatchlogs.html" target="_blank" rel="noopener noreferrer">ドキュメント (Using Elastic Beanstalk with Amazon CloudWatch Logs)</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer">料金ページ (Amazon CloudWatch)</a></li>
+    </ul>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#FF9900',
+      primaryTextColor: '#232F3E',
+      primaryBorderColor: '#FF9900',
+      lineColor: '#FF9900',
+      secondaryColor: '#F5F5F5',
+      tertiaryColor: '#FAFAFA',
+      background: '#FFFFFF',
+      mainBkg: '#FFF3E0',
+      nodeBorder: '#FF9900',
+      clusterBkg: '#FFF8E1',
+      clusterBorder: '#FF9900',
+      edgeLabelBackground: '#FFFFFF',
+      textColor: '#232F3E'
+    }
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

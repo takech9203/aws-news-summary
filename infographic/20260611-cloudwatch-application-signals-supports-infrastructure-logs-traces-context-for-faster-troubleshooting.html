@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon CloudWatch Application Signals - インフラ・ログ・トレースのコンテキスト対応</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  background-image: radial-gradient(circle at 15% 10%, rgba(255,153,0,0.08), transparent 40%),
+                    radial-gradient(circle at 85% 90%, rgba(0,161,201,0.08), transparent 40%);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.7;
+  padding: 20px;
+  margin: 0;
+}
+
+.container { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-bottom: 3px solid var(--aws-orange);
+  padding-bottom: 20px;
+}
+
+.header-left { flex: 1; min-width: 280px; }
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.35;
+}
+
+.subtitle-line { font-size: 15px; color: var(--aws-light-gray); margin-top: 10px; }
+
+.date-box {
+  text-align: right;
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  background: var(--aws-dark-squid);
+  border: 1px solid rgba(255,153,0,0.3);
+  border-radius: 8px;
+  padding: 10px 16px;
+  white-space: nowrap;
+}
+.date-box .d-label { color: var(--aws-orange); font-weight: 600; }
+
+h2, .section-title {
+  font-size: 23px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+h3 {
+  font-size: 17px;
+  color: var(--aws-white);
+  margin: 18px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 12px;
+  padding: 26px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-smile-orange);
+}
+
+/* Before / After */
+.ba-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+.ba-box {
+  border-radius: 10px;
+  padding: 18px;
+}
+.ba-before { background: rgba(209,50,18,0.12); border: 1px solid rgba(209,50,18,0.5); }
+.ba-after { background: rgba(29,129,2,0.14); border: 1px solid rgba(29,129,2,0.6); }
+.ba-box h4 { margin: 0 0 12px 0; font-size: 16px; }
+.ba-before h4 { color: #ff7a5c; }
+.ba-after h4 { color: #5fd35f; }
+.ba-box ul { margin: 0; padding-left: 18px; }
+.ba-box li { margin: 8px 0; font-size: 14px; }
+
+/* feature cards */
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.feature-card h3 { margin: 0 0 8px 0; color: var(--aws-smile-orange); font-size: 16px; }
+.feature-card ul { margin: 6px 0 0 0; padding-left: 18px; }
+.feature-card li { margin: 5px 0; font-size: 14px; }
+
+/* tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255,153,0,0.18);
+  color: var(--aws-smile-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--aws-orange);
+}
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+.ok { color: var(--aws-green); font-weight: 700; }
+
+/* flow */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 18px 0;
+}
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 18px;
+  text-align: center;
+  min-width: 130px;
+  font-size: 14px;
+}
+.flow-step .fs-num { color: var(--aws-orange); font-weight: 700; display:block; font-size: 12px; }
+.flow-arrow { color: var(--aws-orange); font-size: 26px; font-weight: bold; }
+
+/* mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 18px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+.note { font-size: 14px; color: #aab3b3; margin-top: 12px; }
+
+/* benefit columns */
+.benefit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.benefit-col h3 { color: var(--aws-teal); border-bottom: 1px dashed rgba(0,161,201,0.5); padding-bottom: 6px; }
+.benefit-col ul { padding-left: 18px; }
+.benefit-col li { margin: 8px 0; font-size: 14px; }
+
+/* use cases */
+.usecase {
+  background: rgba(255,153,0,0.08);
+  border: 1px solid rgba(255,153,0,0.3);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.usecase h3 { color: var(--aws-orange); margin: 0 0 8px 0; }
+.usecase .label { color: var(--aws-smile-orange); font-weight: 700; }
+
+/* constraints */
+.warn-box {
+  background: rgba(209,50,18,0.1);
+  border: 1px solid rgba(209,50,18,0.4);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.warn-box ul { margin: 0; padding-left: 18px; }
+.warn-box li { margin: 7px 0; font-size: 14px; }
+
+.region-pill {
+  display: inline-block;
+  background: rgba(0,161,201,0.15);
+  border: 1px solid var(--aws-teal);
+  color: var(--aws-light-gray);
+  border-radius: 20px;
+  padding: 4px 14px;
+  margin: 4px 6px 4px 0;
+  font-size: 13px;
+}
+
+a.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+a.aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+.related-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.related-item {
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+.related-item strong { color: var(--aws-smile-orange); }
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255,153,0,0.18), rgba(0,161,201,0.12));
+  border: 1px solid rgba(255,153,0,0.4);
+  border-radius: 12px;
+  padding: 22px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px dashed rgba(255,255,255,0.25);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { padding-left: 18px; }
+footer li { margin: 5px 0; }
+
+@media (max-width: 700px) {
+  .ba-grid, .benefit-grid, .related-grid { grid-template-columns: 1fr; }
+  h1, .title { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-left">
+      <span class="service-badge">Amazon CloudWatch Application Signals</span>
+      <h1>📡 インフラ・ログ・トレースのコンテキストで<br>トラブルシューティングを高速化</h1>
+      <div class="subtitle-line">サービスヘルスランキング＋新しいインフラ／ログ／トレースタブで、根本原因の特定を 1 か所に集約</div>
+    </div>
+    <div class="date-box">
+      <div><span class="d-label">リリース日</span><br>2026 年 6 月 11 日</div>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>🔍 概要</h2>
+    <p>
+      Amazon CloudWatch Application Signals に、アプリケーションマップ上の
+      <span class="highlight">サービスヘルスランキング</span> と、サービス概要ページ上の新しい
+      <span class="highlight">「インフラストラクチャ」「ログ」「トレース」タブ</span> が追加されました。
+      運用担当者は不健全なサービスをトリアージし、基盤となるコンピューティング環境、ログスニペット、
+      トレースの詳細を <span class="highlight">1 か所</span> で確認できます。
+    </p>
+    <p>
+      アプリケーションマップは、サービスをヘルス状態でランク付けし、Amazon EKS / ECS / AWS Lambda / Amazon EC2 の
+      サービスノード上に <span class="highlight">ランタイムインジケーター</span> を表示します。可観測性の主要シグナルである
+      メトリクス・ログ・トレースを統合的に扱うことで、<span class="highlight">平均修復時間 (MTTR) の短縮</span> を目指す
+      運用チームやアプリケーション開発者が主な対象です。
+    </p>
+
+    <div class="ba-grid">
+      <div class="ba-box ba-before">
+        <h4>⚠️ アップデート前の課題</h4>
+        <ul>
+          <li>ヘルス確認後、根本原因調査のため X-Ray や CloudWatch Logs など別ツールへの切り替えが必要だった</li>
+          <li>不健全なサービスを直感的に把握しづらく、トリアージに時間がかかった</li>
+          <li>コンピューティング環境 (EKS / ECS / Lambda / EC2) の状態とアプリのシグナルを関連付ける手段が限られていた</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <h4>✅ アップデート後の改善</h4>
+        <ul>
+          <li>アプリケーションマップでサービスをヘルス状態順にランク付けし、問題のあるサービスを素早く特定</li>
+          <li>インフラ・ログ・トレースタブにより 1 か所で根本原因を調査できる</li>
+          <li>ランタイムインジケーターと関連ツールへのディープリンクでツール間移動を削減</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🗺️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Compute["⚙️ コンピューティング環境"]
+        direction LR
+        EKS["☸️ Amazon EKS"]
+        ECS["📦 Amazon ECS"]
+        Lambda["⚡ AWS Lambda"]
+        EC2["🖥️ Amazon EC2"]
+        EKS ~~~ ECS ~~~ Lambda ~~~ EC2
+    end
+
+    subgraph AppSignals["📡 CloudWatch Application Signals"]
+        Map["🗺️ アプリケーションマップ<br/>ヘルスランキング + ランタイムインジケーター"]
+        Overview["📄 サービス概要ページ"]
+        subgraph Tabs["🔖 詳細タブ"]
+            direction LR
+            Infra["🏗️ インフラストラクチャ"]
+            Logs["📋 ログ"]
+            Traces["🔍 トレース"]
+            Infra ~~~ Logs ~~~ Traces
+        end
+        Map --> Overview
+        Overview --> Tabs
+    end
+
+    Compute -->|メトリクス / ログ / トレース| AppSignals
+    Tabs -.->|ディープリンク| Tools["🔧 関連モニタリングツール<br/>CloudWatch Logs / X-Ray など"]
+    Operator(["👤 運用担当者"]) --> Map
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Compute,Tabs cloud
+    class AppSignals layer
+    class EKS,ECS,Lambda,EC2 compute
+    class Map,Overview,Tools process
+    class Infra,Logs,Traces internal
+    class Operator user
+      </pre>
+    </div>
+    <p class="note">
+      コンピューティング環境から収集されたメトリクス・ログ・トレースが Application Signals に集約され、
+      アプリケーションマップのヘルスランキングとサービス概要ページの 3 つのタブを通じて、
+      運用担当者が単一画面でトラブルシューティングを行えます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⭐ 主要機能</h2>
+
+    <div class="feature-card">
+      <h3>① アプリケーションマップのサービスヘルスランキング</h3>
+      <ul>
+        <li>サービスをヘルス状態に基づいてランク付け</li>
+        <li>不健全なサービスを視覚的に素早く特定し、トリアージを効率化</li>
+        <li>EKS / ECS / Lambda / EC2 のサービスノードにランタイムインジケーターを表示</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h3>② 🏗️ インフラストラクチャタブ</h3>
+      <ul>
+        <li>サービスを支えるコンピューティング・ランタイム環境とその構成要素を表示</li>
+        <li>キュレートされたデフォルトメトリクスで環境の状態を一目で確認</li>
+        <li>関連モニタリングツールへのディープリンクで詳細な調査へ素早く遷移</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h3>③ 📋 ログタブ</h3>
+      <ul>
+        <li>サービスに関連するログスニペットをサービス概要ページ上で直接確認</li>
+        <li>別ツールへ切り替えずに根本原因の手がかりを取得</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h3>④ 🔍 トレースタブ</h3>
+      <ul>
+        <li>サービスに関連するトレースの詳細をサービス概要ページ上で確認</li>
+        <li>メトリクス・ログと組み合わせて、リクエスト経路・遅延・エラー箇所を特定</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>⚙️ 技術仕様</h2>
+
+    <h3>サポート対象のコンピューティングプラットフォーム</h3>
+    <table>
+      <thead>
+        <tr><th>プラットフォーム</th><th>ランタイムインジケーター</th><th>備考</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>☸️ Amazon EKS</td><td class="ok">対応</td><td>サービス名とクラスター名を自動検出</td></tr>
+        <tr><td>📦 Amazon ECS</td><td class="ok">対応</td><td>サービスと環境の指定が必要な場合あり</td></tr>
+        <tr><td>⚡ AWS Lambda</td><td class="ok">対応</td><td>関数単位でのシグナル収集</td></tr>
+        <tr><td>🖥️ Amazon EC2</td><td class="ok">対応</td><td>CloudWatch エージェントと ADOT に対応</td></tr>
+      </tbody>
+    </table>
+
+    <h3>統合される可観測性シグナル</h3>
+    <table>
+      <thead>
+        <tr><th>シグナル</th><th>表示場所</th><th>連携先</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>インフラストラクチャメトリクス</td><td>インフラストラクチャタブ</td><td>CloudWatch メトリクス</td></tr>
+        <tr><td>ログ</td><td>ログタブ</td><td>Amazon CloudWatch Logs</td></tr>
+        <tr><td>トレース</td><td>トレースタブ</td><td>AWS X-Ray</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="feature-card">
+      <ul>
+        <li>対象アプリで CloudWatch Application Signals が有効化されていること</li>
+        <li>サポート言語 (Java / Python / Node.js / .NET) で実装されていること</li>
+        <li>Amazon EKS / ECS / AWS Lambda / Amazon EC2 のいずれかで稼働していること</li>
+      </ul>
+    </div>
+
+    <h3>導入ステップ</h3>
+    <div class="flow-diagram">
+      <div class="flow-step"><span class="fs-num">STEP 1</span>Application Signals を有効化<br><small>StartDiscovery API</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step"><span class="fs-num">STEP 2</span>マップでヘルス状態を確認<br><small>不健全なサービスを選択</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step"><span class="fs-num">STEP 3</span>3 つのタブで根本原因を調査<br><small>インフラ／ログ／トレース</small></div>
+    </div>
+    <p class="note">
+      コンソールまたは <span class="highlight">StartDiscovery</span> API でサービスディスカバリーを開始するとトポロジーが自動検出されます。
+      アプリケーションマップでヘルス状態順にランク付けされたノードを選択し、サービス概要ページの各タブで
+      コンピューティング環境・ログスニペット・トレース詳細を確認、必要に応じてディープリンクから関連ツールへ遷移します。
+    </p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="benefit-grid">
+      <div class="benefit-col">
+        <h3>📈 ビジネス面</h3>
+        <ul>
+          <li><strong>MTTR の短縮</strong>: トリアージと根本原因調査を 1 か所で実施し障害解決を高速化</li>
+          <li><strong>運用負荷の軽減</strong>: 複数ツールの切り替えが不要に</li>
+          <li><strong>追加コストの抑制</strong>: 既存機能の拡張として提供、新ツール導入不要</li>
+        </ul>
+      </div>
+      <div class="benefit-col">
+        <h3>🔧 技術面</h3>
+        <ul>
+          <li><strong>コンテキストの一元化</strong>: インフラ・ログ・トレースを単一画面に集約し相関分析が容易</li>
+          <li><strong>マルチプラットフォーム対応</strong>: EKS / ECS / Lambda / EC2 で統一されたヘルス可視化</li>
+          <li><strong>ディープリンク連携</strong>: CloudWatch Logs や X-Ray へ素早く遷移</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="warn-box">
+      <ul>
+        <li>Application Signals の利用には CloudWatch の課金が発生する</li>
+        <li>ランタイムインジケーターは Amazon EKS / ECS / AWS Lambda / Amazon EC2 でサポート</li>
+        <li>Application Signals は <span class="highlight">Canada West (Calgary) を除く</span> すべての商用リージョンでサポート</li>
+        <li>サポート対象外のアーキテクチャでは、サービス名や環境名の手動指定が必要な場合がある</li>
+        <li>ログ・トレースの収集量に応じて CloudWatch Logs および X-Ray の料金が発生する</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h3>① マイクロサービス障害の迅速なトリアージ</h3>
+      <p><span class="label">シナリオ</span>: 複数のマイクロサービスで構成された Amazon EKS 上のアプリでレイテンシー上昇が報告された。</p>
+      <p><span class="label">効果</span>: マップでヘルス状態順にサービスを確認し最も不健全なサービスを即座に特定。インフラタブでノードのリソース状況を確認し原因を素早く絞り込む。</p>
+    </div>
+
+    <div class="usecase">
+      <h3>② ログとトレースを併用した根本原因分析</h3>
+      <p><span class="label">シナリオ</span>: AWS Lambda 関数でエラー率が上昇しているが原因が不明。</p>
+      <p><span class="label">効果</span>: トレースタブで失敗したリクエストの経路を確認し、ログタブで対応するエラーログスニペットを参照。ツールを切り替えずに根本原因を特定。</p>
+    </div>
+
+    <div class="usecase">
+      <h3>③ コンピューティング環境の健全性確認</h3>
+      <p><span class="label">シナリオ</span>: Amazon ECS 上のサービスでパフォーマンス低下が発生している。</p>
+      <p><span class="label">効果</span>: インフラタブでコンテナ環境とキュレートされたデフォルトメトリクスを確認し、ディープリンクから関連ツールへ遷移して詳細を分析。</p>
+    </div>
+  </div>
+
+  <!-- 料金 / リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <p>
+      本機能は CloudWatch Application Signals の一部として提供されます。利用には CloudWatch の料金が適用され、
+      収集されるシグナル (メトリクス・ログ・トレース) の量に応じて課金されます。
+    </p>
+    <p>Amazon CloudWatch Application Signals がサポートされているすべての AWS リージョンで利用可能です。</p>
+    <div>
+      <span class="region-pill">🌏 サポート対象の全商用リージョン</span>
+      <span class="region-pill">🚫 Canada West (Calgary) を除く</span>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="related-item"><strong>Amazon CloudWatch Logs</strong><br>ログタブで表示されるログスニペットの基盤となるログ管理サービス</div>
+      <div class="related-item"><strong>AWS X-Ray</strong><br>トレースタブで表示されるトレースデータの収集・分析サービス</div>
+      <div class="related-item"><strong>Amazon EKS / ECS / Lambda / EC2</strong><br>ランタイムインジケーターとインフラタブが対応するコンピューティングプラットフォーム</div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin-top:0">
+        このアップデートにより、CloudWatch Application Signals は<span class="highlight">不健全なサービスのトリアージから根本原因の特定までを単一画面で完結</span>でき、
+        運用チームの MTTR 短縮に貢献します。
+      </p>
+      <p style="margin-bottom:0">
+        EKS / ECS / Lambda / EC2 を運用するチームは、アプリケーションマップのヘルスランキングと
+        新しいインフラ・ログ・トレースタブを活用し、トラブルシューティングのワークフローを見直すことを推奨します。
+      </p>
+    </div>
+  </div>
+
+  <footer>
+    <p>📎 出典 / 参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/06/cloudwatch-application-signals-supports%20infrastructure-logs-traces-context-for-faster%20troubleshooting/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Application-Monitoring-Sections.html" target="_blank" rel="noopener noreferrer">ドキュメント: CloudWatch Application Monitoring Sections</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer">Amazon CloudWatch 料金ページ</a></li>
+    </ul>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#FF9900',
+      primaryTextColor: '#232F3E',
+      primaryBorderColor: '#FF9900',
+      lineColor: '#FF9900',
+      secondaryColor: '#F5F5F5',
+      tertiaryColor: '#FAFAFA',
+      background: '#FFFFFF',
+      mainBkg: '#FFF3E0',
+      nodeBorder: '#FF9900',
+      clusterBkg: '#FFF8E1',
+      clusterBorder: '#FF9900',
+      edgeLabelBackground: '#FFFFFF',
+      textColor: '#232F3E'
+    }
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
