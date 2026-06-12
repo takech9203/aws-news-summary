@@ -5,12 +5,19 @@
 
 ## 2026 年
 
+- [2026-06-12 - Amazon SageMaker AI - NVIDIA Nemotron モデルのサーバーレスファインチューニング対応](2026/2026-06-12-amazon-sagemaker-ft-nemotron-3.md)
+- [2026-06-12 - Amazon EC2 - I7i インスタンスが欧州 (パリ) リージョンで利用可能に](2026/2026-06-12-amazon-ec2-i7i-instances-europe-paris-region.md)
 - [2026-06-11 - Amazon Bedrock - OpenAI GPT-5.4 / GPT-5.5 が米国東部 (バージニア北部) で利用可能に](2026/2026-06-11-openai-gpt-us-east-virginia-amazon.md)
+- [2026-06-11 - Amazon EC2 - High Memory U7i-8TB インスタンスの欧州 (パリ) リージョン提供開始](2026/2026-06-11-amazon-ec2-u7i-8tb-europe-paris.md)
 - [2026-06-11 - Amazon Managed Service for Prometheus - 順序外サンプルの取り込みサポート](2026/2026-06-11-amazon-managed-service-prometheus-outoforder-ingestion.md)
+- [2026-06-11 - AWS Lake Formation - Amazon S3 上の基礎データへのアクセス拡張](2026/2026-06-11-aws-lake-formation-access-data-amazon-s3.md)
 - [2026-06-11 - Amazon MWAA Serverless - Amazon EventBridge 通知のサポート](2026/2026-06-11-amazon-mwaa-serverless-eventbridge.md)
 - [2026-06-11 - Amazon CloudWatch Application Signals - インフラストラクチャ、ログ、トレースのコンテキスト対応](2026/2026-06-11-cloudwatch-application-signals-supports-infrastructure-logs-traces-context-for-faster-troubleshooting.md)
 - [2026-06-11 - AWS Workload Credentials Provider - 証明書とシークレットの自動配布](2026/2026-06-11-aws-workload-credentials-provider.md)
 - [2026-06-11 - Amazon Aurora PostgreSQL - メジャーバージョン 18 サポート](2026/2026-06-11-amazon-aurora-postgresql-major-version-18.md)
+- [2026-06-11 - Amazon EKS - AWS Outposts での EC2 インスタンスストアを利用したローカルクラスターのサポート](2026/2026-06-11-amazon-eks-aws-outposts-ec2-instance-store.md)
+- [2026-06-11 - Amazon Quick - Snowflake Cortex AI 連携](2026/2026-06-11-amazon-quick-snowflake-cortex-ai.md)
+- [2026-06-11 - Amazon Managed Service for Prometheus - ネイティブヒストグラムのサポート](2026/2026-06-11-amazon-managed-service-prometheus-native-histograms.md)
 - [2026-06-11 - AWS Elastic Beanstalk - コンソールの Logs タブで CloudWatch Logs を統合表示](2026/2026-06-11-elastic-beanstalk-cloudwatch-logs.md)
 - [2026-06-10 - Amazon EC2 - M9g および M9gd 汎用インスタンス](2026/2026-06-10-ec2-m9g-m9gd-instances-graviton5-processors-available.md)
 - [2026-06-10 - Amazon Bedrock - Gemma 4 モデルの提供開始](2026/2026-06-10-gemma-4-amazon-bedrock.md)
