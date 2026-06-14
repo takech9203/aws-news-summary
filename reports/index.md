@@ -5,7 +5,9 @@
 
 ## 2026 年
 
+- [2026-06-12 - Kiro - /goal、Queue Steering、強化された /rewind](2026/2026-06-12-kiro-changelog-2026-06-12.md)
 - [2026-06-12 - Amazon SageMaker AI - NVIDIA Nemotron モデルのサーバーレスファインチューニング対応](2026/2026-06-12-amazon-sagemaker-ft-nemotron-3.md)
+- [2026-06-12 - Amazon Lightsail - 3 つの新規 AWS リージョンでの提供開始](2026/2026-06-12-amazon-lightsail-aws-regions.md)
 - [2026-06-12 - Amazon EC2 - Capacity Blocks for ML (AWS GovCloud (US) リージョン対応)](2026/2026-06-12-amazon-ec2-capacity-blocks-ml-govcloud.md)
 - [2026-06-12 - Amazon EC2 - I7i インスタンスが欧州 (パリ) リージョンで利用可能に](2026/2026-06-12-amazon-ec2-i7i-instances-europe-paris-region.md)
 - [2026-06-11 - Amazon Bedrock - OpenAI GPT-5.4 / GPT-5.5 が米国東部 (バージニア北部) で利用可能に](2026/2026-06-11-openai-gpt-us-east-virginia-amazon.md)
