@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS DevOps Agent - カスタム SRE エージェントと MCP/A2A 対応</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      background-image: radial-gradient(circle at 15% 10%, rgba(255,153,0,0.08), transparent 40%),
+                        radial-gradient(circle at 85% 90%, rgba(0,161,201,0.08), transparent 40%);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.7;
+      padding: 24px;
+      margin: 0;
+    }
+
+    .container { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+      gap: 12px;
+      border-bottom: 3px solid var(--aws-orange);
+      padding-bottom: 20px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .header-right { text-align: right; min-width: 150px; }
+    .subtitle { font-size: 14px; color: var(--aws-light-gray); }
+    .date-badge {
+      display: inline-block;
+      background: var(--aws-dark-squid);
+      border: 1px solid var(--aws-orange);
+      color: var(--aws-orange);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    h2 {
+      font-size: 23px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h3 {
+      font-size: 17px;
+      color: var(--aws-white);
+      margin: 18px 0 8px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 10px;
+      padding: 26px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.18);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-smile-orange);
+    }
+
+    p { margin: 8px 0; }
+
+    /* Before/After */
+    .ba-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+    .ba-box { border-radius: 10px; padding: 18px; }
+    .ba-before { background: rgba(209,50,18,0.12); border: 1px solid rgba(209,50,18,0.5); }
+    .ba-after { background: rgba(29,129,2,0.12); border: 1px solid rgba(29,129,2,0.6); }
+    .ba-title { font-weight: 700; margin-bottom: 10px; font-size: 15px; }
+    .ba-before .ba-title { color: #ff7a5c; }
+    .ba-after .ba-title { color: #5fd35f; }
+    .ba-box ul { margin: 0; padding-left: 20px; }
+    .ba-box li { margin: 8px 0; font-size: 14px; }
+
+    /* feature cards */
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 14px 0;
+    }
+    .feature-card .fc-title { font-weight: 700; color: var(--aws-white); font-size: 16px; margin-bottom: 6px; }
+    .feature-card ul { margin: 6px 0 0 0; padding-left: 20px; }
+    .feature-card li { margin: 5px 0; font-size: 14px; }
+
+    /* mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid { display: flex; justify-content: center; }
+
+    /* table */
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    th { color: var(--aws-orange); border-bottom: 2px solid rgba(255,153,0,0.4); }
+    td code { background: rgba(0,161,201,0.15); color: var(--aws-teal); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+
+    /* use case */
+    .usecase {
+      background: linear-gradient(135deg, rgba(255,153,0,0.12), rgba(255,153,0,0.04));
+      border: 1px solid rgba(255,153,0,0.35);
+      border-radius: 10px;
+      padding: 18px;
+      margin: 14px 0;
+    }
+    .uc-title { font-weight: 700; color: var(--aws-smile-orange); font-size: 16px; margin-bottom: 8px; }
+    .uc-label { color: var(--aws-orange); font-weight: 600; }
+    .uc-effect { margin-top: 8px; color: #aee0b0; font-size: 14px; }
+
+    /* protocol pills */
+    .proto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
+    .proto-card { background: var(--aws-squid-ink); border: 1px solid rgba(140,79,255,0.4); border-radius: 10px; padding: 16px; }
+    .proto-card .pc-name { font-weight: 700; color: var(--aws-purple); font-size: 16px; margin-bottom: 6px; }
+    .proto-card .pc-desc { font-size: 13px; }
+
+    /* warning box */
+    .warn-box { background: rgba(255,173,51,0.08); border: 1px dashed rgba(255,173,51,0.5); border-radius: 8px; padding: 14px 18px; margin: 12px 0; }
+    .warn-box ul { margin: 6px 0 0 0; padding-left: 20px; }
+    .warn-box li { margin: 6px 0; font-size: 14px; }
+
+    /* region chips */
+    .region-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .region-chip { background: var(--aws-squid-ink); border: 1px solid rgba(0,161,201,0.4); border-radius: 6px; padding: 6px 12px; font-size: 13px; }
+    .region-chip code { color: var(--aws-teal); font-size: 12px; }
+    .region-chip.tokyo { border-color: var(--aws-orange); background: rgba(255,153,0,0.12); }
+
+    /* code block */
+    .code-block { background: #1a1a2e; border-radius: 8px; overflow: hidden; margin: 12px 0; }
+    .code-header { background: #16213e; padding: 8px 16px; display: flex; justify-content: space-between; font-size: 12px; }
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+    .code-block code { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; padding: 16px !important; }
+
+    .icon-text { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; }
+    .arrow { color: var(--aws-orange); font-weight: 700; }
+
+    .pros-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .pros-col h3 { margin-top: 0; }
+    .pros-col li { margin: 8px 0; font-size: 14px; }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+    footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.2); font-size: 12px; color: var(--aws-light-gray); }
+    footer ul { padding-left: 18px; }
+    footer li { margin: 6px 0; }
+
+    @media (max-width: 700px) {
+      .ba-grid, .proto-grid, .pros-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="header">
+      <div>
+        <span class="service-badge">AWS DevOps Agent</span>
+        <h1>🤖 カスタム SRE エージェントと<br/>MCP / A2A プロトコル対応</h1>
+      </div>
+      <div class="header-right">
+        <div class="subtitle">リリース日</div>
+        <div class="date-badge">2026 年 6 月 15 日</div>
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>AWS DevOps Agent が大幅に機能拡張され、<span class="highlight">カスタム SRE エージェント</span>、<span class="highlight">独自サブエージェントの持ち込み</span>、そして <span class="highlight">MCP / A2A プロトコルによるヘッドレスアクセス</span>に対応しました。チームは繰り返し発生する SRE ワークフローを自動化し、DevOps Agent を他のエージェントと連携させ、Kiro や Claude などの既存のコーディングアシスタントから機能を利用できます。</p>
+      <p>カスタム SRE エージェントは Agent Spaces 内で作成し、一定の周期で実行するようスケジュール設定できます。たとえば日次のデータベースヘルスレポートの生成や、過去 24 時間のログから異常を検出するエージェントを構築できます。さらにチャット機能の強化、インシデントスキップのサポート、メモリと Git 管理スキルによるナレッジ強化、品質追跡ダッシュボード、5 つの新リージョンも導入されました。</p>
+
+      <div class="ba-grid">
+        <div class="ba-box ba-before">
+          <div class="ba-title">❌ アップデート前の課題</div>
+          <ul>
+            <li>機能はマネジメントコンソールの Agent Spaces 内でしか使えず、IDE や他ツールから呼び出せなかった</li>
+            <li>日次ヘルスチェックなど定型的な SRE 作業を定期実行させる仕組みがなかった</li>
+            <li>独自エージェントや外部フレームワークと連携する標準的な方法がなかった</li>
+          </ul>
+        </div>
+        <div class="ba-box ba-after">
+          <div class="ba-title">✅ アップデート後の改善</div>
+          <ul>
+            <li>MCP / A2A 経由で Kiro、Claude などからヘッドレスで呼び出せる</li>
+            <li>Agent Spaces 内でカスタム SRE エージェントをスケジュール実行し自動化できる</li>
+            <li>Amazon Bedrock や 3rd party 製の独自サブエージェントを A2A で接続できる</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <p>開発者ツールは MCP/A2A 経由で DevOps Agent コアを呼び出し、DevOps Agent はカスタム SRE エージェントや独自サブエージェントと連携して SRE ワークフローを自動化します。</p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph IDE["💻 開発者ツール"]
+        direction LR
+        Kiro["🛠️ Kiro"]
+        Claude["🤖 Claude"]
+        Other["🔌 その他のコーディングアシスタント"]
+        Kiro ~~~ Claude ~~~ Other
+    end
+
+    subgraph Agent["☁️ AWS DevOps Agent"]
+        subgraph Space["🗂️ Agent Spaces"]
+            direction LR
+            Custom["⏰ カスタム SRE エージェント<br/>スケジュール実行"]
+            Knowledge[("📚 ナレッジ<br/>メモリ + Git 管理スキル")]
+            Custom ~~~ Knowledge
+        end
+        Core["⚙️ DevOps Agent コア<br/>調査 / ヘルスチェック"]
+    end
+
+    subgraph Sub["🧩 独自サブエージェント"]
+        direction LR
+        Bedrock["🟧 Amazon Bedrock エージェント"]
+        ThirdParty["🔗 サードパーティフレームワーク"]
+        Bedrock ~~~ ThirdParty
+    end
+
+    IDE -.->|"MCP / A2A"| Core
+    Core --> Space
+    Core -.->|"A2A"| Sub
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Agent,IDE,Sub cloud
+    class Space layer
+    class Custom compute
+    class Knowledge storage
+    class Kiro,Claude,Other,Bedrock,ThirdParty input
+    class Core process
+        </pre>
+      </div>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="fc-title">⏰ 1. カスタム SRE エージェント</div>
+        <ul>
+          <li>Agent Spaces 内でエージェントを作成し、一定のカデンス (周期) で実行するようスケジュール設定</li>
+          <li>スロークエリやチューニング対象パラメータをチェックする日次データベースヘルスレポートを自動生成</li>
+          <li>過去 24 時間のログをレビューして異常を検出するエージェントを構築</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">🔌 2. ヘッドレスアクセス (MCP / A2A)</div>
+        <ul>
+          <li>A2A または MCP プロトコル経由で、すでに利用中のツールやエージェントから DevOps Agent を呼び出せる</li>
+          <li>Kiro power for AWS DevOps Agent により、IDE を離れずに本番ヘルス確認や問題調査を実行</li>
+          <li>Claude などのコーディングアシスタントからも機能を利用可能</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">🧩 3. 独自サブエージェント連携 (Bring-your-own)</div>
+        <ul>
+          <li>Amazon Bedrock やサードパーティフレームワークで構築したサブエージェントを A2A 経由で接続</li>
+          <li>DevOps Agent を起点に、組織固有のエージェントを組み合わせた拡張ワークフローを構築</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">✨ 4. その他の機能強化</div>
+        <ul>
+          <li>チャット機能の強化 / 顧客定義ルールに基づくインシデントスキップ</li>
+          <li>メモリ (memories) と Git 管理スキルによるナレッジの強化</li>
+          <li>人手によるラベリングと顧客作成ダッシュボードでタスク品質を追跡</li>
+          <li>5 つの新しいリージョンでの提供開始</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様 - 連携プロトコル</h2>
+      <div class="proto-grid">
+        <div class="proto-card">
+          <div class="pc-name">MCP</div>
+          <div class="pc-desc">Model Context Protocol。コーディングアシスタント等から DevOps Agent を<strong>ツールとして呼び出す</strong>ためのプロトコル。</div>
+        </div>
+        <div class="proto-card">
+          <div class="pc-name">A2A</div>
+          <div class="pc-desc">Agent-to-Agent。独自サブエージェントや外部エージェントと DevOps Agent を<strong>相互接続</strong>するプロトコル。</div>
+        </div>
+      </div>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>カスタム SRE エージェント実行場所</td><td>Agent Spaces 内</td></tr>
+        <tr><td>サブエージェント構築フレームワーク</td><td>Amazon Bedrock、サードパーティフレームワーク</td></tr>
+        <tr><td>サービスエンドポイント形式</td><td><code>aidevops.{region}.amazonaws.com</code></td></tr>
+      </table>
+      <p style="font-size:13px;color:#9aa;">※ 今回のアップデートに対応する awsapichanges.com 上の公開 API 変更情報は確認できませんでした。</p>
+
+      <h3>📚 ナレッジ関連の最近の改善</h3>
+      <table>
+        <tr><th>日付</th><th>改善内容</th></tr>
+        <tr><td>2026/06/11</td><td>スキル、指示 (AGENTS.md)、メモリが単一の Knowledge ページ (3 タブ) に統合。サイドバーのラベルが「Skills」から「Knowledge」に変更</td></tr>
+        <tr><td>2026/06/03</td><td>チャット中に追加したツールが再起動なしで約 30 秒以内に利用可能に</td></tr>
+        <tr><td>2026/05/28</td><td>アクティブな Agent Space でトポロジー理解が自動的に定期更新されるように</td></tr>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+      <h3>前提条件</h3>
+      <div class="icon-text"><span class="arrow">→</span><span>サポートされているリージョンで Agent Space を作成済みであること</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span>監視・調査対象の AWS アカウントが Agent Space に関連付けられていること</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span>ヘッドレス利用時は Kiro や Claude など MCP/A2A 対応クライアントを準備すること</span></div>
+
+      <div class="flow-step-wrap">
+        <h3>導入ステップ</h3>
+      </div>
+      <div class="feature-card">
+        <div class="fc-title">STEP 1 - カスタム SRE エージェントの作成とスケジュール設定</div>
+        <p style="font-size:14px;margin:0;">Agent Spaces のコンソールでエージェントを作成し、実行カデンス (例: 日次) を指定。データベースのスロークエリとチューニング対象パラメータを点検する日次ヘルスレポートを定義します。</p>
+      </div>
+      <div class="feature-card">
+        <div class="fc-title">STEP 2 - ヘッドレスアクセスの構成</div>
+        <p style="font-size:14px;margin:0;">利用中の IDE やコーディングアシスタントから MCP または A2A 経由で接続。Kiro の場合は Kiro power for AWS DevOps Agent を有効化し、IDE 内から本番ヘルス確認や問題調査を実行します。</p>
+      </div>
+      <div class="feature-card">
+        <div class="fc-title">STEP 3 - 独自サブエージェントの接続</div>
+        <p style="font-size:14px;margin:0;">Amazon Bedrock やサードパーティフレームワークで構築したサブエージェントを A2A 経由で接続し、組織固有の調査・自動化ワークフローを拡張します。</p>
+      </div>
+      <div class="warn-box">
+        <strong>💡 補足</strong>: サードパーティ連携 (GitHub、GitLab などの CI/CD、Dynatrace、Datadog、New Relic、Splunk などの可観測性ツール、MCP サーバー) は Agent Space 単位で構成し、リージョンに依存しません。
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="uc-title">① 日次データベースヘルスレポートの自動化</div>
+        <p><span class="uc-label">シナリオ</span>: 運用チームが毎朝、本番 DB のスロークエリやチューニングが必要なパラメータを手動で確認している。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">実装例</span></div>
+          <pre><code class="language-text">Agent Spaces でカスタム SRE エージェントを作成し、日次カデンスでスケジュール。
+スロークエリとパラメータチューニング候補をチェックするヘルスレポートを自動生成。</code></pre>
+        </div>
+        <p class="uc-effect">✅ 毎朝の手動点検が不要になり、データベースの問題を早期に検出できる。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="uc-title">② IDE 内からの本番障害調査</div>
+        <p><span class="uc-label">シナリオ</span>: 開発者が本番環境の異常に気づいたが、調査のために別ツールへ切り替える必要がある。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">実装例</span></div>
+          <pre><code class="language-text">Kiro の IDE 内から Kiro power for AWS DevOps Agent を利用し、
+MCP 経由で本番ヘルス確認と問題調査を実行。</code></pre>
+        </div>
+        <p class="uc-effect">✅ IDE を離れずに障害調査ができ、コンテキストスイッチを削減して対応を高速化。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="uc-title">③ 独自サブエージェントによる調査ワークフローの拡張</div>
+        <p><span class="uc-label">シナリオ</span>: 組織固有のランブックを Bedrock で構築したエージェントとして保有し、DevOps Agent の調査と組み合わせたい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">実装例</span></div>
+          <pre><code class="language-text">Amazon Bedrock で構築したサブエージェントを A2A 経由で DevOps Agent に接続し、
+DevOps Agent の調査結果を起点に組織固有の対応フローを連携実行。</code></pre>
+        </div>
+        <p class="uc-effect">✅ 既存資産を活かしながら、AWS の調査能力と組織固有の自動化を統合できる。</p>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>📈 メリット</h2>
+      <div class="pros-grid">
+        <div class="pros-col">
+          <h3>💼 ビジネス面</h3>
+          <ul>
+            <li><strong>運用工数の削減</strong>: 繰り返しの SRE 業務を自動化し、付加価値の高い作業へ集中</li>
+            <li><strong>ツールチェーンの統合</strong>: 既存の IDE から利用でき、コンテキストスイッチを削減</li>
+            <li><strong>品質の可視化</strong>: ラベリングとダッシュボードでタスク品質を継続的に追跡</li>
+          </ul>
+        </div>
+        <div class="pros-col">
+          <h3>⚙️ 技術面</h3>
+          <ul>
+            <li><strong>標準プロトコル採用</strong>: MCP と A2A で幅広いツール・エージェントと相互運用</li>
+            <li><strong>拡張性</strong>: Bedrock やサードパーティの独自サブエージェントで柔軟に拡張</li>
+            <li><strong>クロスリージョン監視</strong>: 作成リージョンに関わらず関連アカウント内の全リージョンを監視</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <div class="warn-box">
+        <strong>制限事項</strong>
+        <ul>
+          <li>現時点でサポートされるリージョンは 11 リージョンに限られる</li>
+          <li>Agent Space とそのデータ (調査、トポロジー、推奨事項) は作成リージョンに保存されるため、データレジデンシー要件を考慮してリージョンを選択する必要がある</li>
+          <li>公式発表ページに料金の詳細は明記されていない</li>
+        </ul>
+      </div>
+      <div class="warn-box">
+        <strong>考慮すべき点</strong>
+        <ul>
+          <li>カスタム SRE エージェントのスケジュール実行は、対象リソースや実行頻度に応じてコストや負荷に影響する可能性があるため設計時に考慮が必要</li>
+          <li>独自サブエージェントを A2A で接続する場合、サブエージェント側の権限管理やセキュリティ設計を適切に行う必要がある</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン (全 11 リージョン)</h2>
+      <p>今回のアップデートで 5 つの新しいリージョンが追加されました。Agent Space の作成リージョンに関わらず、関連付けた AWS アカウント内の全リージョンのリソースをクロスリージョンで監視できます。</p>
+      <div class="region-grid">
+        <span class="region-chip">米国東部 (バージニア北部) <code>us-east-1</code></span>
+        <span class="region-chip">米国西部 (オレゴン) <code>us-west-2</code></span>
+        <span class="region-chip">カナダ (中部) <code>ca-central-1</code></span>
+        <span class="region-chip">南米 (サンパウロ) <code>sa-east-1</code></span>
+        <span class="region-chip">アジアパシフィック (ムンバイ) <code>ap-south-1</code></span>
+        <span class="region-chip">アジアパシフィック (シンガポール) <code>ap-southeast-1</code></span>
+        <span class="region-chip">アジアパシフィック (シドニー) <code>ap-southeast-2</code></span>
+        <span class="region-chip tokyo">⭐ アジアパシフィック (東京) <code>ap-northeast-1</code></span>
+        <span class="region-chip">欧州 (フランクフルト) <code>eu-central-1</code></span>
+        <span class="region-chip">欧州 (アイルランド) <code>eu-west-1</code></span>
+        <span class="region-chip">欧州 (ロンドン) <code>eu-west-2</code></span>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="icon-text"><span class="arrow">→</span><span><strong>Kiro</strong>: AWS の AI 搭載 IDE。Kiro power for AWS DevOps Agent により IDE 内から利用可能</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span><strong>Amazon Bedrock</strong>: 独自サブエージェントの構築基盤。A2A 経由で連携</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span><strong>MCP / A2A</strong>: DevOps Agent を外部ツールやエージェントと連携させる標準プロトコル</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span><strong>Amazon CloudWatch Logs</strong>: ログ調査や異常検出に利用する可観測性サービス</span></div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section" style="border:1px solid rgba(255,153,0,0.4);">
+      <h2>📝 まとめ</h2>
+      <p>AWS DevOps Agent は<span class="highlight">カスタム SRE エージェントのスケジュール実行</span>、<span class="highlight">MCP/A2A によるヘッドレスアクセス</span>、<span class="highlight">独自サブエージェント連携</span>を獲得し、定型的な SRE 業務の自動化と既存ツールチェーンへの統合が大きく前進しました。まずは日次ヘルスチェックなどのカスタムエージェントを試作し、Kiro や Claude からのヘッドレス利用を検証することを推奨します。東京を含む 11 リージョンで利用でき、データレジデンシー要件に合わせたリージョン選択も検討してください。</p>
+    </div>
+
+    <footer>
+      <p>📎 出典 / Source:</p>
+      <ul>
+        <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/06/aws-devops-agent-custom-agents/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/06/aws-devops-agent-custom-agents/</a></li>
+        <li><a class="aws-link" href="https://docs.aws.amazon.com/devopsagent/latest/userguide/recent-fixes-and-improvements.html" target="_blank" rel="noopener noreferrer">最近の修正と改善: https://docs.aws.amazon.com/devopsagent/latest/userguide/recent-fixes-and-improvements.html</a></li>
+        <li><a class="aws-link" href="https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent-supported-regions.html" target="_blank" rel="noopener noreferrer">サポートされているリージョン: https://docs.aws.amazon.com/devopsagent/latest/userguide/about-aws-devops-agent-supported-regions.html</a></li>
+      </ul>
+    </footer>
+
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+    hljs.highlightAll();
+  </script>
+</body>
+</html>

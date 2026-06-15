@@ -5,6 +5,20 @@
 
 ## 2026 年
 
+- [2026-06-15 - Amazon ECS - Express Mode が AWS GovCloud (US) リージョンで利用可能に](2026/2026-06-15-amazon-ecs-express-mode-govcloud.md)
+- [2026-06-15 - Amazon RDS for MariaDB - コミュニティマイナーバージョン 10.6.27、10.11.18、11.4.12、11.8.8 サポート](2026/2026-06-15-amazon-rds-mariadb-community-versions.md)
+- [2026-06-15 - Amazon Route 53 Resolver DNS Firewall - Palo Alto Networks Advanced DNS Security 対応](2026/2026-06-15-amazon-route-53-resolver-dns.md)
+- [2026-06-15 - Amazon Bedrock AgentCore Memory - 長期記憶向け厳密一貫メタデータ](2026/2026-06-15-agentcore-memory-scmetadata.md)
+- [2026-06-15 - AWS Cost Explorer - 請求グループ内アカウントの過去データ保持](2026/2026-06-15-aws-cost-explorer.md)
+- [2026-06-15 - AWS WAF - AI トラフィックマネタイゼーション](2026/2026-06-15-aws-waf-ai-traffic-monetization.md)
+- [2026-06-15 - Amazon RDS for MySQL - Extended Support マイナーバージョン 5.7.44-RDS.20260521](2026/2026-06-15-amazon-rds-mysql-extended-support-minor-5744-rds.md)
+- [2026-06-15 - Amazon CloudWatch - Query Studio](2026/2026-06-15-amazon-cloudwatch-query-studio-generally-available.md)
+- [2026-06-15 - Amazon EC2 C8i - 欧州 (ストックホルム) リージョンでの提供開始](2026/2026-06-15-amazon-ec2-c8i-instances-europe-stockholm-region.md)
+- [2026-06-15 - Amazon CloudWatch - メトリクスセントラライゼーション](2026/2026-06-15-amazon-cross-account-metrics-centralization.md)
+- [2026-06-15 - Amazon RDS for MariaDB - MariaDB 12.3 のプレビュー環境サポート](2026/2026-06-15-amazon-rds-maria-db-innovation-release-12-3-rds-database-preview-environment.md)
+- [2026-06-15 - Amazon CloudWatch - Log Analytics](2026/2026-06-15-amazon-cloudwatch-log-analytics.md)
+- [2026-06-15 - AWS DevOps Agent - カスタム SRE エージェントと MCP/A2A プロトコル対応](2026/2026-06-15-aws-devops-agent-custom-agents.md)
+- [2026-06-15 - AWS Lambda Managed Instances - マネージドリソースへのタグ伝播](2026/2026-06-15-aws-lambda-managed-instances-tag-propagation.md)
 - [2026-06-12 - Kiro - /goal、Queue Steering、強化された /rewind](2026/2026-06-12-kiro-changelog-2026-06-12.md)
 - [2026-06-12 - Amazon SageMaker AI - NVIDIA Nemotron モデルのサーバーレスファインチューニング対応](2026/2026-06-12-amazon-sagemaker-ft-nemotron-3.md)
 - [2026-06-12 - Amazon Lightsail - 3 つの新規 AWS リージョンでの提供開始](2026/2026-06-12-amazon-lightsail-aws-regions.md)
