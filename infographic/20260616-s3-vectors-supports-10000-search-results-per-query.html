@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon S3 Vectors - 1 クエリあたり最大 10,000 件の類似検索結果に対応</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+      gap: 16px;
+      border-bottom: 3px solid var(--aws-orange);
+      padding-bottom: 20px;
+    }
+
+    .header-left { flex: 1; min-width: 260px; }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    h1, .title {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.35;
+    }
+
+    h1 .accent { color: var(--aws-orange); }
+
+    .subtitle { font-size: 14px; color: var(--aws-light-gray); margin-top: 8px; }
+    .date-box { text-align: right; font-size: 14px; color: var(--aws-light-gray); white-space: nowrap; }
+    .date-box .day { font-size: 20px; color: var(--aws-orange); font-weight: 700; }
+
+    h2, .section-title {
+      font-size: 23px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h3 { font-size: 18px; color: var(--aws-smile-orange); margin: 20px 0 10px; }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    p { margin: 10px 0; }
+
+    /* Stat cards */
+    .stat-row { display: flex; gap: 16px; flex-wrap: wrap; margin: 18px 0 6px; }
+    .stat-card {
+      flex: 1;
+      min-width: 150px;
+      background: linear-gradient(135deg, rgba(255,153,0,0.18), rgba(140,79,255,0.12));
+      border: 1px solid rgba(255,153,0,0.4);
+      border-radius: 10px;
+      padding: 18px;
+      text-align: center;
+    }
+    .stat-num { font-size: 36px; font-weight: 700; color: var(--aws-orange); line-height: 1.1; }
+    .stat-label { font-size: 13px; color: var(--aws-light-gray); margin-top: 6px; }
+
+    /* Before/After */
+    .ba-grid { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+    .ba-col { flex: 1; min-width: 280px; border-radius: 10px; padding: 18px; }
+    .ba-before { background: rgba(209,50,18,0.12); border: 1px solid rgba(209,50,18,0.5); }
+    .ba-after { background: rgba(29,129,2,0.14); border: 1px solid rgba(29,129,2,0.6); }
+    .ba-title { font-weight: 700; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .ba-before .ba-title { color: #ff7a5c; }
+    .ba-after .ba-title { color: #5fd13a; }
+    .ba-list { list-style: none; padding: 0; margin: 0; }
+    .ba-list li { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; font-size: 14px; }
+    .ba-arrow-center { display: flex; align-items: center; color: var(--aws-orange); font-size: 28px; font-weight: 700; }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 18px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid { display: flex; justify-content: center; }
+    .caption { font-size: 13px; color: var(--aws-light-gray); font-style: italic; margin-top: 8px; }
+
+    /* Feature cards */
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 6px;
+      padding: 16px 18px;
+      margin: 14px 0;
+    }
+    .feature-card .fc-title { font-weight: 700; color: var(--aws-white); font-size: 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .feature-card ul { margin: 6px 0 0; padding-left: 20px; }
+    .feature-card li { margin: 5px 0; font-size: 14px; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.12); }
+    th { background: rgba(255,153,0,0.15); color: var(--aws-orange); font-weight: 600; }
+    td .highlight { white-space: nowrap; }
+
+    /* Code blocks */
+    .code-block { background: #1a1a2e; border-radius: 8px; overflow: hidden; margin: 14px 0; border: 1px solid rgba(255,153,0,0.2); }
+    .code-header { background: #16213e; padding: 8px 16px; display: flex; justify-content: space-between; font-size: 12px; }
+    .code-lang { color: var(--aws-orange); font-weight: 700; }
+    .code-title { color: var(--aws-light-gray); }
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+    .code-block code { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; padding: 16px !important; }
+
+    /* Use cases */
+    .usecase {
+      background: linear-gradient(135deg, rgba(255,153,0,0.10), rgba(255,173,51,0.04));
+      border: 1px solid rgba(255,153,0,0.35);
+      border-radius: 10px;
+      padding: 18px;
+      margin: 14px 0;
+    }
+    .usecase .uc-title { font-weight: 700; color: var(--aws-smile-orange); font-size: 16px; margin-bottom: 6px; }
+    .uc-effect { margin-top: 10px; font-size: 14px; color: #9fe18a; }
+
+    /* Merit / limits two-column */
+    .two-col { display: flex; gap: 16px; flex-wrap: wrap; }
+    .two-col > div { flex: 1; min-width: 280px; }
+
+    .check-item { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; font-size: 14px; }
+    .check-icon { color: var(--aws-green); }
+    .warn-icon { color: var(--aws-smile-orange); }
+
+    .pill { display: inline-block; background: rgba(0,161,201,0.18); color: var(--aws-teal); border: 1px solid rgba(0,161,201,0.4); border-radius: 20px; padding: 4px 12px; font-size: 13px; margin: 4px 6px 4px 0; }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+    footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.2); font-size: 13px; color: var(--aws-light-gray); }
+    footer ul { list-style: none; padding: 0; }
+    footer li { margin: 6px 0; }
+
+    @media (max-width: 600px) {
+      h1, .title { font-size: 24px; }
+      .ba-arrow-center { transform: rotate(90deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">Amazon S3 Vectors</span>
+        <h1>1 クエリあたり最大 <span class="accent">10,000 件</span>の<br/>類似検索結果に対応</h1>
+        <div class="subtitle">類似検索結果数の上限を 100 件 → 10,000 件 (100 倍) へ拡張</div>
+      </div>
+      <div class="date-box">
+        <div>リリース日</div>
+        <div class="day">2026.06.16</div>
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>
+        <span class="highlight">Amazon S3 Vectors</span> は、ベクトルデータをネイティブにサポートする Amazon S3 のオブジェクトストレージです。
+        今回、1 回の類似検索クエリで返却できる結果数の上限を、従来の <strong>100 件</strong>から最大 <strong>10,000 件</strong>へ拡張しました。
+      </p>
+      <p>
+        これにより、1 回のクエリでより広範な候補集合を取得できます。とくに<span class="highlight">リランキング・集約・重複排除</span>を行う多段階検索パイプライン (multi-stage retrieval pipeline) に有用です。結果は<strong>ページネーション</strong>で返却され、最初のページを処理しながら後続のページを取得できます。
+      </p>
+
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-num">10,000</div>
+          <div class="stat-label">1 クエリあたりの最大結果数</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">100倍</div>
+          <div class="stat-label">従来 (100 件) からの増加</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">512 KB</div>
+          <div class="stat-label">返却データの無料枠</div>
+        </div>
+      </div>
+
+      <h3>🔄 Before / After</h3>
+      <div class="ba-grid">
+        <div class="ba-col ba-before">
+          <div class="ba-title">⛔ アップデート前の課題</div>
+          <ul class="ba-list">
+            <li>📉 1 クエリあたり最大 <strong>100 件</strong>しか取得できなかった</li>
+            <li>🔁 多くの候補が必要な場合、複数回クエリを発行して結果を組み合わせる必要があった</li>
+            <li>🧩 リランキングや重複排除の実装が煩雑になりがちだった</li>
+          </ul>
+        </div>
+        <div class="ba-arrow-center">➡️</div>
+        <div class="ba-col ba-after">
+          <div class="ba-title">✅ アップデート後の改善</div>
+          <ul class="ba-list">
+            <li>📈 1 クエリで最大 <strong>10,000 件</strong>の結果取得が可能に</li>
+            <li>📄 ページネーションで結果を段階的に処理できる</li>
+            <li>⚙️ 多段階検索パイプラインの実装が簡素化</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    App(["👤 アプリケーション"]) --> Query["🔍 QueryVectors<br/>topK 最大 10,000"]
+
+    subgraph S3V["☁️ Amazon S3 Vectors"]
+        Query --> Index[("🧭 ベクトルインデックス")]
+        Index --> Page1["📄 1 ページ目<br/>結果 + nextToken"]
+        Page1 -.->|nextToken| Page2["📄 2 ページ目<br/>結果 + nextToken"]
+    end
+
+    Page1 --> Rerank["⚙️ リランキング/集約/重複排除"]
+    Page2 -.-> Rerank
+    Rerank --> Result(["✅ 最終結果"])
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class S3V cloud
+    class Query,Rerank process
+    class Page1,Page2 internal
+    class Index database
+    class App,Result user
+        </pre>
+      </div>
+      <p class="caption">アプリケーションが QueryVectors で最大 10,000 件の候補を要求し、ページネーションで結果を取得しながら後段のリランキングや重複排除を行う流れ。</p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="fc-title">1. 📊 結果数上限の 100 倍拡張</div>
+        <ul>
+          <li>類似検索結果数が最大 100 件 → 最大 <strong>10,000 件</strong>へ拡張</li>
+          <li>QueryVectors API の <span class="highlight">topK</span> パラメータで最大 10,000 を指定可能</li>
+          <li>より広範な候補集合を 1 回のクエリで取得</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">2. 📄 ページネーション対応</div>
+        <ul>
+          <li>レスポンスに <span class="highlight">nextToken</span> が追加され、結果をページ単位で取得</li>
+          <li>最初のページを処理しながら後続ページを取得する並行処理が可能</li>
+          <li>大量結果のメモリ効率とレイテンシ管理に寄与</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">3. 🔗 多段階検索パイプラインの強化</div>
+        <ul>
+          <li>リランキング・集約・重複排除などの後段処理に十分な候補数を供給</li>
+          <li>候補取得とフィルタリングを分離した検索アーキテクチャを構築しやすい</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <table>
+        <thead>
+          <tr><th>項目</th><th>詳細</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>旧上限</td><td>1 クエリあたり 100 件</td></tr>
+          <tr><td>新上限</td><td><span class="highlight">1 クエリあたり 10,000 件 (100 倍)</span></td></tr>
+          <tr><td>結果取得方式</td><td>ページネーション (nextToken による継続取得)</td></tr>
+          <tr><td>対象 API</td><td>QueryVectors</td></tr>
+          <tr><td>必要条件</td><td>最新の AWS SDK の利用</td></tr>
+        </tbody>
+      </table>
+
+      <h3>📝 API 変更履歴</h3>
+      <table>
+        <thead>
+          <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>2026/06/16</td>
+            <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/e078c6-s3vectors.html" target="_blank" rel="noopener noreferrer">s3vectors</a></td>
+            <td>QueryVectors がページネーションに対応し、1 クエリで最大 10,000 件の結果を返却可能に</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>🧪 QueryVectors API のリクエスト / レスポンス例</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Python</span><span class="code-title">topK と nextToken の指定</span></div>
+        <pre><code class="language-python"># QueryVectors リクエスト (topK と nextToken を指定)
+response = client.query_vectors(
+    vectorBucketName='string',
+    indexName='string',
+    topK=10000,                # 最大 10,000 件まで指定可能
+    queryVector={'float32': [ ... ]},
+    returnMetadata=True,
+    returnDistance=True,
+    nextToken='string'         # 後続ページ取得用 (任意)
+)
+
+# レスポンス (nextToken が付与される)
+# {
+#     'vectors': [
+#         {'distance': ..., 'key': 'string', 'metadata': {...}},
+#     ],
+#     'distanceMetric': 'cosine',
+#     'nextToken': 'string'    # 次ページが存在する場合に返却される
+# }</code></pre>
+      </div>
+      <p class="caption">QueryVectors API に nextToken が追加され、リクエストでページ継続トークンを指定し、レスポンスで次ページの有無を判定できます。</p>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>Amazon S3 Vectors が利用可能なリージョンであること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ベクトルバケットとベクトルインデックスが作成済みであること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>最新の AWS SDK を利用していること</span></div>
+
+      <h3>ステップ 1: AWS SDK の更新</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">boto3 を最新版へ更新</span></div>
+        <pre><code class="language-bash"># Python の場合 (boto3 を最新版へ更新)
+pip install --upgrade boto3</code></pre>
+      </div>
+
+      <h3>ステップ 2: topK の指定</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Python</span><span class="code-title">最大 10,000 件を要求</span></div>
+        <pre><code class="language-python">response = client.query_vectors(
+    vectorBucketName='my-vector-bucket',
+    indexName='my-index',
+    topK=10000,
+    queryVector={'float32': query_embedding},
+    returnMetadata=True,
+    returnDistance=True
+)</code></pre>
+      </div>
+
+      <h3>ステップ 3: ページネーション処理</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Python</span><span class="code-title">nextToken でループ取得</span></div>
+        <pre><code class="language-python">next_token = None
+while True:
+    kwargs = {
+        'vectorBucketName': 'my-vector-bucket',
+        'indexName': 'my-index',
+        'topK': 10000,
+        'queryVector': {'float32': query_embedding},
+        'returnMetadata': True,
+    }
+    if next_token:
+        kwargs['nextToken'] = next_token
+    response = client.query_vectors(**kwargs)
+    # ここで response['vectors'] を処理 (リランキング、重複排除など)
+    next_token = response.get('nextToken')
+    if not next_token:
+        break</code></pre>
+      </div>
+      <p class="caption">レスポンスの nextToken を用いて後続ページを取得し、ページごとに後段処理を行います。次ページが存在しない場合は nextToken が返却されないためループを終了します。</p>
+    </div>
+
+    <!-- メリット / 制約 -->
+    <div class="section">
+      <h2>💡 メリットと制約</h2>
+      <div class="two-col">
+        <div>
+          <h3>👍 メリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>検索品質の向上</strong>: 広範な候補集合を取得し後段処理で精度を高められる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>開発工数の削減</strong>: 複数クエリの結合処理が不要に</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト効率</strong>: 返却データの最初の 512 KB が無料、低コストストレージで大規模検索</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>多段階検索の実現</strong>: 1 回のクエリベースでパイプラインを構築</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>パフォーマンス管理</strong>: ページネーションでメモリとレイテンシを制御</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>シンプルな API</strong>: topK と nextToken の指定だけで利用可能</span></div>
+        </div>
+        <div>
+          <h3>⚠️ 制約・考慮点</h3>
+          <div class="check-item"><span class="warn-icon">!</span><span>1 クエリあたりの結果数上限は最大 10,000 件</span></div>
+          <div class="check-item"><span class="warn-icon">!</span><span>512 KB を超える返却データには少額のデータ返却料金が発生</span></div>
+          <div class="check-item"><span class="warn-icon">!</span><span>最新の AWS SDK が必要 (古い SDK では新上限を利用できない場合あり)</span></div>
+          <div class="check-item"><span class="warn-icon">!</span><span>topK を大きくすると料金とレイテンシへの影響を考慮する</span></div>
+          <div class="check-item"><span class="warn-icon">!</span><span>nextToken のループ制御を確実に実装する必要がある</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="uc-title">1. RAG におけるリランキング前の候補拡大</div>
+        <p><strong>シナリオ</strong>: 検索拡張生成 (RAG) のパイプラインで、リランキングモデルに渡す候補ドキュメントをより多く取得したい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Python</span></div>
+          <pre><code class="language-python"># 1 クエリで大量候補を取得し、後段のリランカーへ渡す
+candidates = client.query_vectors(
+    vectorBucketName='docs-bucket',
+    indexName='docs-index',
+    topK=2000,
+    queryVector={'float32': query_embedding},
+    returnMetadata=True
+)['vectors']
+# reranker.rerank(candidates) で上位を選定</code></pre>
+        </div>
+        <div class="uc-effect">✨ 効果: リランキング対象の候補数が増え、最終的な回答の関連性と網羅性が向上。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="uc-title">2. 重複排除を伴う大規模検索</div>
+        <p><strong>シナリオ</strong>: 類似コンテンツが多いデータセットで、重複を排除した多様な結果集合を提示したい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Python</span></div>
+          <pre><code class="language-python">results = client.query_vectors(
+    vectorBucketName='media-bucket',
+    indexName='media-index',
+    topK=5000,
+    queryVector={'float32': query_embedding},
+    returnMetadata=True
+)['vectors']
+# メタデータを用いて重複排除を実施し、多様な結果を抽出</code></pre>
+        </div>
+        <div class="uc-effect">✨ 効果: 十分な候補数から重複を取り除き、多様性のある検索結果を提示。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="uc-title">3. 集約分析のための広範なベクトル取得</div>
+        <p><strong>シナリオ</strong>: クエリベクトルに近い大量のアイテムを集約し、傾向分析やクラスタリングを行いたい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Python</span></div>
+          <pre><code class="language-python"># ページネーションで最大 10,000 件まで取得し集約処理を実施
+next_token = None
+all_vectors = []
+while True:
+    resp = client.query_vectors(
+        vectorBucketName='analytics-bucket',
+        indexName='items-index',
+        topK=10000,
+        queryVector={'float32': query_embedding},
+        returnMetadata=True,
+        **({'nextToken': next_token} if next_token else {})
+    )
+    all_vectors.extend(resp['vectors'])
+    next_token = resp.get('nextToken')
+    if not next_token:
+        break</code></pre>
+        </div>
+        <div class="uc-effect">✨ 効果: 広範な近傍アイテムを取得して集約でき、より精緻な分析結果を得られる。</div>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>このアップデート自体に追加の基本料金は発生しません。大規模なクエリでは返却される結果の合計サイズに応じた少額のデータ返却料金が適用されます。<span class="highlight">1 クエリあたり返却データの最初の 512 KB は無料</span>です。</p>
+      <table>
+        <thead>
+          <tr><th>使用量</th><th>月額料金 (概算)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1 クエリあたり返却データ 512 KB 以内</td><td>データ返却料金は無料</td></tr>
+          <tr><td>512 KB を超える返却データ</td><td>超過分にデータ返却料金が発生 (詳細は料金ページ参照)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- リージョン / 関連サービス -->
+    <div class="section">
+      <h2>🌐 利用可能リージョン・関連サービス</h2>
+      <p><strong>利用可能リージョン</strong>: Amazon S3 Vectors が利用可能なすべての AWS リージョンで本機能を利用できます。</p>
+      <h3>関連サービス・機能</h3>
+      <div class="feature-card">
+        <ul>
+          <li><strong>Amazon S3</strong>: S3 Vectors はベクトルデータをネイティブに保存・検索する S3 の機能。本アップデートはその検索 API を強化</li>
+          <li><strong>Amazon Bedrock</strong>: RAG や生成 AI アプリの埋め込み生成・検索基盤として S3 Vectors と組み合わせて利用可能</li>
+          <li><strong>Amazon OpenSearch Service</strong>: 大規模かつ低レイテンシのベクトル検索が必要な場合の比較対象</li>
+        </ul>
+      </div>
+      <div style="margin-top:12px;">
+        <span class="pill">ベクトル検索</span>
+        <span class="pill">RAG</span>
+        <span class="pill">リランキング</span>
+        <span class="pill">重複排除</span>
+        <span class="pill">集約分析</span>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section" style="border:1px solid rgba(255,153,0,0.5);">
+      <h2>📝 まとめ</h2>
+      <p>
+        Amazon S3 Vectors の 1 クエリあたりの類似検索結果数が最大 <span class="highlight">10,000 件</span>へと 100 倍に拡張され、ページネーションにも対応しました。
+        これにより、RAG やレコメンデーションなどの多段階検索パイプラインを 1 回のクエリベースでより簡潔かつ高品質に構築できます。
+        最新の AWS SDK へ更新し、<strong>topK</strong> と <strong>nextToken</strong> を活用した検索ロジックの最適化を検討することをおすすめします。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典 / 参考リンク</p>
+      <ul>
+        <li>🔗 <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/06/s3-vectors-supports-10000-search-results-per-query" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li>🔗 <a class="aws-link" href="https://awsapichanges.com/archive/changes/e078c6-s3vectors.html" target="_blank" rel="noopener noreferrer">API 変更履歴 (awsapichanges.com)</a></li>
+        <li>🔗 <a class="aws-link" href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer">Amazon S3 料金ページ</a></li>
+      </ul>
+    </footer>
+
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
