@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon RDS for SQL Server gp3 ボリューム上限の拡張</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-bottom: 3px solid var(--aws-orange);
+  padding-bottom: 20px;
+}
+
+h1, .title { font-size: 32px; font-weight: 700; color: var(--aws-white); margin: 0; line-height: 1.3; }
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin-bottom: 16px;
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 { font-size: 18px; color: var(--aws-white); margin-bottom: 10px; }
+
+.subtitle { font-size: 14px; color: var(--aws-light-gray); text-align: right; }
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 12px 0;
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h3 { margin-top: 0; color: var(--aws-smile-orange); }
+
+/* Before / After */
+.ba-grid { display: flex; gap: 16px; flex-wrap: wrap; }
+.ba-col { flex: 1; min-width: 260px; border-radius: 8px; padding: 18px; }
+.ba-before { background: rgba(209,50,18,0.12); border: 1px solid rgba(209,50,18,0.5); }
+.ba-after { background: rgba(29,129,2,0.12); border: 1px solid rgba(29,129,2,0.55); }
+.ba-col h3 { margin-top: 0; }
+.ba-before h3 { color: #ff7a5c; }
+.ba-after h3 { color: #58d65e; }
+.ba-col ul { margin: 8px 0 0; padding-left: 20px; }
+.ba-col li { margin: 6px 0; }
+
+/* Stats */
+.stats-grid { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+.stat-card {
+  flex: 1; min-width: 200px;
+  background: linear-gradient(135deg, #2a3a4d 0%, #1A242F 100%);
+  border: 1px solid rgba(255,153,0,0.4);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+}
+.stat-label { font-size: 14px; color: var(--aws-light-gray); }
+.stat-flow { font-size: 16px; margin: 8px 0; color: var(--aws-light-gray); }
+.stat-old { color: #ff7a5c; text-decoration: line-through; }
+.stat-new { color: var(--aws-orange); font-size: 26px; font-weight: 700; }
+.stat-mult { display: inline-block; background: var(--aws-green); color: #fff; border-radius: 20px; padding: 2px 12px; font-weight: 700; font-size: 14px; margin-top: 6px; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+/* Table */
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 15px; }
+th, td { border: 1px solid rgba(255,255,255,0.12); padding: 10px 12px; text-align: left; }
+th { background: rgba(255,153,0,0.15); color: var(--aws-orange); }
+td.mult { color: var(--aws-green); font-weight: 700; }
+
+/* use case */
+.usecase {
+  background: rgba(255,153,0,0.08);
+  border: 1px solid rgba(255,153,0,0.3);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase h3 { color: var(--aws-orange); margin-top: 0; }
+.usecase .label { font-weight: 700; color: var(--aws-smile-orange); }
+.effect { color: #58d65e; font-weight: 600; }
+
+/* code */
+.code-block { background: #1a1a2e; border-radius: 8px; overflow: hidden; margin: 16px 0; }
+.code-header { background: #16213e; padding: 8px 16px; display: flex; justify-content: space-between; font-size: 12px; }
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; padding: 16px !important; }
+
+.check-item { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; }
+.check-icon { color: var(--aws-green); font-weight: 700; }
+.warn-icon { color: var(--aws-smile-orange); font-weight: 700; }
+
+.cols { display: flex; gap: 16px; flex-wrap: wrap; }
+.cols > div { flex: 1; min-width: 260px; }
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px dashed rgba(255,255,255,0.3);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+footer ul { padding-left: 20px; }
+footer li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <div class="service-badge">Amazon RDS for SQL Server</div>
+      <h1>💾 gp3 ボリュームの最大サイズと<br/>プロビジョンドパフォーマンスを大幅拡張</h1>
+    </div>
+    <div class="subtitle">📅 リリース日<br/>2026 年 6 月 18 日</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Amazon RDS for SQL Server は、<span class="highlight">General Purpose (gp3)</span> ストレージのボリュームレベル上限を大幅に引き上げました。1 つの gp3 ボリュームで <span class="highlight">最大 64 TiB / 80,000 IOPS / 2,000 MiB/s</span> までスケールできるようになり、高スループット OLTP や大規模分析など I/O 要件の厳しいワークロードを単一ボリュームで高性能に運用できます。</p>
+    <p>さらに追加ストレージボリュームを構成すると、DB インスタンスあたり最大 3 つの gp3 / io2 ボリュームを追加でき、インスタンス合計容量を <span class="highlight">最大 256 TiB</span> まで拡張可能です。<strong>料金体系に変更はなく</strong>、追加コストなしで上限拡張の恩恵を受けられます。</p>
+
+    <h3 style="margin-top:20px;">⚖️ アップデート前後の比較</h3>
+    <div class="ba-grid">
+      <div class="ba-col ba-before">
+        <h3>⛔ Before（従来の課題）</h3>
+        <ul>
+          <li>1 ボリューム最大 <strong>16 TiB</strong> で大規模 DB に容量不足</li>
+          <li>プロビジョンド IOPS は最大 <strong>16,000 IOPS</strong> でボトルネック</li>
+          <li>スループットは最大 <strong>1,000 MiB/s</strong> に制限</li>
+        </ul>
+      </div>
+      <div class="ba-col ba-after">
+        <h3>✅ After（改善後）</h3>
+        <ul>
+          <li>1 ボリューム最大 <strong>64 TiB</strong>（4 倍）までスケール</li>
+          <li>最大 <strong>80,000 IOPS</strong>（5 倍）をプロビジョニング可能</li>
+          <li>最大 <strong>2,000 MiB/s</strong>（2 倍）のスループット</li>
+          <li>単一ボリュームで完結しストレージ管理がシンプルに</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 統計 -->
+  <div class="section">
+    <h2>📊 数字で見る拡張効果</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">ボリュームサイズ</div>
+        <div class="stat-flow"><span class="stat-old">16 TiB</span> →</div>
+        <div class="stat-new">64 TiB</div>
+        <div class="stat-mult">4 倍</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">プロビジョンド IOPS</div>
+        <div class="stat-flow"><span class="stat-old">16,000</span> →</div>
+        <div class="stat-new">80,000</div>
+        <div class="stat-mult">5 倍</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">スループット</div>
+        <div class="stat-flow"><span class="stat-old">1,000 MiB/s</span> →</div>
+        <div class="stat-new">2,000 MiB/s</div>
+        <div class="stat-mult">2 倍</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">インスタンス合計容量</div>
+        <div class="stat-flow">追加ボリューム利用時</div>
+        <div class="stat-new">256 TiB</div>
+        <div class="stat-mult">最大 4 ボリューム</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <p>単一 gp3 ボリュームの上限引き上げに加え、追加ストレージボリュームを組み合わせることで DB インスタンスあたり合計最大 256 TiB まで拡張できる構成を示しています。</p>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Instance["🖥️ RDS for SQL Server DB インスタンス"]
+        direction LR
+        Primary["💾 プライマリ gp3 ボリューム<br/>最大 64 TiB / 80,000 IOPS / 2,000 MiB/s"]
+        Add1["💿 追加ボリューム 1<br/>gp3 または io2"]
+        Add2["💿 追加ボリューム 2<br/>gp3 または io2"]
+        Add3["💿 追加ボリューム 3<br/>gp3 または io2"]
+        Primary ~~~ Add1 ~~~ Add2 ~~~ Add3
+    end
+
+    App(["👤 アプリケーション<br/>高スループット OLTP / 大規模分析"]) --> Instance
+    Instance --> Total["📦 インスタンス合計容量<br/>最大 256 TiB"]
+
+    classDef instance fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Instance instance
+    class Primary,Add1,Add2,Add3 storage
+    class App user
+    class Total process
+      </pre>
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🚀 主要機能</h2>
+    <div class="card">
+      <h3>① ボリュームサイズの拡張</h3>
+      <p>1 つの gp3 ボリュームを最大 <span class="highlight">64 TiB</span>（従来 16 TiB の 4 倍）までスケール可能。単一ボリュームで大規模データベースを格納でき、ストレージ構成がシンプルになります。</p>
+    </div>
+    <div class="card">
+      <h3>② プロビジョンド IOPS の引き上げ</h3>
+      <p>1 ボリュームで最大 <span class="highlight">80,000 IOPS</span>（従来 16,000 の 5 倍）。高スループットの OLTP システムなど、I/O 要件の厳しいワークロードに対応します。</p>
+    </div>
+    <div class="card">
+      <h3>③ スループットの引き上げ</h3>
+      <p>1 ボリュームで最大 <span class="highlight">2,000 MiB/s</span>（従来 1,000 の 2 倍）。大規模分析ワークロードのシーケンシャル I/O 性能を強化します。</p>
+    </div>
+    <div class="card">
+      <h3>④ 追加ストレージボリュームとの組み合わせ</h3>
+      <p>DB インスタンスあたり最大 3 つの gp3 / io2 ボリュームを追加でき、合計 <span class="highlight">最大 256 TiB</span> まで拡張可能。gp3 と io2 を混在させ、コストとパフォーマンスを最適化できます。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>gp3 ボリュームレベル上限の比較（RDS for SQL Server）</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>項目</th><th>従来の上限</th><th>新しい上限</th><th>倍率</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>ボリュームサイズ</td><td>16 TiB</td><td>64 TiB</td><td class="mult">4 倍</td></tr>
+          <tr><td>プロビジョンド IOPS</td><td>16,000 IOPS</td><td>80,000 IOPS</td><td class="mult">5 倍</td></tr>
+          <tr><td>プロビジョンドスループット</td><td>1,000 MiB/s</td><td>2,000 MiB/s</td><td class="mult">2 倍</td></tr>
+          <tr><td>インスタンス合計容量（追加ボリューム利用時）</td><td>-</td><td>最大 256 TiB</td><td class="mult">-</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3 style="margin-top:20px;">gp3 ストレージの特性</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>項目</th><th>詳細</th></tr></thead>
+        <tbody>
+          <tr><td>ベースラインパフォーマンス</td><td>3,000 IOPS / 125 MiB/s</td></tr>
+          <tr><td>性能とサイズの独立性</td><td>IOPS・スループットをストレージ容量とは独立してプロビジョニング可能</td></tr>
+          <tr><td>追加プロビジョニング対象</td><td>ベースラインを超える IOPS とスループットのみ課金対象</td></tr>
+          <tr><td>追加ボリューム種別</td><td>gp3 または io2 を最大 3 つまで追加可能</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon RDS for SQL Server の DB インスタンスを利用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ストレージタイプが gp3 であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>プロビジョニングする IOPS・スループットを活用できる DB インスタンスクラスを選択していること</span></div>
+
+    <h3 style="margin-top:20px;">ステップ 1: 既存インスタンスのストレージを変更する</h3>
+    <p>既存インスタンスを 32 TiB（32,768 GiB）に拡張し、40,000 IOPS / 1,500 MiB/s に設定。<code class="highlight">--apply-immediately</code> で即時適用します。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">modify-db-instance</span></div>
+      <pre><code class="language-bash">aws rds modify-db-instance \
+    --db-instance-identifier my-sqlserver-instance \
+    --allocated-storage 32768 \
+    --storage-type gp3 \
+    --iops 40000 \
+    --storage-throughput 1500 \
+    --apply-immediately</code></pre>
+    </div>
+
+    <h3>ステップ 2: 新規インスタンス作成時に高性能 gp3 を指定する</h3>
+    <p>64 TiB（65,536 GiB）の gp3 に最大値の 80,000 IOPS / 2,000 MiB/s をプロビジョニングした新規インスタンスを作成します。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">create-db-instance</span></div>
+      <pre><code class="language-bash">aws rds create-db-instance \
+    --db-instance-identifier new-sqlserver-instance \
+    --engine sqlserver-se \
+    --db-instance-class db.r6i.4xlarge \
+    --allocated-storage 65536 \
+    --storage-type gp3 \
+    --iops 80000 \
+    --storage-throughput 2000 \
+    --master-username admin \
+    --master-user-password &lt;パスワード&gt;</code></pre>
+    </div>
+
+    <h3>ステップ 3: 追加ストレージボリュームを構成する</h3>
+    <p>合計容量を 256 TiB まで拡張する場合は、RDS マネジメントコンソールまたは CLI から追加ストレージボリューム（最大 3 つの gp3 / io2）を構成します。各ボリュームに個別にストレージタイプ・サイズ・性能を設定でき、アクセス頻度の高いデータと低いデータを使い分けられます。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="cols">
+      <div>
+        <h3>🏢 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>大規模ワークロードの集約</strong>: 単一インスタンスで最大 256 TiB を扱え、分割やシャーディングの必要性を低減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト効率</strong>: ベースラインを超えた分のみ課金され、要件に応じた最適なコスト配分が可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>料金変更なし</strong>: 追加コストなしで上限拡張の恩恵を受けられる</span></div>
+      </div>
+      <div>
+        <h3>🛠️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>性能スケーラビリティ</strong>: 単一ボリュームで最大 80,000 IOPS / 2,000 MiB/s を確保</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>管理の簡素化</strong>: 大容量を単一ボリュームで構成でき、分割による複雑さを軽減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な構成</strong>: 追加ボリュームで gp3 と io2 を混在でき、アクセスパターンに応じて最適化</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="cols">
+      <div>
+        <h3>制限事項</h3>
+        <div class="check-item"><span class="warn-icon">!</span><span>プロビジョニングした IOPS・スループットは、インスタンスクラスのネットワーク帯域や EBS 最適化上限を超えて利用できない</span></div>
+        <div class="check-item"><span class="warn-icon">!</span><span>インスタンスクラスの上限が低い場合、性能をフル活用できない可能性がある</span></div>
+        <div class="check-item"><span class="warn-icon">!</span><span>性能を最大限引き出すには、十分な帯域と IOPS をサポートする現行世代インスタンスクラスの選択が必要</span></div>
+      </div>
+      <div>
+        <h3>考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">!</span><span>ストレージタイプ・性能を変更するとボリュームが <code class="highlight">optimizing</code> 状態となり、変更中は性能が一時的に変動する場合がある</span></div>
+        <div class="check-item"><span class="warn-icon">!</span><span>1 → 複数ボリュームへの変更では、移行に大量の IOPS・スループットを消費し時間を要することがある</span></div>
+        <div class="check-item"><span class="warn-icon">!</span><span>IOPS とストレージ（GiB）の比率には制約があるため、事前に要件を確認する</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+    <div class="usecase">
+      <h3>① 高スループット OLTP システム</h3>
+      <p><span class="label">シナリオ</span>: 大量トランザクションを処理する基幹業務システムで、従来の 16,000 IOPS 上限がボトルネックになっていた。</p>
+      <p><span class="label">実装例</span>: gp3 / 80,000 IOPS / 2,000 MiB/s</p>
+      <p class="effect">→ 効果: 単一ボリュームで従来の 5 倍の IOPS を確保し、トランザクション処理のレイテンシーとスループットを改善。</p>
+    </div>
+    <div class="usecase">
+      <h3>② 大規模分析ワークロード</h3>
+      <p><span class="label">シナリオ</span>: 数十 TiB 規模のデータウェアハウスを、複数ボリュームに分割せず単一インスタンスで運用したい。</p>
+      <p><span class="label">実装例</span>: プライマリ gp3 64 TiB + 追加 gp3 / io2 最大 3 つ（合計最大 256 TiB）</p>
+      <p class="effect">→ 効果: ストレージ分割の管理オーバーヘッドを抑えつつ、大規模データセットを単一インスタンスで保持。</p>
+    </div>
+    <div class="usecase">
+      <h3>③ コストとパフォーマンスの両立</h3>
+      <p><span class="label">シナリオ</span>: アクセス頻度の高いデータとアーカイブ用コールドデータを同一インスタンスで管理したい。</p>
+      <p><span class="label">実装例</span>: プライマリ + 追加 1 = io2（高頻度）/ 追加 2・3 = gp3（アーカイブ）</p>
+      <p class="effect">→ 効果: ホットデータを高性能 io2、コールドデータをコスト効率の高い gp3 に配置し最適化。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="card">
+      <h3>💴 料金</h3>
+      <p>今回のアップデートに伴う<strong>料金体系の変更はありません</strong>。プロビジョニングしたストレージ容量と、ベースライン（3,000 IOPS / 125 MiB/s）を超えてプロビジョニングした追加 IOPS およびスループットに対してのみ料金を支払います。</p>
+    </div>
+    <div class="card">
+      <h3>🌐 利用可能リージョン</h3>
+      <p>リージョンごとの提供状況については、Amazon RDS for SQL Server の料金ページを参照してください。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="check-item"><span class="arrow" style="color:var(--aws-orange);font-weight:700;">→</span><span><strong>Amazon EBS (gp3 / io2)</strong>: RDS のストレージ基盤となるブロックストレージ。今回拡張されたのは gp3 ボリュームの上限</span></div>
+    <div class="check-item"><span class="arrow" style="color:var(--aws-orange);font-weight:700;">→</span><span><strong>Amazon RDS 追加ストレージボリューム</strong>: SQL Server / Oracle で最大 3 つの追加ボリュームを構成し合計容量を拡張する機能</span></div>
+    <div class="check-item"><span class="arrow" style="color:var(--aws-orange);font-weight:700;">→</span><span><strong>Amazon RDS ストレージ自動スケーリング</strong>: 容量を需要に応じて自動拡張。IOPS とストレージ容量の比率制約が同様に適用される</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section" style="border-left:4px solid var(--aws-orange);">
+    <h2>✅ まとめ</h2>
+    <p>このアップデートにより、Amazon RDS for SQL Server の gp3 ボリュームは単一ボリュームで <span class="highlight">最大 64 TiB / 80,000 IOPS / 2,000 MiB/s</span> までスケールでき、追加ストレージボリュームと組み合わせてインスタンスあたり <span class="highlight">最大 256 TiB</span> を実現できます。料金変更なしで大規模かつ I/O 集約型の SQL Server ワークロードに対応できるため、性能不足やストレージ分割に課題を抱えている場合は、対象インスタンスのストレージ構成の見直しを検討することをお勧めします。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/06/rds-sqlserver-increases-gp3-limits/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): rds-sqlserver-increases-gp3-limits</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Storage.html" target="_blank" rel="noopener noreferrer">Amazon RDS DB インスタンスストレージ (ドキュメント)</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/rds/sqlserver/pricing/" target="_blank" rel="noopener noreferrer">Amazon RDS for SQL Server 料金ページ</a></li>
+    </ul>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#FF9900',
+      primaryTextColor: '#232F3E',
+      primaryBorderColor: '#FF9900',
+      lineColor: '#FF9900',
+      secondaryColor: '#F5F5F5',
+      tertiaryColor: '#FAFAFA',
+      background: '#FFFFFF',
+      mainBkg: '#FFF3E0',
+      nodeBorder: '#FF9900',
+      clusterBkg: '#FFF8E1',
+      clusterBorder: '#FF9900',
+      edgeLabelBackground: '#FFFFFF',
+      textColor: '#232F3E'
+    }
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

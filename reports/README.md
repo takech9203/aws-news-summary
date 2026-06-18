@@ -5,6 +5,17 @@
 
 ## 2026 年
 
+- [2026-06-18 - Amazon RDS for SQL Server - General Purpose (gp3) ボリュームの最大サイズとプロビジョンドパフォーマンスの拡張](2026/2026-06-18-rds-sqlserver-increases-gp3-limits.md)
+- [2026-06-18 - Amazon SNS - アジアパシフィック (ソウル) リージョンでの SMS 送信サポート](2026/2026-06-18-amazon-sns-supports-sending-sms-seoul-region.md)
+- [2026-06-18 - Amazon EC2 - G7 インスタンス](2026/2026-06-18-amazon-ec2-g7-generally-available.md)
+- [2026-06-18 - Amazon EKS - カスタマールーティング型コントロールプレーンエグレス](2026/2026-06-18-amazon-eks-customer-routed-control-plane-egress.md)
+- [2026-06-18 - Amazon EC2 - ネスト仮想化の対応プラットフォーム拡大と AWS GovCloud (US) 対応](2026/2026-06-18-nested-virtualization-intel-us-gov-cloud.md)
+- [2026-06-18 - Amazon SageMaker JumpStart - all-MiniLM-L12-v2 の提供開始](2026/2026-06-18-all-minilm-l12-v2-on-sagemaker-jumpstart.md)
+- [2026-06-18 - Amazon ECS - 高速サービスオートスケーリング](2026/2026-06-18-amazon-ecs-faster-autoscaling.md)
+- [2026-06-18 - Amazon SageMaker JumpStart - Ministral-3-14B-Instruct の提供開始](2026/2026-06-18-ministral-3-14b-on-sagemaker-jumpstart.md)
+- [2026-06-18 - Amazon Connect - 緊急コンタクトによるエージェント割り込み機能](2026/2026-06-18-amazon-connect-interrupt-agent-with-urgent-contact.md)
+- [2026-06-18 - Amazon MQ for RabbitMQ - プライベートネットワーク接続のサポート](2026/2026-06-18-amazon-mq-private-network-connectivity.md)
+- [2026-06-18 - Amazon SageMaker AI - 推論エンドポイントの新しいオブザーバビリティ機能](2026/2026-06-18-amazon-sagemaker-ai-inference.md)
 - [2026-06-17 - Amazon Quick - 自律エージェント、マルチデータセット分析、刷新されたアクティビティフィード](2026/2026-06-17-amazon-quick.md)
 - [2026-06-17 - AWS Security Agent - 脅威モデリングのサポート](2026/2026-06-17-aws-security-agent-threat-modeling.md)
 - [2026-06-17 - Amazon Bedrock AgentCore - 本番環境のエージェントを継続的に改善する新しい最適化機能](2026/2026-06-17-amazon-bedrock-agentcore-new-optimization-capabilities.md)

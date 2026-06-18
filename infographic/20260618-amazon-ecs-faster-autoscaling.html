@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon ECS 高速サービスオートスケーリング</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  background-image: radial-gradient(circle at 15% 10%, rgba(255,153,0,0.08), transparent 40%),
+                    radial-gradient(circle at 85% 90%, rgba(0,161,201,0.08), transparent 40%);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-bottom: 3px solid var(--aws-orange);
+  padding-bottom: 20px;
+}
+
+.header-left { flex: 1; min-width: 280px; }
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-orange);
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+.date-box {
+  background: var(--aws-dark-squid);
+  border: 1px solid rgba(255,153,0,0.3);
+  border-radius: 8px;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  white-space: nowrap;
+}
+.date-box strong { color: var(--aws-orange); display: block; font-size: 16px; }
+
+h2, .section-title {
+  font-size: 23px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+h3 { font-size: 18px; color: var(--aws-white); margin: 18px 0 10px 0; }
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 10px;
+  padding: 26px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* Stats */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255,153,0,0.18), rgba(255,153,0,0.04));
+  border: 1px solid rgba(255,153,0,0.4);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+}
+.stat-number {
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1;
+}
+.stat-label { font-size: 13px; color: var(--aws-light-gray); margin-top: 8px; }
+.stat-sub { font-size: 12px; color: var(--aws-smile-orange); margin-top: 4px; }
+
+/* Before/After */
+.ba-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 16px;
+  align-items: center;
+  margin: 20px 0;
+}
+.ba-box { border-radius: 10px; padding: 18px; }
+.ba-before { background: rgba(209,50,18,0.12); border: 1px solid rgba(209,50,18,0.5); }
+.ba-after { background: rgba(29,129,2,0.12); border: 1px solid rgba(29,129,2,0.6); }
+.ba-title { font-weight: 700; margin-bottom: 10px; font-size: 15px; }
+.ba-before .ba-title { color: #FF7A5C; }
+.ba-after .ba-title { color: #6FD45A; }
+.ba-box ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.ba-box li { margin: 6px 0; }
+.ba-arrow { font-size: 32px; color: var(--aws-orange); text-align: center; }
+
+/* Feature cards */
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 6px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.feature-card h4 { margin: 0 0 8px 0; color: var(--aws-white); font-size: 16px; }
+.feature-card ul { margin: 6px 0 0 0; padding-left: 18px; font-size: 14px; }
+.feature-card li { margin: 4px 0; }
+
+/* Use case */
+.usecase {
+  background: rgba(255,153,0,0.08);
+  border: 1px solid rgba(255,153,0,0.3);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.usecase h4 { margin: 0 0 8px 0; color: var(--aws-smile-orange); font-size: 16px; }
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .uc-effect { color: var(--aws-green); font-weight: 500; }
+.uc-label { font-weight: 700; color: var(--aws-light-gray); }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
+th { background: rgba(255,153,0,0.15); color: var(--aws-orange); font-weight: 600; }
+td:first-child { color: var(--aws-white); font-weight: 500; }
+
+/* Pros / Cons */
+.pc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 700px) { .pc-grid { grid-template-columns: 1fr; } .ba-grid { grid-template-columns: 1fr; } .ba-arrow { transform: rotate(90deg); } }
+.check-item { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0; font-size: 14px; }
+.check-icon { color: var(--aws-green); font-weight: 700; }
+.warn-icon { color: var(--aws-smile-orange); font-weight: 700; }
+
+/* Code */
+.code-block { background: #16213e; border-radius: 8px; overflow: hidden; margin: 14px 0; }
+.code-header { background: #0f1830; padding: 8px 16px; display: flex; justify-content: space-between; font-size: 12px; }
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; padding: 16px !important; }
+
+/* Steps */
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--aws-orange); color: var(--aws-squid-ink);
+  font-weight: 700; font-size: 14px; margin-right: 8px;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+.note {
+  font-size: 13px; color: var(--aws-light-gray);
+  background: rgba(0,161,201,0.1); border-left: 3px solid var(--aws-teal);
+  padding: 10px 14px; border-radius: 4px; margin: 14px 0;
+}
+
+.region-badge {
+  display: inline-block; background: rgba(0,161,201,0.18);
+  border: 1px solid var(--aws-teal); color: var(--aws-teal);
+  padding: 6px 14px; border-radius: 20px; font-size: 14px; margin: 6px 6px 0 0;
+}
+
+.related-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 12px; }
+.related-card { background: var(--aws-squid-ink); border-radius: 8px; padding: 14px; border: 1px solid rgba(255,255,255,0.08); font-size: 14px; }
+.related-card strong { color: var(--aws-teal); }
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+footer {
+  margin-top: 24px; padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px; color: var(--aws-light-gray);
+}
+footer ul { padding-left: 20px; }
+footer li { margin: 6px 0; }
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255,153,0,0.15), rgba(0,161,201,0.08));
+  border: 1px solid rgba(255,153,0,0.4);
+  border-radius: 10px; padding: 22px; font-size: 15px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <span class="service-badge">Amazon Elastic Container Service</span>
+      <h1>⚡ Amazon ECS<br/>高速サービスオートスケーリング</h1>
+      <div class="subtitle">高解像度メトリクスでスケールアウトを最大 4.2 倍高速化</div>
+    </div>
+    <div class="date-box">
+      📅 リリース日<strong>2026-06-18</strong>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Amazon ECS のサービスオートスケーリングが、負荷変化により迅速に反応できるようになりました。<span class="highlight">高解像度 (20 秒) メトリクス</span>とメトリクス発行の最適化により、トラフィックの急増に対してスケールアウトの判断と新しいタスクのプロビジョニングが大幅に高速化されます。</p>
+    <p>反応速度が向上することで、お客様は<span class="highlight">ベースラインキャパシティを削減</span>し、コンピューティングコストを抑えながら信頼性を維持できます。本機能は CPU 使用率・メモリ使用率に基づくターゲット追跡スケーリングポリシーで 20 秒解像度をサポートし、スパイク状トラフィックを処理するすべての ECS ユーザーが対象です。</p>
+
+    <h3>📊 数字で見るアップデート効果 (AWS 社内ベンチマーク)</h3>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number">76%</div>
+        <div class="stat-label">スケールアウトトリガー時間 短縮</div>
+        <div class="stat-sub">363 秒 → 86 秒 (4.2 倍高速)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">72%</div>
+        <div class="stat-label">E2E プロビジョニング時間 短縮</div>
+        <div class="stat-sub">386 秒 → 109 秒 (3.5 倍高速)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">20秒</div>
+        <div class="stat-label">高解像度メトリクス</div>
+        <div class="stat-sub">従来は 60 秒がデフォルト</div>
+      </div>
+    </div>
+
+    <h3>🔄 Before / After</h3>
+    <div class="ba-grid">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ アップデート前の課題</div>
+        <ul>
+          <li>メトリクス解像度がデフォルト 60 秒で、負荷急増の検知が遅い</li>
+          <li>スケールアウトのトリガーまで 6 分以上 (363 秒) を要した</li>
+          <li>遅延を見越して余分なベースラインキャパシティが必要でコスト増</li>
+        </ul>
+      </div>
+      <div class="ba-arrow">➡️</div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <ul>
+          <li>20 秒の高解像度メトリクスで判断を 4.2 倍高速化</li>
+          <li>新タスクのプロビジョニングを E2E で 3.5 倍高速化</li>
+          <li>過剰なベースラインが不要になりコンピューティングコスト削減</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <p>ECS サービスが CPU/メモリ使用率を 20 秒間隔で CloudWatch に発行し、ターゲット追跡ポリシーが負荷の変化を素早く検知して高速にスケールアウトします。</p>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart LR
+    subgraph Service["📦 ECS サービス"]
+        direction LR
+        T1["⚙️ タスク 1"]
+        T2["⚙️ タスク 2"]
+        T1 ~~~ T2
+    end
+
+    subgraph Scaling["📈 Application Auto Scaling"]
+        direction LR
+        Alarm["🔔 CloudWatch アラーム"]
+        Policy["🎯 ターゲット追跡<br/>ポリシー"]
+        Alarm ~~~ Policy
+    end
+
+    CW[("📊 CloudWatch<br/>高解像度メトリクス 20 秒")]
+    User(["👤 トラフィック急増"]) --> Service
+    Service -->|"CPU/メモリ使用率を 20 秒間隔で発行"| CW
+    CW --> Alarm
+    Alarm --> Policy
+    Policy -->|"高速スケールアウト 86 秒"| Service
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Service,Scaling cloud
+    class T1,T2 compute
+    class CW database
+    class Alarm,Policy decision
+    class User user
+      </pre>
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🚀 主要機能</h2>
+
+    <div class="feature-card">
+      <h4>1️⃣ 高解像度 (20 秒) メトリクスのサポート</h4>
+      <ul>
+        <li>従来のデフォルト 60 秒解像度に加えて、20 秒の高解像度メトリクスを選択可能</li>
+        <li>CPU 使用率およびメモリ使用率のメトリクスが対象</li>
+        <li>60 秒解像度も引き続き利用可能で、ワークロードに応じて選択できる</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h4>2️⃣ メトリクス発行の最適化</h4>
+      <ul>
+        <li>発行パイプラインを最適化し、負荷変化からスケーリングアクションまでの遅延を短縮</li>
+        <li>スケールアウトのトリガー時間が 363 秒 → 86 秒 (76% 短縮)</li>
+        <li>新タスクの E2E プロビジョニング時間が 386 秒 → 109 秒 (72% 短縮)</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h4>3️⃣ ターゲット追跡スケーリングポリシーとの統合</h4>
+      <ul>
+        <li>CPU/メモリ使用率ベースのターゲット追跡ポリシーで 20 秒解像度をサポート</li>
+        <li>高解像度対応の事前定義メトリクスを指定することで迅速なスケーリングを実現</li>
+        <li>予測スケーリングやスケジュールスケーリングなど既存ポリシーと併用可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>メトリクス解像度</td><td>60 秒 (従来のデフォルト) または 20 秒 (新規対応)</td></tr>
+      <tr><td>対象メトリクス</td><td>CPU 使用率、メモリ使用率</td></tr>
+      <tr><td>ポリシータイプ</td><td>ターゲット追跡スケーリング</td></tr>
+      <tr><td>スケールアウトトリガー時間</td><td>363 秒 → 86 秒 (76% 短縮、4.2 倍高速)</td></tr>
+      <tr><td>E2E プロビジョニング時間</td><td>386 秒 → 109 秒 (72% 短縮、3.5 倍高速)</td></tr>
+      <tr><td>対応コンピューティング</td><td>AWS Fargate、Amazon ECS Managed Instances、Amazon EC2</td></tr>
+    </table>
+    <div class="note">📝 API 変更履歴: 今回のアップデートに直接対応する awsapichanges.com 上の ECS API 変更は確認されませんでした。設定は Application Auto Scaling および CloudWatch の高解像度メトリクスを通じて行います。</div>
+
+    <h3>⚙️ ターゲット追跡ポリシーの設定例</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">config.json</span></div>
+      <pre><code class="language-json">{
+  "TargetValue": 60.0,
+  "PredefinedMetricSpecification": {
+    "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
+  },
+  "ScaleInCooldown": 300,
+  "ScaleOutCooldown": 60
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>📋 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon ECS のサービスが稼働していること (Fargate、ECS Managed Instances、または EC2 起動タイプ)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Application Auto Scaling を利用するための適切な IAM 権限を持っていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>CPU/メモリ使用率に基づくスケーリングを行う構成であること</span></div>
+
+    <h3><span class="step-num">1</span>高解像度メトリクスを有効にする</h3>
+    <p>サービスの作成時または更新時に 20 秒解像度のメトリクスを有効化します。これにより CPU/メモリ使用率が 20 秒間隔で CloudWatch に発行されます。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+      <pre><code class="language-bash"># サービス作成または更新時に 20 秒の高解像度メトリクスを有効化する
+aws ecs update-service \
+  --cluster my-cluster \
+  --service my-service \
+  --enable-high-resolution-metrics</code></pre>
+    </div>
+
+    <h3><span class="step-num">2</span>スケーラブルターゲットを登録する</h3>
+    <p>ECS サービスのタスク数 (DesiredCount) をスケーリング対象として登録し、最小・最大キャパシティを指定します。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+      <pre><code class="language-bash"># ECS サービスをスケーラブルターゲットとして登録する
+aws application-autoscaling register-scalable-target \
+  --service-namespace ecs \
+  --resource-id service/my-cluster/my-service \
+  --scalable-dimension ecs:service:DesiredCount \
+  --min-capacity 2 \
+  --max-capacity 20</code></pre>
+    </div>
+
+    <h3><span class="step-num">3</span>ターゲット追跡ポリシーを設定する</h3>
+    <p>CPU 使用率を対象としたターゲット追跡ポリシーを適用します。<code>config.json</code> には目標値とクールダウン設定を記述します。コンソール、CLI、CloudFormation、各種 SDK から設定できます。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+      <pre><code class="language-bash"># 高解像度メトリクスに対応したターゲット追跡ポリシーを適用する
+aws application-autoscaling put-scaling-policy \
+  --service-namespace ecs \
+  --resource-id service/my-cluster/my-service \
+  --scalable-dimension ecs:service:DesiredCount \
+  --policy-name cpu-target-tracking \
+  --policy-type TargetTrackingScaling \
+  --target-tracking-scaling-policy-configuration file://config.json</code></pre>
+    </div>
+  </div>
+
+  <!-- メリット / 制約 -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="pc-grid">
+      <div>
+        <h3 style="color:var(--aws-green);">👍 メリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト削減</strong>: 反応が速くなり、過剰なベースラインキャパシティを削減できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>UX 向上</strong>: トラフィック急増に素早く対応し、レスポンス遅延やエラーを抑制</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>信頼性維持</strong>: 低コスト化と同時に急激な負荷変動への対応力を保てる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>高速化</strong>: トリガー最大 4.2 倍、プロビジョニング最大 3.5 倍</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟性</strong>: 20 秒と 60 秒を選択でき、既存ポリシーとも併用可能</span></div>
+      </div>
+      <div>
+        <h3 style="color:var(--aws-smile-orange);">⚠️ 制約・考慮点</h3>
+        <div class="check-item"><span class="warn-icon">!</span><span>20 秒の高解像度メトリクスには CloudWatch 標準料金が適用され追加コストが発生</span></div>
+        <div class="check-item"><span class="warn-icon">!</span><span>対象は CPU/メモリ使用率に基づくターゲット追跡ポリシーに限定</span></div>
+        <div class="check-item"><span class="warn-icon">!</span><span>ベンチマーク値は AWS 社内測定で、改善幅はワークロード・構成により異なる</span></div>
+        <div class="check-item"><span class="warn-icon">!</span><span>頻繁なスケーリングを避けるためクールダウン設定を適切に調整する</span></div>
+        <div class="check-item"><span class="warn-icon">!</span><span>急速なスケールインによる可用性低下を防ぐため最小キャパシティを慎重に設定</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>1. スパイク型トラフィックを処理する API</h4>
+      <p><span class="uc-label">シナリオ</span>: イベントやキャンペーンで短時間に急激にリクエストが増加する API。従来は 60 秒解像度のため対応が遅れていた。</p>
+      <p><span class="uc-label">実装</span>: CPU 使用率のターゲット追跡ポリシー (目標値 60%) + 20 秒高解像度メトリクス</p>
+      <p class="uc-effect">✅ 効果: 負荷急増を素早く検知し、約 86 秒でスケールアウトを開始。エラー率やレイテンシの悪化を防ぐ。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>2. コスト最適化を狙うバックエンドワークロード</h4>
+      <p><span class="uc-label">シナリオ</span>: 通常は低負荷だが断続的に負荷が高まるサービス。これまでは遅延を見越して余分なタスクを常時稼働していた。</p>
+      <p><span class="uc-label">実装</span>: 最小キャパシティを引き下げ + 20 秒高解像度メトリクスによる高速スケールアウト</p>
+      <p class="uc-effect">✅ 効果: ベースラインのタスク数を削減してコストを下げつつ、負荷増加時に迅速にキャパシティを追加。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>3. メモリ集約型の処理ワークロード</h4>
+      <p><span class="uc-label">シナリオ</span>: バッチ処理やデータ変換などメモリ使用率が急上昇するワークロード。メモリ枯渇によるタスク停止を避けたい。</p>
+      <p><span class="uc-label">実装</span>: メモリ使用率のターゲット追跡ポリシー + 20 秒高解像度メトリクス</p>
+      <p class="uc-effect">✅ 効果: メモリ使用率の上昇を 20 秒間隔で検知し、迅速にタスクを増やしメモリ起因の障害リスクを低減。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>高解像度 (20 秒) メトリクスの利用には <span class="highlight">CloudWatch の標準料金</span>が適用されます。高解像度メトリクスは標準解像度とは異なる料金体系のため、利用前に Amazon CloudWatch の料金ページで確認することを推奨します。ECS サービスオートスケーリング機能自体には追加料金は発生しません。</p>
+    <table>
+      <tr><th>使用量</th><th>月額料金 (概算)</th></tr>
+      <tr><td>高解像度メトリクスの利用</td><td>CloudWatch 標準料金が適用 (CloudWatch 料金ページを参照)</td></tr>
+      <tr><td>サービスオートスケーリング機能</td><td>追加料金なし</td></tr>
+    </table>
+  </div>
+
+  <!-- リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>すべての AWS 商用リージョンおよび AWS GovCloud (US) リージョンで利用可能です。</p>
+    <span class="region-badge">🌐 すべての商用リージョン</span>
+    <span class="region-badge">🏛️ AWS GovCloud (US)</span>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="related-card"><strong>AWS Application Auto Scaling</strong><br/>ECS サービスのタスク数をスケーリングする基盤サービス。ターゲット追跡ポリシーを管理する。</div>
+      <div class="related-card"><strong>Amazon CloudWatch</strong><br/>高解像度 (20 秒) メトリクスを収集・発行し、スケーリングアラームのトリガーとなる。</div>
+      <div class="related-card"><strong>AWS Fargate</strong><br/>サーバーレスでタスクを実行するコンピューティングオプション。本機能の対象。</div>
+      <div class="related-card"><strong>Amazon ECS Managed Instances</strong><br/>ECS が管理するインスタンス上でタスクを実行するオプション。本機能の対象。</div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>🎯 まとめ</h2>
+    <div class="summary-box">
+      このアップデートは、ECS サービスオートスケーリングが <strong>20 秒の高解像度メトリクス</strong>をサポートすることで、スケールアウトを<strong>最大 4.2 倍高速化</strong>する重要な機能強化です。スパイク型トラフィックを扱う本番ワークロードでは、可用性を高めながらベースラインキャパシティを削減してコストを最適化できます。CloudWatch の追加料金とのバランスを評価したうえで、ターゲット追跡ポリシーへの高解像度メトリクスの適用を検討することを推奨します。
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典 / 参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-ecs-faster-autoscaling/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-ecs-faster-autoscaling/</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-auto-scaling.html" target="_blank" rel="noopener noreferrer">ドキュメント (Amazon ECS サービスオートスケーリング)</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer">料金ページ (Amazon CloudWatch)</a></li>
+    </ul>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    primaryColor: '#FF9900',
+    primaryTextColor: '#232F3E',
+    primaryBorderColor: '#FF9900',
+    lineColor: '#FF9900',
+    secondaryColor: '#F5F5F5',
+    tertiaryColor: '#FAFAFA',
+    background: '#FFFFFF',
+    mainBkg: '#FFF3E0',
+    nodeBorder: '#FF9900',
+    clusterBkg: '#FFF8E1',
+    clusterBorder: '#FF9900',
+    edgeLabelBackground: '#FFFFFF',
+    textColor: '#232F3E'
+  }
+});
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
