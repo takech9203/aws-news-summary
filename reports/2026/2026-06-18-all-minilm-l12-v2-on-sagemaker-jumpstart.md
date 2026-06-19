@@ -1,244 +1,243 @@
 # Amazon SageMaker JumpStart - all-MiniLM-L12-v2 の提供開始
 
-**リリース日**: 2026年6月18日
+**リリース日**: 2026 年 6 月 18 日
 **サービス**: Amazon SageMaker JumpStart
-**機能**: all-MiniLM-L12-v2 (セマンティック検索・文章類似度向けテキスト埋め込みモデル)
+**機能**: all-MiniLM-L12-v2 (Sentence Transformers 埋め込みモデル) の提供
 
 📊 [このアップデートのインフォグラフィックを見る](https://takech9203.github.io/aws-news-summary/20260618-all-minilm-l12-v2-on-sagemaker-jumpstart.html)
 <!-- INFOGRAPHIC_BASE_URL は環境変数から取得 -->
 
 ## 概要
 
-AWS は、Sentence Transformers が開発したテキスト埋め込みモデル all-MiniLM-L12-v2 を Amazon SageMaker JumpStart で利用できるようにしたことを発表しました。このモデルは文や段落を 384 次元の密ベクトル空間にマッピングし、セマンティック検索、テキストクラスタリング、文章類似度といったユースケースをサポートします。
+AWS は、Sentence Transformers の埋め込みモデルである all-MiniLM-L12-v2 を Amazon SageMaker JumpStart で利用できるようにしたことを発表しました。このモデルは、文章や短い段落を 384 次元の密ベクトル (dense vector) にマッピングし、セマンティック検索や文章類似度の計算といったアプリケーションを実現します。
 
-all-MiniLM-L12-v2 は、入力されたテキストを意味を捉えた密ベクトル (embeddings) にエンコードします。生成されたベクトルは、情報検索、セマンティック検索、ドキュメントのクラスタリング、重複検出、言い換え (paraphrase) の識別などに活用できます。33.4M パラメータという小さなフットプリントにより高速な推論を実現しながら、本番環境でのスケールに耐えうる高い埋め込み品質を維持している点が特徴です。
+all-MiniLM-L12-v2 はコンパクトなアーキテクチャを採用しており、高い埋め込み品質を維持しながら高速な推論を提供します。これにより、大規模なテキスト表現を効率的に処理する必要がある本番環境のワークロードに適しています。情報検索、セマンティック検索システム、ドキュメントやテキストのクラスタリング、重複検出、パラフレーズ (言い換え) の識別など、幅広いユースケースで活用できます。
 
-お客様は SageMaker Studio の Models 画面、または SageMaker Python SDK を使用して、わずか数クリックで自身の AWS アカウントにモデルをデプロイできます。これにより、Retrieval-Augmented Generation (RAG) パイプラインのベクトル化処理や、ベクトル検索基盤の構築を、モデルの実装や微調整に時間をかけることなく素早く開始できます。
+SageMaker JumpStart を通じて、SageMaker Studio の [Models] セクションから数クリックでデプロイできるほか、SageMaker Python SDK を使用して各自の AWS アカウントにデプロイすることも可能です。事前トレーニング済みのモデルをすぐに利用できるため、埋め込みモデルを基盤とするアプリケーションの開発を迅速に開始できます。
 
 **アップデート前の課題**
 
-- 高品質なオープンソース埋め込みモデルを SageMaker で利用するには、Hugging Face からモデルをダウンロードし、推論コンテナや依存関係を自分で構成してデプロイする必要があった
-- 埋め込みモデルの選定にあたり、推論速度と埋め込み品質のトレードオフを検証する手間がかかっていた
-- RAG やセマンティック検索の基盤を構築する際、ベクトル化を担う埋め込みモデルの準備が初期構築のボトルネックになりやすかった
+- 埋め込みモデルを利用するには、Hugging Face などの外部リポジトリからモデルを取得し、推論コンテナやエンドポイントの構成を自前で準備する必要がありました
+- セマンティック検索や類似度計算のための埋め込み生成基盤を、ゼロから構築・運用する手間がありました
+- モデルのデプロイやスケーリングに関する設定を手動で管理する必要がありました
 
 **アップデート後の改善**
 
-- SageMaker JumpStart から数クリックで all-MiniLM-L12-v2 をデプロイできるようになった
-- 12 層アーキテクチャにより、軽量な L6 系モデルよりも高い埋め込み品質を得つつ、小さなフットプリントで高速な推論を維持できる
-- セマンティック検索、クラスタリング、文章類似度のユースケースに対応した埋め込み基盤を、最小限の設定で本番運用へ展開できる
+- SageMaker JumpStart 経由で all-MiniLM-L12-v2 を数クリックまたは数行の SDK コードでデプロイできるようになりました
+- AWS の管理されたインフラストラクチャ上で、すぐに本番品質の埋め込み生成を開始できます
+- SageMaker のマネージドエンドポイントを活用し、推論のスケーリングや運用を簡素化できるようになりました
 
 ## アーキテクチャ図
 
 ```mermaid
 flowchart TD
-    subgraph Client["☁️ アプリケーション層"]
-        App["⚙️ RAG / 検索アプリ"]
-    end
-
     subgraph SM["☁️ Amazon SageMaker"]
-        JS["📦 SageMaker JumpStart<br/>all-MiniLM-L12-v2"]
-        EP["🔌 推論エンドポイント"]
+        subgraph JS["📦 SageMaker JumpStart"]
+            Model["🧠 all-MiniLM-L12-v2<br/>Sentence Transformers"]
+        end
+        Endpoint["🔌 推論エンドポイント<br/>384 次元ベクトル出力"]
     end
 
-    subgraph Store["🗄️ ベクトルストア"]
-        OS[("🪣 OpenSearch / pgvector")]
+    subgraph App["⚙️ アプリケーション層"]
+        Search["🔍 セマンティック検索"]
+        Cluster["📊 クラスタリング"]
+        Dedup["🔁 重複検出"]
     end
 
-    App -->|テキスト入力| EP
-    JS -.デプロイ.-> EP
-    EP -->|384 次元ベクトル| App
-    App -->|ベクトル登録 / 検索| OS
+    VectorDB[("🗄️ ベクトルストア")]
+
+    Dev(["👤 開発者"]) -->|数クリックでデプロイ| Model
+    Model -->|デプロイ| Endpoint
+    Text(["📝 入力テキスト"]) -->|エンコード要求| Endpoint
+    Endpoint -->|埋め込みベクトル| VectorDB
+    VectorDB --> Search
+    VectorDB --> Cluster
+    VectorDB --> Dedup
 
     classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
     classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
-    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
     classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
 
-    class Client,SM,Store cloud
-    class JS,EP compute
-    class OS storage
-    class App process
+    class SM cloud
+    class JS,App layer
+    class Model,Endpoint compute
+    class VectorDB database
+    class Dev,Text user
+    class Search,Cluster,Dedup process
 ```
 
-アプリケーションはテキストを SageMaker 推論エンドポイントに送信し、384 次元の埋め込みベクトルを取得します。取得したベクトルは OpenSearch や pgvector などのベクトルストアに登録・検索され、セマンティック検索や RAG を実現します。
+開発者は SageMaker JumpStart から all-MiniLM-L12-v2 をデプロイし、推論エンドポイントでテキストを 384 次元ベクトルに変換します。生成された埋め込みをベクトルストアに格納することで、セマンティック検索やクラスタリングなどのアプリケーションを構築できます。
 
 ## サービスアップデートの詳細
 
 ### 主要機能
 
-1. **384 次元の密ベクトル生成**
-   - 文や段落を 384 次元の密ベクトル空間にマッピングする
-   - ベクトルは意味的な情報 (semantic meaning) を捉えるため、表層的な単語一致を超えた類似度比較が可能
-   - 情報検索、セマンティック検索、ドキュメントクラスタリング、重複検出、言い換え識別に利用できる
+1. **高品質な文章埋め込みの生成**
+   - 文章や短い段落を 384 次元の密ベクトルにエンコードし、意味的な情報を表現します
+   - 単語の表層的な一致ではなく、意味的な近さに基づいた類似度計算を可能にします
 
-2. **12 層アーキテクチャによる高品質と高速推論の両立**
-   - `microsoft/MiniLM-L12-H384-uncased` をベースとした 12 層の BERT 系トランスフォーマー (33.4M パラメータ)
-   - 小さなフットプリントにより高速な推論を実現しつつ、本番スケールでも高い埋め込み品質を維持
-   - 軽量な L6 系モデルと比較して、より深い層構造による高品質な埋め込みが期待できる
+2. **コンパクトかつ高速な推論**
+   - MiniLM ベースのコンパクトなアーキテクチャにより、高い埋め込み品質を維持しながら高速な推論を実現します
+   - 大規模なテキスト表現を効率的に処理する本番ワークロードに適しています
 
-3. **SageMaker JumpStart からの簡単なデプロイ**
-   - SageMaker Studio の Models 画面から数クリックでデプロイ可能
-   - SageMaker Python SDK を使用したコードベースのデプロイにも対応
-   - デプロイ後は SageMaker 推論エンドポイント経由で埋め込み生成を呼び出せる
+3. **SageMaker JumpStart 経由の容易なデプロイ**
+   - SageMaker Studio の [Models] セクションから数クリックでデプロイできます
+   - SageMaker Python SDK を使用して、各自の AWS アカウントにプログラムからデプロイすることも可能です
 
 ## 技術仕様
 
-### モデル仕様
+### モデル概要
 
 | 項目 | 詳細 |
 |------|------|
 | モデル名 | all-MiniLM-L12-v2 |
-| 開発元 | Sentence Transformers |
-| ベースモデル | microsoft/MiniLM-L12-H384-uncased |
-| アーキテクチャ | 12 層 BERT 系トランスフォーマー |
-| パラメータ数 | 約 33.4M |
-| 埋め込み次元 | 384 次元 |
-| 最大シーケンス長 | 256 word pieces (超過分は切り捨て) |
-| ライセンス | Apache 2.0 |
-| 主な用途 | セマンティック検索、文章類似度、クラスタリング、情報検索 |
+| 提供元 | Sentence Transformers |
+| 出力次元数 | 384 次元 (密ベクトル) |
+| 主な用途 | セマンティック検索、文章類似度 |
+| アーキテクチャ特性 | コンパクトで高速な推論 |
+| デプロイ方法 | SageMaker Studio (Models)、SageMaker Python SDK |
 
-### 学習データ
+### デプロイ例 (SageMaker Python SDK)
 
-- 10 億件超の文ペア (合計 1,170,060,424 タプル) を用いた自己教師あり対照学習 (contrastive learning) でファインチューニング
-- 主要な学習データソースには Reddit コメント (約 7.26 億件)、S2ORC 引用ペア、WikiAnswers の重複質問、PAQ の質問応答ペアが含まれる
+```python
+from sagemaker.jumpstart.model import JumpStartModel
 
-### API変更履歴
+# JumpStart モデル ID を指定してモデルオブジェクトを生成
+model = JumpStartModel(model_id="<all-MiniLM-L12-v2 のモデル ID>")
 
-このアップデートは SageMaker JumpStart 上での既存モデルカタログへのモデル追加であり、新規 API の追加や既存 API の変更を伴うものではありません。デプロイには既存の SageMaker 推論 API (`InvokeEndpoint` など) を利用します。
+# 推論エンドポイントをデプロイ
+predictor = model.deploy()
+
+# テキストをエンコードして埋め込みベクトルを取得
+response = predictor.predict({"inputs": ["セマンティック検索のための文章です"]})
+```
+
+上記は SageMaker JumpStart からモデルをデプロイし、テキストを埋め込みベクトルに変換する例です。正確なモデル ID や入力フォーマットは SageMaker JumpStart のドキュメントを参照してください。
 
 ## 設定方法
 
 ### 前提条件
 
-1. Amazon SageMaker を利用可能な AWS アカウント
-2. SageMaker のドメインおよびユーザープロファイル (SageMaker Studio 利用時)
-3. モデルのデプロイとエンドポイント作成に必要な IAM 権限
+1. Amazon SageMaker Studio が利用可能な AWS アカウント
+2. SageMaker の実行ロール (IAM ロール) と、モデルデプロイに必要な権限
+3. 推論エンドポイント用のインスタンスを起動できるサービスクォータ
 
 ### 手順
 
-#### ステップ1: SageMaker Studio からモデルを選択
+#### ステップ1: SageMaker Studio で JumpStart を開く
 
-SageMaker Studio を開き、左側ナビゲーションの [Models] (JumpStart) 画面で「all-MiniLM-L12-v2」を検索します。モデルカードを開き、内容を確認します。
+SageMaker Studio を起動し、[Models] (JumpStart) セクションから all-MiniLM-L12-v2 を検索します。モデルの詳細ページで仕様やデプロイオプションを確認します。
 
-#### ステップ2: モデルをデプロイ
+#### ステップ2: モデルをデプロイする
 
 ```python
 from sagemaker.jumpstart.model import JumpStartModel
 
-# JumpStart モデル ID を指定してモデルを初期化
-model = JumpStartModel(model_id="huggingface-sentencesimilarity-all-minilm-l12-v2")
-
-# 推論エンドポイントへデプロイ
+model = JumpStartModel(model_id="<all-MiniLM-L12-v2 のモデル ID>")
 predictor = model.deploy()
 ```
 
-SageMaker Python SDK の `JumpStartModel` クラスにモデル ID を指定してデプロイします。`deploy()` の実行により推論エンドポイントが作成されます。
+JumpStart のモデルオブジェクトを生成し、`deploy()` を呼び出して推論エンドポイントを作成します。Studio の UI から数クリックでデプロイすることも可能です。
 
-> 注: 実際のモデル ID やインスタンスタイプは SageMaker JumpStart のモデルカードおよびドキュメントで確認してください。
+#### ステップ3: 埋め込みを生成して活用する
 
-#### ステップ3: 埋め込みを生成
-
-```python
-# テキストを送信して埋め込みベクトルを取得
-response = predictor.predict({
-    "inputs": "AWS のセマンティック検索を構築する"
-})
-
-# 384 次元のベクトルが返却される
-print(response)
-```
-
-デプロイしたエンドポイントにテキストを送信し、384 次元の埋め込みベクトルを取得します。得られたベクトルをベクトルストアに登録することで、セマンティック検索や RAG の基盤を構築できます。
+デプロイしたエンドポイントにテキストを送信して 384 次元の埋め込みベクトルを取得し、ベクトルストア (例: Amazon OpenSearch Service、Amazon Aurora の pgvector) に格納してセマンティック検索やクラスタリングに利用します。
 
 ## メリット
 
 ### ビジネス面
 
-- **構築期間の短縮**: 埋め込みモデルの準備を数クリックで完了でき、セマンティック検索や RAG の PoC から本番化までのリードタイムを短縮できる
-- **コスト効率**: 33.4M パラメータの軽量モデルのため、大規模モデルと比べて推論コストとインフラ要件を抑えやすい
-- **オープンソースの活用**: Apache 2.0 ライセンスのモデルを SageMaker の運用環境に統合し、AWS の管理・スケーリング機能を活用できる
+- **開発の迅速化**: 事前トレーニング済みモデルを即座にデプロイでき、埋め込み基盤の構築期間を短縮できます
+- **コスト効率**: コンパクトなモデルにより、小さなインスタンスでも高速な推論が可能で、推論コストを抑えられます
+- **幅広い適用範囲**: 検索、クラスタリング、重複検出など複数のユースケースに同一モデルを活用できます
 
 ### 技術面
 
-- **高速推論**: 小さなフットプリントにより低レイテンシでの埋め込み生成が可能
-- **品質と速度の両立**: 12 層アーキテクチャにより、軽量な L6 系モデルよりも高い埋め込み品質が期待できる
-- **統合の容易さ**: SageMaker 推論エンドポイントとして提供されるため、OpenSearch や pgvector などのベクトルストアと容易に連携できる
+- **マネージド運用**: SageMaker のマネージドエンドポイントにより、スケーリングや可用性の管理を簡素化できます
+- **再現性のあるデプロイ**: Python SDK を用いることで、デプロイ手順をコード化し再現性を確保できます
+- **エコシステムとの統合**: SageMaker や OpenSearch などの AWS サービスと組み合わせて埋め込みパイプラインを構築できます
 
 ## デメリット・制約事項
 
 ### 制限事項
 
-- 最大シーケンス長は 256 word pieces であり、それを超える長文は切り捨てられる (長文ドキュメントはチャンク分割が必要)
-- 学習データの大半が英語コーパスのため、多言語や日本語特有のタスクでは品質を事前に検証する必要がある
-- 384 次元という比較的低い次元数は効率に優れる一方、最大精度を求めるタスクでは高次元モデルに劣る場合がある
+- all-MiniLM-L12-v2 は短い文章や段落向けに最適化されており、長文ドキュメント全体をそのままエンコードする用途には適切なチャンク分割が必要です
+- 出力次元数は 384 次元に固定されています
+- 推論エンドポイントを稼働させている間はインスタンス料金が発生します
 
 ### 考慮すべき点
 
-- 推論エンドポイントは起動中に課金されるため、利用パターンに応じてエンドポイントの稼働時間やインスタンスタイプを最適化する
-- ユースケースに応じて L6 系モデルや他の埋め込みモデルとの品質・コスト比較を行うことが望ましい
-- 利用可能リージョンやインスタンスタイプは SageMaker JumpStart のモデルカードで確認する
+- 多言語対応の度合いはモデルの特性に依存するため、対象言語での精度を事前に評価することを推奨します
+- 利用可能リージョンや対応インスタンスタイプは、SageMaker JumpStart のドキュメントで確認してください
+- 大量のテキストをバッチ処理する場合は、エンドポイントのスケーリング設定やバッチ推論の活用を検討してください
 
 ## ユースケース
 
-### ユースケース1: 社内ドキュメント検索 (RAG)
+### ユースケース1: 社内ナレッジのセマンティック検索
 
-**シナリオ**: 社内ナレッジベースを対象に、自然言語の質問から関連ドキュメントを検索する RAG パイプラインを構築する。
-
-**実装例**:
-```
-ドキュメント → all-MiniLM-L12-v2 で埋め込み生成 → ベクトルストアに登録
-質問 → 埋め込み生成 → ベクトル類似度検索 → 関連文書を LLM へ渡して回答生成
-```
-
-**効果**: キーワード一致では拾えない意味的に関連する文書を検索でき、回答の精度が向上する。
-
-### ユースケース2: 重複・類似コンテンツの検出
-
-**シナリオ**: 大量のテキストデータ (問い合わせ、レビュー、記事) から重複や言い換えを検出する。
+**シナリオ**: 社内ドキュメントや FAQ をキーワード一致ではなく意味的な近さで検索したい。
 
 **実装例**:
 ```
-各テキストを埋め込みベクトル化 → ベクトル間のコサイン類似度を計算
-→ 閾値を超えるペアを重複・類似候補として抽出
+1. ドキュメントを適切なサイズにチャンク分割
+2. all-MiniLM-L12-v2 で各チャンクを 384 次元ベクトルに変換
+3. ベクトルをベクトルストアに格納
+4. 検索クエリも同じモデルでベクトル化し、近傍検索を実行
 ```
 
-**効果**: 表現が異なる重複コンテンツを高精度に検出し、データ品質の向上や名寄せ処理を自動化できる。
+**効果**: 表現が異なっても意味的に関連するドキュメントを検索でき、検索精度が向上します。
 
-### ユースケース3: テキストクラスタリングによる分類
+### ユースケース2: 問い合わせの重複検出
 
-**シナリオ**: ラベルのない大量のテキストを意味的に近いグループへ自動分類する。
+**シナリオ**: カスタマーサポートに寄せられる問い合わせのうち、内容が重複するものを自動で検出したい。
 
 **実装例**:
 ```
-テキスト群を埋め込みベクトル化 → k-means などのクラスタリングを適用
-→ 意味的に近いトピックごとにグループ化
+1. 各問い合わせ文を埋め込みベクトルに変換
+2. ベクトル間のコサイン類似度を計算
+3. 類似度が閾値を超えるペアを重複候補として抽出
 ```
 
-**効果**: 教師データなしでトピックの傾向を把握でき、問い合わせ分類やコンテンツ整理を効率化できる。
+**効果**: 重複対応の削減と、よくある質問のグルーピングによる対応効率の向上が期待できます。
+
+### ユースケース3: ドキュメントのクラスタリング
+
+**シナリオ**: 大量のテキストデータをテーマごとに自動分類したい。
+
+**実装例**:
+```
+1. 全テキストを埋め込みベクトルに変換
+2. K-means などのクラスタリングアルゴリズムを適用
+3. クラスタごとに代表的なトピックを抽出
+```
+
+**効果**: 手動のラベル付けなしにテキストを意味的なグループに整理でき、データ分析を効率化できます。
 
 ## 料金
 
-SageMaker JumpStart 経由で all-MiniLM-L12-v2 を利用する場合、モデル自体は Apache 2.0 ライセンスのオープンソースモデルであり、ソフトウェア利用料は発生しません。課金は、モデルをデプロイした SageMaker 推論エンドポイントで使用するインスタンスの稼働時間に対して発生します。料金はインスタンスタイプとリージョンによって異なります。最新かつ正確な料金は SageMaker の料金ページを参照してください。
+本アップデートの発表では、専用の料金体系については言及されていません。SageMaker JumpStart のモデルをデプロイして利用する場合、推論エンドポイントに使用する Amazon SageMaker のインスタンス料金などの通常の SageMaker 利用料金が適用されます。正確な料金は Amazon SageMaker の料金ページを参照してください。
 
 ## 利用可能リージョン
 
-利用可能なリージョンは、What's New の発表時点では明示されていません。最新の対応リージョンおよびインスタンスタイプは、SageMaker JumpStart のモデルカードおよび公式ドキュメントで確認してください。
+本アップデートの発表では、利用可能リージョンの具体的な記載はありません。対応リージョンについては、Amazon SageMaker JumpStart のドキュメントおよび利用しているリージョンの SageMaker コンソールで確認してください。
 
 ## 関連サービス・機能
 
-- **Amazon OpenSearch Service**: 生成した埋め込みベクトルを格納し、k-NN ベクトル検索を実行するベクトルストアとして利用できる
-- **Amazon Aurora PostgreSQL (pgvector)**: リレーショナルデータベース上でベクトル検索を行う場合の格納先として利用できる
-- **Amazon Bedrock**: RAG パイプラインにおいて、検索結果をもとに回答を生成する LLM レイヤーとして組み合わせ可能
-- **Amazon SageMaker Studio**: モデルの検索、デプロイ、エンドポイント管理を行う統合開発環境
+- **Amazon SageMaker Studio**: JumpStart のモデルを検索・デプロイするための統合開発環境です
+- **Amazon OpenSearch Service**: 生成した埋め込みベクトルを格納し、近傍検索 (k-NN) を実行できます
+- **Amazon Bedrock**: マネージドな埋め込みモデルの選択肢として、用途に応じて比較検討できます
 
 ## 参考リンク
 
 - 📊 [インフォグラフィック](https://takech9203.github.io/aws-news-summary/20260618-all-minilm-l12-v2-on-sagemaker-jumpstart.html)
 - [公式発表 (What's New)](https://aws.amazon.com/about-aws/whats-new/2026/06/all-minilm-l12-v2-on-sagemaker-jumpstart/)
 - [Amazon SageMaker JumpStart ドキュメント](https://docs.aws.amazon.com/sagemaker/latest/dg/studio-jumpstart.html)
-- [all-MiniLM-L12-v2 モデルカード (Hugging Face)](https://huggingface.co/sentence-transformers/all-MiniLM-L12-v2)
 - [Amazon SageMaker 料金ページ](https://aws.amazon.com/sagemaker/pricing/)
 
 ## まとめ
 
-all-MiniLM-L12-v2 が SageMaker JumpStart で利用可能になったことで、高品質かつ軽量な埋め込みモデルを数クリックでデプロイし、セマンティック検索や RAG の基盤を素早く構築できるようになりました。推論速度と埋め込み品質のバランスに優れたモデルであり、まずは PoC でユースケースに対する品質とコストを検証し、ベクトルストアと組み合わせた検索基盤への適用を検討することをお勧めします。
+all-MiniLM-L12-v2 が SageMaker JumpStart で利用可能になったことで、高品質かつ高速な文章埋め込みを数クリックでデプロイできるようになりました。セマンティック検索や重複検出、クラスタリングといったテキスト表現を活用するアプリケーションを検討している場合は、JumpStart からモデルをデプロイし、自社データでの精度を評価することから始めることを推奨します。

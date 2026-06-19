@@ -4,7 +4,7 @@
 **サービス**: Amazon Simple Notification Service (Amazon SNS)
 **機能**: アジアパシフィック (ソウル) リージョンでの SMS 送信
 
-📊 [このアップデートのインフォグラフィックを見る]({INFOGRAPHIC_BASE_URL}/20260618-amazon-sns-supports-sending-sms-seoul-region.html)
+📊 [このアップデートのインフォグラフィックを見る](https://takech9203.github.io/aws-news-summary/20260618-amazon-sns-supports-sending-sms-seoul-region.html)
 <!-- INFOGRAPHIC_BASE_URL は環境変数から取得 -->
 
 ## 概要
@@ -225,7 +225,7 @@ aws sns publish \
 
 ## 参考リンク
 
-- 📊 [インフォグラフィック]({INFOGRAPHIC_BASE_URL}/20260618-amazon-sns-supports-sending-sms-seoul-region.html)
+- 📊 [インフォグラフィック](https://takech9203.github.io/aws-news-summary/20260618-amazon-sns-supports-sending-sms-seoul-region.html)
 - [公式発表 (What's New)](https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-sns-supports-sending-sms-seoul-region/)
 - [Amazon SNS 製品ページ](https://aws.amazon.com/sns/)
 - [ドキュメント: Amazon SNS によるモバイルテキストメッセージング](https://docs.aws.amazon.com/sns/latest/dg/sns-mobile-phone-number-as-subscriber.html)

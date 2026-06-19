@@ -278,6 +278,7 @@ Amazon Bedrock Managed Knowledge Base は、以下のリージョンで一般提
 
 - 📊 [インフォグラフィック](https://takech9203.github.io/aws-news-summary/20260617-amazon-bedrock-managed-knowledge-base.html)
 - [公式発表 (What's New)](https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-bedrock-managed-knowledge-base/)
+- [AWS Blog: Introducing Amazon Bedrock Managed Knowledge Base for faster, more accurate enterprise AI applications](https://aws.amazon.com/blogs/aws/introducing-amazon-bedrock-managed-knowledge-base-for-faster-more-accurate-enterprise-ai-applications/)
 - [製品ページ (Knowledge Bases)](https://aws.amazon.com/bedrock/knowledge-bases/)
 - [ドキュメント](https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-base.html)
 - [料金ページ](https://aws.amazon.com/bedrock/pricing/)

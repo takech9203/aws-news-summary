@@ -2,245 +2,255 @@
 
 **リリース日**: 2026 年 6 月 18 日
 **サービス**: Amazon SageMaker AI
-**機能**: 推論エンドポイント向けオブザーバビリティ機能 (SageMaker AI Insights ダッシュボード)
+**機能**: 推論エンドポイント向け詳細オブザーバビリティ (Detailed observability)
 
 📊 [このアップデートのインフォグラフィックを見る](https://takech9203.github.io/aws-news-summary/20260618-amazon-sagemaker-ai-inference.html)
-<!-- INFOGRAPHIC_BASE_URL は環境変数から取得 -->
 
 ## 概要
 
-Amazon SageMaker AI は、推論エンドポイントに対する新しいオブザーバビリティ機能を発表しました。この機能は、本番環境で稼働する生成 AI ワークロードのパフォーマンスを可視化し、問題の特定と解決にかかる時間を大幅に短縮することを目的としています。
+Amazon SageMaker AI は、リアルタイム推論エンドポイント向けの新しいオブザーバビリティ機能を発表しました。この機能により、本番環境の生成 AI 推論ワークロードについて、トークンパフォーマンス、GPU の状態、推論コンポーネントの配置、オートスケーリングの挙動などをきめ細かく可視化できます。
 
-従来、推論エンドポイントのパフォーマンス問題を調査するには、Amazon CloudWatch の複数のメトリクスを手動で探し回り、レイテンシーの問題とハードウェアの状態を相関させる必要がありました。今回のアップデートでは、Time to First Token (TTFT)、トークン間レイテンシー、キュー深度、1 秒あたりのトークン数などの主要なパフォーマンス指標を、インフラストラクチャの健全性とあわせてリアルタイムに追跡できます。これにより、これまで数時間を要していた問題の特定と解決が数分で完了するようになります。
+この機能は OpenTelemetry (OTel) をベースに構築されており、GPU、ノード、推論フレームワークの各レイヤーから運用メトリクスを収集して Amazon CloudWatch に発行します。あらかじめ用意された SageMaker AI Insights ダッシュボードにより、複数のデータが 1 つのビューに集約され、Time to First Token (TTFT) の劣化、可用性ゾーン (AZ) のコンプライアンス、オートスケーリングポリシーのチューニングといった課題を、数時間ではなく数分で診断できるようになります。
 
-中核となるのは、Amazon CloudWatch に組み込まれた事前構築済みの SageMaker AI Insights ダッシュボードです。トークンレイテンシー、GPU 使用率、推論コンポーネントのコピー数、スケーリングイベント、コールドスタートの内訳を 1 つのビューに集約します。メトリクスは OpenTelemetry ネイティブメトリクスとして自動的に公開されるため、ユーザー側で計装 (インストルメンテーション) を行う必要はありません。
+対象は、本番環境で生成 AI モデルを運用する機械学習エンジニアや SRE、プラットフォーム運用チームです。計測コードの追加 (インストルメンテーション) は不要で、メトリクスは自動的に発行されます。
 
 **アップデート前の課題**
 
-このアップデート以前は、推論エンドポイントの運用に以下の課題がありました。
-
-- 以前はパフォーマンス問題の調査時に、CloudWatch の複数のメトリクスを手動で探し回る必要があった
-- 以前はレイテンシーの問題とハードウェアの状態を手動で相関させる必要があり、原因特定に数時間を要していた
-- 以前は TTFT やトークン間レイテンシーといった生成 AI 特有の指標を統合的に把握する手段が限られていた
+- 推論パフォーマンスの問題を診断するには、CloudWatch のログやメトリクスを手作業で検索し、レイテンシのスパイクを相関させる必要があった
+- vLLM や SGLang などの推論フレームワーク内部のメトリクス (TTFT、トークン/秒、KV キャッシュ利用率など) を取得するには、カスタムの計測コードが必要だった
+- マルチテナントのインスタンス上で、どのモデルが GPU リソースを消費しているのかを特定することが困難だった
+- スケーリングが遅い原因 (コールドスタートの内訳など) を切り分けるのに時間がかかっていた
 
 **アップデート後の改善**
 
-今回のアップデートにより、以下が可能になりました。
-
-- 今回のアップデートにより、生成 AI 特有のメトリクスとインフラ健全性を 1 つのダッシュボードで統合的に把握できるようになった
-- 今回のアップデートにより、計装 (インストルメンテーション) を行わずに OpenTelemetry ネイティブメトリクスを自動取得できるようになった
-- 今回のアップデートにより、問題の特定と解決にかかる時間が数時間から数分に短縮された
+- 事前構築済みの SageMaker AI Insights ダッシュボードにより、トークンパフォーマンス、GPU の状態、配置状況を 1 つのビューで確認できるようになった
+- OpenTelemetry ネイティブのメトリクスが計測コードなしで自動発行されるようになった
+- GPU メトリクス (DCGM) が推論コンポーネント単位で属性付けされ、リソース消費の発生源を特定できるようになった
+- PromQL によるクエリと Amazon Managed Grafana への連携が可能になり、問題解決にかかる時間が短縮された
 
 ## アーキテクチャ図
 
 ```mermaid
 flowchart TD
-    subgraph SageMaker["☁️ Amazon SageMaker AI"]
-        Endpoint["⚙️ 推論エンドポイント<br/>EnableDetailedObservability"]
-        IC["🧩 推論コンポーネント<br/>GPU / ホスト / フレームワークメトリクス"]
+    subgraph Endpoint["☁️ SageMaker AI 推論エンドポイントインスタンス"]
+        direction LR
+        MC["🧠 モデルコンテナ<br/>vLLM / SGLang"]
+        DCGM["🎮 DCGM Exporter<br/>GPU メトリクス"]
+        NODE["🖥️ Node Exporter<br/>CPU/メモリ/ディスク"]
+        MC ~~~ DCGM ~~~ NODE
     end
 
-    subgraph Observability["📊 オブザーバビリティ"]
-        CW["📈 CloudWatch<br/>SageMaker AI Insights ダッシュボード"]
-        PromQL["🔌 リージョン別 PromQL エンドポイント"]
-        Grafana["📉 Grafana<br/>事前構成ダッシュボードテンプレート"]
+    OTEL["⚙️ OTel Collector<br/>スクレイプ + ラベル付与"]
+
+    subgraph CW["📊 Amazon CloudWatch お客様アカウント"]
+        direction LR
+        STORE[("🗄️ OTel メトリクスストア")]
+        DASH["📈 SageMaker AI Insights<br/>ダッシュボード"]
+        STORE ~~~ DASH
     end
 
-    User(["👤 運用担当者"]) --> CW
-    User --> Grafana
+    Grafana["📉 Amazon Managed Grafana"]
+    User(["👤 運用チーム"])
 
-    Endpoint --> IC
-    IC -.->|OpenTelemetry ネイティブメトリクス<br/>自動公開| CW
-    IC -.->|PromQL| PromQL
-    PromQL --> Grafana
+    MC --> OTEL
+    DCGM --> OTEL
+    NODE --> OTEL
+    OTEL -->|OTLP| STORE
+    STORE -->|PromQL| DASH
+    STORE -.->|PromQL エンドポイント| Grafana
+    DASH --> User
+    Grafana -.-> User
 
     classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
     classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
     classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
     classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
     classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
 
-    class SageMaker,Observability cloud
-    class Endpoint,IC compute
-    class CW,Grafana process
-    class PromQL internal
+    class Endpoint,CW cloud
+    class MC,DCGM,NODE compute
+    class STORE storage
+    class OTEL process
+    class DASH,Grafana internal
     class User user
 ```
 
-推論エンドポイントが OpenTelemetry ネイティブメトリクスを自動公開し、CloudWatch のダッシュボードまたは PromQL 経由の Grafana で可視化する流れを示しています。
+各エンドポイントインスタンスがモデルコンテナ、DCGM Exporter、Node Exporter からメトリクスを公開し、OTel Collector がそれらをスクレイプしてラベルを付与した上で、OTLP 経由でお客様アカウントの CloudWatch に発行します。
 
 ## サービスアップデートの詳細
 
 ### 主要機能
 
-1. **生成 AI 向けパフォーマンスメトリクスのリアルタイム追跡**
-   - Time to First Token (TTFT) を追跡し、最初のトークンが返るまでの遅延を把握できる
-   - トークン間レイテンシー、キュー深度、1 秒あたりのトークン数を可視化する
-   - これらの指標をインフラストラクチャの健全性とあわせて表示する
+1. **SageMaker AI Insights ダッシュボード**
+   - Amazon CloudWatch 内に事前構築されたダッシュボード
+   - トークンパフォーマンス、GPU の状態、推論コンポーネントの配置、オートスケーリングの挙動を 1 つのビューに集約
+   - TTFT の劣化診断、AZ コンプライアンスの確認、オートスケーリングポリシーのチューニングを支援
 
-2. **SageMaker AI Insights ダッシュボード (CloudWatch)**
-   - トークンレイテンシー、GPU 使用率、推論コンポーネントのコピー数を 1 つのビューに集約する
-   - スケーリングイベントとコールドスタートの内訳を確認できる
-   - OpenTelemetry ネイティブメトリクスが自動的に公開され、計装は不要
+2. **OpenTelemetry ネイティブのメトリクス収集**
+   - OTel Collector が DCGM (GPU メトリクス)、Node Exporter (CPU/メモリ/ディスク)、推論フレームワークコンテナ (vLLM、SGLang) の Prometheus エンドポイントをスクレイプ
+   - 計測コードの追加は不要で、メトリクスは自動的に発行される
+   - 収集されたメトリクスは OTLP 経由で CloudWatch に OTel メトリクスデータとして格納される
 
-3. **Grafana 連携**
-   - リージョン別の PromQL エンドポイントを使用して Grafana と連携できる
-   - インポート可能な事前構成済みダッシュボードテンプレートを提供する
-   - CloudWatch 以外の監視ツールを利用しているチームにも対応する
+3. **豊富なディメンションラベルと GPU 単位の属性付け**
+   - 各メトリクスにエンドポイント名、推論コンポーネント名、インスタンス ID、AZ、インスタンスタイプなどのラベルを付与
+   - GPU メトリクス (DCGM) は推論コンポーネント単位で属性付けされ、マルチテナントインスタンス上でどのモデルが GPU を消費しているか特定可能
+
+4. **PromQL クエリと Grafana 連携**
+   - Amazon CloudWatch、CloudWatch Query Studio、Amazon Managed Grafana から PromQL 構文でクエリ可能
+   - リージョンの PromQL エンドポイント経由で接続し、事前構成済みのダッシュボードテンプレートをインポートできる
+   - PromQL はクエリ言語として利用できるが、Prometheus サーバーや Prometheus 互換バックエンドは関与しない
 
 ## 技術仕様
 
-### 追跡される主要メトリクス
+### 収集されるメトリクスのカテゴリ
 
-| 項目 | 詳細 |
+| カテゴリ | 主なメトリクス | スコープ | 発行頻度 |
+|------|------|------|------|
+| 推論フレームワーク (vLLM/SGLang) | TTFT、トークン間レイテンシ (ITL)、KV キャッシュ、キュー深度、バッチサイズ、トークン/秒、同時リクエスト数 | 推論コンポーネント単位 (IC エンドポイント)、インスタンス/エンドポイント単位 (SME) | 設定可能 |
+| GPU の状態 (DCGM) | GPU 利用率、メモリコピー利用率、GPU 温度 | インスタンス単位、GPU 単位 | 設定可能 |
+| ノードの状態 | CPU、メモリ、ディスク、ファイルシステム | インスタンス単位 | 設定可能 |
+| 推論コンポーネントの配置と高可用性 | IC コピー数、AZ ごとのコピー数、AZ スキュー、インスタンスあたりの IC 数、AZ ごとのインスタンス数 | エンドポイント単位 | 定期 |
+| ライフサイクル | モデルダウンロード時間、GPU ロード時間、コンテナ起動、コールドスタート | IC 単位、エンドポイント単位 | イベント駆動 |
+| オートスケーリング | スケーリングイベント、エンドツーエンドレイテンシ、リバランス | エンドポイント単位 | イベント駆動 |
+| ICE 診断 | ICE 数、失敗タイプ、失敗 AZ | エンドポイント単位 | イベント駆動 |
+
+### 主なラベル
+
+| ラベル | 説明 |
 |------|------|
-| Time to First Token (TTFT) | リクエストから最初のトークンが返されるまでの時間 |
-| トークン間レイテンシー | トークンとトークンの間の生成遅延 |
-| キュー深度 | 処理待ちリクエストの滞留状況 |
-| 1 秒あたりのトークン数 | スループットを示すトークン生成速度 |
-| GPU 使用率 | 推論コンポーネントの GPU リソース使用状況 |
-| 推論コンポーネントのコピー数 | スケーリングの状態 |
-| コールドスタートの内訳 | 起動時のレイテンシー要因の分解 |
+| `aws.sagemaker.endpoint.name` | エンドポイント名 |
+| `aws.sagemaker.inference_component.name` | 推論コンポーネント名 |
+| `@resource.host.id` | インスタンス ID |
+| `@resource.cloud.availability_zone` | 可用性ゾーン |
+| `@resource.host.type` | インスタンスタイプ |
 
-### API変更履歴
+### スクレイプ頻度の設定
 
-| 日付 | サービス | 変更内容 |
-|------|----------|----------|
-| 2026/06/16 | [api.sagemaker](https://awsapichanges.com/archive/changes/e078c6-api.sagemaker.html) | 21 updated api methods - Endpoint の MetricsConfig に EnableDetailedObservability を追加。GPU、ホスト、フレームワークネイティブの推論メトリクスを、推論コンポーネント別、アベイラビリティーゾーン別、インスタンス別のディメンションで CloudWatch に公開。推論コンポーネントのプロビジョニングライフサイクルとマルチ AZ 配置メトリクスを追加 |
-
-### 設定例
-
-```json
-{
-  "EndpointConfigName": "my-genai-endpoint-config",
-  "MetricsConfig": {
-    "EnableDetailedObservability": true
-  }
-}
-```
-
-`MetricsConfig` の `EnableDetailedObservability` を有効化することで、詳細なオブザーバビリティメトリクスが CloudWatch に自動的に公開されます。
+メトリクスの収集頻度は `MetricPublishFrequencyInSeconds` で制御します。有効な値は 10、30、60、120、180、240、300 秒で、デフォルトは 60 秒です。ライフサイクル、オートスケーリング、ICE 診断などのコントロールプレーンメトリクスはイベント駆動であり、この設定の影響を受けません。
 
 ## 設定方法
 
 ### 前提条件
 
-1. Amazon SageMaker AI の推論エンドポイントが利用可能なリージョンにあること
-2. CloudWatch にアクセスできる IAM 権限があること
-3. Grafana 連携を利用する場合は、Amazon Managed Grafana または既存の Grafana 環境があること
+1. SageMaker AI のリアルタイム推論エンドポイントを利用していること
+2. 対象リージョンが詳細オブザーバビリティに対応していること
+3. CloudWatch および (必要に応じて) Amazon Managed Grafana へのアクセス権限があること
 
 ### 手順
 
-#### ステップ1: エンドポイント構成でオブザーバビリティを有効化
+#### ステップ 1: CloudWatch で SageMaker AI Insights ダッシュボードを確認
 
-```bash
-aws sagemaker create-endpoint-config \
-  --endpoint-config-name my-genai-endpoint-config \
-  --metrics-config EnableDetailedObservability=true \
-  --production-variants '[{...}]'
+CloudWatch コンソールから、事前構築済みの SageMaker AI Insights ダッシュボードを開きます。トークンパフォーマンス、GPU の状態、推論コンポーネントの配置などが 1 つのビューに集約されて表示されます。
+
+#### ステップ 2: PromQL でメトリクスをクエリ
+
+```text
+# 推論コンポーネント単位の TTFT を確認する PromQL クエリの例
+histogram_quantile(0.99, sum by (aws_sagemaker_inference_component_name) (rate(ttft_seconds_bucket[5m])))
 ```
 
-このコマンドは、エンドポイント構成の `MetricsConfig` で詳細なオブザーバビリティを有効化し、GPU・ホスト・フレームワークネイティブの推論メトリクスを CloudWatch へ自動公開するよう設定します。
+CloudWatch または CloudWatch Query Studio で PromQL 構文を使用し、TTFT などのメトリクスをきめ細かく分析します。
 
-#### ステップ2: SageMaker AI Insights ダッシュボードを確認
+#### ステップ 3: Amazon Managed Grafana と連携
 
-CloudWatch コンソールを開き、事前構築済みの SageMaker AI Insights ダッシュボードを選択します。トークンレイテンシー、GPU 使用率、スケーリングイベント、コールドスタートの内訳を 1 つのビューで確認できます。追加の計装は不要です。
-
-#### ステップ3: Grafana 連携を構成 (任意)
-
-CloudWatch 以外の監視ツールを利用している場合は、リージョン別の PromQL エンドポイントを Grafana のデータソースとして登録し、提供される事前構成済みダッシュボードテンプレートをインポートします。これにより既存の運用ダッシュボードに統合できます。
+リージョンの PromQL エンドポイント (`https://monitoring.{region}.amazonaws.com`) を Grafana のデータソースとして接続し、事前構成済みのダッシュボードテンプレートをインポートします。これにより、Grafana 上で SageMaker AI の推論メトリクスを可視化できます。
 
 ## メリット
 
 ### ビジネス面
 
-- **問題解決時間の短縮**: 問題の特定と解決が数時間から数分に短縮され、運用負荷とダウンタイムを削減する
-- **AI 投資の最大化**: パフォーマンスを継続的に把握しチューニングすることで、AI 投資の効果を最大化できる
-- **セルフサービス化**: 運用チームが自律的に問題を診断・解決できるようになる
+- **問題解決時間の短縮**: パフォーマンスの問題を数時間ではなく数分で診断でき、本番ワークロードの信頼性が向上する
+- **運用負荷の軽減**: 手作業での CloudWatch 検索やレイテンシ相関の作業が不要になる
+- **コスト最適化**: GPU 利用率や推論コンポーネントの配置を可視化することで、リソースの過剰/過少プロビジョニングを見直せる
 
 ### 技術面
 
-- **計装不要**: OpenTelemetry ネイティブメトリクスが自動公開されるため、コード変更や追加の計装が不要
-- **統合ビュー**: 生成 AI 特有のメトリクスとインフラ健全性を 1 つのダッシュボードに集約
-- **マルチツール対応**: CloudWatch に加えて PromQL 経由で Grafana にも対応し、既存の監視基盤に統合できる
+- **計測コード不要**: OpenTelemetry ネイティブのメトリクスが自動発行され、追加実装の手間がない
+- **きめ細かい属性付け**: GPU メトリクスが推論コンポーネント単位で取得でき、マルチテナント環境での原因特定が容易
+- **既存ツールとの親和性**: PromQL と Amazon Managed Grafana に対応し、既存の運用ワークフローに組み込みやすい
 
 ## デメリット・制約事項
 
 ### 制限事項
 
-- 現時点では一部のリージョンのみで利用可能 (利用可能リージョンを参照)
-- 公式発表では料金に関する記載がないため、CloudWatch メトリクスや Grafana 利用に伴う標準的なコストは別途確認が必要
+- 対応リージョンは限定されている (利用可能リージョンを参照)
+- メトリクスは Prometheus メトリクスではなく OTel メトリクスとして CloudWatch に格納される。PromQL はクエリ言語としてのみサポートされ、Prometheus サーバーは関与しない
+- スクレイプ頻度として設定できる値は 10、30、60、120、180、240、300 秒に限定される
 
 ### 考慮すべき点
 
-- 詳細なメトリクスの公開に伴う CloudWatch のカスタムメトリクスやストレージのコスト影響を事前に確認することが望ましい
-- Grafana 連携を利用する場合は、リージョン別の PromQL エンドポイントへのネットワークアクセスとアクセス制御の設計が必要
+- メトリクス自体は追加料金なしで提供されるが、OTel エンリッチメントに伴う CloudWatch のデータ取り込みコストが発生する可能性がある
+- 高頻度のスクレイプ設定はデータ量とコストの増加につながるため、ワークロードに応じた調整が必要
 
 ## ユースケース
 
-### ユースケース1: TTFT の悪化要因の特定
+### ユースケース 1: TTFT 劣化の原因特定
 
-**シナリオ**: 生成 AI チャットアプリケーションで、ユーザーから応答の初動が遅いという報告が増えている。
-
-**実装例**:
-```
-SageMaker AI Insights ダッシュボードで TTFT、キュー深度、GPU 使用率を同時に確認
-```
-
-**効果**: TTFT の悪化がキュー滞留によるものか GPU リソース不足によるものかを即座に切り分け、適切な対策を打てる。
-
-### ユースケース2: オートスケーリングポリシーの最適化
-
-**シナリオ**: トラフィック変動が大きい本番エンドポイントで、コールドスタートによる遅延が断続的に発生している。
+**シナリオ**: 生成 AI チャットアプリケーションでユーザーから応答開始が遅いという報告があり、TTFT の劣化が疑われる。
 
 **実装例**:
+```text
+# 推論コンポーネント単位の TTFT 推移を確認
+rate(ttft_seconds_sum[5m]) / rate(ttft_seconds_count[5m])
 ```
-スケーリングイベントとコールドスタートの内訳、推論コンポーネントのコピー数を分析
-```
 
-**効果**: スケーリングのしきい値とウォームプールの設定を見直し、コールドスタートの影響を最小化できる。
+**効果**: どの推論コンポーネントとインスタンスで TTFT が劣化しているかを特定し、キュー深度や GPU 利用率と相関させて原因を切り分けられる。
 
-### ユースケース3: アベイラビリティーゾーンのコンプライアンス確認
+### ユースケース 2: マルチテナント GPU の消費分析
 
-**シナリオ**: 規制要件により、推論ワークロードが特定のアベイラビリティーゾーンに配置されていることを継続的に確認する必要がある。
+**シナリオ**: 1 つのインスタンスに複数の推論コンポーネントを配置しており、特定のモデルが GPU を圧迫している可能性がある。
 
 **実装例**:
-```
-アベイラビリティーゾーン別ディメンションのメトリクスとマルチ AZ 配置メトリクスを確認
+```text
+# 推論コンポーネント単位の GPU 利用率
+sum by (aws_sagemaker_inference_component_name) (DCGM_FI_DEV_GPU_UTIL)
 ```
 
-**効果**: ワークロードの配置状況を可視化し、AZ 配置に関するコンプライアンスを継続的に確認できる。
+**効果**: GPU リソースの消費源となっている推論コンポーネントを特定し、配置やインスタンスタイプの見直しに活用できる。
+
+### ユースケース 3: 高可用性とオートスケーリングの検証
+
+**シナリオ**: 推論コンポーネントが複数 AZ に均等に配置されているか、オートスケーリングが適切に機能しているかを確認したい。
+
+**実装例**:
+```text
+# AZ ごとの IC コピー数を確認し、AZ スキューを検出
+sum by (availability_zone) (aws_sagemaker_inference_component_copy_count)
+```
+
+**効果**: AZ スキューやスケーリングイベントを可視化し、可用性の確保とオートスケーリングポリシーのチューニングを行える。
 
 ## 料金
 
-公式発表では本機能自体の料金に関する記載はありません。CloudWatch のメトリクスやダッシュボード、Grafana 連携の利用には、各サービスの標準的な料金が適用される可能性があります。詳細は各サービスの料金ページを確認してください。
+詳細オブザーバビリティのメトリクスは追加料金なしで提供されます。ただし、OTel エンリッチメントに関連する Amazon CloudWatch のデータ取り込みコストが発生する可能性があります。詳細は [Amazon CloudWatch の料金ページ](https://aws.amazon.com/cloudwatch/pricing/) を参照してください。
 
 ## 利用可能リージョン
 
 本機能は以下のリージョンで利用可能です。
 
-- 米国東部 (バージニア北部、オハイオ)
-- 米国西部 (オレゴン、北カリフォルニア)
+- 米国東部 (バージニア北部)、米国東部 (オハイオ)
+- 米国西部 (オレゴン)、米国西部 (北カリフォルニア)
 - カナダ (中部)
 - 南米 (サンパウロ)
 - 欧州 (アイルランド、フランクフルト、ロンドン、ストックホルム、チューリッヒ)
 - アジアパシフィック (ムンバイ、シンガポール、シドニー、東京、ソウル、ジャカルタ)
 
-アジアパシフィック (東京) リージョンが含まれています。
-
 ## 関連サービス・機能
 
-- **Amazon CloudWatch**: SageMaker AI Insights ダッシュボードのホスト先であり、メトリクスの集約・可視化基盤
-- **Amazon Managed Grafana / Grafana**: リージョン別 PromQL エンドポイント経由でメトリクスを可視化
-- **SageMaker 推論コンポーネント**: GPU・ホスト・フレームワークネイティブメトリクスの取得対象となる単位
+- **Amazon CloudWatch**: メトリクスの格納先であり、SageMaker AI Insights ダッシュボードと PromQL クエリの実行基盤
+- **Amazon Managed Grafana**: PromQL エンドポイント経由で接続し、推論メトリクスを可視化
+- **OpenTelemetry (OTel)**: メトリクス収集の基盤となるオープンスタンダード
+- **vLLM / SGLang**: メトリクスを公開する推論フレームワーク
 
 ## 参考リンク
 
 - 📊 [インフォグラフィック](https://takech9203.github.io/aws-news-summary/20260618-amazon-sagemaker-ai-inference.html)
 - [公式発表 (What's New)](https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-sagemaker-ai-inference/)
-- [API 変更履歴 (awsapichanges.com)](https://awsapichanges.com/archive/changes/e078c6-api.sagemaker.html)
-- [Amazon SageMaker AI ドキュメント](https://docs.aws.amazon.com/sagemaker/)
+- [ドキュメント (詳細オブザーバビリティ)](https://docs.aws.amazon.com/sagemaker/latest/dg/monitoring-cloudwatch-detailed-observability.html)
+- [Amazon SageMaker AI](https://aws.amazon.com/sagemaker/ai/)
+- [Amazon CloudWatch の料金](https://aws.amazon.com/cloudwatch/pricing/)
 
 ## まとめ
 
-本アップデートは、本番環境の生成 AI 推論ワークロードの運用を大きく改善する重要な機能です。計装不要で TTFT などの生成 AI 特有のメトリクスとインフラ健全性を統合的に可視化でき、問題解決時間を数時間から数分へ短縮します。東京リージョンでも利用できるため、推論エンドポイントを運用しているチームは、まず `EnableDetailedObservability` を有効化し、SageMaker AI Insights ダッシュボードでの運用を検討することを推奨します。
+今回のアップデートにより、SageMaker AI のリアルタイム推論エンドポイントについて、計測コードを追加することなく OpenTelemetry ベースのきめ細かいメトリクスを取得できるようになりました。事前構築済みの SageMaker AI Insights ダッシュボードと PromQL/Grafana 連携を活用することで、本番生成 AI ワークロードの問題切り分けを数分で行えます。本番環境で推論エンドポイントを運用しているチームは、まず対応リージョンで本機能を有効化し、TTFT や GPU 利用率の可視化から運用改善を始めることを推奨します。

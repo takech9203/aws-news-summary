@@ -1,73 +1,69 @@
-# Amazon Bedrock AgentCore - マネージドエージェントハーネス
+# Amazon Bedrock AgentCore - AgentCore harness 一般提供開始
 
 **リリース日**: 2026 年 6 月 17 日
 **サービス**: Amazon Bedrock AgentCore
-**機能**: マネージドエージェントハーネス (AgentCore harness)
+**機能**: AgentCore harness (マネージドエージェントハーネス)
 
 📊 [このアップデートのインフォグラフィックを見る](https://takech9203.github.io/aws-news-summary/20260617-amazon-bedrock-agentcore-harness-generally-available.html)
+<!-- INFOGRAPHIC_BASE_URL は環境変数から取得 -->
 
 ## 概要
 
-AWS は、Amazon Bedrock AgentCore のマネージドエージェントハーネス (AgentCore harness) の一般提供 (GA) を発表しました。このハーネスは、アイデアから動作するエージェントまでを数分で実現することを目的とした、本番環境向けのマネージド実行基盤です。
+AWS は、Amazon Bedrock AgentCore のマネージドエージェントハーネス (AgentCore harness) の一般提供を開始しました。AgentCore harness は、AI エージェントを本番環境で動作させるために必要な運用層をフルマネージドで提供する機能です。公式発表では「モデルが脳であれば、ハーネスは身体である」と表現されており、モデル (脳) が思考した内容を実際の作業として実行するためのすべての処理を担います。
 
-AgentCore のドキュメントでは、モデルを「頭脳」、ハーネスを「身体」に例えています。ハーネスはオーケストレーションループを実行し、ツールを呼び出し、コンテキストウィンドウを管理し、ターンをまたいで状態を永続化し、障害から回復し、各セッションを分離します。これまでは、各チームがこれらの仕組みを自前で実装する必要がありました。今回のハーネスは、その作業を「コーディング」から「設定 (configuration)」へと置き換えます。お客様はエージェントの動作 (モデル、ツール、スキル、指示) を宣言するだけで、AgentCore が環境、コンピューティング、メモリ、ID、ネットワーク、可観測性を引き受け、設定を稼働中のエージェントへと組み立てます。
+従来、エージェントを本番運用するには、オーケストレーションループ、ツール実行、コンテキストウィンドウ管理、状態の永続化、障害回復、セッションの分離といった処理を開発者自身がコードで実装する必要がありました。AgentCore harness では、モデル、ツール、スキル、指示 (instructions) を設定として定義するだけで、AgentCore がこれらを組み立てて実行します。これにより、ファイルシステム、シェル、クロスセッションメモリ、スキル (AWS がキュレーションしたカタログを含む)、Web ブラウジングを備えた分離環境上で、本番グレードのエージェントを数分で構築できます。
 
-ハーネスはオープンソースのエージェントフレームワークである Strands Agents を基盤としています。エージェント開発者やプラットフォームエンジニアが、本番品質のエージェントをインフラ管理の負担なく構築、実行、運用できることを狙いとしています。
+対象ユーザーは、AI エージェントを開発・運用するアプリケーション開発者、機械学習エンジニア、プラットフォームチームです。エージェントの運用基盤を自前で構築・保守する負担を軽減し、エージェントのロジックそのものに集中できるようになります。
 
 **アップデート前の課題**
 
-- ローカルでエージェントを立ち上げるのは容易でも、本番環境では同時実行、セッション分離、ID、状態管理、スケーリングといった一連の作業を各チームが自前で実装する必要がありました。
-- オーケストレーションループ (モデル呼び出し、ツール選択、結果の受け渡し、コンテキスト管理、障害処理) を手作業でコーディングする必要がありました。
-- モデルの変更やツールの追加のたびにコードの書き換えが発生し、可観測性や ID 管理も個別に組み込む必要がありました。
+このアップデート以前は、本番グレードのエージェントを構築・運用するうえで以下の課題がありました。
+
+- オーケストレーションループ、ツール実行、コンテキスト管理、状態永続化、障害回復、セッション分離などの運用層を開発者がコードで実装する必要があった
+- モデルプロバイダーを切り替える際にエージェントのロジックやコンテキストへの影響を考慮する必要があった
+- ツール接続、アイデンティティ、メモリ、可観測性などを個別に配線する必要があり、ガバナンスやトレースの一貫性を確保しにくかった
+- プロトタイプから本番運用へ移行する際にエージェントの再構築が必要になることがあった
 
 **アップデート後の改善**
 
-- 本番品質のエージェントを、セッションごとに分離された安全な環境で数分以内に実行できるようになりました。
-- エージェントの定義が「設定」に置き換わり、モデルの切り替えやツールの追加が、コードの書き換えではなく設定変更だけで済むようになりました。
-- ID、メモリ、可観測性が組み込まれており、すべてのエージェント動作が最初の呼び出しから追加実装なしでガバナンスおよびトレースの対象になります。
+今回のアップデートにより、以下が可能になりました。
+
+- 設定ベースでエージェントを定義するだけで、AgentCore が運用層を組み立てて実行するため、ループの手書き実装が不要になった
+- セッションの途中でモデルプロバイダーを切り替えても、コンテキストを失わずエージェントロジックに手を加える必要がなくなった
+- ツールは同一ゲートウェイ経由で接続され、アイデンティティ、メモリ、可観測性が単一プラットフォームから提供されるため、最初の呼び出しから追加配線なしでガバナンスとトレースが効くようになった
+- 開始時の設定をそのまま大規模運用に利用でき、再構築なしでスケールできるようになった
 
 ## アーキテクチャ図
 
 ```mermaid
 flowchart TD
-    User(["👤 ユーザー / アプリケーション"]) --> Invoke["⚡ InvokeHarness API"]
+    Dev(["👤 開発者"]) -->|設定で定義| Config["📝 エージェント設定<br/>モデル / ツール / スキル / 指示"]
 
     subgraph AgentCore["☁️ Amazon Bedrock AgentCore"]
-        subgraph Harness["⚙️ マネージドエージェントハーネス"]
-            Loop["🔁 オーケストレーションループ<br/>モデル呼び出し / ツール選択<br/>コンテキスト管理 / 障害回復"]
-            Config["📝 設定<br/>モデル / ツール / スキル / 指示"]
+        subgraph Harness["⚙️ AgentCore harness 運用層"]
+            Loop["🔁 オーケストレーションループ"]
+            State["💾 状態永続化 / メモリ"]
+            Recover["🛟 障害回復 / セッション分離"]
         end
-        subgraph Runtime["🧱 セッションごとの分離 microVM"]
-            FS["🗂️ ファイルシステム / シェル"]
-            Mem["🧠 短期 / 長期メモリ"]
+        subgraph Env["🧰 分離実行環境"]
+            FS["📁 ファイルシステム / シェル"]
+            Skills["📚 スキルカタログ"]
+            Web["🌐 Web ブラウジング"]
         end
-        Obs["🔍 可観測性 / トレース"]
-        Iden["🛡️ ID / ガバナンス"]
+        Gateway["🔐 Gateway<br/>セキュリティポリシー適用"]
+        Obs["📈 アイデンティティ / 可観測性"]
     end
 
-    subgraph Models["🤖 モデルプロバイダー"]
-        direction LR
-        M1["Amazon Bedrock"]
-        M2["OpenAI"]
-        M3["Google Gemini / LiteLLM 互換"]
-        M1 ~~~ M2 ~~~ M3
-    end
+    Models{{"🧠 任意のモデル<br/>セッション中に切替可能"}}
+    Tools{{"🔌 ツール群"}}
 
-    subgraph Tools["🔌 ツール"]
-        direction LR
-        T1["AgentCore Gateway"]
-        T2["MCP サーバー"]
-        T3["ブラウザ / コードインタープリター / Web 検索"]
-        T1 ~~~ T2 ~~~ T3
-    end
-
-    Invoke --> Loop
     Config --> Loop
-    Loop --> Runtime
     Loop --> Models
-    Loop --> Tools
+    Loop --> Gateway
+    Gateway --> Tools
+    Loop --> Env
     Harness --> Obs
-    Harness --> Iden
+    Loop -->|CLI で 1 コマンド| Export["📤 Strands ベースのコードへエクスポート"]
 
     classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
     classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
@@ -75,225 +71,193 @@ flowchart TD
     classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
     classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
     classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
 
     class AgentCore cloud
-    class Harness,Runtime,Models,Tools layer
-    class Loop,Config,FS,Mem,Obs,Iden compute
-    class Invoke process
-    class User user
+    class Harness,Env layer
+    class Loop,Recover,Gateway,Obs process
+    class State,FS,Skills,Web storage
+    class Config,Export input
+    class Models,Tools decision
+    class Dev user
 ```
 
-ユーザーやアプリケーションからの呼び出しを受けたハーネスが、設定に基づきオーケストレーションループを実行し、分離された microVM 上でモデルとツールを連携させながらエージェントを稼働させる構成を示しています。
+開発者が設定でエージェントを定義すると、AgentCore harness が運用層 (ループ、状態管理、障害回復) と分離実行環境を組み立て、Gateway 経由でツールを呼び出してガバナンスを効かせる流れを示しています。
 
 ## サービスアップデートの詳細
 
 ### 主要機能
 
-1. **設定によるエージェント定義**
-   - エージェントの動作 (モデル、ツール、スキル、指示) を宣言するだけで、AgentCore が環境、コンピューティング、メモリ、ID、ネットワーク、可観測性を組み立てます。
-   - 別のモデルを試す、新しいツールを追加するといった変更が、コードの書き換えではなく設定変更で完結します。
-   - オーケストレーションループ自体は AgentCore が実行するため、ループの実装が不要です。
+1. **設定ベースのエージェント定義と運用層の自動実行**
+   - モデル、ツール、スキル、指示を設定として定義するだけでエージェントを構築できる
+   - オーケストレーションループの実行、ツール実行、コンテキストウィンドウ管理、状態の永続化、障害回復、セッション分離を AgentCore が自動的に処理する
+   - ファイルシステム、シェル、クロスセッションメモリ、スキルカタログ、Web ブラウジングを備えた分離環境で本番グレードのエージェントを数分で構築できる
 
-2. **セッションごとに分離された実行環境**
-   - すべてのハーネスセッションはデフォルトでステートフルであり、セッションごとに安全な分離 microVM 上で実行されます (AgentCore runtime が基盤)。
-   - エージェントは独自のファイルシステムとシェルを持ち、コードの記述と実行が可能です。
-   - 短期および長期のメモリとファイルを、microVM セッションが期限切れになり新しいセッションに置き換わった後も、セッションをまたいで永続化できます。
+2. **モデルの柔軟性 (プロバイダー切替)**
+   - 任意のモデルを選択できる
+   - セッションの途中でモデルプロバイダーを切り替えても、コンテキストを失わず、エージェントロジックを変更する必要がない
+   - 例: 計画 (planning) はあるモデルで実行し、コーディングは別のモデルで実行するといった使い分けが可能
 
-3. **モデルの柔軟性とプロバイダーの動的切り替え**
-   - Amazon Bedrock、OpenAI、Google Gemini、または LiteLLM 互換の任意のプロバイダーが提供するモデルを利用できます。
-   - コンテキストを失うことなくセッション中にプロバイダーを切り替えられるため、あるモデルで計画を立て、別のモデルで実行する、あるいは会話を再構築せずに価格性能のテストを行うといった使い方が可能です。
-   - モデルを指定しない場合、ハーネスは Amazon Bedrock 上の Anthropic Claude Sonnet 4.6 をデフォルトで使用します。
+3. **統合プラットフォームによるガバナンス**
+   - ツールは、セキュリティポリシーを適用する同一の Gateway 経由で接続される
+   - アイデンティティ、メモリ、可観測性がすべて単一プラットフォームから提供される
+   - 最初の呼び出しから追加の配線なしで、アクションがガバナンスされ、トレースされる
 
-4. **ツール連携とスキル**
-   - AgentCore Gateway、MCP サーバー、組み込みのブラウザ、コードインタープリター、Web 検索を通じてツールに接続できます。
-   - Git、S3、または AWS が厳選したスキルカタログから AWS スキルを単一のトグルでアタッチでき、エージェントが必要に応じてドメイン知識を獲得します。
-   - 独自の依存関係を持つカスタム環境が必要な場合は、独自のコンテナ (BYOC) を持ち込めます。S3 Files や EFS をマウントして、セッションやハーネスをまたいでデータを共有することも可能です。
+4. **コードエクスポート**
+   - CLI の 1 コマンドで、ハーネスを同一コンピュート上の Strands ベースのコードにエクスポートできる
+   - エクスポート先として Claude Agent SDK のサポートが近日提供予定 (coming soon)
 
-5. **可観測性、評価、安全なロールアウト**
-   - すべての動作が AgentCore observability を通じて自動的にトレースされ、エージェントが行ったことを 1 か所で統合的に確認できます。
-   - AgentCore evaluations と optimization により、動作のスコアリング、プロンプトおよびツール説明の推奨、統計的有意性を伴う A/B テストが可能です。
-   - イミュータブルなバージョンと名前付きエンドポイントによって変更を安全にロールアウトでき、エンドポイントを以前のバージョンに向けることで即座にロールバックできます。
-
-6. **パイプライン統合とコードへのエクスポート**
-   - AWS Step Functions の AgentCore InvokeHarness ステートを通じて、ハーネスをより大きなパイプラインに組み込めます。
-   - 設定だけでは不十分な場合、単一の CLI コマンドでハーネスを Strands ベースのコードにエクスポートし、同じ AgentCore runtime 上で実行できます (Claude Agent SDK へのエクスポートは近日対応予定)。
+5. **スケーラビリティ**
+   - 開始時の構成を、再構築することなくそのまま大規模運用で利用できる
 
 ## 技術仕様
 
-### 主要な機能項目
+### AgentCore harness が担う運用層
 
 | 項目 | 詳細 |
 |------|------|
-| 実行環境 | セッションごとに分離された microVM (AgentCore runtime ベース) |
-| 状態管理 | デフォルトでステートフル、短期 / 長期メモリをセッションをまたいで永続化 |
-| 対応モデル | Amazon Bedrock、OpenAI、Google Gemini、LiteLLM 互換プロバイダー |
-| デフォルトモデル | Anthropic Claude Sonnet 4.6 (Amazon Bedrock 上) |
-| ツール接続 | AgentCore Gateway、MCP サーバー、組み込みブラウザ / コードインタープリター / Web 検索 |
-| スキル | Git、S3、AWS 厳選カタログからアタッチ |
-| ストレージ | S3 Files、EFS のマウントに対応、BYOC に対応 |
-| エクスポート | Strands コードへのエクスポート (Claude Agent SDK は近日対応) |
-| 基盤フレームワーク | Strands Agents (AWS のオープンソースエージェントフレームワーク) |
+| オーケストレーションループ | エージェントの思考と行動のループを実行 |
+| ツール実行 | ツールの呼び出しと実行を管理 |
+| コンテキスト管理 | コンテキストウィンドウを管理 |
+| 状態永続化 | ターンをまたいで状態を永続化 |
+| 障害回復 | 失敗からの回復を処理 |
+| セッション分離 | 各セッションを分離 |
+| 分離環境 | ファイルシステム、シェル、クロスセッションメモリ、スキルカタログ、Web ブラウジングを提供 |
 
 ### API 変更履歴
 
-| 日付 | サービス | 変更内容 |
-|------|----------|----------|
-| 2026/06/17 | [Amazon Bedrock AgentCore Control](https://awsapichanges.com/archive/changes/ecddc1-bedrock-agentcore-control.html) | 6 new 34 updated methods - ハーネスの GA に伴い、CreateHarness / GetHarness / InvokeHarness などのハーネス関連 API を追加。qualifier パラメーターによる特定エンドポイントの呼び出し、事前構築済みエージェント機能向けの AWS Skills、スキル Git ソース URL の検証強化に対応 |
-| 2026/06/17 | [Amazon Bedrock AgentCore](https://awsapichanges.com/archive/changes/ecddc1-bedrock-agentcore.html) | 3 updated methods - データプレーン側のハーネス呼び出し関連の更新 |
-
-### 主要な API メソッド
-
-```text
-# コントロールプレーン (bedrock-agentcore-control)
-CreateHarness / GetHarness / UpdateHarness / DeleteHarness / ListHarnesses
-ListHarnessVersions
-CreateHarnessEndpoint / GetHarnessEndpoint / UpdateHarnessEndpoint / DeleteHarnessEndpoint / ListHarnessesEndpoint
-
-# データプレーン (bedrock-agentcore)
-InvokeHarness
-InvokeAgentRuntimeCommand
-```
+今回のアップデートに直接対応する awsapichanges.com の該当エントリは確認できませんでした。API の詳細は公式ドキュメントを参照してください。
 
 ## 設定方法
 
 ### 前提条件
 
-1. サポート対象リージョンのいずれかで AWS の認証情報が構成されていること。
-2. CLI を使用する場合は Node.js 20 以上、SDK / boto3 を使用する場合は Python 3.10 以上と boto3 のインストール。
-3. ハーネスが引き受けることのできる IAM 実行ロール (最小権限はドキュメントの実行ロールポリシーを参照)。
+1. AgentCore が利用可能な AWS コマーシャルリージョンの AWS アカウント
+2. AgentCore および基盤モデルへのアクセスに必要な IAM 権限
+3. 利用するツールやスキルへのアクセス設定 (必要に応じて Gateway の構成)
 
 ### 手順
 
-#### ステップ 1: AgentCore CLI のインストール
+#### ステップ 1: エージェントを設定として定義する
 
-```bash
-npm install -g @aws/agentcore@preview
+```text
+# 設定で指定する主な要素
+- model:        使用するモデル
+- tools:        利用するツール
+- skills:       利用するスキル (AWS キュレーションカタログを含む)
+- instructions: エージェントへの指示
 ```
 
-プレビューチャネルから AgentCore CLI をインストールします。CLI はほとんどの開発者にとって最も速い利用方法です。
+モデル、ツール、スキル、指示を設定として定義します。コードでオーケストレーションループを実装する必要はありません。
 
-#### ステップ 2: ハーネスプロジェクトの作成
+#### ステップ 2: AgentCore でエージェントを実行する
 
-```bash
-agentcore create --name myresearchagent --model-provider bedrock
-```
+AgentCore が設定に基づいて運用層と分離環境を組み立て、本番グレードのエージェントを実行します。ツールは Gateway 経由で接続され、アイデンティティ、メモリ、可観測性が自動的に適用されます。
 
-フラグを指定して、対話なしでハーネスプロジェクトを作成します。フラグなしで `agentcore create` を実行すると、プロジェクト名、プロジェクトタイプ、モデルプロバイダー、環境、メモリなどを順に設定する対話ウィザードが起動します。
-
-#### ステップ 3: デプロイと呼び出し
+#### ステップ 3: 必要に応じてコードへエクスポートする
 
 ```bash
-agentcore deploy
-agentcore invoke --harness myresearchagent \
-  --session-id "$(uuidgen)" \
-  "Research three tropical vacation options under $3k, within five hours of NYC."
+# CLI の 1 コマンドでハーネスを Strands ベースのコードにエクスポート
+# (Claude Agent SDK へのエクスポートは近日提供予定)
 ```
 
-ハーネスをデプロイし、セッション ID を指定して呼び出します。応答はターミナルにストリーミングされます。同じ `--session-id` を再利用すると、同一環境内で会話を継続できます。なお `runtimeSessionId` は 33 文字以上である必要があります。
-
-#### 参考: AWS CLI と boto3 での利用
-
-```bash
-# 実行ロールを指定してハーネスを作成
-aws bedrock-agentcore-control create-harness \
-  --harness-name "MyHarness" \
-  --execution-role-arn "arn:aws:iam::123456789012:role/MyHarnessRole"
-```
-
-`get-harness` をポーリングして `"status": "READY"` になるまで待機し、応答に含まれる ARN を控えます。SDK からは `bedrock-agentcore` クライアントの `invoke_harness` を呼び出してストリーミング応答を処理します。
+設定ベースのハーネスを、同一コンピュート上で動作する Strands ベースのコードにエクスポートできます。詳細なカスタマイズが必要になった場合に有用です。
 
 ## メリット
 
 ### ビジネス面
 
-- **市場投入までの時間短縮**: 本番品質のエージェントを数分で実行できるため、アイデアから稼働までの期間を大幅に短縮できます。
-- **インフラ運用コストの削減**: 同時実行、分離、スケーリングといった本番運用に必要な作業を自前で構築する必要がなくなります。
-- **ベンダーロックインの回避**: 複数のモデルプロバイダーを横断して利用でき、価格性能の比較を会話の再構築なしに行えます。
+- **市場投入までの時間短縮**: 本番グレードのエージェントを数分で構築でき、アイデアから本番運用までの時間を短縮できる
+- **開発コストの削減**: 運用層を自前で実装・保守する必要がなくなり、エンジニアリングリソースをエージェントの価値創出に集中できる
+- **スケール時の手戻り防止**: 開始時の構成をそのまま大規模運用に利用できるため、再構築のコストを回避できる
 
 ### 技術面
 
-- **設定主導の開発**: モデルやツールの変更が設定変更で完結し、コードの書き換えやループの再実装が不要です。
-- **組み込みのガバナンスとトレース**: ID、メモリ、可観測性が標準で組み込まれ、すべてのエージェント動作が追加実装なしで追跡されます。
-- **安全なリリース運用**: イミュータブルなバージョンと名前付きエンドポイントにより、段階的なロールアウトと即時ロールバックが可能です。
+- **ガバナンスとトレーサビリティの一貫性**: アイデンティティ、メモリ、可観測性が単一プラットフォームから提供され、最初の呼び出しから追加配線なしでガバナンスとトレースが効く
+- **モデルの柔軟性**: セッション中にコンテキストを保持したままモデルプロバイダーを切り替えられ、タスクごとに最適なモデルを使い分けられる
+- **運用負荷の軽減**: 障害回復やセッション分離などの運用処理がマネージドで提供される
 
 ## デメリット・制約事項
 
 ### 制限事項
 
-- 現時点でのコードエクスポート先は Strands ベースのコードのみであり、Claude Agent SDK へのエクスポートは近日対応予定です。
-- CLI の利用には Node.js 20 以上、SDK の利用には Python 3.10 以上が必要です。
-- `runtimeSessionId` は 33 文字以上である必要があります。
+- AgentCore harness は AWS GovCloud (US-West) では未対応 (AgentCore Runtime など一部の機能は GovCloud で対応)
+- コードエクスポート先として現時点で対応するのは Strands ベースのコードのみで、Claude Agent SDK へのエクスポートは近日提供予定 (coming soon)
 
 ### 考慮すべき点
 
-- microVM セッションには有効期限があるため、セッションをまたいで保持したい状態はメモリやマウントしたストレージ (S3 Files / EFS) を活用して永続化する必要があります。
-- LiteLLM 互換を含む外部モデルプロバイダーを利用する場合、それぞれのプロバイダーの認証情報や利用条件の管理を考慮する必要があります。
+- 利用するモデルやツール、その他 AgentCore の各コンポーネントに応じた料金が発生する点を考慮する必要がある (本発表に料金詳細の記載はないため、各料金ページを確認)
+- マネージドな運用層を利用するため、細かなオーケストレーション制御が必要な場合はコードエクスポートを併用する設計が望ましい
 
 ## ユースケース
 
-### ユースケース 1: 本番運用するリサーチエージェントの迅速な構築
+### ユースケース 1: アイデアから本番エージェントへの迅速な立ち上げ
 
-**シナリオ**: 複数ユーザーが同時に利用するリサーチアシスタントを、インフラ構築の負担なく本番運用したい。
-
-**実装例**:
-```bash
-agentcore create --name researchagent --model-provider bedrock
-agentcore deploy
-agentcore invoke --harness researchagent --session-id "$(uuidgen)" \
-  "条件に合う候補を 3 つ調査して比較してください。"
-```
-
-**効果**: セッションごとの分離、状態の永続化、スケーリングをマネージド基盤に任せ、本番品質のエージェントを短時間で立ち上げられます。
-
-### ユースケース 2: モデルの価格性能テスト
-
-**シナリオ**: 計画フェーズと実行フェーズで異なるモデルを使い分け、コストと品質のバランスを検証したい。
+**シナリオ**: 社内業務を自動化するエージェントを短期間で本番投入したいが、運用層の実装に時間をかけたくない。
 
 **実装例**:
 ```text
-セッション内で、計画には高性能モデル、実行には低コストモデルへと
-プロバイダーをコンテキストを保持したまま切り替える。
+モデル / ツール / スキル / 指示を設定として定義し、AgentCore harness で実行
 ```
 
-**効果**: 会話を再構築することなくプロバイダーを切り替えられ、価格性能の A/B テストを統計的有意性とともに評価できます。
+**効果**: オーケストレーションループや状態管理を自前で実装せずに、本番グレードのエージェントを数分で立ち上げられます。
 
-### ユースケース 3: 大規模ワークフローへのエージェント組み込み
+### ユースケース 2: タスクに応じたモデルの使い分け
 
-**シナリオ**: 既存の業務パイプラインの一部として、エージェントによる処理を組み込みたい。
+**シナリオ**: 計画フェーズでは推論重視のモデルを使い、コード生成フェーズでは別のモデルを使いたい。
 
 **実装例**:
 ```text
-AWS Step Functions のステートマシンに AgentCore InvokeHarness ステートを配置し、
-前後のステップと連携させる。
+セッション中にモデルプロバイダーを切り替え (コンテキストとロジックは維持)
 ```
 
-**効果**: エージェントをワークフローのステップとして扱え、可観測性とガバナンスを維持したまま既存の自動化に統合できます。
+**効果**: コンテキストを失わずにモデルを切り替えられ、各タスクに最適なモデルを活用してコストと品質を最適化できます。
+
+### ユースケース 3: ガバナンスを重視したエンタープライズエージェント
+
+**シナリオ**: エージェントのアクションをすべてトレースし、セキュリティポリシーを一貫して適用したい。
+
+**実装例**:
+```text
+ツールを Gateway 経由で接続し、アイデンティティ / メモリ / 可観測性を単一プラットフォームで管理
+```
+
+**効果**: 最初の呼び出しから追加配線なしでアクションがガバナンスされ、トレースされるため、監査やコンプライアンス要件に対応しやすくなります。
 
 ## 料金
 
-ハーネス自体に対する個別の料金は発生しません。利用した基盤となる AgentCore の各機能 (コンピューティング、メモリ、ツールなど) に対してのみ課金されます。詳細は AgentCore の料金ページを参照してください。
+本発表に料金の詳細は記載されていません。AgentCore および利用するモデル、ツール、各コンポーネントに応じた料金が発生します。最新の料金体系は Amazon Bedrock AgentCore の料金ページを確認してください。
 
 ## 利用可能リージョン
 
-AgentCore harness は、AgentCore が利用可能なすべての AWS 商用リージョンで一般提供されています。対応リージョンの最新情報は、AgentCore のリージョンドキュメントを参照してください。
+AgentCore harness は、AgentCore が利用可能なすべての AWS コマーシャルリージョンで一般提供されています。ドキュメントのリージョン対応表では、以下のリージョンで AgentCore harness が利用可能です。
+
+- 米国東部 (バージニア北部、オハイオ)
+- 米国西部 (オレゴン)
+- 欧州 (フランクフルト、アイルランド、ロンドン、パリ、ストックホルム)
+- アジアパシフィック (ムンバイ、シンガポール、シドニー、東京、ソウル)
+- カナダ (中部)
+- 南米 (サンパウロ)
+
+東京リージョンを含む主要なコマーシャルリージョンで利用できます。なお、AWS GovCloud (US-West) では AgentCore harness は対象外です。最新の対応状況は公式ドキュメントを確認してください。
 
 ## 関連サービス・機能
 
-- **AgentCore Gateway**: エージェントがセキュリティポリシーを適用したうえでツールにアクセスするためのゲートウェイ機能です。
-- **AgentCore Runtime**: ハーネスのセッションごとの分離 microVM を提供する実行基盤です。
-- **AgentCore Observability**: エージェントのすべての動作を自動的にトレースし、統合ビューで可視化します。
-- **Strands Agents**: ハーネスの基盤となる、AWS が提供するオープンソースのエージェントフレームワークです。
-- **AWS Step Functions**: AgentCore InvokeHarness ステートを通じて、ハーネスをワークフローに組み込めます。
+- **AgentCore Gateway**: ツールへの接続とセキュリティポリシーの適用を担い、harness のツール実行の基盤となる
+- **AgentCore Memory**: クロスセッションメモリを提供し、ターンをまたいだ状態の保持を支える
+- **AgentCore Identity / Observability**: アイデンティティ管理と可観測性を単一プラットフォームから提供し、ガバナンスとトレースを実現する
+- **Strands / Claude Agent SDK**: コードエクスポート先のフレームワーク (Claude Agent SDK は近日対応予定)
+- **AgentCore Built-in Tools / スキルカタログ**: Web ブラウジングや AWS がキュレーションしたスキルを harness の分離環境で利用可能
 
 ## 参考リンク
 
 - 📊 [インフォグラフィック](https://takech9203.github.io/aws-news-summary/20260617-amazon-bedrock-agentcore-harness-generally-available.html)
-- [公式発表 (What's New)](https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-bedrock-agentcore-harness-generally-available)
-- [ドキュメント (AgentCore harness)](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html)
-- [入門ガイド (Get started)](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-get-started.html)
-- [対応リージョン](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-regions.html)
-- [料金ページ](https://aws.amazon.com/bedrock/agentcore/pricing/)
+- [公式発表 (What's New)](https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-bedrock-agentcore-harness-generally-available/)
+- [AWS Blog: Amazon Bedrock AgentCore harness is now generally available](https://aws.amazon.com/blogs/machine-learning/amazon-bedrock-agentcore-harness-is-now-generally-available-go-from-idea-to-production-grade-agent-in-minutes/)
+- [ドキュメント: AgentCore harness](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html)
+- [ドキュメント: 対応リージョン](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agentcore-regions.html)
 
 ## まとめ
 
-AgentCore harness の GA により、本番品質の AI エージェントの構築が「インフラのコーディング」から「設定の宣言」へと大きく変わります。モデルの柔軟な切り替え、組み込みのメモリ / ID / 可観測性、安全なバージョン管理が標準で提供されるため、運用負荷を抑えつつ迅速にエージェントを本番投入できます。エージェント開発に取り組むチームは、まず AgentCore CLI でリサーチエージェントなどの小さなハーネスを作成し、デフォルトの Claude Sonnet 4.6 で挙動を確認したうえで、必要に応じてモデルやツール、スキルを設定で拡張していくことを推奨します。
+AgentCore harness の一般提供により、エージェントの運用層を自前で実装することなく、設定ベースで本番グレードの AI エージェントを数分で構築できるようになりました。モデルの柔軟な切替、Gateway を通じた一貫したガバナンス、Strands へのコードエクスポートにより、プロトタイプから大規模運用までシームレスに移行できます。AI エージェントの開発・運用を検討しているチームは、まず東京リージョンを含む対応リージョンで設定ベースのエージェント構築を試し、自前実装からの移行効果を評価することを推奨します。

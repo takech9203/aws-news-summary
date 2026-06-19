@@ -114,7 +114,12 @@ flowchart TD
 
 ### API 変更履歴
 
-今回のアップデートに直接対応する awsapichanges.com の API 変更エントリは、確認時点では公開されていませんでした。
+| 日付 | サービス | 変更内容 |
+|------|----------|----------|
+| 2026/06/17 | [Amazon Bedrock AgentCore Control](https://awsapichanges.com/archive/changes/ecddc1-bedrock-agentcore-control.html) | 6 new 34 updated api methods - AgentCore の制御プレーン API が更新 |
+| 2026/06/17 | [Amazon Bedrock AgentCore](https://awsapichanges.com/archive/changes/ecddc1-bedrock-agentcore.html) | 3 updated api methods - AgentCore のデータプレーン API が更新 |
+
+上記は同日に公開された AgentCore 全体の API 変更であり、Policy における Guardrails サポートを含む複数の機能追加を含みます。
 
 ## 設定方法
 

@@ -1,6 +1,6 @@
 # AWS Glue - Interactive Sessions の Spark Connect サポート
 
-**リリース日**: 2026年6月17日
+**リリース日**: 2026 年 6 月 17 日
 **サービス**: AWS Glue
 **機能**: AWS Glue Interactive Sessions における Apache Spark Connect サポート
 
@@ -9,55 +9,54 @@
 
 ## 概要
 
-AWS Glue Interactive Sessions が Apache Spark Connect をサポートするようになりました。これにより、開発者は使い慣れた環境から Spark アプリケーションを構築および実行しながら、その処理を AWS Glue のサーバーレスインフラストラクチャ上で実行できます。クラスター管理は不要です。
+AWS Glue Interactive Sessions が Apache Spark Connect をサポートするようになりました。これにより、開発者は使い慣れた環境から Spark アプリケーションを構築および実行しながら、実際の処理は AWS Glue のサーバーレスバックエンドで実行できます。クラスターの管理は不要です。
 
-Spark Connect は、クライアントアプリケーションを Spark の実行環境から分離する軽量なクライアントアーキテクチャ (シンクライアントアーキテクチャ) を採用しています。クライアントは gRPC を介してリモートの Spark 環境に接続し、最小限のクライアント側依存関係で Spark を実行します。この仕組みにより、アドホックなデータ探索、ステップごとの反復的なデバッグ、本番デプロイ前の段階的な PySpark ジョブ開発といったワークフローが可能になります。
+Spark Connect は、クライアントアプリケーションと Spark 実行環境を分離するシンクライアントアーキテクチャを採用しています。この分離により、開発ツールをサーバー側のランタイムに密結合させることなく Spark ジョブを送信できます。サポートされる環境には、Amazon SageMaker Unified Studio のマネージドノートブック、Jupyter、Visual Studio Code をはじめとする Python インタープリターを備えた IDE、そして AWS API、SDK、CLI が含まれます。
 
-この機能の主な対象は、Amazon SageMaker Unified Studio のマネージドノートブック、Jupyter や Visual Studio Code などのノートブック環境および IDE、さらに Python インタープリターを備えた任意の IDE を利用するデータエンジニアやデータサイエンティストです。AWS API、SDK、CLI からも接続できます。
+この機能は、本番環境への移行前のアドホックなデータ探索、ステップごとの反復的なデバッグ、PySpark ジョブの段階的な開発を対象としたデータエンジニアやデータサイエンティスト向けに設計されています。
 
 **アップデート前の課題**
 
-- 使い慣れたローカル IDE やノートブック環境から、AWS Glue のサーバーレス Spark エンジンに対して対話的に処理を実行することが容易ではなかった
-- クライアントアプリケーションと Spark 実行環境が密結合していたため、クライアント側の依存関係とサーバー側ランタイムの分離が難しく、アップグレードや安定性の確保に手間がかかった
-- 本番デプロイ前に PySpark ジョブを段階的に開発したり、反復的にデバッグしたりするワークフローを構築しにくかった
+- 以前はローカルの開発環境や任意の IDE から AWS Glue のサーバーレス Spark バックエンドへ直接対話的に接続する手段が限られていた
+- クライアント側の依存関係とサーバー側の Spark ランタイムが密結合しており、バージョンアップグレード時の安定性に懸念があった
+- 反復的なデバッグや段階的なジョブ開発を、本番に近いサーバーレス環境で手軽に行うことが難しかった
 
 **アップデート後の改善**
 
-- Spark Connect により、好みの開発環境から AWS Glue のサーバーレスインフラ上で Spark アプリケーションを実行できるようになった
-- シンクライアントアーキテクチャにより、クライアント側の依存関係とサーバー側ランタイムが分離され、アップグレードの簡素化と安定性の向上が実現した
-- アドホックなデータ探索、反復的なデバッグ、段階的な PySpark ジョブ開発が可能になった
+- 今回のアップデートにより、SageMaker Unified Studio のノートブック、Jupyter、VS Code などの任意の環境から Glue のサーバーレスバックエンドに対して対話的に Spark ワークロードを実行できるようになった
+- シンクライアントアーキテクチャによってクライアントの依存関係がサーバー側 Spark ランタイムから分離され、アップグレードが簡素化され安定性が向上した
+- Spark UI によるリアルタイムモニタリング、Spark History Server による履歴確認、Glue API/CLI/SDK によるセッション管理といった可観測性機能を利用できるようになった
 
 ## アーキテクチャ図
 
 ```mermaid
-flowchart LR
+flowchart TD
     subgraph Client["💻 クライアント環境"]
         direction LR
-        SMUS["📓 SageMaker<br/>Unified Studio"]
-        IDE["🧩 IDE / Jupyter<br/>VS Code"]
-        CLI["🔧 AWS CLI / SDK"]
-        SMUS ~~~ IDE ~~~ CLI
+        NB["📓 SageMaker Unified Studio<br/>ノートブック"]
+        JP["📔 Jupyter"]
+        IDE["🛠️ VS Code / IDE"]
+        NB ~~~ JP ~~~ IDE
     end
 
-    subgraph Glue["☁️ AWS Glue サーバーレス基盤"]
+    subgraph Glue["☁️ AWS Glue サーバーレス"]
+        SC["🔌 Spark Connect<br/>エンドポイント"]
+        Spark["⚡ Spark 実行<br/>バックエンド"]
+        SC --> Spark
+    end
+
+    subgraph Obs["🔍 可観測性"]
         direction LR
-        Endpoint["🔌 Spark Connect<br/>エンドポイント"]
-        Spark["⚡ Serverless<br/>Spark エンジン"]
-        Endpoint --> Spark
+        UI["📊 Spark UI"]
+        Hist["🕒 Spark History Server"]
+        UI ~~~ Hist
     end
 
-    subgraph Observability["📊 可観測性"]
-        direction LR
-        SparkUI["📈 Spark UI"]
-        History["🕘 Spark History<br/>Server"]
-        SparkUI ~~~ History
-    end
-
-    SMUS -->|gRPC| Endpoint
-    IDE -->|gRPC| Endpoint
-    CLI -.->|セッション管理| Endpoint
-    Spark -.-> SparkUI
-    Spark -.-> History
+    NB -.-> SC
+    JP -.-> SC
+    IDE -.-> SC
+    Spark --> UI
+    Spark --> Hist
 
     classDef client fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
     classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
@@ -65,193 +64,102 @@ flowchart LR
     classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
     classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
 
-    class SMUS,IDE,CLI client
-    class Glue,Client,Observability cloud
+    class Client,Obs client
+    class Glue cloud
     class Spark compute
-    class Endpoint process
-    class SparkUI,History internal
+    class SC process
+    class NB,JP,IDE,UI,Hist internal
 ```
 
-クライアント環境 (SageMaker Unified Studio や IDE) が gRPC を介して AWS Glue のサーバーレス Spark エンジンに接続し、処理結果は Spark UI や Spark History Server で監視できることを示しています。
+クライアント環境から Spark Connect エンドポイント経由で Glue のサーバーレス Spark バックエンドに接続し、実行状況を Spark UI と Spark History Server で確認する流れを示しています。
 
 ## サービスアップデートの詳細
 
 ### 主要機能
 
-1. **Spark Connect によるリモート実行**
-   - クライアントアプリケーションと Spark 実行環境を分離するシンクライアントアーキテクチャを採用
-   - クライアントは gRPC を介して AWS Glue のサーバーレス Spark 環境に接続
-   - 最小限のクライアント側依存関係でリモートの Spark を実行
+1. **Spark Connect によるシンクライアント接続**
+   - クライアントアプリケーションと Spark 実行環境を分離するアーキテクチャを採用
+   - 開発ツールをサーバー側ランタイムに密結合させずに Spark ジョブを送信可能
+   - クラスター管理が不要なサーバーレスバックエンドで処理を実行
 
-2. **対話的な開発ワークフローのサポート**
-   - アドホックなデータ探索
-   - ステップごとの反復的なデバッグ
-   - 本番デプロイ前の段階的な PySpark ジョブ開発
-
-3. **可観測性 (オブザーバビリティ) 機能**
-   - Spark UI によるリアルタイムのセッション監視
-   - Spark History Server による履歴トラッキング
-   - AWS Glue API、CLI、SDK を用いたセッション管理
-
-4. **幅広い開発環境のサポート**
+2. **幅広い開発環境のサポート**
    - Amazon SageMaker Unified Studio のマネージドノートブック
-   - Jupyter や Visual Studio Code などのノートブック環境および IDE
-   - Python インタープリターを備えた任意の IDE、および AWS API、SDK、CLI
+   - Jupyter
+   - Visual Studio Code をはじめとする Python インタープリターを備えた IDE
+   - AWS API、SDK、CLI
+
+3. **対話的な開発体験と可観測性**
+   - アドホックなデータ探索、ステップごとの反復的なデバッグ、PySpark ジョブの段階的な開発に対応
+   - Spark UI によるリアルタイムモニタリング
+   - Spark History Server による実行履歴の確認
+   - Glue API/CLI/SDK によるセッション管理
 
 ## 技術仕様
 
-### Spark Connect の構成要素
+### サポートされる開発環境
 
 | 項目 | 詳細 |
 |------|------|
-| 通信プロトコル | gRPC |
-| アーキテクチャ | シンクライアント (クライアントと実行環境の分離) |
-| 実行基盤 | AWS Glue サーバーレス Spark (クラスター管理不要) |
-| 対応クライアント | SageMaker Unified Studio、Jupyter、VS Code、Python 対応 IDE、AWS API / SDK / CLI |
-| 監視 | Spark UI (リアルタイム)、Spark History Server (履歴) |
-
-### API変更履歴
-
-| 日付 | サービス | 変更内容 |
-|------|----------|----------|
-| 2026/06/04 | [AWS Glue](https://awsapichanges.com/archive/changes/fb8102-glue.html) | 2 new 3 updated api methods - AWS Glue Interactive Sessions が Apache Spark Connect をサポート。`GetSessionEndpoint` と `GetDashboardUrl` API を追加し、`CreateSession` が `SPARK_CONNECT` セッションタイプを受け付けるよう変更 |
-
-### セッション作成の例
-
-```python
-import boto3
-
-glue = boto3.client("glue")
-
-# Spark Connect セッションを作成
-response = glue.create_session(
-    Id="my-spark-connect-session",
-    Role="arn:aws:iam::123456789012:role/GlueInteractiveSessionRole",
-    Command={
-        "Name": "glueetl",
-        "PythonVersion": "3"
-    },
-    SessionType="SPARK_CONNECT"
-)
-```
-
-`CreateSession` API で `SessionType` に `SPARK_CONNECT` を指定することで、Spark Connect 対応のセッションを作成します。実際のパラメーター名や指定方法は公式ドキュメントで確認してください。
-
-## 設定方法
-
-### 前提条件
-
-1. AWS Glue Interactive Sessions を利用できる IAM ロールおよび権限が設定されていること
-2. クライアント側に Python インタープリターおよび Spark Connect クライアントが用意されていること
-3. SageMaker Unified Studio を利用する場合は、対象ドメインおよびプロジェクトが構成されていること
-
-### 手順
-
-#### ステップ1: Spark Connect セッションの作成
-
-```bash
-aws glue create-session \
-    --id my-spark-connect-session \
-    --role arn:aws:iam::123456789012:role/GlueInteractiveSessionRole \
-    --command Name=glueetl,PythonVersion=3 \
-    --session-type SPARK_CONNECT
-```
-
-AWS CLI で `SPARK_CONNECT` タイプの Interactive Session を作成します。これにより AWS Glue 側にサーバーレス Spark 実行環境が準備されます。
-
-#### ステップ2: エンドポイントの取得とクライアント接続
-
-```bash
-aws glue get-session-endpoint --id my-spark-connect-session
-```
-
-`GetSessionEndpoint` API でクライアントが接続するための Spark Connect エンドポイントを取得します。取得したエンドポイントに対して、SageMaker Unified Studio ノートブックや使い慣れた IDE から gRPC で接続します。
-
-#### ステップ3: 開発と監視
-
-セッションに接続後、PySpark コードを対話的に実行します。`GetDashboardUrl` API で取得できる URL を通じて Spark UI にアクセスし、リアルタイムでセッションを監視できます。実行履歴は Spark History Server で確認できます。
+| ノートブック | Amazon SageMaker Unified Studio マネージドノートブック、Jupyter |
+| IDE | Visual Studio Code など Python インタープリターを備えた IDE |
+| プログラマティックアクセス | AWS API、SDK、CLI |
+| 接続方式 | Apache Spark Connect (シンクライアントアーキテクチャ) |
+| 実行基盤 | AWS Glue サーバーレス Spark バックエンド |
+| 可観測性 | Spark UI、Spark History Server、Glue API/CLI/SDK |
 
 ## メリット
 
 ### ビジネス面
 
-- **開発生産性の向上**: 使い慣れた IDE やノートブックから直接 AWS Glue 上で処理を実行でき、環境構築の手間を削減できる
-- **インフラ運用コストの削減**: サーバーレス基盤を利用するため、Spark クラスターの構築や管理が不要
-- **本番移行リスクの低減**: 段階的な開発と反復的なデバッグにより、本番デプロイ前に品質を高められる
+- **開発生産性の向上**: 使い慣れた環境から対話的に Spark ワークロードを実行でき、本番移行前の探索やデバッグを高速化
+- **運用負荷の軽減**: サーバーレスバックエンドにより、クラスターのプロビジョニングや管理が不要
+- **環境の柔軟性**: SageMaker Unified Studio、Jupyter、VS Code など好みのツールを選択可能
 
 ### 技術面
 
-- **依存関係の分離**: クライアント側依存関係とサーバー側ランタイムが分離され、アップグレードが簡素化され安定性が向上
-- **可観測性の確保**: Spark UI と Spark History Server によりセッションの監視と履歴トラッキングが可能
-- **柔軟な接続手段**: gRPC ベースの接続により、Python 対応の任意の IDE や AWS API / SDK / CLI から利用可能
+- **安定性の向上**: クライアントの依存関係をサーバー側 Spark ランタイムから分離し、アップグレードを簡素化
+- **対話的な反復開発**: ステップごとのデバッグと PySpark ジョブの段階的開発をサポート
+- **可観測性の確保**: Spark UI と Spark History Server によるリアルタイム監視と履歴確認
 
 ## デメリット・制約事項
 
 ### 制限事項
 
-- 利用可能なリージョンが限定されている (利用可能リージョンを参照)
-- クライアント側に Spark Connect クライアントおよび Python 環境を用意する必要がある
+- 利用可能なリージョンが限定されている (利用可能リージョンセクションを参照)
+- Spark Connect のシンクライアントアーキテクチャに起因する機能差異が存在する可能性があるため、利用する Spark API の対応状況を確認する必要がある
 
 ### 考慮すべき点
 
-- ローカルクライアントから AWS Glue 環境へ gRPC で接続するため、ネットワーク経路やセキュリティ要件の確認が必要
-- 既存の標準的な Glue Interactive Sessions との使い分けを検討する必要がある
+- 既存の Interactive Sessions の利用形態から Spark Connect ベースの接続へ移行する場合、クライアント側の設定や依存関係の確認が必要
+- 本番ワークロードへ移行する際は、開発時の設定を本番向けに適切に見直すことが望ましい
 
 ## ユースケース
 
-### ユースケース1: ローカル IDE での対話的データ探索
+### ユースケース1: アドホックなデータ探索
 
-**シナリオ**: データエンジニアがローカルの Visual Studio Code から AWS Glue のサーバーレス Spark エンジンに接続し、大規模データセットを対話的に探索する
+**シナリオ**: データサイエンティストが SageMaker Unified Studio のノートブックから、本番に近いサーバーレス環境でデータセットを対話的に探索する。
 
-**実装例**:
-```python
-from pyspark.sql import SparkSession
+**効果**: クラスター管理を意識せず、使い慣れたノートブックから即座にデータ探索を開始できる。
 
-# Spark Connect エンドポイントに接続
-spark = SparkSession.builder.remote("sc://<glue-spark-connect-endpoint>").getOrCreate()
+### ユースケース2: PySpark ジョブの段階的開発
 
-df = spark.read.parquet("s3://my-bucket/data/")
-df.printSchema()
-df.show(20)
-```
+**シナリオ**: データエンジニアが VS Code で PySpark ジョブをステップごとにデバッグしながら開発し、Spark UI で実行状況を確認する。
 
-**効果**: クラスターを管理せずに、使い慣れた IDE から大規模データの探索を即座に開始できる
+**効果**: 反復的なデバッグと可観測性により、本番移行前にジョブの品質を高められる。
 
-### ユースケース2: PySpark ジョブの段階的開発とデバッグ
+### ユースケース3: 任意 IDE からのサーバーレス実行
 
-**シナリオ**: 本番デプロイ前に、PySpark の変換ロジックをステップごとに実行して結果を確認しながら開発する
+**シナリオ**: 開発チームが Jupyter や任意の IDE から Glue のサーバーレスバックエンドに接続し、共通の実行基盤上でワークロードを実行する。
 
-**実装例**:
-```python
-# 変換処理を段階的に確認しながら構築
-filtered = df.filter(df["status"] == "active")
-filtered.show(5)
-
-aggregated = filtered.groupBy("region").count()
-aggregated.show()
-```
-
-**効果**: 反復的なデバッグにより、本番ジョブの品質を高めてからデプロイできる
-
-### ユースケース3: SageMaker Unified Studio での協働分析
-
-**シナリオ**: データサイエンスチームが SageMaker Unified Studio のマネージドノートブックから AWS Glue の Spark エンジンを共有して分析を進める
-
-**実装例**:
-```python
-# SageMaker Unified Studio ノートブックから Spark Connect セッションを利用
-spark.sql("SELECT region, COUNT(*) FROM sales GROUP BY region").show()
-```
-
-**効果**: マネージド環境で統合的なデータ分析ワークフローを構築し、チーム間の協働を促進できる
+**効果**: クライアント依存関係をサーバー側ランタイムから分離できるため、環境間の差異やアップグレードに伴う影響を抑えられる。
 
 ## 料金
 
-公式発表では本機能に関する料金詳細は示されていません。AWS Glue Interactive Sessions の利用料金が適用されると考えられます。詳細は AWS Glue の料金ページで確認してください。
+本アップデートに関する固有の料金情報は、公式発表では言及されていません。AWS Glue Interactive Sessions の利用料金については、AWS Glue の料金ページを参照してください。
 
 ## 利用可能リージョン
 
-本機能は以下のリージョンで利用可能です。
+以下のリージョンで利用可能です。
 
 - アジアパシフィック: ムンバイ、ソウル、シンガポール、シドニー、東京
 - カナダ: 中部
@@ -262,18 +170,17 @@ spark.sql("SELECT region, COUNT(*) FROM sales GROUP BY region").show()
 
 ## 関連サービス・機能
 
-- **Amazon SageMaker Unified Studio**: マネージドノートブックから Spark Connect セッションに接続して分析や開発を行う統合環境
-- **Apache Spark Connect**: クライアントと実行環境を分離するシンクライアントアーキテクチャを提供する Apache Spark の機能
-- **AWS Glue Interactive Sessions**: サーバーレスの Spark 環境を対話的に利用するための AWS Glue の機能
+- **Amazon SageMaker Unified Studio**: マネージドノートブックから Glue のサーバーレスバックエンドに接続する主要なクライアント環境
+- **Apache Spark Connect**: クライアントと実行環境を分離するシンクライアントアーキテクチャの基盤技術
+- **AWS Glue**: サーバーレスのデータ統合サービスであり、本機能の実行基盤を提供
 
 ## 参考リンク
 
 - 📊 [インフォグラフィック](https://takech9203.github.io/aws-news-summary/20260617-aws-glue-interactive-sessions-spark-connect-smus-notebooks.html)
-- [公式発表 (What's New)](https://aws.amazon.com/about-aws/whats-new/2026/06/aws-glue-interactive-sessions-spark-connect-smus-notebooks)
-- [AWS Glue API 変更履歴 (awsapichanges.com)](https://awsapichanges.com/archive/changes/fb8102-glue.html)
+- [公式発表 (What's New)](https://aws.amazon.com/about-aws/whats-new/2026/06/aws-glue-interactive-sessions-spark-connect-smus-notebooks/)
 - [AWS Glue ドキュメント](https://docs.aws.amazon.com/glue/)
 - [AWS Glue 料金ページ](https://aws.amazon.com/glue/pricing/)
 
 ## まとめ
 
-AWS Glue Interactive Sessions の Spark Connect サポートにより、開発者は使い慣れた IDE やノートブックから AWS Glue のサーバーレス Spark エンジンを対話的に利用できるようになりました。クラスター管理が不要で、アドホックな探索から段階的なジョブ開発までを 1 つのワークフローでカバーできます。データエンジニアリングや分析を行うチームは、まず東京リージョンなどの対応リージョンで Spark Connect セッションを試し、既存の開発フローへの組み込みを検討することをおすすめします。
+AWS Glue Interactive Sessions の Spark Connect サポートにより、開発者は SageMaker Unified Studio や任意の IDE から、クラスター管理不要のサーバーレス Spark バックエンドに対して対話的にワークロードを実行できるようになりました。クライアントとサーバーの分離による安定性向上と可観測性機能の活用は、本番移行前の探索やデバッグを大きく効率化します。データエンジニアリングやデータサイエンスのワークフローを持つチームは、対応リージョンでの試験的な導入を検討することを推奨します。

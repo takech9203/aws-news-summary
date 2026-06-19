@@ -9,208 +9,125 @@
 
 ## 概要
 
-Amazon EKS は、Kubernetes API サーバーからのアウトバウンドトラフィックをお客様自身の Amazon VPC 経由でルーティングできる新機能を発表しました。この機能により、コントロールプレーンが外部リソースへ通信する際の経路、セキュリティグループ、エグレスパスをお客様が制御できるようになります。
+Amazon EKS は、Kubernetes API サーバーからのアウトバウンドトラフィックをお客様自身の Amazon VPC 経由でルーティングできる新機能を発表しました。この機能により、コントロールプレーンが外部リソースへ通信する際のルーティング、セキュリティグループ、エグレスパスをお客様が制御できるようになります。
 
-対象となるトラフィックは、アドミッション Webhook のコールバック、OpenID Connect (OIDC) プロバイダーのルックアップ、および集約 API サーバー (Aggregate API server) へのリクエストです。これらのトラフィックをお客様の VPC 経由に切り替えることで、VPC 内にのみ存在するプライベートな OIDC プロバイダーや Webhook サーバーへ到達できるようになります。
+対象となるトラフィックは、アドミッション Webhook のコールバック、OpenID Connect (OIDC) プロバイダーのディスカバリー、および集約 API サーバー (Aggregated API server) へのリクエストです。これらのトラフィックをお客様の VPC 経由に切り替えることで、VPC 内からのみアクセス可能なプライベートな OIDC プロバイダーや Webhook サーバーへコントロールプレーンが到達できるようになります。
 
-この機能は、データ境界 (data perimeter) 要件、コンプライアンス要件、またはプライベートネットワークインフラを持つ組織を主な対象としています。すべての EKS 利用可能リージョンで、追加費用なしで利用できます。
+この機能は、データ境界 (data perimeter) の要件、コンプライアンス要件、またはプライベートネットワークインフラを持つ組織を主な対象としています。クラスター作成時または既存クラスターの更新時に `controlPlaneEgressMode` を `CUSTOMER_ROUTED` に設定することで有効化でき、Amazon EKS が利用可能なすべての AWS リージョンで追加料金なしで利用できます。
 
 **アップデート前の課題**
 
-- 以前は、EKS コントロールプレーンからのアウトバウンドトラフィックの経路をお客様が制御できなかった
-- 以前は、VPC 内にのみ存在するプライベートな OIDC プロバイダーや Webhook サーバーへコントロールプレーンから到達することが困難だった
-- 以前は、コントロールプレーンのエグレストラフィックにお客様独自のセキュリティグループやデータ境界ポリシーを適用できなかった
+- これまでは Amazon EKS がコントロールプレーンから VPC リソースへのエグレスネットワークを管理しており (`AWS_MANAGED` モード)、お客様がそのネットワークパスを制御できなかった
+- VPC 内にのみ存在するプライベートな OIDC プロバイダーや Webhook サーバーへ、コントロールプレーンから到達させることが難しかった
+- アウトバウンドトラフィックの経路をお客様の NAT ゲートウェイやファイアウォール、検査アプライアンス経由に強制する手段がなく、データ境界やコンプライアンス要件を満たしにくかった
 
 **アップデート後の改善**
 
-- 今回のアップデートにより、Kubernetes API サーバーのアウトバウンドトラフィックをお客様の VPC 経由でルーティングできるようになった
-- 今回のアップデートにより、プライベートな OIDC プロバイダーや Webhook サーバーへコントロールプレーンから到達できるようになった
-- 今回のアップデートにより、エグレストラフィックの経路、セキュリティグループ、エグレスパスを制御できるようになった
+- `CUSTOMER_ROUTED` モードを選択することで、コントロールプレーンの ENI から VPC リソースへ向かうトラフィックの経路をお客様自身が管理できるようになった
+- NAT ゲートウェイ、NAT インスタンス、Transit Gateway、ファイアウォールアプライアンスなど、任意のエグレスデバイスを経由させられるようになった
+- `eks:controlPlaneEgressMode` IAM 条件キーと AWS Organizations のサービスコントロールポリシー (SCP) を組み合わせ、組織全体でエグレスモードを強制できるようになった
 
 ## アーキテクチャ図
 
 ```mermaid
 flowchart TD
-    subgraph EKS["☁️ Amazon EKS コントロールプレーン"]
-        API["🔌 Kubernetes API サーバー"]
+    subgraph AWSManaged["☁️ AWS マネージドインフラ"]
+        API["⚙️ kube-apiserver<br/>コントロールプレーン"]
     end
 
-    subgraph CustomerVPC["🏢 お客様の Amazon VPC"]
+    subgraph CustomerVPC["🏢 お客様の VPC"]
+        ENI["🔌 クロスアカウント ENI<br/>コントロールプレーン ENI"]
+        RT["🗺️ ルートテーブル<br/>SG / NACL"]
+        Egress{{"🚪 エグレスデバイス<br/>NAT GW / FW / TGW"}}
+    end
+
+    subgraph Endpoints["🌐 到達先エンドポイント"]
         direction LR
-        SG["🛡️ セキュリティグループ"]
-        OIDC["🔑 プライベート OIDC プロバイダー"]
-        WH["🪝 アドミッション Webhook サーバー"]
-        SG ~~~ OIDC ~~~ WH
+        Webhook["🪝 Webhook サーバー"]
+        OIDC["🔑 OIDC プロバイダー"]
+        Webhook ~~~ OIDC
     end
 
-    Mode{"controlPlaneEgressMode<br/>CUSTOMER_ROUTED"}
-
-    API --> Mode
-    Mode -->|お客様 VPC 経由でルーティング| SG
-    SG --> OIDC
-    SG --> WH
+    API -->|"アウトバウンド通信"| ENI
+    ENI --> RT
+    RT --> Egress
+    Egress -->|"TCP 443"| Webhook
+    Egress -->|"TCP 443"| OIDC
 
     classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
     classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
-    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
     classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
-    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
 
-    class EKS,CustomerVPC cloud
+    class AWSManaged,CustomerVPC,Endpoints cloud
     class API compute
-    class Mode decision
-    class SG,OIDC,WH internal
+    class ENI,RT internal
+    class Egress decision
+    class Webhook,OIDC input
 ```
 
-コントロールプレーンのアウトバウンドトラフィックを `CUSTOMER_ROUTED` モードに設定することで、API サーバーからのトラフィックがお客様の VPC を経由し、VPC 内のプライベートリソースへ到達できるようになります。
+`CUSTOMER_ROUTED` モードでは、kube-apiserver からのお客様向けトラフィックが VPC 内のクロスアカウント ENI を経由し、お客様が定義したルートテーブルとエグレスデバイスを通って Webhook や OIDC エンドポイントへ到達します。なお、etcd や CloudWatch Logs など EKS が管理する内部トラフィックは引き続き AWS マネージドの経路を通り、この設定の影響を受けません。
 
 ## サービスアップデートの詳細
 
 ### 主要機能
 
-1. **コントロールプレーンエグレスのカスタマールーティング**
-   - Kubernetes API サーバーのアウトバウンドトラフィックをお客様の VPC 経由でルーティング
-   - トラフィックの経路、セキュリティグループ、エグレスパスをお客様が制御
-   - クラスター作成時または既存クラスターの更新時に有効化可能
+1. **エグレスルーティングモードの選択**
+   - `AWS_MANAGED` (デフォルト): Amazon EKS がコントロールプレーン ENI からのエグレスパスを管理する。NAT ゲートウェイなどのルーティングインフラを別途構成する必要はない
+   - `CUSTOMER_ROUTED`: お客様が VPC サブネット内でコントロールプレーンからのエグレスパスを管理する。エグレスデバイスやルートテーブル、NACL、セキュリティグループのルールを自身で構成する
 
-2. **対象トラフィックの拡大**
-   - アドミッション Webhook のコールバック
-   - OpenID Connect (OIDC) プロバイダーのルックアップ
-   - 集約 API サーバー (Aggregate API server) へのリクエスト
+2. **既存 ENI の再利用**
+   - `CUSTOMER_ROUTED` モードでは、Amazon EKS がコントロールプレーンとノード間の通信用にすでに作成しているクロスアカウントネットワークインターフェイスを利用する
+   - 専用のエグレス用ネットワークインターフェイスは新規に作成されず、既存インターフェイスの「使われ方」が変わる
 
-3. **組織全体での適用制御**
-   - `eks:controlPlaneEgressMode` IAM 条件キーを利用
-   - AWS Organizations のサービスコントロールポリシー (SCP) と組み合わせて、組織全体で適用を強制可能
+3. **VPC の DNS 設定による名前解決**
+   - `CUSTOMER_ROUTED` モードでは、コントロールプレーンがお客様の VPC の DNS 設定を使用してホスト名を解決する
+   - これにより Route 53 プライベートホストゾーンや、Route 53 Resolver エンドポイント経由のオンプレミス DNS のエンドポイントへ到達できる
+
+4. **IAM 条件キーによる組織的なガバナンス**
+   - `eks:controlPlaneEgressMode` 条件キーを IAM ポリシーや SCP で使用し、許可するエグレスモードを制御できる
+   - 対象アクションは `eks:CreateCluster` と `eks:UpdateClusterConfig`
 
 ## 技術仕様
 
-### 設定項目
+### CUSTOMER_ROUTED モードで VPC 経由となるトラフィック
+
+| トラフィック | 宛先 | ポート | 備考 |
+|------|------|------|------|
+| アドミッション Webhook | Webhook エンドポイント (お客様定義の URL) | 443 (通常) | Webhook 構成時のみ。外部エンドポイントの場合はエグレスデバイス経由 |
+| OIDC ディスカバリー | OIDC issuer URL | 443 | OIDC プロバイダー構成時のみ。外部の場合はエグレスデバイス経由 |
+| 集約 API サーバー | お客様の API サーバーエンドポイント | 443 | 構成時のみ。外部の場合はエグレスデバイス経由 |
+| Kubelet API | ワーカーノードの IP アドレス | 10250 | クラスター ENI 経由の通信であり、エグレスデバイスは経由しない |
+
+etcd、CloudWatch Logs、EKS 内部サービスとの通信など、EKS が管理するコントロールプレーントラフィックは引き続き AWS マネージドの経路を通り、お客様の VPC 構成の影響を受けません。
+
+### サブネットの要件
 
 | 項目 | 詳細 |
 |------|------|
-| 設定名 | `controlPlaneEgressMode` |
-| 設定値 | `CUSTOMER_ROUTED` (カスタマールーティングを有効化) |
-| 適用タイミング | クラスター作成時または既存クラスターの更新時 |
-| IAM 条件キー | `eks:controlPlaneEgressMode` |
-| 制御単位 | AWS Organizations の SCP による組織全体への適用 |
+| ルーティング | コントロールプレーンが到達すべきエンドポイントへのルートが必要。VPC 外のエンドポイントには通常デフォルトルート (IPv4: `0.0.0.0/0`、IPv6: `::/0`) をエグレスデバイスへ設定 |
+| セキュリティグループ | クロスアカウント ENI でアウトバウンド通信を許可 (例: Webhook と OIDC 向けの 443) |
+| ネットワーク ACL | アウトバウンド通信と、戻りトラフィック用のインバウンドエフェメラルポート範囲 (1024-65535) を許可 |
+| DHCP オプションセット | ドメインネームサーバーのリストに `AmazonProvidedDNS` を含める必要がある |
 
 ### API変更履歴
 
-今回のアップデートに対応する awsapichanges.com 上の EKS API 変更履歴は、本レポート作成時点では確認できませんでした。`controlPlaneEgressMode` の設定は、EKS クラスターの作成・更新 API を通じて指定します。
+今回のアップデートに関連する awsapichanges.com の EKS API 変更エントリは、本レポート作成時点では確認できませんでした。実際の API としては、`CreateCluster` および `UpdateClusterConfig` の `resourcesVpcConfig` に `controlPlaneEgressMode` フィールドが追加されています。
 
-### 設定例
+### IAM 条件キーによる強制 (SCP 例)
 
-```bash
-# 新規クラスター作成時にカスタマールーティングを有効化
-aws eks create-cluster \
-  --name my-cluster \
-  --role-arn arn:aws:iam::111122223333:role/eks-cluster-role \
-  --resources-vpc-config subnetIds=subnet-aaaa,subnet-bbbb \
-  --control-plane-egress-mode CUSTOMER_ROUTED
-```
-
-上記は新規クラスター作成時に `controlPlaneEgressMode` を `CUSTOMER_ROUTED` に設定する例です。正確なパラメータ名や指定方法は、Amazon EKS ユーザーガイドおよび最新の AWS CLI / API リファレンスで確認してください。
-
-## 設定方法
-
-### 前提条件
-
-1. Amazon EKS クラスターを利用できる環境であること
-2. クラスターのアウトバウンドトラフィックを通すお客様の VPC とサブネットが用意されていること
-3. クラスター作成・更新を行う IAM 権限を持っていること
-
-### 手順
-
-#### ステップ1: コントロールプレーンエグレスモードの設定
-
-```bash
-aws eks update-cluster-config \
-  --name my-cluster \
-  --control-plane-egress-mode CUSTOMER_ROUTED
-```
-
-既存クラスターのコントロールプレーンエグレスモードを `CUSTOMER_ROUTED` に更新します。これにより、コントロールプレーンのアウトバウンドトラフィックがお客様の VPC 経由でルーティングされるようになります。
-
-#### ステップ2: VPC のルーティングとセキュリティグループの確認
-
-```bash
-aws eks describe-cluster --name my-cluster \
-  --query 'cluster.resourcesVpcConfig'
-```
-
-クラスターに関連付けられた VPC 設定を確認し、プライベートな OIDC プロバイダーや Webhook サーバーへ到達できるルーティングとセキュリティグループが構成されていることを検証します。
-
-#### ステップ3: 組織全体での適用強制 (任意)
-
-組織全体でカスタマールーティングを強制する場合は、`eks:controlPlaneEgressMode` IAM 条件キーを利用した SCP を AWS Organizations に適用します。これにより、組織内のすべてのアカウントで意図しないエグレス設定を防止できます。
-
-## メリット
-
-### ビジネス面
-
-- **コンプライアンス対応**: データ境界要件やコンプライアンス要件を持つ組織が、コントロールプレーンのエグレスを自社ネットワークポリシーに準拠させられる
-- **追加費用なし**: 機能の利用に追加料金が発生しないため、コスト増を抑えつつセキュリティ態勢を強化できる
-- **ガバナンス強化**: SCP と IAM 条件キーにより、組織全体で一貫したエグレスポリシーを適用できる
-
-### 技術面
-
-- **ネットワーク制御の向上**: コントロールプレーントラフィックの経路、セキュリティグループ、エグレスパスを細かく制御できる
-- **プライベートリソースへの到達**: VPC 内にのみ存在する OIDC プロバイダーや Webhook サーバーをコントロールプレーンから利用できる
-- **既存クラスターへの適用**: 新規クラスターだけでなく既存クラスターでも有効化できる
-
-## デメリット・制約事項
-
-### 制限事項
-
-- 対象トラフィックはアドミッション Webhook コールバック、OIDC プロバイダールックアップ、集約 API サーバーリクエストに限られる
-- カスタマールーティングを有効にすると、お客様側で適切な VPC ルーティングとセキュリティグループの構成が必要になる
-
-### 考慮すべき点
-
-- VPC のルーティングやセキュリティグループの設定が不適切な場合、Webhook や OIDC への通信が失敗し、クラスター動作に影響する可能性がある
-- 組織全体で適用する前に、検証環境でエグレス経路が想定どおり機能することを確認することが推奨される
-
-## ユースケース
-
-### ユースケース1: プライベート OIDC プロバイダーの利用
-
-**シナリオ**: 社内ネットワーク内 (VPC 内) にのみ公開されている OIDC プロバイダーを使って、Kubernetes API サーバーの認証連携を行いたい。
-
-**実装例**:
-```bash
-aws eks update-cluster-config \
-  --name corp-cluster \
-  --control-plane-egress-mode CUSTOMER_ROUTED
-```
-
-**効果**: コントロールプレーンが VPC 経由でプライベート OIDC プロバイダーへ到達でき、外部公開を伴わずに認証連携を実現できる。
-
-### ユースケース2: プライベート Webhook サーバーとの連携
-
-**シナリオ**: VPC 内にのみ配置されたアドミッション Webhook サーバーで、ポリシー検証やリソース変更を行いたい。
-
-**実装例**:
-```bash
-# Webhook サーバーが配置された VPC 経由でエグレスをルーティング
-aws eks update-cluster-config \
-  --name secure-cluster \
-  --control-plane-egress-mode CUSTOMER_ROUTED
-```
-
-**効果**: API サーバーから VPC 内の Webhook サーバーへ到達でき、プライベートネットワーク内でアドミッション制御を完結できる。
-
-### ユースケース3: 組織全体でのデータ境界の強制
-
-**シナリオ**: 規制業種の企業が、すべての EKS クラスターでコントロールプレーンのエグレスを自社 VPC 経由に統一したい。
-
-**実装例**:
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
+      "Sid": "RequireCustomerRoutedControlPlane",
       "Effect": "Deny",
-      "Action": ["eks:CreateCluster", "eks:UpdateClusterConfig"],
+      "Action": [
+        "eks:CreateCluster",
+        "eks:UpdateClusterConfig"
+      ],
       "Resource": "*",
       "Condition": {
         "StringNotEquals": {
@@ -222,11 +139,123 @@ aws eks update-cluster-config \
 }
 ```
 
-**効果**: SCP により、カスタマールーティング以外の設定でのクラスター作成・更新を拒否し、組織全体でデータ境界を強制できる。
+このポリシーは、`CUSTOMER_ROUTED` を指定しない限りクラスターの作成と設定更新を拒否し、組織内のすべてのクラスターでカスタマールーティング型エグレスを強制します。
+
+## 設定方法
+
+### 前提条件
+
+1. VPC とサブネットが Amazon EKS の標準ネットワーク要件を満たしていること
+2. コントロールプレーンが到達すべきエンドポイント (Webhook サーバー、OIDC プロバイダーなど) へのルートとエグレスデバイス (NAT ゲートウェイ、NAT インスタンス、Transit Gateway、ファイアウォール) が用意されていること
+3. セキュリティグループ、NACL、ルートテーブルが必要なアウトバウンド通信と戻りトラフィックを許可していること
+4. DHCP オプションセットに `AmazonProvidedDNS` が含まれていること
+
+### 手順
+
+#### ステップ1: カスタマールーティング型エグレスでクラスターを作成する
+
+```bash
+aws eks create-cluster \
+    --name my-cluster \
+    --role-arn arn:aws:iam::111122223333:role/myAmazonEKSClusterRole \
+    --resources-vpc-config "subnetIds=subnet-ExampleID1,subnet-ExampleID2,securityGroupIds=sg-ExampleID1,controlPlaneEgressMode=CUSTOMER_ROUTED" \
+    --kubernetes-network-config "ipFamily=ipv4" \
+    --region region-code
+```
+
+`--resources-vpc-config` に `controlPlaneEgressMode=CUSTOMER_ROUTED` を指定して新規クラスターを作成します。IPv6 クラスターの場合は `ipFamily=ipv6` を指定し、IPv4 用の NAT ゲートウェイに加えて IPv6 用の egress-only インターネットゲートウェイを用意します。
+
+#### ステップ2: 既存クラスターのエグレスモードを更新する
+
+```bash
+aws eks update-cluster-config \
+    --name my-cluster \
+    --resources-vpc-config "controlPlaneEgressMode=CUSTOMER_ROUTED" \
+    --region region-code
+```
+
+既存クラスターを `CUSTOMER_ROUTED` へ切り替えます。更新タイプは `ControlPlaneEgressUpdate` で、通常 10 分以内に完了します。`CUSTOMER_ROUTED` への切り替えは一方向の操作であり、`AWS_MANAGED` に戻すことはできない点に注意してください。
+
+#### ステップ3: 接続性を検証する
+
+```bash
+aws eks describe-cluster --name my-cluster \
+    --query "cluster.resourcesVpcConfig.controlPlaneEgressMode" \
+    --region region-code
+```
+
+現在のエグレスモードを確認します。あわせてクラスターが `ACTIVE` 状態であることを確認し、Webhook を発火させるリソースの作成、ノードの登録 (`kubectl get nodes`)、IRSA を使う Pod の IAM ロール引き受けなどを通じて実際の接続性を検証します。
+
+## メリット
+
+### ビジネス面
+
+- **コンプライアンス要件への対応**: データ境界やコンプライアンス要件を持つ組織が、コントロールプレーンのアウトバウンドトラフィックを自社のネットワーク制御下に置けるようになる
+- **追加コストなし**: Amazon EKS が利用可能なすべてのリージョンで追加料金なしで利用できる
+- **組織的なガバナンス**: SCP と IAM 条件キーにより、組織全体で一貫したエグレスポリシーを強制できる
+
+### 技術面
+
+- **プライベートエンドポイントへの到達**: VPC 内にのみ存在するプライベートな OIDC プロバイダーや Webhook サーバーへコントロールプレーンが到達できる
+- **柔軟な経路制御**: NAT ゲートウェイ、ファイアウォール、検査アプライアンス、Transit Gateway 経由の集約エグレスなど、任意の経路を選択できる
+- **既存アーキテクチャとの親和性**: Standard モードと Auto Mode のどちらのクラスターでも同じ仕組みで動作する。専用 ENI が追加されないため構成がシンプル
+
+## デメリット・制約事項
+
+### 制限事項
+
+- `CUSTOMER_ROUTED` への切り替えは一方向の操作であり、`AWS_MANAGED` へ戻すことはできない
+- ネットワークの設定ミス (エグレスパスの欠落、制限的な NACL、不適切なセキュリティグループ) があると、アドミッション Webhook 呼び出しや OIDC 認証などのコントロールプレーン操作が失敗する可能性がある
+- Terraform の AWS Provider における当該フィールドのサポートは将来のリリースで提供予定
+- EKS Capabilities (ArgoCD、ACK、KRO など) のコントローラーからのトラフィックは、この機能では VPC 経由にルーティングされない
+
+### 考慮すべき点
+
+- IPv6 クラスターでは IPv4 と IPv6 の両方のエグレスパスを構成する必要がある (IPv4: NAT ゲートウェイ、IPv6: egress-only インターネットゲートウェイなど)
+- VPC フローログを有効にすると、VPC を経由する Webhook や OIDC エンドポイントへのエグレストラフィックを観測できる。有効でない場合はこれらのトラフィックはログに記録されない
+- 切り替え前に VPC が前提条件を満たしているか必ず確認する
+
+## ユースケース
+
+### ユースケース1: プライベート OIDC プロバイダーの利用
+
+**シナリオ**: 社内専用の OIDC プロバイダーを VPC 内に配置し、外部に公開せずにクラスター認証や IRSA を運用したい。
+
+**実装例**:
+```
+コントロールプレーンサブネットに、Route 53 プライベートホストゾーンで解決される
+プライベート OIDC issuer への到達経路を構成し、CUSTOMER_ROUTED を有効化する
+```
+
+**効果**: コントロールプレーンがインターネットを経由せずにプライベート OIDC エンドポイントへ到達でき、認証情報を社内ネットワーク内に閉じられる。
+
+### ユースケース2: 集約エグレスとトラフィック検査
+
+**シナリオ**: セキュリティポリシー上、すべてのアウトバウンドトラフィックをファイアウォールや検査アプライアンスを通す必要がある。
+
+**実装例**:
+```
+コントロールプレーンサブネットのデフォルトルートを Transit Gateway 経由の
+集約エグレス VPC または AWS Network Firewall へ向ける
+```
+
+**効果**: Webhook や OIDC 向けのコントロールプレーントラフィックも含めてアウトバウンド通信を一元的に検査・記録でき、データ境界を強化できる。
+
+### ユースケース3: 組織全体でのエグレスモード強制
+
+**シナリオ**: 大企業で、すべての新規・既存 EKS クラスターにカスタマールーティング型エグレスを強制したい。
+
+**実装例**:
+```
+eks:controlPlaneEgressMode 条件キーを用いた SCP を AWS Organizations に適用し、
+CUSTOMER_ROUTED 以外のクラスター作成・更新を拒否する
+```
+
+**効果**: 個々のチームの設定ミスを防ぎ、組織全体で一貫したネットワークガバナンスを実現できる。
 
 ## 料金
 
-この機能は追加費用なしで利用できます。Amazon EKS クラスターおよび関連リソース (VPC、データ転送など) の通常料金は引き続き適用されます。
+この機能は、Amazon EKS が利用可能なすべての AWS リージョンで追加料金なしで利用できます。ただし、お客様が用意する NAT ゲートウェイ、Transit Gateway、ファイアウォールアプライアンス、データ転送などの関連リソースには、それぞれの通常料金が適用されます。
 
 ## 利用可能リージョン
 
@@ -234,18 +263,19 @@ Amazon EKS が利用可能なすべての AWS リージョンで利用できま�
 
 ## 関連サービス・機能
 
-- **Amazon VPC**: コントロールプレーンのアウトバウンドトラフィックをルーティングする経路として使用
-- **AWS Organizations (SCP)**: `eks:controlPlaneEgressMode` 条件キーと組み合わせ、組織全体でエグレスポリシーを強制
-- **OpenID Connect (OIDC)**: コントロールプレーンが認証連携のために参照するプロバイダー
-- **AWS IAM**: 条件キーによりエグレスモードの設定を制御
+- **Amazon VPC**: トラフィックのルーティング、セキュリティグループ、NACL、エグレスデバイスを管理する基盤
+- **AWS Organizations / SCP**: `eks:controlPlaneEgressMode` 条件キーと組み合わせ、組織全体でエグレスモードを強制
+- **Amazon Route 53 Resolver**: VPC の DNS 設定を通じてプライベートホストゾーンやオンプレミス DNS の名前解決を実現
+- **AWS Network Firewall / NAT Gateway / Transit Gateway**: コントロールプレーンのエグレストラフィックを検査・集約するためのエグレスデバイス
+- **VPC フローログ**: VPC を経由するコントロールプレーンのエグレストラフィックを観測
 
 ## 参考リンク
 
 - 📊 [インフォグラフィック](https://takech9203.github.io/aws-news-summary/20260618-amazon-eks-customer-routed-control-plane-egress.html)
 - [公式発表 (What's New)](https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-eks-customer-routed-control-plane-egress/)
-- [Amazon EKS ユーザーガイド](https://docs.aws.amazon.com/eks/latest/userguide/)
+- [ドキュメント (Configuring control plane egress routing)](https://docs.aws.amazon.com/eks/latest/userguide/control-plane-egress.html)
 - [Amazon EKS 料金ページ](https://aws.amazon.com/eks/pricing/)
 
 ## まとめ
 
-Amazon EKS のカスタマールーティング型コントロールプレーンエグレスは、コントロールプレーンのアウトバウンドトラフィックをお客様の VPC 経由に切り替え、ネットワーク制御とデータ境界の強制を可能にする重要な機能です。データ境界要件やコンプライアンス要件を持つ組織は、まず検証環境で `controlPlaneEgressMode` を `CUSTOMER_ROUTED` に設定し、プライベート OIDC プロバイダーや Webhook サーバーへの到達性を確認することを推奨します。組織全体への展開には、SCP と IAM 条件キーによる適用強制を検討してください。
+カスタマールーティング型コントロールプレーンエグレスは、EKS コントロールプレーンからのアウトバウンドトラフィックの経路をお客様自身が制御できるようにする、データ境界やコンプライアンス要件を持つ組織にとって重要なアップデートです。`CUSTOMER_ROUTED` への切り替えは一方向の操作であり、ネットワーク設定ミスがコントロールプレーン操作の失敗につながるため、有効化前に VPC のルーティング、セキュリティグループ、NACL、DNS 設定が前提条件を満たしているか必ず確認してください。組織全体での適用には `eks:controlPlaneEgressMode` 条件キーを用いた SCP の活用を検討することをお勧めします。
