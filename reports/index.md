@@ -5,6 +5,10 @@
 
 ## 2026 年
 
+- [2026-06-22 - AWS IAM Identity Center - AWS アカウントとアプリケーションの個別クォータ対応](2026/2026-06-22-aws-identity-center-separate-quotas.md)
+- [2026-06-22 - AWS Network Firewall - デフォルトドロップアクションの変更による接続信頼性の向上](2026/2026-06-22-aws-network-firewall-updates-default-drop-action.md)
+- [2026-06-22 - AWS Batch - 顧客指定順序によるインスタンス割り当て戦略](2026/2026-06-22-batch-ordered-allocation-strategies.md)
+- [2026-06-22 - AWS Outposts - セルフサービスライフサイクル管理](2026/2026-06-22-aws-outposts-self-service-lifecycle-management.md)
 - [2026-06-19 - AWS Local Zones - ベトナム・ハノイの新しい Local Zone を一般提供開始](2026/2026-06-19-aws-local-zones-hanoi-vietnam.md)
 - [2026-06-18 - Amazon RDS for SQL Server - General Purpose (gp3) ボリュームの最大サイズとプロビジョンドパフォーマンスの拡張](2026/2026-06-18-rds-sqlserver-increases-gp3-limits.md)
 - [2026-06-18 - Amazon SNS - アジアパシフィック (ソウル) リージョンでの SMS 送信サポート](2026/2026-06-18-amazon-sns-supports-sending-sms-seoul-region.md)
