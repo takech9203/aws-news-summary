@@ -5,9 +5,23 @@
 
 ## 2026 年
 
+- [2026-06-23 - Amazon OpenSearch Service - AI 支援による移行](2026/2026-06-23-amazon-opensearch-service-ai-migrations.md)
+- [2026-06-23 - AWS HealthOmics - プライベートワークフロー向けエフェメラルストレージ](2026/2026-06-23-healthomics-scratch-storage.md)
+- [2026-06-23 - Amazon Cognito - 保存データ暗号化におけるカスタマーマネージドキーのサポート](2026/2026-06-23-amazon-cognito-customer-managed-key.md)
+- [2026-06-23 - Amazon Bedrock AgentCore Memory - クロスアカウントアクセス](2026/2026-06-23-agentcore-memory-cross-account-access.md)
+- [2026-06-23 - Amazon SageMaker - ノートブックインスタンスでの G6e インスタンスタイプサポート](2026/2026-06-23-g6e-new-launch-sagemaker-notebook-instances.md)
+- [2026-06-23 - Amazon CloudWatch - OTel Container Insights for Amazon EKS](2026/2026-06-23-amazon-cloudwatch-otel-amazon-eks.md)
+- [2026-06-23 - Amazon CloudWatch Logs - マネージド syslog 取り込み](2026/2026-06-23-amazon-cloudwatch-syslog-ingestion.md)
+- [2026-06-23 - Amazon Bedrock Guardrails - Automated Reasoning checks の新しいポリシー改善ワークフロー](2026/2026-06-23-amazon-bedrock-guardrails.md)
+- [2026-06-23 - Amazon SageMaker Studio ノートブック - G7e インスタンスタイプのサポート](2026/2026-06-23-g7e-new-launch-sagemaker-studio-notebooks.md)
+- [2026-06-22 - AWS HealthOmics - Nextflow プロファイルのサポート](2026/2026-06-22-aws-healthomics-nextflow-profiles.md)
 - [2026-06-22 - AWS IAM Identity Center - AWS アカウントとアプリケーションの個別クォータ対応](2026/2026-06-22-aws-identity-center-separate-quotas.md)
+- [2026-06-22 - Amazon MSK - AI Agent Skills](2026/2026-06-22-amazon-msk-ai-agent-skills.md)
 - [2026-06-22 - AWS Network Firewall - デフォルトドロップアクションの変更による接続信頼性の向上](2026/2026-06-22-aws-network-firewall-updates-default-drop-action.md)
+- [2026-06-22 - Amazon MSK Replicator - 外部 Apache Kafka クラスターからの mTLS 認証サポート](2026/2026-06-22-amazon-msk-replicator-mtls-support.md)
+- [2026-06-22 - AWS Transform for migrations - 移行先リージョンの全商用リージョンへの拡大](2026/2026-06-22-aws-transform-migrations-region-expansion.md)
 - [2026-06-22 - AWS Batch - 顧客指定順序によるインスタンス割り当て戦略](2026/2026-06-22-batch-ordered-allocation-strategies.md)
+- [2026-06-22 - AWS Lambda - MicroVMs](2026/2026-06-22-aws-lambda-microvms.md)
 - [2026-06-22 - AWS Outposts - セルフサービスライフサイクル管理](2026/2026-06-22-aws-outposts-self-service-lifecycle-management.md)
 - [2026-06-19 - AWS Local Zones - ベトナム・ハノイの新しい Local Zone を一般提供開始](2026/2026-06-19-aws-local-zones-hanoi-vietnam.md)
 - [2026-06-18 - Amazon RDS for SQL Server - General Purpose (gp3) ボリュームの最大サイズとプロビジョンドパフォーマンスの拡張](2026/2026-06-18-rds-sqlserver-increases-gp3-limits.md)
