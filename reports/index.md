@@ -5,8 +5,16 @@
 
 ## 2026 年
 
+- [2026-06-24 - Amazon Neptune - グローバルデータベースの AWS CloudFormation サポート](2026/2026-06-24-amazon-neptune-aws-cloudformation.md)
+- [2026-06-24 - Amazon EC2 - High Memory U7in-24TB インスタンス](2026/2026-06-24-amazon-ec2-u7in-24tb-aws-seoul.md)
+- [2026-06-24 - Amazon EC2 - AMI ウォーターマーク](2026/2026-06-24-ec2-image-watermarks-allowed-images.md)
+- [2026-06-24 - Amazon EMR Serverless - アプリケーション再起動なしのライブ構成更新](2026/2026-06-24-amazon-emr-serverless.md)
+- [2026-06-24 - Amazon CloudWatch - ダッシュボードのタグ付け対応](2026/2026-06-24-amazon-cloudwatch-tags-on-dashboards.md)
+- [2026-06-24 - AWS IoT - AWS IoT Device SDK for Swift](2026/2026-06-24-aws-iot-device-sdk-swift.md)
 - [2026-06-23 - Amazon OpenSearch Service - AI 支援による移行](2026/2026-06-23-amazon-opensearch-service-ai-migrations.md)
 - [2026-06-23 - AWS HealthOmics - プライベートワークフロー向けエフェメラルストレージ](2026/2026-06-23-healthomics-scratch-storage.md)
+- [2026-06-23 - Amazon GuardDuty - AI を活用した調査機能](2026/2026-06-23-amazon-guardduty.md)
+- [2026-06-23 - Claude Enterprise - Claude Tag (ベータ版)](2026/2026-06-23-claude-tag-aws-marketplace.md)
 - [2026-06-23 - Amazon Cognito - 保存データ暗号化におけるカスタマーマネージドキーのサポート](2026/2026-06-23-amazon-cognito-customer-managed-key.md)
 - [2026-06-23 - Amazon Bedrock AgentCore Memory - クロスアカウントアクセス](2026/2026-06-23-agentcore-memory-cross-account-access.md)
 - [2026-06-23 - Amazon SageMaker - ノートブックインスタンスでの G6e インスタンスタイプサポート](2026/2026-06-23-g6e-new-launch-sagemaker-notebook-instances.md)
