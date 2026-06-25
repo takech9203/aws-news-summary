@@ -5,9 +5,14 @@
 
 ## 2026 年
 
+- [2026-06-25 - Amazon RDS for SQL Server - 最新の GDR アップデートのサポート](2026/2026-06-25-amazon-rds-supports-latest-gdr-updates-microsoft-sql-server.md)
+- [2026-06-25 - Amazon Redshift - RG インスタンス向けリザーブドインスタンスの前払いオプション追加](2026/2026-06-25-amazon-redshift-ri-upfront-pricing-rg-instances.md)
+- [2026-06-25 - AWS Network Firewall - VisionHeight マネージド脅威インテリジェンスルール](2026/2026-06-25-network-firewall-visionheight-managed-rules.md)
+- [2026-06-25 - AWS Backup - Amazon S3 バックアップコピーのパフォーマンス強化](2026/2026-06-25-aws-backup-amazon-s3-copy-enhancement.md)
 - [2026-06-24 - Amazon Neptune - グローバルデータベースの AWS CloudFormation サポート](2026/2026-06-24-amazon-neptune-aws-cloudformation.md)
 - [2026-06-24 - Amazon EC2 - High Memory U7in-24TB インスタンス](2026/2026-06-24-amazon-ec2-u7in-24tb-aws-seoul.md)
 - [2026-06-24 - Amazon EC2 - AMI ウォーターマーク](2026/2026-06-24-ec2-image-watermarks-allowed-images.md)
+- [2026-06-24 - Amazon Route 53 Global Resolver - AWS アカウント間での DNS ビュー共有](2026/2026-06-24-amazon-route-53-global-resolver.md)
 - [2026-06-24 - Amazon EMR Serverless - アプリケーション再起動なしのライブ構成更新](2026/2026-06-24-amazon-emr-serverless.md)
 - [2026-06-24 - Amazon CloudWatch - ダッシュボードのタグ付け対応](2026/2026-06-24-amazon-cloudwatch-tags-on-dashboards.md)
 - [2026-06-24 - AWS IoT - AWS IoT Device SDK for Swift](2026/2026-06-24-aws-iot-device-sdk-swift.md)
