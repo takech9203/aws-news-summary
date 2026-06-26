@@ -5,10 +5,16 @@
 
 ## 2026 年
 
+- [2026-06-26 - Amazon EC2 R8g インスタンス - 追加リージョンでの提供開始](2026/2026-06-26-amazon-ec2-r8g-instances-additional-regions.md)
+- [2026-06-25 - Amazon EC2 - C7a インスタンスがアジアパシフィック (シンガポール) リージョンで利用可能に](2026/2026-06-25-amazon-ec2-c7a-instances-asia-pacific-singapore-region.md)
 - [2026-06-25 - Amazon RDS for SQL Server - 最新の GDR アップデートのサポート](2026/2026-06-25-amazon-rds-supports-latest-gdr-updates-microsoft-sql-server.md)
+- [2026-06-25 - Amazon EC2 - M8a インスタンスが Asia Pacific (Mumbai) リージョンで利用可能に](2026/2026-06-25-amazon-ec2-m8a-instances-asia-pacific-mumbai-region.md)
+- [2026-06-25 - Amazon OpenSearch Service - OpenSearch Ingestion の欧州 (パリ) リージョン対応](2026/2026-06-25-opensearch-ingestion-europe-paris-region-availability.md)
+- [2026-06-25 - Amazon RDS Custom for SQL Server - 最新 CU および GDR アップデートのサポート](2026/2026-06-25-amazon-rds-custom-supports-latest-cu-gdr-updates-microsoft-sql-server.md)
 - [2026-06-25 - Amazon Redshift - RG インスタンス向けリザーブドインスタンスの前払いオプション追加](2026/2026-06-25-amazon-redshift-ri-upfront-pricing-rg-instances.md)
 - [2026-06-25 - AWS Network Firewall - VisionHeight マネージド脅威インテリジェンスルール](2026/2026-06-25-network-firewall-visionheight-managed-rules.md)
 - [2026-06-25 - AWS Backup - Amazon S3 バックアップコピーのパフォーマンス強化](2026/2026-06-25-aws-backup-amazon-s3-copy-enhancement.md)
+- [2026-06-25 - Amazon EC2 - C8in インスタンスが追加リージョンで利用可能に](2026/2026-06-25-amazon-ec2-c8in-ireland-ohio.md)
 - [2026-06-24 - Amazon Neptune - グローバルデータベースの AWS CloudFormation サポート](2026/2026-06-24-amazon-neptune-aws-cloudformation.md)
 - [2026-06-24 - Amazon EC2 - High Memory U7in-24TB インスタンス](2026/2026-06-24-amazon-ec2-u7in-24tb-aws-seoul.md)
 - [2026-06-24 - Amazon EC2 - AMI ウォーターマーク](2026/2026-06-24-ec2-image-watermarks-allowed-images.md)
