@@ -6,6 +6,8 @@
 ## 2026 年
 
 - [2026-06-26 - Amazon EC2 R8g インスタンス - 追加リージョンでの提供開始](2026/2026-06-26-amazon-ec2-r8g-instances-additional-regions.md)
+- [2026-06-26 - Kiro - GitLab と GitHub をまたぐ変更を 1 セッションで調整](2026/2026-06-26-kiro-coordinating-changes-across-gitlab-and-github-in-one-session.md)
+- [2026-06-26 - Kiro - 設定のホットリロードとリソース継承制御](2026/2026-06-26-kiro-changelog-2026-06-26.md)
 - [2026-06-25 - Amazon EC2 - C7a インスタンスがアジアパシフィック (シンガポール) リージョンで利用可能に](2026/2026-06-25-amazon-ec2-c7a-instances-asia-pacific-singapore-region.md)
 - [2026-06-25 - Amazon RDS for SQL Server - 最新の GDR アップデートのサポート](2026/2026-06-25-amazon-rds-supports-latest-gdr-updates-microsoft-sql-server.md)
 - [2026-06-25 - Amazon EC2 - M8a インスタンスが Asia Pacific (Mumbai) リージョンで利用可能に](2026/2026-06-25-amazon-ec2-m8a-instances-asia-pacific-mumbai-region.md)
