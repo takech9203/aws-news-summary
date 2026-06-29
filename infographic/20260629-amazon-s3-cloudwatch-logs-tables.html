@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon S3 サーバーアクセスログの CloudWatch Logs / S3 Tables 配信</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  background-image: radial-gradient(circle at 15% 10%, rgba(255,153,0,0.08) 0, transparent 40%),
+                    radial-gradient(circle at 85% 90%, rgba(0,161,201,0.08) 0, transparent 40%);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-bottom: 3px dashed rgba(255,153,0,0.4);
+  padding-bottom: 20px;
+}
+
+.header-left { flex: 1; min-width: 280px; }
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.subtitle { font-size: 15px; color: var(--aws-light-gray); margin-top: 8px; }
+
+.date-box {
+  background: var(--aws-dark-squid);
+  border: 1px solid rgba(255,153,0,0.3);
+  border-radius: 8px;
+  padding: 10px 16px;
+  text-align: center;
+  white-space: nowrap;
+}
+.date-box .label { font-size: 11px; color: var(--aws-orange); }
+.date-box .date { font-size: 18px; font-weight: 700; color: var(--aws-white); }
+
+h2 {
+  font-size: 23px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--aws-smile-orange);
+  margin: 18px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 12px;
+  padding: 26px;
+  margin-bottom: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-smile-orange);
+}
+
+/* Before / After */
+.ba-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px; }
+.ba-box { border-radius: 10px; padding: 16px; }
+.ba-before { background: rgba(209,50,18,0.12); border: 1px solid rgba(209,50,18,0.5); }
+.ba-after { background: rgba(29,129,2,0.12); border: 1px solid rgba(29,129,2,0.6); }
+.ba-title { font-weight: 700; margin-bottom: 10px; font-size: 15px; }
+.ba-before .ba-title { color: #FF7058; }
+.ba-after .ba-title { color: #6FCF4F; }
+.ba-box ul { margin: 0; padding-left: 18px; }
+.ba-box li { margin: 8px 0; font-size: 14px; }
+
+/* Destination cards */
+.dest-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-top: 8px; }
+.dest-card {
+  background: var(--aws-squid-ink);
+  border-radius: 10px;
+  padding: 16px;
+  border-top: 4px solid var(--aws-orange);
+  text-align: center;
+}
+.dest-card .ic { font-size: 30px; }
+.dest-card .nm { font-weight: 700; color: var(--aws-white); margin: 6px 0; }
+.dest-card .ds { font-size: 13px; }
+.dest-card.free { border-top-color: var(--aws-green); }
+.dest-card.cw { border-top-color: var(--aws-teal); }
+.dest-card.tbl { border-top-color: var(--aws-purple); }
+
+/* feature cards */
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 12px 0;
+}
+.feature-card .ft { font-weight: 700; color: var(--aws-white); font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.feature-card ul { margin: 8px 0 0 0; padding-left: 20px; }
+.feature-card li { margin: 5px 0; font-size: 14px; }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+th { background: rgba(255,153,0,0.15); color: var(--aws-orange); padding: 10px; text-align: left; border-bottom: 2px solid rgba(255,153,0,0.4); }
+td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); vertical-align: top; }
+td.yes { color: var(--aws-green); font-weight: 700; }
+td.no { color: var(--aws-red); font-weight: 700; }
+code.inline { background: rgba(0,161,201,0.15); color: var(--aws-teal); padding: 1px 5px; border-radius: 4px; font-size: 13px; word-break: break-all; }
+
+/* use cases */
+.usecase {
+  background: linear-gradient(135deg, rgba(255,153,0,0.12), rgba(255,173,51,0.05));
+  border: 1px solid rgba(255,153,0,0.3);
+  border-radius: 10px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase .uc-title { font-weight: 700; color: var(--aws-smile-orange); font-size: 16px; margin-bottom: 8px; }
+.usecase .uc-row { font-size: 14px; margin: 6px 0; }
+.usecase .uc-row b { color: var(--aws-white); }
+
+/* merit lists */
+.merit-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.merit-block { background: var(--aws-squid-ink); border-radius: 8px; padding: 16px; }
+.merit-block h3 { margin-top: 0; }
+.check-item { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; font-size: 14px; }
+.check-icon { color: var(--aws-green); font-weight: 700; }
+.warn-icon { color: var(--aws-orange); font-weight: 700; }
+.cross-icon { color: var(--aws-red); font-weight: 700; }
+
+/* code blocks */
+.code-block { background: #1a1a2e; border-radius: 8px; overflow: hidden; margin: 14px 0; border: 1px solid rgba(255,153,0,0.2); }
+.code-header { background: #16213e; padding: 7px 14px; display: flex; justify-content: space-between; font-size: 12px; }
+.code-lang { color: var(--aws-orange); font-weight: 700; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; padding: 14px !important; }
+
+/* mermaid */
+.mermaid-container { background: #FFFFFF; border-radius: 12px; padding: 24px; margin: 16px 0; border: 2px solid rgba(255,153,0,0.3); overflow-x: auto; }
+.mermaid { display: flex; justify-content: center; }
+
+.note { background: rgba(0,161,201,0.1); border-left: 4px solid var(--aws-teal); border-radius: 6px; padding: 12px 14px; font-size: 14px; margin: 12px 0; }
+.region-banner { background: rgba(29,129,2,0.12); border: 1px solid rgba(29,129,2,0.5); border-radius: 10px; padding: 16px; font-size: 15px; }
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+footer { margin-top: 24px; padding-top: 16px; border-top: 1px dashed rgba(255,255,255,0.3); font-size: 13px; color: var(--aws-light-gray); }
+footer ul { padding-left: 20px; }
+footer li { margin: 6px 0; }
+
+@media (max-width: 720px) {
+  .ba-grid, .dest-grid, .merit-cols { grid-template-columns: 1fr; }
+  h1 { font-size: 26px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-left">
+      <span class="service-badge">Amazon S3</span>
+      <h1>サーバーアクセスログを<br/>CloudWatch Logs / S3 Tables へ配信</h1>
+      <div class="subtitle">構造化された即時クエリ・アラーム・クロスアカウント分析をパイプライン構築なしで実現</div>
+    </div>
+    <div class="date-box">
+      <div class="label">リリース日</div>
+      <div class="date">2026.06.29</div>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Amazon S3 は、サーバーアクセスログ (Server Access Logs) を <span class="highlight">Amazon CloudWatch Logs</span> および <span class="highlight">Amazon S3 Tables</span> へ配信する新しいオプションをサポートしました。これまで S3 汎用バケットへの配信のみだったログを、用途に応じて 3 つの配信先から柔軟に選択できるようになりました。</p>
+    <p>CloudWatch Logs では、ログが<strong>構造化フィールドにパース</strong>され取り込み後すぐにクエリ可能です。S3 Tables では<strong>追加ストレージコストなし</strong>で Apache Iceberg 形式にミラーリングされ、Athena や Redshift から標準 SQL で即時クエリできます。これらの新しい配信パスは、既存の S3 汎用バケットへの無料配信を補完するものです。</p>
+
+    <h3>3 つの配信先を選択可能</h3>
+    <div class="dest-grid">
+      <div class="dest-card free">
+        <div class="ic">🪣</div>
+        <div class="nm">S3 汎用バケット</div>
+        <div class="ds">従来どおりの無料配信</div>
+      </div>
+      <div class="dest-card cw">
+        <div class="ic">📊</div>
+        <div class="nm">CloudWatch Logs</div>
+        <div class="ds">構造化 / 即時クエリ / アラーム</div>
+      </div>
+      <div class="dest-card tbl">
+        <div class="ic">🧊</div>
+        <div class="nm">S3 Tables</div>
+        <div class="ds">Apache Iceberg / SQL 分析</div>
+      </div>
+    </div>
+
+    <h3>アップデート前後の比較</h3>
+    <div class="ba-grid">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ Before</div>
+        <ul>
+          <li>S3 汎用バケットにしか配信できず、分析には独自の転送パイプライン・パースロジック・ETL ジョブが必要</li>
+          <li>エラー率の急増やアクセスインシデントをリアルタイムに近い形で検知する仕組みを自前で構築する必要があった</li>
+          <li>複数アカウント・リージョンにまたがるアクセスログの横断的な集約・分析手段が限られていた</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ After</div>
+        <ul>
+          <li>CloudWatch Logs で構造化フィールドにパースされ、取り込み後すぐに Logs Insights でクエリ可能</li>
+          <li>メトリクスフィルターによるアラーム設定とクロスアカウント / クロスリージョン集約が可能</li>
+          <li>S3 Tables への Iceberg ミラーリングで、Athena / Redshift から SQL 即時分析が追加ストレージコストなしで可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+<pre class="mermaid">
+flowchart TD
+    subgraph Source["☁️ ソース"]
+        Bucket[("🪣 S3 汎用バケット<br/>監視対象")]
+    end
+
+    subgraph Delivery["⚙️ ログ配信"]
+        SAL["📝 サーバーアクセスログ"]
+    end
+
+    subgraph Destinations["🎯 配信先"]
+        GP[("🪣 S3 汎用バケット<br/>無料配信")]
+        CWL["📊 CloudWatch Logs<br/>構造化 / 即時クエリ"]
+        Tables[("🧊 S3 Tables<br/>Apache Iceberg")]
+    end
+
+    subgraph Analysis["🔍 分析 / 監視"]
+        Insights["🔎 Logs Insights"]
+        Alarm["🔔 アラーム / SNS"]
+        Athena["🗄️ Athena / Redshift"]
+    end
+
+    Bucket --> SAL
+    SAL --> GP
+    SAL --> CWL
+    CWL -.ミラーリング.-> Tables
+    CWL --> Insights
+    CWL --> Alarm
+    Tables --> Athena
+
+    classDef source fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Source,Delivery,Destinations,Analysis layer
+    class Bucket,GP,Tables storage
+    class SAL,CWL compute
+    class Insights,Alarm,Athena process
+</pre>
+    </div>
+    <p>監視対象の S3 汎用バケットのサーバーアクセスログを、3 つの配信先 (汎用バケット、CloudWatch Logs、S3 Tables) に配信し、Logs Insights やアラーム、Athena などで分析・監視します。S3 Tables への配信は <strong>CloudWatch Logs グループからミラーリング</strong>されます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="ft">📊 1. CloudWatch Logs への配信</div>
+      <ul>
+        <li>サーバーアクセスログが構造化フィールドにパースされ、取り込み後数秒でクエリ可能</li>
+        <li>独自の転送パイプライン・パースロジック・ETL ジョブが不要に</li>
+        <li>CloudWatch Logs Insights による即時クエリに対応</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="ft">🔔 2. メトリクスフィルターとアラーム</div>
+      <ul>
+        <li>Standard ログクラスではメトリクスフィルターベースのアラームを設定可能</li>
+        <li>エラー率 (例: HTTP 403) の急増を検知し、SNS で通知できる</li>
+        <li>トラフィックパターンの監視やダッシュボードでの傾向分析に活用</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="ft">🌐 3. クロスアカウント / クロスリージョン集約</div>
+      <ul>
+        <li>クロスアカウントオブザーバビリティによる「その場でのクエリ」、または 1 アカウントへのログ集約が可能</li>
+        <li>組織全体への展開はテレメトリ有効化ルール (アカウント、リージョン、タグ単位) で実施</li>
+        <li>複数アカウント・リージョンにまたがるアクセスインシデントの調査が容易に</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="ft">🧊 4. S3 Tables (Apache Iceberg) へのミラーリング</div>
+      <ul>
+        <li>CloudWatch Logs グループから S3 Tables へログをミラーリング</li>
+        <li>追加ストレージコストなしで Iceberg 形式に保存、コンパクションとスナップショット管理は自動</li>
+        <li>Athena、Redshift、その他の Iceberg 互換エンジンから標準 SQL でクエリ可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="ft">🔒 5. AWS KMS による暗号化</div>
+      <ul>
+        <li>ログ グループの設定により KMS 暗号化を有効化できる</li>
+        <li>KMS 暗号化されたログ グループで S3 Tables を併用する場合は <code class="inline">systemtables.cloudwatch.amazonaws.com</code> および <code class="inline">maintenance.s3tables.amazonaws.com</code> へのアクセス許可が必要</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>ログ グループのクラスと機能の対応</h3>
+    <table>
+      <thead>
+        <tr><th>クラス</th><th>メトリクスフィルター / アラーム</th><th>Logs Insights</th><th>S3 Tables 連携</th><th>特徴</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Standard</strong></td><td class="yes">✓ 対応</td><td class="yes">✓ 対応</td><td class="yes">✓ 対応</td><td>メトリクスフィルターによるアラームが可能</td></tr>
+        <tr><td><strong>Infrequent Access</strong></td><td class="no">✗ 非対応</td><td class="yes">✓ 対応</td><td class="yes">✓ 対応</td><td>より低コストだがメトリクスフィルターは利用不可</td></tr>
+      </tbody>
+    </table>
+    <div class="note">⚠️ ログ グループのクラスは<strong>作成時に固定</strong>され、後から変更できません。</div>
+
+    <h3>S3 Tables のテーブル構成</h3>
+    <table>
+      <tbody>
+        <tr><td>マネージドテーブルバケット</td><td><code class="inline">aws-cloudwatch</code></td></tr>
+        <tr><td>名前空間</td><td><code class="inline">logs</code></td></tr>
+        <tr><td>完全修飾名</td><td><code class="inline">"s3tablescatalog/aws-cloudwatch"."logs"."amazon_s3__server_access"</code></td></tr>
+        <tr><td>パーティション</td><td><code class="inline">cwl__timestamp</code> による日次パーティション</td></tr>
+        <tr><td>保持期間</td><td>CloudWatch Logs グループの保持設定を共有 (独立していない)</td></tr>
+      </tbody>
+    </table>
+    <div class="note">⚠️ S3 Tables のコピーはログ グループの保持期間を共有します。<strong>ログ グループやログストリームを削除すると Iceberg データも削除される</strong>点に注意。</div>
+
+    <h3>API 変更履歴</h3>
+    <p>今回のアップデートに直接対応する awsapichanges.com 上の API 変更履歴は、レポート作成時点 (過去 7 日間) では確認できませんでした。設定は CloudWatch Logs の <code class="inline">put-delivery-source</code>、<code class="inline">put-delivery-destination</code>、<code class="inline">create-delivery</code> および <code class="inline">observabilityadmin</code> の S3 Tables 連携 API を組み合わせて行います。</p>
+
+    <h3>CloudWatch Logs Insights クエリ例</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Logs Insights</span><span class="code-title">アクセス集計</span></div>
+      <pre><code class="language-sql"># 誰がどの操作でアクセスしているかを集計
+stats count(*) as requests by requester, operation | sort requests desc</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Logs Insights</span><span class="code-title">プレフィックス単位の読み取りボリューム</span></div>
+      <pre><code class="language-sql"># プレフィックス単位の読み取りボリュームを集計
+filter operation like /REST\.GET\.OBJECT/
+| parse key_name /^(?&lt;prefix&gt;[^\/]+)\//
+| stats sum(bytes_sent_size) as total_bytes_returned, count(*) as requests by prefix
+| sort total_bytes_returned desc | limit 10</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>ソースとなる S3 汎用バケットが存在すること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>バケットと同じリージョンに CloudWatch Logs のログ グループが存在すること (<code class="inline">/aws/vendedlogs/</code> プレフィックスで作成すると自動作成)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>配信および vended log delivery に必要な IAM 権限が付与されていること</span></div>
+
+    <div class="flow-diagram" style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:20px 0;">
+      <div class="dest-card cw" style="flex:1;min-width:140px;">STEP 1<br/><b>配信元の作成</b></div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div class="dest-card cw" style="flex:1;min-width:140px;">STEP 2<br/><b>配信先の作成と関連付け</b></div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div class="dest-card tbl" style="flex:1;min-width:140px;">STEP 3<br/><b>S3 Tables 連携 (任意)</b></div>
+    </div>
+
+    <h3>ステップ 1: 配信元 (delivery source) の作成</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">put-delivery-source</span></div>
+      <pre><code class="language-bash">aws logs put-delivery-source --name my-sal-source \
+  --resource-arn arn:aws:s3:::my-bucket \
+  --log-type S3_SERVER_ACCESS_LOGS --region us-east-1</code></pre>
+    </div>
+    <p>バケットごとに配信元を作成し、サーバーアクセスログを配信対象として登録します。バケットと同じリージョン / アカウントを指定する必要があります。</p>
+
+    <h3>ステップ 2: 配信先 (delivery destination) の作成と関連付け</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">put-delivery-destination / create-delivery</span></div>
+      <pre><code class="language-bash"># ログ グループごとに 1 回作成
+aws logs put-delivery-destination --name my-sal-destination \
+  --delivery-destination-configuration '{"destinationResourceArn": "..."}'
+
+# バケットごとに配信を作成
+aws logs create-delivery --delivery-source-name my-sal-source \
+  --delivery-destination-arn ...</code></pre>
+    </div>
+    <div class="note">⏱️ 設定の反映には <strong>15 ～ 20 分</strong>かかります。配信はベストエフォートであり、過去ログの遡及配信 (バックフィル) は行われません。</div>
+
+    <h3>ステップ 3: S3 Tables 連携の有効化 (任意)</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">observabilityadmin / S3 Tables 連携</span></div>
+      <pre><code class="language-bash">aws observabilityadmin create-s3-table-integration \
+  --role-arn ... --encryption '{"SseAlgorithm":"AES256"}'
+
+aws logs associate-source-to-s3-table-integration \
+  --integration-arn ... --data-source '{"name":"amazon_s3","type":"server_access"}'</code></pre>
+    </div>
+    <p>暗号化は必須で、SSE-S3 の場合は <code class="inline">{"SseAlgorithm":"AES256"}</code>、KMS を使う場合は <code class="inline">aws:kms</code> と <code class="inline">KmsKeyArn</code> を指定します。マネジメントコンソールからはバケットの [プロパティ] タブで [Enable S3 Tables integration] を選択することで、アカウント / リージョンごとに 1 回だけ有効化できます。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-cols">
+      <div class="merit-block">
+        <h3>📈 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><b>運用コストの削減</b>: 独自のログ転送パイプラインや ETL ジョブの構築・保守が不要に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><b>追加ストレージコストなしの分析基盤</b>: S3 Tables ミラーリングは追加コストなし</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><b>既存の無料配信との併用</b>: 汎用バケットへの無料配信を維持しつつ機能追加</span></div>
+      </div>
+      <div class="merit-block">
+        <h3>⚙️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><b>即時クエリ性</b>: CloudWatch Logs は取り込み後数秒、S3 Tables は SQL で即時クエリ</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><b>横断的な可観測性</b>: クロスアカウント / クロスリージョンでの集約と調査</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><b>標準フォーマットの活用</b>: Apache Iceberg により Athena / Redshift など複数エンジンから分析</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ログ グループのクラスは作成時に固定。Infrequent Access ではメトリクスフィルター / アラームを利用不可</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>配信はベストエフォートのため傾向分析向き。リアルタイムのアラート用途には不向きで、過去ログの遡及配信もなし</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>S3 Tables のコピーはログ グループの保持期間を共有。独立した保持設定不可で、削除時に Iceberg データも削除</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">!</span><span>設定反映に 15 ～ 20 分かかるため、構成変更後すぐにログが配信されない点を考慮</span></div>
+    <div class="check-item"><span class="warn-icon">!</span><span>アラームが必要な場合は Standard ログクラスが必須で、コストとのトレードオフを検討</span></div>
+    <div class="check-item"><span class="warn-icon">!</span><span>KMS 暗号化ログ グループで S3 Tables を併用する場合、CloudWatch / S3 Tables のサービスプリンシパルへの KMS アクセス許可が必要</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="uc-title">🚨 1. 不正アクセスの検知とアラート</div>
+      <div class="uc-row"><b>シナリオ</b>: アクセス拒否 (HTTP 403) の急増を検知し、セキュリティチームへ即座に通知したい。</div>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Metric Filter</span></div>
+        <pre><code class="language-text"># メトリクスフィルターのパターン
+{ $.http_status = 403 }
+# しきい値: 5 分間に 100 リクエスト → SNS 通知</code></pre>
+      </div>
+      <div class="uc-row"><b>効果</b>: Standard ログクラスのメトリクスフィルターにより、アクセス拒否の急増をアラームで検知し、インシデント対応を迅速化できます。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">🔍 2. クロスアカウントでのアクセスインシデント調査</div>
+      <div class="uc-row"><b>シナリオ</b>: 複数の AWS アカウントにまたがる S3 バケットへのアクセスを 1 つのアカウントから横断的に調査したい。</div>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Logs Insights</span></div>
+        <pre><code class="language-sql"># クロスアカウントオブザーバビリティで集約し Logs Insights でクエリ
+stats count(*) as requests by requester, operation | sort requests desc</code></pre>
+      </div>
+      <div class="uc-row"><b>効果</b>: クロスアカウント / クロスリージョンでログを集約・クエリでき、横断的なインシデント調査が可能になります。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">💰 3. コールドデータの特定によるコスト最適化</div>
+      <div class="uc-row"><b>シナリオ</b>: アクセス頻度の低いオブジェクトを特定し、ストレージクラスの見直しでコスト最適化したい。</div>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Athena SQL</span></div>
+        <pre><code class="language-sql"># S3 Tables を Athena でクエリし、オブジェクト読み取り操作を分析
+SELECT key_name, MAX(request_time) AS last_accessed
+FROM "s3tablescatalog/aws-cloudwatch"."logs"."amazon_s3__server_access"
+WHERE operation LIKE 'REST.GET.OBJECT%'
+GROUP BY key_name</code></pre>
+      </div>
+      <div class="uc-row"><b>効果</b>: アクセス傾向を SQL で分析し、コールドデータを特定してストレージコストを最適化できます。<code class="inline">last_accessed</code> が NULL の場合はコールドデータの強い兆候として扱えます。</div>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💵 料金</h2>
+    <p>CloudWatch Logs への配信は <strong>vended log の料金</strong> (ボリュームベースの段階的料金) が適用され、主なコスト要因となります。Infrequent Access クラスは取り込み料金が安価ですが、メトリクスフィルターは利用できません。ストレージはログを圧縮して保存し、両クラスとも同じ料金で、保持期間によりコストを制御します。クエリは Logs Insights でスキャンしたデータ量に応じて課金されます。</p>
+    <p>S3 Tables については、ストレージとテーブルメンテナンスに CloudWatch の取り込み / ストレージ料金を超える<strong>追加料金はかかりません</strong>。Athena からのクエリには、標準の S3 Tables リクエスト料金とクエリごとのスキャン課金が発生します。</p>
+    <table>
+      <thead><tr><th>使用量</th><th>月額料金 (概算)</th></tr></thead>
+      <tbody>
+        <tr><td>S3 汎用バケットへの配信</td><td class="yes">無料 (配信自体は無料)</td></tr>
+        <tr><td>S3 Tables へのミラーリング (ストレージ)</td><td class="yes">追加ストレージコストなし</td></tr>
+        <tr><td>CloudWatch Logs への取り込み / Logs Insights クエリ</td><td>使用量に応じた従量課金 (料金ページ参照)</td></tr>
+      </tbody>
+    </table>
+    <div class="note">💡 正確な料金は使用量やリージョンにより異なります。最新の料金は公式の料金ページを確認してください。</div>
+  </div>
+
+  <!-- リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <div class="region-banner">
+      <strong>AWS 中国リージョン</strong>および <strong>AWS GovCloud (US) リージョン</strong>を除く、すべての AWS リージョンで利用可能です。
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="feature-card" style="border-left-color:var(--aws-teal);">
+      <ul style="padding-left:20px;">
+        <li><b>Amazon CloudWatch Logs</b>: 構造化配信先。Logs Insights クエリ、メトリクスフィルター、アラームを提供</li>
+        <li><b>Amazon S3 Tables</b>: Apache Iceberg 形式でのログミラーリング先。SQL 分析の基盤</li>
+        <li><b>Amazon Athena / Amazon Redshift</b>: S3 Tables のログを標準 SQL でクエリする分析エンジン</li>
+        <li><b>AWS KMS</b>: ログデータの暗号化を提供</li>
+        <li><b>Amazon SNS</b>: メトリクスフィルターによるアラームの通知先</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>今回のアップデートにより、Amazon S3 のサーバーアクセスログを CloudWatch Logs および S3 Tables へ直接配信できるようになり、独自のログ処理パイプラインを構築せずに<span class="highlight">即時クエリ・アラーム・クロスアカウント分析</span>が実現できます。</p>
+    <p>セキュリティ監視やコスト最適化を強化したい場合は、Standard / Infrequent Access のログクラスの選択と保持期間設定を検討したうえで、まず対象バケットで <strong>CloudWatch Logs 配信を有効化</strong>し、必要に応じて <strong>S3 Tables 連携を追加</strong>することを推奨します。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典 / 参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-s3-cloudwatch-logs-tables/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/blogs/storage/query-amazon-s3-access-logs-instantly-with-cloudwatch-and-s3-tables/" target="_blank" rel="noopener noreferrer">AWS Blog: Query Amazon S3 access logs instantly with CloudWatch and S3 Tables</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/ServerLogs.html" target="_blank" rel="noopener noreferrer">Amazon S3 ドキュメント (サーバーアクセスログ)</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer">Amazon CloudWatch Logs 料金</a></li>
+    </ul>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    primaryColor: '#FF9900',
+    primaryTextColor: '#232F3E',
+    primaryBorderColor: '#FF9900',
+    lineColor: '#FF9900',
+    secondaryColor: '#F5F5F5',
+    tertiaryColor: '#FAFAFA',
+    background: '#FFFFFF',
+    mainBkg: '#FFF3E0',
+    nodeBorder: '#FF9900',
+    clusterBkg: '#FFF8E1',
+    clusterBorder: '#FF9900',
+    edgeLabelBackground: '#FFFFFF',
+    textColor: '#232F3E'
+  }
+});
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
