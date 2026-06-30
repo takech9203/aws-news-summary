@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon RDS - IAM データベース認証の接続レートスケーリング</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      background-image: radial-gradient(circle at 15% 10%, rgba(255,153,0,0.08), transparent 40%),
+                        radial-gradient(circle at 85% 90%, rgba(0,161,201,0.08), transparent 40%);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.7;
+      padding: 24px;
+      margin: 0;
+    }
+
+    .container { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+      gap: 16px;
+      border-bottom: 3px solid var(--aws-orange);
+      padding-bottom: 20px;
+    }
+
+    .header-left { flex: 1; min-width: 280px; }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px;
+      line-height: 1.3;
+    }
+
+    .feature-name { font-size: 16px; color: var(--aws-smile-orange); font-weight: 500; }
+
+    .header-right { text-align: right; }
+    .date-pill {
+      background: var(--aws-dark-squid);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      white-space: nowrap;
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h3 {
+      font-size: 18px;
+      color: var(--aws-smile-orange);
+      margin: 20px 0 10px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 12px;
+      padding: 26px;
+      margin-bottom: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    p { margin: 10px 0; }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Before / After */
+    .ba-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: stretch; margin: 18px 0; }
+    .ba-card { border-radius: 10px; padding: 18px; }
+    .ba-before { background: rgba(209,50,18,0.12); border: 1px solid rgba(209,50,18,0.5); }
+    .ba-after { background: rgba(29,129,2,0.14); border: 1px solid rgba(29,129,2,0.55); }
+    .ba-title { font-weight: 700; font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .ba-before .ba-title { color: #ff8a6a; }
+    .ba-after .ba-title { color: #6fd14b; }
+    .ba-card ul { margin: 0; padding-left: 20px; font-size: 14px; }
+    .ba-card li { margin: 8px 0; }
+    .ba-arrow { display: flex; align-items: center; font-size: 32px; color: var(--aws-orange); font-weight: bold; }
+
+    /* Cards */
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 14px 0;
+    }
+    .feature-card .fc-title { font-weight: 700; color: var(--aws-white); font-size: 16px; margin-bottom: 8px; display:flex; gap:8px; align-items:center;}
+    .feature-card ul { margin: 6px 0 0; padding-left: 20px; font-size: 14px; }
+    .feature-card li { margin: 6px 0; }
+
+    .usecase {
+      background: rgba(255,153,0,0.08);
+      border: 1px solid rgba(255,153,0,0.3);
+      border-radius: 10px;
+      padding: 18px;
+      margin: 14px 0;
+    }
+    .usecase .uc-title { color: var(--aws-orange); font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+    .uc-label { color: var(--aws-smile-orange); font-weight: 600; }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 16px; margin: 8px 0; }
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255,153,0,0.18), rgba(0,161,201,0.12));
+      border: 1px solid rgba(255,153,0,0.3);
+      border-radius: 10px;
+      padding: 18px;
+      text-align: center;
+    }
+    .stat-num { font-size: 30px; font-weight: 700; color: var(--aws-orange); line-height: 1.1; }
+    .stat-label { font-size: 13px; color: var(--aws-light-gray); margin-top: 6px; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    th { color: var(--aws-orange); font-weight: 600; background: rgba(255,153,0,0.08); }
+    td:first-child { color: var(--aws-white); font-weight: 500; white-space: nowrap; }
+
+    /* lists */
+    .check-item { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0; }
+    .check-icon { color: var(--aws-green); font-size: 17px; flex-shrink:0;}
+    .warn-icon { color: var(--aws-smile-orange); font-size: 17px; flex-shrink:0;}
+    .note-icon { color: var(--aws-teal); font-size: 17px; flex-shrink:0;}
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 16px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid { display: flex; justify-content: center; }
+    .diagram-note { font-size: 14px; color: var(--aws-light-gray); margin-top: 8px; }
+
+    /* Code */
+    .code-block { background: #1a1a2e; border-radius: 8px; overflow: hidden; margin: 14px 0; border: 1px solid rgba(255,153,0,0.2); }
+    .code-header { background: #16213e; padding: 8px 16px; display: flex; justify-content: space-between; font-size: 12px; }
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+    .code-block code { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; padding: 16px !important; }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; }
+    .aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+    .region-pill {
+      display: inline-block; background: rgba(0,161,201,0.15); border: 1px solid rgba(0,161,201,0.4);
+      color: var(--aws-light-gray); border-radius: 16px; padding: 4px 12px; margin: 4px 4px 0 0; font-size: 13px;
+    }
+
+    footer {
+      margin-top: 24px; padding-top: 16px; border-top: 1px dashed rgba(255,255,255,0.25);
+      font-size: 13px; color: var(--aws-light-gray);
+    }
+    footer ul { padding-left: 18px; }
+    footer a { word-break: break-all; }
+
+    @media (max-width: 720px) {
+      .ba-grid { grid-template-columns: 1fr; }
+      .ba-arrow { justify-content: center; transform: rotate(90deg); }
+      .two-col { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="header">
+      <div class="header-left">
+        <span class="service-badge">Amazon RDS / Amazon Aurora</span>
+        <h1>IAM データベース認証の<br/>接続レートスケーリング</h1>
+        <div class="feature-name">⚡ 動的接続スケーリング (Connection Rate Scaling)</div>
+      </div>
+      <div class="header-right">
+        <div class="date-pill">📅 リリース日: 2026 年 6 月 30 日</div>
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>Amazon RDS は、IAM データベース認証における<span class="highlight">動的な接続スケーリング</span>を提供開始しました。新規の IAM 認証リクエストを処理できるレートが、データベースインスタンスの<span class="highlight">利用可能なリソースに応じて拡張</span>されるようになりました。</p>
+      <p>これまで IAM データベース認証は、新規認証リクエストの処理能力が制約となり、高頻度に新規接続を確立するワークロードでは性能上の限界に達することがありました。今回のアップデートにより、IAM 認証の処理性能がインスタンスのリソースとともにスケールするため、大量の接続パターンを持つエンタープライズワークロードでも IAM 認証を活用しやすくなりました。</p>
+
+      <div class="ba-grid">
+        <div class="ba-card ba-before">
+          <div class="ba-title">⚠️ アップデート前の課題</div>
+          <ul>
+            <li>新規 IAM 認証リクエストの処理能力が固定的で、高頻度な新規接続で認証処理がボトルネックに</li>
+            <li>インスタンスサイズを大きくしても認証レートが比例してスケールしなかった</li>
+            <li>大量接続のエンタープライズワークロードで IAM 認証の採用をためらう要因に</li>
+          </ul>
+        </div>
+        <div class="ba-arrow">➜</div>
+        <div class="ba-card ba-after">
+          <div class="ba-title">✅ アップデート後の改善</div>
+          <ul>
+            <li>IAM 認証の処理性能がインスタンスのリソースとともにスケール</li>
+            <li>より大きなインスタンスで、より高い認証リクエストレートを処理可能に</li>
+            <li>高ボリュームの接続パターンを持つワークロードでも IAM 認証を活用しやすく</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph App["⚙️ アプリケーション層"]
+        EC2["💻 アプリケーション<br/>EC2 / ECS / Lambda"]
+        Token["🎫 認証トークン<br/>有効期限 15 分"]
+    end
+
+    subgraph AWS["☁️ AWS"]
+        IAM["🔐 AWS IAM<br/>プリンシパル / ポリシー"]
+        subgraph RDS["🗄️ Amazon RDS / Aurora"]
+            Auth["🛡️ IAM 認証処理<br/>リソースに応じてスケール"]
+            DB[("📋 データベース<br/>PostgreSQL / MySQL / MariaDB")]
+        end
+    end
+
+    EC2 -->|1. トークン生成要求| IAM
+    IAM -.->|2. SigV4 署名トークン発行| Token
+    Token -->|3. SSL/TLS 接続 トークンをパスワードとして使用| Auth
+    Auth -->|4. 認証検証| IAM
+    Auth -->|5. 接続確立| DB
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class App,AWS cloud
+    class RDS layer
+    class EC2,Token compute
+    class DB database
+    class IAM input
+    class Auth process
+        </pre>
+      </div>
+      <p class="diagram-note">アプリケーションは IAM プリンシパルを用いて SigV4 署名による認証トークンを生成し、そのトークンをパスワードとして SSL/TLS 経由でデータベースに接続します。今回のアップデートにより、<span class="highlight">ステップ 3 から 4 の認証処理</span>がインスタンスのリソースに応じてスケールします。</p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>🚀 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="fc-title">📈 リソースに応じた動的接続スケーリング</div>
+        <ul>
+          <li>新規 IAM 認証リクエストのレートが、インスタンスの利用可能なリソースに応じて拡張</li>
+          <li>インスタンスサイズを大きくすることで、より高い認証リクエストレートを処理可能</li>
+          <li>処理可能なリクエスト数は利用可能なリソースとワークロードの特性に依存</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">🏢 エンタープライズワークロードへの対応</div>
+        <ul>
+          <li>高ボリュームの接続パターンを持つワークロードでも IAM 認証を活用可能</li>
+          <li>パスワード管理を排し、IAM による一元的なアクセス管理を大規模環境でも適用しやすく</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">💡 推奨されるベストプラクティス</div>
+        <ul>
+          <li>IAM ユーザーまたは IAM 引き受けロールのプリンシパルを再利用してトークンを生成</li>
+          <li>生成した認証トークン自体を再利用 (トークンの有効期限は 15 分)</li>
+          <li>これらにより認証処理のオーバーヘッドを抑え、最適な性能を引き出せる</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <h3>IAM データベース認証の基本仕様</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対応エンジン</td><td>Aurora / RDS の PostgreSQL、MySQL、MariaDB</td></tr>
+        <tr><td>トークン生成方式</td><td>AWS Signature Version 4 (SigV4)</td></tr>
+        <tr><td>トークン有効期限</td><td>15 分</td></tr>
+        <tr><td>トークンサイズ</td><td>一般的に最小約 1 KB (IAM タグ・ポリシー・ARN 長で増減)</td></tr>
+        <tr><td>通信の暗号化</td><td>SSL / TLS による暗号化</td></tr>
+        <tr><td>必要な追加メモリ</td><td>インスタンスに 300 〜 1000 MiB の追加メモリ</td></tr>
+      </table>
+
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-num">15 分</div><div class="stat-label">トークン有効期限</div></div>
+        <div class="stat-card"><div class="stat-num">約 1 KB</div><div class="stat-label">トークンサイズ (最小)</div></div>
+        <div class="stat-card"><div class="stat-num">300-1000<br/>MiB</div><div class="stat-label">必要な追加メモリ</div></div>
+        <div class="stat-card"><div class="stat-num">$0</div><div class="stat-label">機能利用の追加料金</div></div>
+      </div>
+
+      <h3>API 変更履歴</h3>
+      <p>今回のアップデートは IAM 認証処理の<span class="highlight">内部的な性能改善</span>であり、新規 API メソッドの追加や API の変更を伴いません。トークン生成には従来どおり <code>generate-db-auth-token</code> (AWS CLI) や各 SDK の AuthTokenGenerator を使用します。</p>
+
+      <h3>IAM ポリシー例</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">rds-db:connect を許可するポリシー</span></div>
+        <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "rds-db:connect"
+            ],
+            "Resource": [
+                "arn:aws:rds-db:us-east-1:123456789012:dbuser:db-ABCDEFGHIJKL01234/db_user_name"
+            ]
+        }
+    ]
+}</code></pre>
+      </div>
+      <p><code>rds-db:connect</code> アクションにより、指定したデータベースユーザーへの IAM 認証による接続を許可します。</p>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>対象の RDS / Aurora インスタンスで IAM データベース認証が有効になっていること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>IAM 認証用 DB アカウントが作成済み (PostgreSQL は <code>rds_iam</code> ロール、MySQL / MariaDB は <code>AWSAuthenticationPlugin</code>)</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>接続プリンシパルに <code>rds-db:connect</code> を許可する IAM ポリシーがアタッチ済み</span></div>
+
+      <h3>ステップ 1: 認証トークンの生成</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">generate-db-auth-token</span></div>
+        <pre><code class="language-bash">aws rds generate-db-auth-token \
+  --hostname mydb.123456789012.us-east-1.rds.amazonaws.com \
+  --port 5432 \
+  --region us-east-1 \
+  --username db_user_name</code></pre>
+      </div>
+      <p>エンドポイント・ポート・リージョン・ユーザー名を指定し、有効期限 15 分の認証トークンを生成します。トークンはパスワードの代わりに使用します。</p>
+
+      <h3>ステップ 2: トークンを使用したデータベース接続</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">psql での接続</span></div>
+        <pre><code class="language-bash">psql "host=mydb.123456789012.us-east-1.rds.amazonaws.com \
+  port=5432 \
+  dbname=mydb \
+  user=db_user_name \
+  sslmode=require" \
+  password="&lt;生成したトークン&gt;"</code></pre>
+      </div>
+      <p>生成したトークンをパスワードとして指定し、SSL / TLS を有効にして接続します。PostgreSQL では <code>sslmode=require</code> 以上が必要です。</p>
+
+      <h3>ステップ 3: 高ボリュームワークロードでの最適化</h3>
+      <p>大量の新規接続を確立するアプリでは、毎回新しいプリンシパルでトークンを生成せず、<span class="highlight">同一の IAM プリンシパルを再利用</span>します。さらに生成したトークンを有効期限 (15 分) の範囲内で再利用することで、認証処理のオーバーヘッドを抑えられます。AWS JDBC ドライバや AWS Python ドライバの IAM 認証プラグインを利用すると、トークンのキャッシュと再利用が容易になります。</p>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>🎯 メリット</h2>
+      <div class="two-col">
+        <div>
+          <h3>ビジネス面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><b>大規模環境でのパスワードレス認証</b>: IAM による一元的なアクセス管理を高ボリュームワークロードにも拡大</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><b>セキュリティガバナンスの向上</b>: 資格情報をコードに保持せず、IAM の監査・統制を活用</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><b>追加コストなしの性能向上</b>: 既存ワークロードが追加料金なしで恩恵を受けられる</span></div>
+        </div>
+        <div>
+          <h3>技術面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><b>リソースに応じたスケーラビリティ</b>: 垂直スケーリングが認証性能にも反映される</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><b>EC2 インスタンスプロファイルとの連携</b>: インスタンス固有の認証情報でパスワードレス接続</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><b>SSL / TLS の標準化</b>: 通信が常に暗号化され、転送時の保護が組み込みで確保</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <h3>制限事項</h3>
+      <div class="check-item"><span class="warn-icon">!</span><span>新規 IAM 認証リクエスト数は利用可能なリソースとワークロード特性に依存し、無制限ではない</span></div>
+      <div class="check-item"><span class="warn-icon">!</span><span>追加の計算リソースが必要で、インスタンスに 300 〜 1000 MiB の追加メモリが求められる</span></div>
+      <div class="check-item"><span class="warn-icon">!</span><span>CloudWatch / CloudTrail は IAM 認証 (<code>generate-db-auth-token</code> の呼び出し) をログ記録しない</span></div>
+      <div class="check-item"><span class="warn-icon">!</span><span>PostgreSQL では IAM 認証と Kerberos 認証を同時有効化できず、レプリケーション接続にも使用不可</span></div>
+      <div class="check-item"><span class="warn-icon">!</span><span>RDS on Outposts では IAM データベース認証はサポートされない</span></div>
+      <div class="check-item"><span class="warn-icon">!</span><span>カスタム Route 53 DNS レコードでトークンを生成できない (DB インスタンスエンドポイントが必要)</span></div>
+
+      <h3>考慮すべき点</h3>
+      <div class="check-item"><span class="note-icon">i</span><span>バースト可能クラスのインスタンスでは、追加メモリ確保のためバッファ・キャッシュなど他パラメータのメモリ使用量を同程度削減してメモリ枯渇を回避</span></div>
+      <div class="check-item"><span class="note-icon">i</span><span>トークンは最小約 1 KB と大きいため、ドライバやツールが切り詰めないことを確認 (切り詰めると認証失敗)</span></div>
+      <div class="check-item"><span class="note-icon">i</span><span>一時的な認証情報でトークンを生成する場合、接続時点でもその認証情報が有効である必要がある</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>💼 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="uc-title">1. マイクロサービスからの高頻度接続</div>
+        <p><span class="uc-label">シナリオ</span>: コンテナベースのマイクロサービスがリクエストごとに短命な DB 接続を大量に確立。新規認証処理がボトルネックに。</p>
+        <p><span class="uc-label">実装例</span>: 十分なリソースのインスタンスクラスを設定 / 各サービスは共通の IAM ロールを引き受けてトークン生成 / AWS JDBC ドライバの IAM 認証プラグインでトークンをキャッシュ・再利用。</p>
+        <p><span class="uc-label">効果</span>: インスタンスリソースに応じて認証レートがスケールし、高頻度の新規接続を IAM 認証で安定処理。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="uc-title">2. パスワード管理の全社的な廃止</div>
+        <p><span class="uc-label">シナリオ</span>: 複数 DB を運用する組織が、パスワードの管理・ローテーション負荷を削減し IAM 中心の管理へ統一したい。</p>
+        <p><span class="uc-label">実装例</span>: すべての RDS / Aurora で IAM 認証を有効化 / EC2 インスタンスプロファイルや IAM ロールでトークン生成 / <code>rds-db:connect</code> を最小権限で付与する IAM ポリシーで統制。</p>
+        <p><span class="uc-label">効果</span>: パスワードの保管・ローテーションが不要になり、大規模環境でも IAM による一元的なアクセス制御を実現。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="uc-title">3. サーバーレスアプリケーションの接続スパイク対応</div>
+        <p><span class="uc-label">シナリオ</span>: Lambda などがトラフィックスパイク時に多数の同時実行から新規接続を確立。</p>
+        <p><span class="uc-label">実装例</span>: 関数の実行ロールに <code>rds-db:connect</code> を付与 / 有効期限 15 分内でトークンを再利用 / Amazon RDS Proxy と組み合わせて接続プールを最適化。</p>
+        <p><span class="uc-label">効果</span>: スパイク時の新規認証がインスタンスリソースに応じてスケールし、IAM 認証を維持したまま接続スパイクに対応。</p>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>本機能は IAM データベース認証の性能改善であり、<span class="highlight">機能の利用自体に追加料金は発生しません</span>。RDS / Aurora のインスタンス、ストレージ、データ転送などの通常料金が適用されます。認証処理にはインスタンスの計算リソース (追加メモリ) が必要となるため、ワークロードによってはインスタンスサイズの見直しを検討してください。</p>
+    </div>
+
+    <!-- リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>IAM データベース認証がサポートされる<span class="highlight">すべての AWS リージョン</span>で利用できます。</p>
+      <div>
+        <span class="region-pill">🌐 全 IAM 認証対応リージョン</span>
+        <span class="region-pill">🇺🇸 AWS GovCloud (US) を含む</span>
+      </div>
+      <p style="margin-top:12px;">対象エンジンは Aurora / RDS の PostgreSQL、MySQL、MariaDB です。エンジンやバージョンごとの対応状況は、ドキュメントの「Supported Regions and DB engines for IAM database authentication」を参照してください。</p>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="feature-card"><div class="fc-title">🔐 AWS IAM</div><p style="margin:0;font-size:14px;">認証トークンの生成元となるプリンシパルとポリシーを管理。<code>rds-db:connect</code> で接続を制御。</p></div>
+      <div class="feature-card"><div class="fc-title">🔄 Amazon RDS Proxy</div><p style="margin:0;font-size:14px;">接続プーリングで接続管理を効率化し、IAM 認証と組み合わせて高頻度接続を最適化。</p></div>
+      <div class="feature-card"><div class="fc-title">🧩 AWS JDBC / Python ドライバ</div><p style="margin:0;font-size:14px;">IAM 認証プラグインでトークンの生成・キャッシュ・再利用を容易にする。</p></div>
+      <div class="feature-card"><div class="fc-title">💻 Amazon EC2</div><p style="margin:0;font-size:14px;">インスタンスプロファイルの認証情報でパスワードレスで DB に接続できる。</p></div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section" style="border:1px solid rgba(255,153,0,0.4); background:linear-gradient(135deg, rgba(255,153,0,0.10), rgba(26,36,47,1));">
+      <h2>📝 まとめ</h2>
+      <p>今回のアップデートにより、IAM データベース認証の処理性能が<span class="highlight">インスタンスのリソースに応じてスケール</span>するようになり、これまで採用をためらわれていた高ボリュームの接続パターンを持つエンタープライズワークロードでも IAM 認証を活用しやすくなりました。</p>
+      <p>追加料金なしで恩恵を受けられるため、既存の IAM 認証ワークロードでは性能改善を確認するとともに、<span class="highlight">プリンシパルやトークンの再利用</span>といったベストプラクティスの適用を検討することを推奨します。</p>
+    </div>
+
+    <footer>
+      <p>📎 出典 / 参考リンク</p>
+      <ul>
+        <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-rds-iam/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html" target="_blank" rel="noopener noreferrer">ドキュメント (IAM database authentication for MariaDB, MySQL, and PostgreSQL)</a></li>
+        <li><a class="aws-link" href="https://aws.amazon.com/rds/pricing/" target="_blank" rel="noopener noreferrer">料金ページ (Amazon RDS)</a></li>
+      </ul>
+      <p style="color:#8a9499;">Amazon RDS / Aurora - IAM データベース認証の接続レートスケーリング | リリース日: 2026 年 6 月 30 日</p>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

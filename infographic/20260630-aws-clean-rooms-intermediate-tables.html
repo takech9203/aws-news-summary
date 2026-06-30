@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Clean Rooms - SQL 中間テーブルのサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-bottom: 3px solid var(--aws-orange);
+  padding-bottom: 20px;
+}
+
+h1, .title {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+.subtitle { font-size: 15px; color: var(--aws-light-gray); text-align: right; }
+.subtitle .date { color: var(--aws-orange); font-weight: 600; font-size: 18px; }
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+h3 { font-size: 18px; color: var(--aws-smile-orange); margin: 18px 0 10px; }
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 10px;
+  padding: 26px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.lead { font-size: 17px; color: var(--aws-white); margin-top: 0; }
+
+/* Before/After */
+.ba-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: stretch; }
+.ba-card { border-radius: 10px; padding: 18px; }
+.ba-before { background: rgba(209,50,18,0.12); border: 1px solid rgba(209,50,18,0.5); }
+.ba-after  { background: rgba(29,129,2,0.14); border: 1px solid rgba(29,129,2,0.6); }
+.ba-title { font-weight: 700; font-size: 16px; margin-bottom: 10px; }
+.ba-before .ba-title { color: #FF7A5C; }
+.ba-after .ba-title { color: #5CD45C; }
+.ba-arrow { display: flex; align-items: center; justify-content: center; font-size: 34px; color: var(--aws-orange); }
+.ba-card ul { margin: 0; padding-left: 18px; }
+.ba-card li { margin: 8px 0; font-size: 14px; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+.diagram-note { font-size: 14px; color: var(--aws-light-gray); margin-top: 4px; }
+
+/* Feature cards */
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.feature-card .ftitle { font-weight: 700; color: var(--aws-white); font-size: 16px; margin-bottom: 8px; }
+.feature-card ul { margin: 0; padding-left: 18px; }
+.feature-card li { margin: 6px 0; font-size: 14px; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.12); vertical-align: top; }
+th { background: rgba(255,153,0,0.15); color: var(--aws-orange); font-weight: 600; }
+td code, .status-pill { font-family: 'Courier New', monospace; }
+.status-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 700;
+  background: rgba(0,161,201,0.18); color: var(--aws-teal);
+}
+.status-ok { background: rgba(29,129,2,0.22); color: #5CD45C; }
+.status-bad { background: rgba(209,50,18,0.2); color: #FF7A5C; }
+
+/* lifecycle flow */
+.flow-diagram { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 20px 0; }
+.flow-step {
+  background: var(--aws-squid-ink); border: 2px solid var(--aws-orange);
+  border-radius: 8px; padding: 12px 18px; text-align: center; min-width: 130px; font-size: 14px;
+}
+.flow-step .fs-state { display:block; font-family:'Courier New',monospace; color: var(--aws-orange); font-size:12px; margin-top:4px; }
+.flow-arrow { color: var(--aws-orange); font-size: 24px; font-weight: bold; }
+
+/* usecase */
+.usecase {
+  background: linear-gradient(135deg, rgba(255,153,0,0.12), rgba(255,173,51,0.05));
+  border: 1px solid rgba(255,153,0,0.35); border-radius: 10px; padding: 18px; margin: 14px 0;
+}
+.usecase .uc-title { font-weight: 700; color: var(--aws-orange); margin-bottom: 8px; }
+.usecase .uc-row { margin: 6px 0; font-size: 14px; }
+.uc-label { font-weight: 700; color: var(--aws-white); }
+
+/* benefits / limits */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.subcard { background: var(--aws-squid-ink); border-radius: 8px; padding: 16px; border: 1px solid rgba(255,255,255,0.08); }
+.subcard h4 { margin: 0 0 10px; font-size: 15px; }
+.subcard ul { margin: 0; padding-left: 18px; }
+.subcard li { margin: 6px 0; font-size: 14px; }
+
+.check-item { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; font-size: 14px; }
+.check-icon { color: var(--aws-green); }
+.warn-icon { color: var(--aws-smile-orange); }
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+.pill-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pill { background: rgba(140,79,255,0.18); color: #C4A7FF; border: 1px solid rgba(140,79,255,0.4); border-radius: 16px; padding: 4px 12px; font-size: 13px; }
+
+.note-box { background: rgba(0,161,201,0.1); border-left: 4px solid var(--aws-teal); border-radius: 0 8px 8px 0; padding: 14px 16px; margin: 14px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px; padding-top: 16px;
+  border-top: 1px dashed rgba(255,255,255,0.3);
+  font-size: 13px; color: var(--aws-light-gray);
+}
+footer ul { padding-left: 18px; }
+footer li { margin: 6px 0; }
+
+@media (max-width: 720px) {
+  .ba-grid { grid-template-columns: 1fr; }
+  .ba-arrow { transform: rotate(90deg); }
+  .two-col { grid-template-columns: 1fr; }
+  h1, .title { font-size: 26px; }
+  .subtitle { text-align: left; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS Clean Rooms</span>
+      <h1>🔐 SQL 中間テーブルのサポート</h1>
+      <p style="margin:8px 0 0; color: var(--aws-light-gray);">複数ステップの分析ワークフローを、プライバシー境界内で効率化</p>
+    </div>
+    <div class="subtitle">
+      <div class="date">2026-06-30</div>
+      <div>リリース日</div>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p class="lead">AWS Clean Rooms が <span class="highlight">SQL クエリ向けの中間テーブル (Intermediate Tables)</span> をサポートしました。SQL クエリの結果をコラボレーション内の中間テーブルに書き込み、その後の分析で再利用できます。</p>
+    <p>複雑な結合の再利用から、ダウンストリーム分析向けの共有 ID マッピングテーブルの構築まで、複数ステップの分析ワークフローを実現します。これらの処理はすべて <span class="highlight">コラボレーションのプライバシー境界内</span> で完結し、中間テーブルのデータは AWS マネージドストレージに保存され、外部にエクスポートされることはありません。</p>
+
+    <div class="ba-grid" style="margin-top:18px;">
+      <div class="ba-card ba-before">
+        <div class="ba-title">⛔ アップデート前の課題</div>
+        <ul>
+          <li>複雑な結合や ID マッピングの計算を分析ごとに毎回実行する必要があった</li>
+          <li>同じ中間結果を再利用できず、繰り返し計算でコストとクエリ実行時間が増加</li>
+          <li>リーチ・フリークエンシー・アトリビューション間で中間データを共有する仕組みがなかった</li>
+        </ul>
+      </div>
+      <div class="ba-arrow">➡️</div>
+      <div class="ba-card ba-after">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <ul>
+          <li>SQL クエリ結果を中間テーブルとして保存し、後続分析で再利用可能に</li>
+          <li>複雑な結合や共有 ID マッピングを一度だけ計算し、複数分析で活用</li>
+          <li>プライバシー境界を維持したまま複数ステップのワークフローを構築可能に</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Collaboration["☁️ AWS Clean Rooms コラボレーション プライバシー境界"]
+        subgraph Base["🗄️ ベーステーブル"]
+            direction LR
+            T1[("📋 パブリッシャー<br/>ファーストパーティデータ")]
+            T2[("📋 広告主<br/>ファーストパーティデータ")]
+            T1 ~~~ T2
+        end
+        Populate{{"⚙️ 結合クエリ<br/>Populate"}}
+        IT[("🔁 中間テーブル<br/>ID マッピング<br/>POPULATE_SUCCESS")]
+        subgraph Downstream["📊 ダウンストリーム分析"]
+            direction LR
+            A1["リーチ分析"]
+            A2["フリークエンシー分析"]
+            A3["アトリビューション分析"]
+            A1 ~~~ A2 ~~~ A3
+        end
+    end
+
+    T1 --> Populate
+    T2 --> Populate
+    Populate --> IT
+    IT --> A1
+    IT --> A2
+    IT --> A3
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Collaboration cloud
+    class Base,Downstream layer
+    class T1,T2 database
+    class IT internal
+    class Populate decision
+    class A1,A2,A3 process
+      </pre>
+    </div>
+    <p class="diagram-note">ベーステーブルを結合して中間テーブルを生成し、複数のダウンストリーム分析で再利用するフロー。中間テーブルは <code>POPULATE_SUCCESS</code> 状態になった後に分析から参照できます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="ftitle">1. 中間テーブルへの SQL クエリ結果の保存</div>
+      <ul>
+        <li>SQL クエリの結果をコラボレーションスコープの中間テーブルに書き込める</li>
+        <li>データは AWS マネージドストレージに保存され、コラボレーション外部にはエクスポートされない</li>
+        <li>中間テーブルは分析ランナーが作成し、所有・管理する</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="ftitle">2. 後続分析での再利用</div>
+      <ul>
+        <li>設定済みテーブルと同様に SQL クエリや PySpark ジョブから名前で参照できる</li>
+        <li>複雑な結合や共有 ID マッピングを一度計算し、複数の分析で再利用できる</li>
+        <li>中間テーブルを別の中間テーブルのベースとして利用する<span class="highlight">ネスト構成</span>も可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="ftitle">3. プライバシー制御の継承と遅延適用 (Deferred Enforcement)</div>
+      <ul>
+        <li>中間テーブルは、生成元のベーステーブルからプライバシー制御を継承する</li>
+        <li>一部の制御は populate 時には評価されず、後続分析で参照された時点で適用される (遅延適用)</li>
+        <li>First-party / Multi-party の分類により、制御の適用方法が決まる</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様: ライフサイクル -->
+  <div class="section">
+    <h2>🔄 中間テーブルのライフサイクル</h2>
+    <p>分析で参照する前に、まずデータを populate (生成) しカスタム分析ルールをアタッチする必要があります。ステータスが <code>POPULATE_SUCCESS</code> になっている必要があります。</p>
+
+    <div class="flow-diagram">
+      <div class="flow-step">📦 作成<span class="fs-state">CREATED</span></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">⏳ 生成中<span class="fs-state">POPULATE_STARTED</span></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">✅ 参照可能<span class="fs-state">POPULATE_SUCCESS</span></div>
+    </div>
+
+    <table>
+      <thead><tr><th>ステータス</th><th>詳細</th></tr></thead>
+      <tbody>
+        <tr><td><span class="status-pill">CREATED</span></td><td>リソースは存在するが、データはまだ生成されていない</td></tr>
+        <tr><td><span class="status-pill">POPULATE_STARTED</span></td><td>populate 操作が進行中</td></tr>
+        <tr><td><span class="status-pill status-ok">POPULATE_SUCCESS</span></td><td>データが正常に生成され、分析から参照可能</td></tr>
+        <tr><td><span class="status-pill status-bad">POPULATE_FAILED</span></td><td>populate 操作が正常に完了しなかった</td></tr>
+        <tr><td><span class="status-pill status-bad">DISALLOWED_BY_DATA_PROVIDER</span></td><td>データプロバイダーが不許可にした状態。再許可されるまで分析で利用不可</td></tr>
+        <tr><td><span class="status-pill status-bad">BASE_TABLE_REMOVED</span></td><td>populate に使用したベーステーブルが削除された状態。分析で利用不可</td></tr>
+        <tr><td><span class="status-pill status-bad">RETENTION_PERIOD_EXPIRED</span></td><td>保持期間に基づきバージョンが期限切れ。保存データはクリーンアップされ再 populate が必要 (デフォルト保持期間 <span class="highlight">30 日</span>)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 継承されるプライバシー制御 -->
+  <div class="section">
+    <h2>🛡️ 継承されるプライバシー制御 (Deferred Controls)</h2>
+    <table>
+      <thead><tr><th>遅延制御</th><th>継承方法</th></tr></thead>
+      <tbody>
+        <tr><td>許可された結果受信者<br/>(Allowed result receivers)</td><td>すべてのベーステーブルの<span class="highlight">積集合 (intersection)</span> として継承</td></tr>
+        <tr><td>出力禁止カラム<br/>(Disallowed output columns)</td><td>すべてのベーステーブルの<span class="highlight">和集合 (union)</span> として継承</td></tr>
+        <tr><td>許可された追加分析<br/>(Allowed additional analyses)</td><td>ベーステーブルの中で<span class="highlight">最も制限的な値</span>を継承</td></tr>
+        <tr><td>追加分析<br/>(Additional analyses)</td><td>ベーステーブルの中で<span class="highlight">最も制限的な値</span>を継承</td></tr>
+      </tbody>
+    </table>
+
+    <h3>💰 予算 (Budgets) の扱い</h3>
+    <div class="note-box">
+      <strong>アクセス予算</strong>: populate 時 (ベーステーブルへの分析実行) と中間テーブルへのアクセス時の<strong>両方で減算</strong>される。キャッシュデータへのアクセスもベーステーブル利用としてカウントされる (ネストの推移的依存も含む)。
+    </div>
+    <div class="note-box">
+      <strong>差分プライバシー予算</strong>: populate 時にベーステーブルの差分プライバシーが有効な場合は予算が減算されノイズが注入される。中間テーブルに設定した場合、利用時に単一予算オーナーのイプシロンが減算される。
+    </div>
+  </div>
+
+  <!-- API変更 + 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>コラボレーションが作成され、メンバーが参加していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>中間テーブル生成に使うベーステーブル (設定済みテーブル / ID マッピングテーブル / 他の中間テーブル) が利用可能であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>分析ランナーとしての適切な権限を保有していること</span></div>
+
+    <h3>手順</h3>
+    <div class="flow-diagram">
+      <div class="flow-step">① 作成<span class="fs-state">CREATED</span><span style="font-size:12px;">リソースを作成</span></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">② populate<span class="fs-state">POPULATE_SUCCESS</span><span style="font-size:12px;">結合クエリで生成</span></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">③ 分析ルール<br/>アタッチ &amp; 再利用<span style="font-size:12px;">SQL / PySpark で参照</span></div>
+    </div>
+
+    <h3>API 変更履歴</h3>
+    <table>
+      <thead><tr><th>日付</th><th>サービス</th><th>変更内容</th></tr></thead>
+      <tbody>
+        <tr><td>2026/06/30</td><td>cleanrooms</td><td>中間テーブルの作成・populate・分析ルール設定・削除に関連する API の追加 (詳細は AWS API Changes を参照)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>⚖️ メリットとデメリット・制約事項</h2>
+    <div class="two-col">
+      <div class="subcard">
+        <h4 style="color:#5CD45C;">👍 ビジネス面のメリット</h4>
+        <ul>
+          <li><strong>コスト削減</strong>: 複雑な結合や ID マッピングを一度だけ実行し再利用</li>
+          <li><strong>協働の高度化</strong>: 共有 ID マッピングを基盤に複数当事者が一貫した分析を実施</li>
+          <li><strong>プライバシー保護の維持</strong>: 基礎データを開示・コピーせず境界内で複数ステップ分析</li>
+        </ul>
+      </div>
+      <div class="subcard">
+        <h4 style="color:#5CD45C;">🚀 技術面のメリット</h4>
+        <ul>
+          <li><strong>パフォーマンス最適化</strong>: 中間結果のキャッシュで後続クエリ実行時間を短縮</li>
+          <li><strong>ワークフローの簡素化</strong>: 設定済みテーブルと同じ方法で SQL/PySpark から参照、ネスト構成も可能</li>
+          <li><strong>きめ細かな制御</strong>: 遅延適用により参照時点で最も制限的な制御を適用</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="two-col" style="margin-top:16px;">
+      <div class="subcard" style="border-color: rgba(209,50,18,0.4);">
+        <h4 style="color:#FF7A5C;">⚠️ 制限事項</h4>
+        <ul>
+          <li>参照には事前に populate し <code>POPULATE_SUCCESS</code> である必要がある</li>
+          <li>ベーステーブル削除時は <code>BASE_TABLE_REMOVED</code> となり利用不可</li>
+          <li>バージョンには保持期間 (デフォルト 30 日)。期限切れ後は再 populate が必要</li>
+        </ul>
+      </div>
+      <div class="subcard" style="border-color: rgba(255,173,51,0.4);">
+        <h4 style="color: var(--aws-smile-orange);">🔎 考慮すべき点</h4>
+        <ul>
+          <li>ストレージは削除するまで標準料金で課金される</li>
+          <li>アクセス予算は populate 時と利用時の両方で減算 (二重消費を考慮)</li>
+          <li>差分プライバシーでは新データセット扱い。populate のトランスフォーメーションでユーザー数を増幅した場合、元母集団への影響は追跡されない</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="uc-title">1. 広告のリーチ・フリークエンシー・アトリビューション分析</div>
+      <div class="uc-row"><span class="uc-label">シナリオ</span>: パブリッシャーと広告主がファーストパーティデータを結合し、共通の ID マッピングテーブルを構築する。</div>
+      <div class="uc-row"><span class="uc-label">効果</span>: ID マッピングを中間テーブルとして各分析で再利用し、結合処理の重複を排除してコストとパフォーマンスを最適化。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">2. 複雑な結合の再利用</div>
+      <div class="uc-row"><span class="uc-label">シナリオ</span>: 複数テーブルを結合する重い処理を含む分析を、条件を変えて何度も実行する。</div>
+      <div class="uc-row"><span class="uc-label">効果</span>: 結合結果を中間テーブルに保存し、後続分析では結合済みデータを参照するだけで済み、実行時間とコストを削減。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">3. 段階的なデータ加工パイプライン</div>
+      <div class="uc-row"><span class="uc-label">シナリオ</span>: 生データをクレンジング・集計し、その結果を別の集計に渡す多段階パイプラインを構築する。</div>
+      <div class="uc-row"><span class="uc-label">効果</span>: 各段階の結果を中間テーブルとして保持しネスト構成で渡すことで、プライバシー境界を維持したまま複数ステップを実現。</div>
+    </div>
+  </div>
+
+  <!-- 料金 / リージョン / 関連サービス -->
+  <div class="section">
+    <h2>💵 料金・リージョン・関連サービス</h2>
+    <div class="two-col">
+      <div class="subcard">
+        <h4 style="color: var(--aws-orange);">💵 料金</h4>
+        <p style="font-size:14px; margin:0;">中間テーブルのストレージは削除するまで<strong>標準料金で課金</strong>。populate 操作および中間テーブルへのアクセスは、ベーステーブルへの分析実行・利用としてアクセス予算や差分プライバシー予算を消費します。</p>
+      </div>
+      <div class="subcard">
+        <h4 style="color: var(--aws-orange);">🌍 利用可能リージョン</h4>
+        <p style="font-size:14px; margin:0;">本アップデートの発表では対応リージョンの個別記載はありません。詳細は <a class="aws-link" href="https://docs.aws.amazon.com/general/latest/gr/clean-rooms.html#clean-rooms_region" target="_blank" rel="noopener noreferrer">AWS リージョン表</a> を参照してください。</p>
+      </div>
+    </div>
+
+    <h3>🔗 関連サービス・機能</h3>
+    <div class="pill-list">
+      <span class="pill">ID マッピングテーブル</span>
+      <span class="pill">差分プライバシー (Differential Privacy)</span>
+      <span class="pill">PySpark 分析</span>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section" style="border-color: rgba(255,153,0,0.4);">
+    <h2>📝 まとめ</h2>
+    <p style="margin:0;">SQL 中間テーブルのサポートにより、AWS Clean Rooms は <span class="highlight">プライバシー境界を維持したまま複雑な複数ステップ分析</span> を効率的に実行できるようになりました。複雑な結合や共有 ID マッピングを一度計算して再利用することで、コスト削減とパフォーマンス最適化を実現します。広告分析など繰り返しの中間処理を伴うコラボレーションでは、<strong>保持期間 (デフォルト 30 日)</strong>、ストレージ課金、予算消費の挙動を考慮しながら導入を検討することを推奨します。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典 / 参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/06/aws-clean-rooms-intermediate-tables" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/clean-rooms/latest/userguide/working-with-intermediate-tables.html" target="_blank" rel="noopener noreferrer">ドキュメント (Intermediate tables)</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/clean-rooms/" target="_blank" rel="noopener noreferrer">AWS Clean Rooms 製品ページ</a></li>
+    </ul>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#FF9900',
+      primaryTextColor: '#232F3E',
+      primaryBorderColor: '#FF9900',
+      lineColor: '#FF9900',
+      secondaryColor: '#F5F5F5',
+      tertiaryColor: '#FAFAFA',
+      background: '#FFFFFF',
+      mainBkg: '#FFF3E0',
+      nodeBorder: '#FF9900',
+      clusterBkg: '#FFF8E1',
+      clusterBorder: '#FF9900',
+      edgeLabelBackground: '#FFFFFF',
+      textColor: '#232F3E'
+    }
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
