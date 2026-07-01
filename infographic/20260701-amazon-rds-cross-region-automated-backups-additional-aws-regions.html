@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon RDS クロスリージョン自動バックアップ 対応リージョン拡大</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.7;
+  padding: 20px;
+  margin: 0;
+}
+
+.container { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-bottom: 3px solid var(--aws-orange);
+  padding-bottom: 20px;
+}
+
+.header-left { flex: 1; min-width: 260px; }
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 6px 0;
+  line-height: 1.3;
+}
+
+.subtitle { font-size: 15px; color: var(--aws-light-gray); }
+
+.date-box {
+  background: var(--aws-dark-squid);
+  border: 1px solid rgba(255,153,0,0.4);
+  border-radius: 8px;
+  padding: 10px 16px;
+  text-align: center;
+  white-space: nowrap;
+}
+.date-box .label { font-size: 11px; color: var(--aws-orange); }
+.date-box .date { font-size: 16px; color: var(--aws-white); font-weight: 600; }
+
+h2, .section-title {
+  font-size: 23px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+h3 {
+  font-size: 18px;
+  color: var(--aws-smile-orange);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 10px;
+  padding: 26px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* Before / After */
+.ba-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 16px;
+  align-items: stretch;
+  margin-top: 16px;
+}
+.ba-card { border-radius: 10px; padding: 18px; }
+.ba-before { background: rgba(209,50,18,0.12); border: 1px solid rgba(209,50,18,0.5); }
+.ba-after { background: rgba(29,129,2,0.14); border: 1px solid rgba(29,129,2,0.55); }
+.ba-head { font-weight: 700; font-size: 15px; margin-bottom: 10px; }
+.ba-before .ba-head { color: #ff7a5c; }
+.ba-after .ba-head { color: #6fd44f; }
+.ba-card ul { margin: 0; padding-left: 20px; }
+.ba-card li { margin: 8px 0; font-size: 14px; }
+.ba-arrow { display: flex; align-items: center; color: var(--aws-orange); font-size: 34px; font-weight: bold; }
+
+@media (max-width: 720px) {
+  .ba-grid { grid-template-columns: 1fr; }
+  .ba-arrow { justify-content: center; transform: rotate(90deg); }
+}
+
+/* Cards */
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.feature-card .fc-title { font-weight: 700; color: var(--aws-white); font-size: 16px; margin-bottom: 6px; }
+.feature-card ul { margin: 6px 0 0; padding-left: 20px; }
+.feature-card li { margin: 5px 0; font-size: 14px; }
+
+/* Use case */
+.usecase {
+  background: rgba(255, 153, 0, 0.09);
+  border: 1px solid rgba(255,153,0,0.3);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase .uc-title { color: var(--aws-orange); font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+.usecase .uc-line { font-size: 14px; margin: 6px 0; }
+.uc-effect { color: #6fd44f; font-weight: 600; }
+
+/* Stats */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 16px; margin-top: 8px; }
+.stat-card {
+  background: linear-gradient(135deg, rgba(255,153,0,0.22), rgba(255,153,0,0.06));
+  border: 1px solid rgba(255,153,0,0.35);
+  border-radius: 10px;
+  padding: 18px;
+  text-align: center;
+}
+.stat-num { font-size: 30px; font-weight: 700; color: var(--aws-orange); line-height: 1.2; }
+.stat-label { font-size: 13px; color: var(--aws-light-gray); margin-top: 6px; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.12); }
+th { color: var(--aws-orange); background: rgba(255,153,0,0.08); }
+td { color: var(--aws-light-gray); }
+tr:hover td { background: rgba(255,255,255,0.03); }
+
+/* Region flow */
+.region-flow { display: grid; gap: 12px; margin-top: 8px; }
+.region-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(0,161,201,0.35);
+  border-radius: 8px; padding: 14px;
+}
+.region-src {
+  background: rgba(0,161,201,0.18); color: var(--aws-white);
+  border: 1px solid var(--aws-teal); border-radius: 6px;
+  padding: 8px 14px; font-weight: 700; font-size: 14px; min-width: 190px;
+}
+.region-arrow { color: var(--aws-orange); font-size: 22px; font-weight: bold; }
+.region-dst { display: flex; gap: 8px; flex-wrap: wrap; }
+.region-tag {
+  background: rgba(255,153,0,0.15); color: var(--aws-smile-orange);
+  border: 1px solid rgba(255,153,0,0.4); border-radius: 6px;
+  padding: 6px 12px; font-size: 13px;
+}
+
+/* check items */
+.check-item { display: flex; align-items: flex-start; gap: 10px; margin: 10px 0; }
+.check-icon { color: var(--aws-green); font-size: 18px; line-height: 1.5; }
+.cross-icon { color: var(--aws-red); font-size: 18px; line-height: 1.5; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; line-height: 1.5; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 12px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+.diagram-note { font-size: 14px; color: var(--aws-light-gray); margin-top: 12px; }
+
+/* Code block */
+.code-block { background: #1a1a2e; border-radius: 8px; overflow: hidden; margin: 16px 0; border: 1px solid rgba(255,153,0,0.2); }
+.code-header { background: #16213e; padding: 8px 16px; display: flex; justify-content: space-between; font-size: 12px; }
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.55; padding: 16px !important; }
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
+
+.related-list { list-style: none; padding: 0; margin: 0; }
+.related-list li { padding: 10px 0; border-bottom: 1px dashed rgba(255,255,255,0.15); }
+.related-list li:last-child { border-bottom: none; }
+.related-list strong { color: var(--aws-white); }
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.2); font-size: 12px; color: var(--aws-light-gray); }
+footer a { color: var(--aws-teal); }
+footer ul { padding-left: 18px; }
+footer li { margin: 6px 0; word-break: break-all; }
+
+.intro-lead { font-size: 16px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-left">
+      <span class="service-badge">Amazon RDS</span>
+      <h1>クロスリージョン自動バックアップ 対応リージョン拡大</h1>
+      <div class="subtitle">Cross-Region Automated Backups が新たに 4 リージョンで利用可能に</div>
+    </div>
+    <div class="date-box">
+      <div class="label">リリース日</div>
+      <div class="date">2026-07-01</div>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p class="intro-lead">
+      Amazon RDS の<span class="highlight">クロスリージョン自動バックアップレプリケーション</span>が、
+      新たに 4 つの AWS リージョンで利用可能になりました。RDS の自動バックアップ (スナップショットおよびトランザクションログ) を
+      別リージョンへ自動複製し、<span class="highlight">災害対策 (DR)</span> とビジネス継続性を強化します。
+    </p>
+    <p>
+      トランザクションログはターゲットリージョンへ頻繁にアップロードされるため、<span class="highlight">数分以内の RPO</span> を実現。
+      プライマリリージョンが利用不能になっても、セカンダリリージョンでポイントインタイムリカバリ (PITR) を実行し迅速に業務を再開できます。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-num">+4</div><div class="stat-label">追加ソースリージョン</div></div>
+      <div class="stat-card"><div class="stat-num">数分</div><div class="stat-label">以内の RPO</div></div>
+      <div class="stat-card"><div class="stat-num">6</div><div class="stat-label">対応 DB エンジン</div></div>
+      <div class="stat-card"><div class="stat-num">20</div><div class="stat-label">アカウントあたりの既定クォータ</div></div>
+    </div>
+
+    <h3>Before / After</h3>
+    <div class="ba-grid">
+      <div class="ba-card ba-before">
+        <div class="ba-head">😟 アップデート前の課題</div>
+        <ul>
+          <li>Mexico、Taipei、New Zealand、Thailand を起点としたレプリケーションが設定できなかった</li>
+          <li>これらのリージョンでは独自のバックアップ複製の仕組みを構築する必要があった</li>
+          <li>離れたリージョンへ自動複製できず、リカバリ地点の選択肢が限られていた</li>
+        </ul>
+      </div>
+      <div class="ba-arrow">→</div>
+      <div class="ba-card ba-after">
+        <div class="ba-head">😊 アップデート後の改善</div>
+        <ul>
+          <li>上記 4 リージョンを起点に、近隣リージョンへ自動複製が可能に</li>
+          <li>コンソール / SDK / CLI から数クリックでレプリケーションを設定</li>
+          <li>6 種類の RDS エンジンで、数分以内の RPO を追加インフラなしで実現</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart LR
+    subgraph Primary["☁️ プライマリリージョン"]
+        DB[("🗄️ RDS DB インスタンス")]
+        SNAP[("📸 スナップショット")]
+        LOG["📝 トランザクションログ"]
+        DB --> SNAP
+        DB --> LOG
+    end
+
+    subgraph Secondary["☁️ セカンダリリージョン"]
+        RSNAP[("📸 複製スナップショット")]
+        RLOG["📝 複製トランザクションログ"]
+        RESTORE[("🗄️ 復元された DB インスタンス")]
+        RSNAP --> RESTORE
+        RLOG --> RESTORE
+    end
+
+    SNAP -.クロスリージョンコピー.-> RSNAP
+    LOG -.頻繁にアップロード.-> RLOG
+
+    User(["👤 運用担当者"]) -->|障害時に PITR で復元| RESTORE
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Primary,Secondary cloud
+    class DB,SNAP,RSNAP,RESTORE,RLOG database
+    class LOG process
+    class User user
+      </pre>
+    </div>
+    <p class="diagram-note">
+      プライマリリージョンで作成されたスナップショットとトランザクションログがセカンダリリージョンへ自動的に複製され、
+      リージョン障害時にセカンダリリージョンで PITR を実行できます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="fc-title">🔄 クロスリージョン自動バックアップレプリケーション</div>
+      <ul>
+        <li>スナップショットとトランザクションログを指定した別リージョンへ自動複製</li>
+        <li>スナップショットは準備完了後すぐにクロスリージョンコピーを開始</li>
+        <li>トランザクションログの頻繁なアップロードで数分以内の RPO を達成</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="fc-title">🌏 今回追加された対応リージョンペア</div>
+      <ul>
+        <li>Mexico (Central) → Europe (Ireland)、US West (N. California)</li>
+        <li>Asia Pacific (Taipei) → Asia Pacific (Singapore)、Asia Pacific (Tokyo)</li>
+        <li>Asia Pacific (New Zealand) → Asia Pacific (Singapore / Sydney / Melbourne)</li>
+        <li>Asia Pacific (Thailand) → Asia Pacific (Singapore)、Asia Pacific (Jakarta)</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="fc-title">🗄️ 幅広いデータベースエンジンのサポート</div>
+      <ul>
+        <li>RDS for PostgreSQL、MariaDB、MySQL、Db2、Oracle、SQL Server に対応</li>
+        <li>Multi-AZ DB インスタンス構成でもサポート (Multi-AZ DB クラスターは非対応)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 対応リージョンペア (ビジュアル) -->
+  <div class="section">
+    <h2>🗺️ 追加された対応リージョンペア</h2>
+    <div class="region-flow">
+      <div class="region-row">
+        <div class="region-src">🇲🇽 Mexico (Central)</div>
+        <span class="region-arrow">→</span>
+        <div class="region-dst">
+          <span class="region-tag">Europe (Ireland)</span>
+          <span class="region-tag">US West (N. California)</span>
+        </div>
+      </div>
+      <div class="region-row">
+        <div class="region-src">🇹🇼 Asia Pacific (Taipei)</div>
+        <span class="region-arrow">→</span>
+        <div class="region-dst">
+          <span class="region-tag">AP (Singapore)</span>
+          <span class="region-tag">AP (Tokyo)</span>
+        </div>
+      </div>
+      <div class="region-row">
+        <div class="region-src">🇳🇿 Asia Pacific (New Zealand)</div>
+        <span class="region-arrow">→</span>
+        <div class="region-dst">
+          <span class="region-tag">AP (Singapore)</span>
+          <span class="region-tag">AP (Sydney)</span>
+          <span class="region-tag">AP (Melbourne)</span>
+        </div>
+      </div>
+      <div class="region-row">
+        <div class="region-src">🇹🇭 Asia Pacific (Thailand)</div>
+        <span class="region-arrow">→</span>
+        <div class="region-dst">
+          <span class="region-tag">AP (Singapore)</span>
+          <span class="region-tag">AP (Jakarta)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>📋 技術仕様</h2>
+    <h3>サポートされるデータベースエンジン・仕様</h3>
+    <table>
+      <thead><tr><th>項目</th><th>詳細</th></tr></thead>
+      <tbody>
+        <tr><td>対応エンジン</td><td>RDS for PostgreSQL、MariaDB、MySQL、Db2、Oracle、SQL Server</td></tr>
+        <tr><td>RPO</td><td>数分以内 (トランザクションログの頻繁なアップロードによる)</td></tr>
+        <tr><td>Multi-AZ DB インスタンス</td><td>✅ サポート対象</td></tr>
+        <tr><td>Multi-AZ DB クラスター</td><td>❌ 非対応</td></tr>
+        <tr><td>デフォルトクォータ</td><td>AWS アカウントあたり最大 20 のクロスリージョン自動バックアップ</td></tr>
+        <tr><td>設定方法</td><td>マネジメントコンソール、AWS SDK、AWS CLI</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🔧 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>クロスリージョン自動バックアップレプリケーションに対応した RDS DB インスタンスを保有していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ソース DB インスタンスで自動バックアップ (保持期間 1 日以上) が有効になっていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>複製先が、ソースリージョンからサポートされている複製先リージョンに含まれていること</span></div>
+
+    <h3>ステップ 1: 対応リージョンの確認</h3>
+    <p><code>describe-source-regions</code> でどのリージョン間でレプリケーションが可能かを確認します。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">対応リージョンの確認</span></div>
+      <pre><code class="language-bash">aws rds describe-source-regions --region us-west-1</code></pre>
+    </div>
+
+    <h3>ステップ 2: レプリケーションの開始</h3>
+    <p><code>start-db-instance-automated-backups-replication</code> で複製設定を開始します。<code>--backup-retention-period</code> で複製先での保持期間を指定します。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">レプリケーション開始</span></div>
+      <pre><code class="language-bash">aws rds start-db-instance-automated-backups-replication \
+    --source-db-instance-arn arn:aws:rds:mx-central-1:123456789012:db:mydbinstance \
+    --backup-retention-period 7 \
+    --region us-west-1</code></pre>
+    </div>
+
+    <h3>ステップ 3: 複製されたバックアップからの復元</h3>
+    <p>
+      障害発生時には複製先リージョンで <code>restore-db-instance-to-point-in-time</code>、またはマネジメントコンソールを使用し、
+      保持期間内の任意の時点にデータベースを復元します。プライマリリージョンが利用不能でも迅速に業務を再開できます。
+    </p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>✅ メリット</h2>
+    <div class="two-col">
+      <div>
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>災害対策の強化</strong>: プライマリ障害時に別リージョンで業務を再開でき、事業継続性を確保</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>地理的な選択肢の拡大</strong>: コンプライアンスやデータレジデンシー要件に合わせた DR 設計が可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>低い運用コスト</strong>: 独自の複製基盤を構築せず、マネージド機能として利用</span></div>
+      </div>
+      <div>
+        <h3>🛠️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>数分以内の RPO</strong>: トランザクションログの頻繁なアップロードでデータ損失を最小化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>簡単なセットアップ</strong>: コンソール / SDK / CLI から数クリックまたは 1 コマンドで設定</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>幅広いエンジン対応</strong>: 主要 6 エンジンで一貫した DR 手法を適用</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Multi-AZ DB クラスターではクロスリージョン自動バックアップレプリケーションは非対応</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>デフォルトでは 1 AWS アカウントあたり最大 20 のクロスリージョン自動バックアップに制限</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>レプリケーション可能なリージョンペアは定められた組み合わせに限られる (任意のリージョン間ではない)</span></div>
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>スナップショットコピーによるデータ転送料金、および複製先リージョンでのストレージ料金が発生</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>機能とサポートは DB エンジンの特定バージョンおよび AWS リージョンによって異なるため、事前確認が必要</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="uc-title">1. 台北リージョンの DB DR を東京リージョンで構築</div>
+      <div class="uc-line"><strong>シナリオ</strong>: AP (Taipei) で本番 DB を稼働する企業が、地理的に近い AP (Tokyo) をセカンダリとして DR を構築したい。</div>
+      <div class="uc-line"><strong>実装</strong>: ソース = AP (Taipei) の RDS for PostgreSQL、複製先 = AP (Tokyo)。<code>start-db-instance-automated-backups-replication</code> で複製を開始。</div>
+      <div class="uc-line uc-effect">効果: 台北で障害が発生しても、東京で数分以内の RPO により迅速に復元できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">2. メキシコから米国・欧州への地理的分散 DR</div>
+      <div class="uc-line"><strong>シナリオ</strong>: Mexico (Central) で運用する組織が、大陸をまたいだ地理的分散による堅牢な DR を実現したい。</div>
+      <div class="uc-line"><strong>実装</strong>: ソース = Mexico (Central) の RDS for MySQL、複製先 = US West (N. California) または Europe (Ireland)。</div>
+      <div class="uc-line uc-effect">効果: 大きく離れたリージョンへ複製することで、広域災害に対する耐性を高められる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">3. ニュージーランドを起点としたオセアニア圏 DR</div>
+      <div class="uc-line"><strong>シナリオ</strong>: AP (New Zealand) の金融系ワークロードで、規制要件に合わせ域内・近隣リージョンで DR を構成したい。</div>
+      <div class="uc-line"><strong>実装</strong>: ソース = AP (New Zealand) の RDS for SQL Server、複製先 = AP (Sydney / Melbourne / Singapore)。</div>
+      <div class="uc-line uc-effect">効果: オセアニア圏内での複製でデータレジデンシー要件を満たしつつ、復旧性を確保できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>クロスリージョン自動バックアップレプリケーション自体に追加の機能料金は<span class="highlight">ありません</span>。ただし、以下の料金が発生します。</p>
+    <table>
+      <thead><tr><th>使用量</th><th>月額料金 (概算)</th></tr></thead>
+      <tbody>
+        <tr><td>リージョン間データ転送</td><td>転送量に応じた従量課金 (詳細は RDS 料金ページを参照)</td></tr>
+        <tr><td>複製先ストレージ</td><td>複製先リージョンの標準バックアップストレージ料金</td></tr>
+      </tbody>
+    </table>
+    <p>正確な料金は対象エンジンとリージョンにより異なるため、<a class="aws-link" href="https://aws.amazon.com/rds/pricing/" target="_blank" rel="noopener noreferrer">RDS 料金ページ</a> を確認してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌐 利用可能リージョン (今回追加されたソースリージョン)</h2>
+    <div class="region-dst" style="gap:12px;">
+      <span class="region-tag">🇲🇽 Mexico (Central)</span>
+      <span class="region-tag">🇹🇼 Asia Pacific (Taipei)</span>
+      <span class="region-tag">🇳🇿 Asia Pacific (New Zealand)</span>
+      <span class="region-tag">🇹🇭 Asia Pacific (Thailand)</span>
+    </div>
+    <p style="margin-top:14px;">各リージョンから複製可能な複製先は上記「対応リージョンペア」を参照してください。対応リージョンとエンジンバージョンの最新情報は公式ドキュメントで確認してください。</p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <ul class="related-list">
+      <li><strong>Amazon RDS 自動バックアップ</strong>: 本機能の基盤となる、保持期間内の PITR を提供する機能</li>
+      <li><strong>AWS Backup</strong>: 複数の AWS サービスのバックアップを一元管理するマネージドサービス。RDS の管理にも利用可能</li>
+      <li><strong>Amazon RDS リードレプリカ</strong>: クロスリージョンでの読み取り負荷分散や DR 補完に利用できる関連機能</li>
+    </ul>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      今回のアップデートにより、<span class="highlight">Mexico (Central)、Asia Pacific (Taipei / New Zealand / Thailand)</span> を起点とした
+      クロスリージョン自動バックアップレプリケーションが利用可能になり、これらのリージョンで稼働するデータベースの災害対策の選択肢が広がりました。
+      ミッションクリティカルなワークロードを運用している場合は、複製先リージョンを選定し、<span class="highlight">数分以内の RPO</span> を実現する DR 構成の導入を検討することを推奨します。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/07/amazon-rds-cross-region-automated-backups-additional-aws-regions/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReplicateBackups.html" target="_blank" rel="noopener noreferrer">ドキュメント: Replicating automated backups to another AWS Region</a></li>
+      <li><a href="https://aws.amazon.com/rds/pricing/" target="_blank" rel="noopener noreferrer">Amazon RDS 料金ページ</a></li>
+    </ul>
+    <p>Amazon RDS - クロスリージョン自動バックアップの対応リージョン拡大 / リリース日: 2026-07-01</p>
+  </footer>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#FF9900',
+      primaryTextColor: '#232F3E',
+      primaryBorderColor: '#FF9900',
+      lineColor: '#FF9900',
+      secondaryColor: '#F5F5F5',
+      tertiaryColor: '#FAFAFA',
+      background: '#FFFFFF',
+      mainBkg: '#FFF3E0',
+      nodeBorder: '#FF9900',
+      clusterBkg: '#FFF8E1',
+      clusterBorder: '#FF9900',
+      edgeLabelBackground: '#FFFFFF',
+      textColor: '#232F3E'
+    }
+  });
+  hljs.highlightAll();
+</script>
+</body>
+</html>
