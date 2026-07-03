@@ -5,8 +5,10 @@
 
 ## 2026 年
 
+- [2026-07-02 - Amazon SageMaker Unified Studio - Terraform によるプロビジョニングのサポート](2026/2026-07-02-amazon-sagemaker-unified-studio-terraform.md)
 - [2026-07-02 - Amazon EC2 - X8i インスタンスの追加リージョン対応](2026/2026-07-02-amazon-ec2-x8i-instances-ICN-KUL-NRT-region.md)
 - [2026-07-02 - Amazon EC2 - Dedicated Hosts での AMD SEV-SNP サポート](2026/2026-07-02-ec2-amd-sev-snp-dedicated-hosts.md)
+- [2026-07-02 - Amazon SageMaker HyperPod - AMI バージョニングと自動パッチ適用](2026/2026-07-02-amazon-sagemaker-hyperpod-ami-version-auto-patch.md)
 - [2026-07-02 - AWS Config - 8 種類の新しいリソースタイプのサポート](2026/2026-07-02-aws-config-new-resource-types.md)
 - [2026-07-01 - AWS AppConfig - マネージド実験ツール (A/B テスト)](2026/2026-07-01-aws-appconfig-experimentation.md)
 - [2026-07-01 - Amazon RDS - クロスリージョン自動バックアップの対応リージョン拡大](2026/2026-07-01-amazon-rds-cross-region-automated-backups-additional-aws-regions.md)
