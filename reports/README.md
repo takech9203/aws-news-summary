@@ -5,6 +5,12 @@
 
 ## 2026 年
 
+- [2026-07-06 - AWS Certificate Manager - ACME プロトコルによるパブリック証明書の自動発行](2026/2026-07-06-aws-certificate-manager-acme.md)
+- [2026-07-06 - AWS Secrets Manager - Paddle および GitLab 向けマネージド外部シークレットサポート](2026/2026-07-06-secrets-manager-managed-external-secrets-paddle-gitlab.md)
+- [2026-07-06 - Amazon SageMaker HyperPod - Disaggregated Prefill and Decode (DPD)](2026/2026-07-06-amazon-sagemaker-hyperpod-dpd.md)
+- [2026-07-06 - Amazon CloudWatch Application Signals - Service Events](2026/2026-07-06-cloudwatch-service-events.md)
+- [2026-07-06 - AWS CodePipeline - アジアパシフィック (ニュージーランド) リージョンでの提供開始](2026/2026-07-06-aws-codepipeline-new-zealand.md)
+- [2026-07-06 - Amazon EVS - VMware Cloud Foundation (VCF) 9.0 および 9.1 のサポート](2026/2026-07-06-amazon-evs-vcf9.md)
 - [2026-07-02 - Amazon SageMaker Unified Studio - Terraform によるプロビジョニングのサポート](2026/2026-07-02-amazon-sagemaker-unified-studio-terraform.md)
 - [2026-07-02 - Amazon EC2 - X8i インスタンスの追加リージョン対応](2026/2026-07-02-amazon-ec2-x8i-instances-ICN-KUL-NRT-region.md)
 - [2026-07-02 - Amazon EC2 - Dedicated Hosts での AMD SEV-SNP サポート](2026/2026-07-02-ec2-amd-sev-snp-dedicated-hosts.md)

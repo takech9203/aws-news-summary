@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon SageMaker HyperPod - Disaggregated Prefill and Decode (DPD)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.7;
+  padding: 20px;
+  margin: 0;
+}
+
+.container { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-bottom: 3px solid var(--aws-orange);
+  padding-bottom: 20px;
+}
+
+.header-left { flex: 1; min-width: 260px; }
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.title .accent { color: var(--aws-orange); }
+
+.header-right {
+  text-align: right;
+  font-size: 14px;
+  color: var(--aws-light-gray);
+}
+
+.date-badge {
+  background: var(--aws-dark-squid);
+  border: 1px solid rgba(255,153,0,0.4);
+  border-radius: 6px;
+  padding: 6px 14px;
+  display: inline-block;
+}
+
+h2, .section-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+h3 {
+  font-size: 17px;
+  color: var(--aws-smile-orange);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle { font-size: 16px; color: var(--aws-light-gray); }
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 10px;
+  padding: 26px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.lead {
+  font-size: 16px;
+  color: var(--aws-white);
+  background: rgba(255,153,0,0.08);
+  border-left: 4px solid var(--aws-orange);
+  padding: 14px 18px;
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 20px;
+}
+
+/* Before / After */
+.ba-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+.ba-box { border-radius: 8px; padding: 18px; }
+.ba-before { background: rgba(209,50,18,0.12); border: 1px solid rgba(209,50,18,0.5); }
+.ba-after  { background: rgba(29,129,2,0.14);  border: 1px solid rgba(29,129,2,0.6); }
+.ba-title { font-weight: 700; font-size: 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.ba-before .ba-title { color: #ff7a5c; }
+.ba-after .ba-title { color: #6fce4e; }
+.ba-box ul { margin: 0; padding-left: 20px; }
+.ba-box li { margin: 8px 0; font-size: 14px; }
+
+/* Cards */
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+  border-left: 4px solid var(--aws-orange);
+}
+.card-title { font-weight: 700; color: var(--aws-white); font-size: 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.card ul { margin: 8px 0 0 0; padding-left: 20px; }
+.card li { margin: 6px 0; font-size: 14px; }
+
+/* Stats */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255,153,0,0.18), rgba(140,79,255,0.12));
+  border: 1px solid rgba(255,153,0,0.35);
+  border-radius: 10px;
+  padding: 18px;
+  text-align: center;
+}
+.stat-num { font-size: 26px; font-weight: 700; color: var(--aws-orange); line-height: 1.2; }
+.stat-label { font-size: 13px; color: var(--aws-light-gray); margin-top: 6px; }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+th { color: var(--aws-orange); font-weight: 600; }
+tr:hover td { background: rgba(255,255,255,0.03); }
+
+/* Use case */
+.usecase {
+  background: rgba(255,153,0,0.08);
+  border: 1px solid rgba(255,153,0,0.3);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase-title { color: var(--aws-smile-orange); font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+.usecase .effect { margin-top: 10px; font-size: 14px; }
+.usecase .effect b { color: var(--aws-green); }
+
+/* Check / Cross */
+.check-item { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; font-size: 14px; }
+.check-icon { color: var(--aws-green); font-size: 16px; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; }
+
+/* Code */
+.code-block { background: #1a1a2e; border-radius: 8px; overflow: hidden; margin: 14px 0; border: 1px solid rgba(255,153,0,0.2); }
+.code-header { background: #16213e; padding: 8px 16px; display: flex; justify-content: space-between; font-size: 12px; }
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; padding: 16px !important; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+.note {
+  background: rgba(0,161,201,0.1);
+  border: 1px solid rgba(0,161,201,0.4);
+  border-radius: 8px;
+  padding: 14px 18px;
+  font-size: 14px;
+  margin: 14px 0;
+}
+
+.pill { display:inline-block; background: rgba(140,79,255,0.18); border:1px solid rgba(140,79,255,0.5); color:#c4a6ff; padding:2px 10px; border-radius: 20px; font-size:12px; margin:3px; }
+
+footer {
+  margin-top: 30px;
+  padding-top: 18px;
+  border-top: 1px dashed rgba(255,255,255,0.25);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+footer ul { list-style: none; padding: 0; margin: 8px 0 0 0; }
+footer li { margin: 6px 0; }
+
+@media (max-width: 640px) {
+  .ba-grid { grid-template-columns: 1fr; }
+  h1, .title { font-size: 24px; }
+  .header-right { text-align: left; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-left">
+      <span class="service-badge">Amazon SageMaker HyperPod</span>
+      <h1 class="title">Disaggregated Prefill and Decode <span class="accent">(DPD)</span></h1>
+      <p class="subtitle">LLM 推論の 2 フェーズを分離し、安定したレイテンシーと高い goodput を実現</p>
+    </div>
+    <div class="header-right">
+      <span class="date-badge">📅 リリース: 2026 年 7 月 6 日</span>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p class="lead">
+      Amazon SageMaker HyperPod が、LLM 推論最適化技術 <span class="highlight">Disaggregated Prefill and Decode (DPD)</span> をサポート。プレフィル (prefill) とデコード (decode) を<b>それぞれ専用の GPU プール</b>に分離して実行します。
+    </p>
+    <p>
+      LLM 推論には特性の異なる 2 つのフェーズがあります。<b style="color:var(--aws-orange)">プレフィル</b>は入力プロンプト全体を一括処理する<b>計算バウンド</b>な処理、<b style="color:var(--aws-purple)">デコード</b>はトークンを 1 つずつ生成する<b>メモリ帯域幅バウンド</b>な処理です。DPD は両者を別々の GPU グループで実行し、リソースの奪い合いを解消します。両フェーズ間の Key-Value (KV) キャッシュの受け渡しは、<span class="highlight">Elastic Fabric Adapter (EFA) 上の GPU-Direct RDMA</span> で行われます。
+    </p>
+    <p>
+      インテリジェントルーターがロングコンテキストのリクエストを分離パスへ自動振り分けし、短いプロンプトはデコーダーへ直接送ることで不要な転送オーバーヘッドを回避。チャットアシスタント、エージェンティックパイプライン、RAG、長文ドキュメント分析といった本番 LLM ワークロードで<b>安定したレイテンシーと予測可能なスループット</b>を実現します。
+    </p>
+
+    <div class="ba-grid">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ アップデート前の課題</div>
+        <ul>
+          <li>プレフィルとデコードを同一 GPU で同居実行し、1 件のロングコンテキストが他の全リクエストのトークン生成を停滞</li>
+          <li>フェーズ間干渉で高負荷時にトークンごとのレイテンシーが悪化</li>
+          <li>一方を保護するため他方を過剰プロビジョニングする必要</li>
+          <li>入出力分布に合わせた独立スケールが不可能</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <ul>
+          <li>計算バウンドとメモリ帯域幅バウンドを別 GPU プールで実行し干渉を解消</li>
+          <li>混在トラフィック下でレイテンシーが予測可能になり SLO 下の goodput が向上</li>
+          <li>プレフィルとデコードの容量を独立してスケール可能</li>
+          <li><span class="highlight">pdSpec</span> を追加するだけで既存構成から有効化</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 クライアント"]) --> Router{"🔀 インテリジェント<br/>ルーター"}
+
+    subgraph Cluster["☁️ HyperPod EKS クラスター EFA 対応インスタンス"]
+        subgraph Prefill["⚙️ プレフィルプール 計算バウンド"]
+            P1["🧮 Prefill Pod<br/>vLLM"]
+        end
+        subgraph Decode["🧠 デコードプール メモリ帯域幅バウンド"]
+            D1["🔁 Decode Pod<br/>vLLM"]
+        end
+        P1 -. "KV キャッシュ転送<br/>EFA + GPU-Direct RDMA" .-> D1
+    end
+
+    Router -->|"入力トークン数 >= threshold<br/>分離パス"| P1
+    Router -->|"入力トークン数 < threshold<br/>デコーダー直行"| D1
+    D1 --> Response(["📤 生成トークン"])
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Cluster cloud
+    class Prefill,Decode layer
+    class P1,D1 process
+    class Router decision
+    class User,Response user
+      </pre>
+    </div>
+    <p>
+      インテリジェントルーターが入力トークン数を <span class="highlight">routingThreshold</span> と比較し、閾値以上のロングコンテキストはプレフィルプールを経由させて KV キャッシュを EFA + GPU-Direct RDMA でデコードプールへ転送。閾値未満の短いリクエストはプレフィルを省略してデコーダーへ直接送られます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ プレフィルとデコードの物理的な分離</div>
+      <ul>
+        <li>LLM 推論の 2 フェーズを専用の GPU プールに分離して実行</li>
+        <li>計算バウンドなプレフィルとメモリ帯域幅バウンドなデコードがリソースを奪い合わない</li>
+        <li>Inference Operator がルーターのプロビジョニング、LMCache と NIXL を用いた Pod 連携、HyperPod オブザーバビリティ統合を自動オーケストレーション</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ EFA + GPU-Direct RDMA による KV キャッシュ転送</div>
+      <ul>
+        <li>プレフィルで計算した KV キャッシュを EFA 上の GPU-Direct RDMA でデコード側 GPU へ直接転送</li>
+        <li>NIXL チャネルを介して転送され、デコーダー側では再計算が不要</li>
+        <li>Llama 70B (TP=8) の場合、6,000 トークンのプロンプトの KV キャッシュは 1 ランクあたり約 0.23 GB</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ インテリジェントルーターによる条件付きルーティング</div>
+      <ul>
+        <li>入力トークン数が <span class="highlight">routingThreshold</span> (デフォルト 4,096) 以上のリクエストのみ分離パスへ</li>
+        <li>閾値未満の短いプロンプトはプレフィラーをバイパスし転送オーバーヘッドを回避</li>
+        <li>ルーティング戦略: <span class="pill">prefixaware (デフォルト)</span> <span class="pill">roundrobin</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ 独立したスケーリングと既存機能との組み合わせ</div>
+      <ul>
+        <li><span class="highlight">prefillSpec.replicas</span> と <span class="highlight">decodingSpec.replicas</span> でプレフィルとデコードの容量を独立してスケール</li>
+        <li>KV キャッシュオフローディング (L1 キャッシュ) やインテリジェントルーティングと組み合わせ可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>DPD が効果を発揮する条件</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>モデルサイズ</td><td>70B 以上の大規模 Dense モデル (例: Llama 3.3 70B)</td></tr>
+      <tr><td>入力長</td><td>4,000 トークン以上の長い入力</td></tr>
+      <tr><td>同時実行性</td><td>秒間 2 リクエスト以上の継続的な同時実行</td></tr>
+      <tr><td>出力長</td><td>256 トークン以上の中〜長い出力</td></tr>
+    </table>
+    <div class="note">💡 入力が短い・同時実行性が低い・小規模モデルのワークロードでは、標準の同居 (colocated) デプロイの方がシンプルで良好に動作します。</div>
+
+    <h3>サポート対象インスタンスタイプ</h3>
+    <p>DPD には GPU-Direct RDMA をサポートする EFA 対応インスタンスが必要です。</p>
+    <table>
+      <tr><th>インスタンスタイプ</th><th>備考</th></tr>
+      <tr><td>ml.p5.48xlarge</td><td>パフォーマンス検証済み (Llama 3.3 70B)</td></tr>
+      <tr><td>ml.p5e.48xlarge</td><td>EFA 対応</td></tr>
+      <tr><td>ml.p5en.48xlarge</td><td>EFA 対応</td></tr>
+      <tr><td>ml.p6-b200.48xlarge</td><td>EFA 対応</td></tr>
+      <tr><td>ml.p6-b300.48xlarge</td><td>EFA 対応</td></tr>
+    </table>
+
+    <h3>API 変更履歴</h3>
+    <div class="note">🔧 HyperPod Inference Operator の Kubernetes カスタムリソース (<span class="highlight">InferenceEndpointConfig</span>) の拡張によって提供されます。AWS SDK/API レベルの新規メソッド追加は伴わないため、awsapichanges.com 上での該当する API 変更はありません。</div>
+
+    <h3>pdSpec の設定例</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">pdSpec 設定例</span></div>
+<pre><code class="language-yaml">pdSpec:
+  prefillSpec:
+    replicas: 1
+    resources:
+      limits:
+        nvidia.com/gpu: "8"
+      requests:
+        nvidia.com/gpu: "8"
+    args:
+      - "--gpu-memory-utilization"
+      - "0.75"
+  decodingSpec:
+    replicas: 1
+    resources:
+      limits:
+        nvidia.com/gpu: "8"
+      requests:
+        nvidia.com/gpu: "8"
+  routingThreshold: 4096</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🚀 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS CLI がセットアップされていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>kubectl 経由で HyperPod Amazon EKS クラスターにアクセスできること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>モデルチェックポイントへの読み取りアクセス用 Hugging Face トークン (S3 バケットにある場合は不要)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>vLLM、LMCache、NVIDIA NIXL、EFA libfabric を含むワーカーイメージ (DLC: vllm:server-hyperpod-cuda-v1.1 / LMCache 0.4.3、vLLM 0.19.0、NIXL 1.0.0)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>HyperPod Inference Operator バージョン 3.2 以降 (新規 EKS クラスターにはデフォルト導入済み)</span></div>
+
+    <h3>ステップ 1: Inference Operator のバージョン確認</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span></div>
+<pre><code class="language-bash">kubectl get deployment hyperpod-inference-operator-controller-manager \
+  -n hyperpod-inference-system \
+  -o jsonpath='{.spec.template.spec.containers[?(@.name=="manager")].image}{"\n"}'</code></pre>
+    </div>
+
+    <h3>ステップ 2: pdSpec を含むマニフェストの適用</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span></div>
+<pre><code class="language-bash">kubectl apply -f inference_endpoint_dpd_config.yaml</code></pre>
+    </div>
+    <p style="font-size:14px;"><span class="highlight">pdSpec</span> が存在することで、Operator がプレフィル用とデコード用の別々の Deployment を作成し、ルーターと LMCache PD バックエンドを介して連携させます。</p>
+
+    <h3>ステップ 3: デプロイの検証</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span></div>
+<pre><code class="language-bash">kubectl get pods -A | grep -E "prefill-|decode-|router"</code></pre>
+    </div>
+    <p style="font-size:14px;">プレフィル / デコード / ルーター Pod が <b>Running</b> であること、プレフィラーが <code>sender</code>、デコーダーが <code>receiver</code> を報告することを確認。デコーダーのログで <code>Retrieved N out of N required tokens</code> が出れば KV キャッシュが NIXL 経由で正しく転送されています。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>🎯 メリット</h2>
+    <div class="ba-grid">
+      <div class="card" style="border-left-color: var(--aws-teal); margin:0;">
+        <div class="card-title">💼 ビジネス面</div>
+        <ul>
+          <li><b>予測可能なユーザー体験</b>: 混在トラフィックでもトークンごとのレイテンシーが安定</li>
+          <li><b>SLO 遵守とコスト効率</b>: 厳格な SLO 下の goodput 向上、過剰プロビジョニングを削減</li>
+          <li><b>容易な移行</b>: 既存構成に pdSpec を追加するだけで導入障壁が低い</li>
+        </ul>
+      </div>
+      <div class="card" style="border-left-color: var(--aws-purple); margin:0;">
+        <div class="card-title">🔧 技術面</div>
+        <ul>
+          <li><b>リソース干渉の解消</b>: 計算バウンドとメモリ帯域幅バウンドを分離</li>
+          <li><b>独立スケーリング</b>: 入出力分布に合わせて個別調整</li>
+          <li><b>高速な KV キャッシュ転送</b>: EFA + GPU-Direct RDMA で低レイテンシー・高スループット</li>
+          <li><b>自動オーケストレーション</b>: Operator がルーターと Pod 配線を自動化</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="warn-icon">▸</span><span>DPD は 70B 以上の Dense モデルで推奨。小規模モデルや MoE モデルは通常恩恵を受けない</span></div>
+    <div class="check-item"><span class="warn-icon">▸</span><span>現行リリースでは 1 エンドポイントあたり単一のデコードデプロイメントのみサポート (複数対応は将来予定)</span></div>
+    <div class="check-item"><span class="warn-icon">▸</span><span>パフォーマンスは ml.p5.48xlarge 上の Llama 3.3 70B で最大 64 同時リクエストまで検証済み</span></div>
+    <div class="check-item"><span class="warn-icon">▸</span><span>GPU-Direct RDMA をサポートする特定の EFA 対応インスタンスタイプに限定</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">▸</span><span>入力が短い・同時実行性が低い・小規模モデルでは標準の同居デプロイの方が適している</span></div>
+    <div class="check-item"><span class="warn-icon">▸</span><span><span class="highlight">PD_BUFFER_SIZE</span> (デフォルト 8 GiB) を超えるとレイテンシースパイクが発生。16/32 GiB への増加やデコードレプリカのスケールを検討</span></div>
+    <div class="check-item"><span class="warn-icon">▸</span><span><span class="highlight">PYTHONHASHSEED</span> を固定しないとキャッシュキーが一致せずキャッシュミスが発生</span></div>
+    <div class="check-item"><span class="warn-icon">▸</span><span>標準の同居デプロイに戻すには pdSpec を含まない新しい InferenceEndpointConfig を適用</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📄 ユースケース 1: 長文ドキュメント分析サービス</div>
+      <p style="font-size:14px;"><b>シナリオ</b>: 数千トークンの契約書や技術文書を Llama 3.3 70B で要約・分析する SaaS。長い入力が多く、複数リクエストが継続的に発生。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span></div>
+<pre><code class="language-yaml">pdSpec:
+  prefillSpec:
+    replicas: 2
+  decodingSpec:
+    replicas: 1
+  routingThreshold: 4096</code></pre>
+      </div>
+      <p class="effect"><b>効果:</b> プレフィルレプリカを増やしてキュー滞留を解消し、長い入力の TTFT を改善しつつデコードのトークンごとのレイテンシーを安定化。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">💬 ユースケース 2: 高並行のチャットアシスタント</div>
+      <p style="font-size:14px;"><b>シナリオ</b>: 多数のユーザーが同時アクセス。システムプロンプトやチャット履歴が共通するリクエストが多い。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span></div>
+<pre><code class="language-yaml">intelligentRoutingSpec:
+  enabled: true
+  routingStrategy: prefixaware
+kvCacheSpec:
+  enableL1Cache: true</code></pre>
+      </div>
+      <p class="effect"><b>効果:</b> prefixaware ルーティングと L1 KV キャッシュで共通プレフィックスのヒット率を最大化。ロングコンテキストが他ユーザーのトークン生成を停滞させる問題も解消。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔎 ユースケース 3: RAG / エージェンティックパイプライン</div>
+      <p style="font-size:14px;"><b>シナリオ</b>: 検索結果や複数ツール出力を大量のコンテキストとして LLM に渡す RAG やエージェントワークフロー。入力長のばらつきが大きい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span></div>
+<pre><code class="language-yaml">pdSpec:
+  routingThreshold: 4096
+environmentVariables:
+  - name: PD_BUFFER_SIZE
+    value: "17179869184"</code></pre>
+      </div>
+      <p class="effect"><b>効果:</b> 長いコンテキストのみを DPD パスへ、短いリクエストはデコーダー直行で処理しスループットとレイテンシーのバランスを最適化。バッファを 16 GiB に拡大し同時 KV 転送スパイクにも対応。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン・関連 -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-num">追加料金なし</div>
+        <div class="stat-label">DPD の利用自体は無料。通常の HyperPod 料金体系に従う</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">全リージョン</div>
+        <div class="stat-label">HyperPod が利用可能な全 AWS リージョンの EKS + EFA 対応インスタンス</div>
+      </div>
+    </div>
+    <div class="note" style="margin-top:16px;">💰 使用する EFA 対応インスタンス (ml.p5.48xlarge、ml.p6-b200.48xlarge など) の稼働時間に対して課金。DPD はプレフィルとデコードを別 GPU プールで実行するため、両フェーズに必要なインスタンス数の合計がコストに影響します。最新の料金は AWS 公式料金ページを参照してください。</div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card" style="margin:0;">
+      <ul style="margin:0; padding-left:20px;">
+        <li><b>Amazon EKS</b>: EKS オーケストレーターを使用する HyperPod クラスター上で動作し、InferenceEndpointConfig で構成</li>
+        <li><b>Elastic Fabric Adapter (EFA)</b>: GPU-Direct RDMA による KV キャッシュ高速転送に使用</li>
+        <li><b>vLLM / LMCache / NVIDIA NIXL</b>: プレフィル/デコード Pod の推論エンジンと KV キャッシュ連携を担うコンポーネント</li>
+        <li><b>HyperPod オブザーバビリティ</b>: E2E TTFT、KV Transfer Time、DPD Routing Counts などの固有メトリクスをダッシュボードで可視化</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section" style="border:1px solid rgba(255,153,0,0.4); background: linear-gradient(135deg, rgba(255,153,0,0.08), rgba(26,36,47,1));">
+    <h2>📝 まとめ</h2>
+    <p>
+      DPD は、大規模 LLM の本番推論において<b>フェーズ間干渉を解消</b>し、<span class="highlight">安定したレイテンシーと高い goodput</span> を実現する重要な最適化技術です。70B 以上の Dense モデルで長い入力・高い同時実行性を持つワークロードを HyperPod で運用している場合は、既存の <span class="highlight">InferenceEndpointConfig</span> に <span class="highlight">pdSpec</span> を追加して DPD を検証し、実際の入出力分布に合わせて <code>routingThreshold</code> やレプリカ数をチューニングすることを推奨します。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典 / 参考リンク</p>
+    <ul>
+      <li>🔗 <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/7/amazon-sagemaker-hyperpod-dpd/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+      <li>🔗 <a class="aws-link" href="https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-model-deployment-dpd.html" target="_blank" rel="noopener noreferrer">ドキュメント: Disaggregated Prefill and Decode for HyperPod inference</a></li>
+      <li>🔗 <a class="aws-link" href="https://aws.amazon.com/sagemaker/ai/pricing/" target="_blank" rel="noopener noreferrer">SageMaker HyperPod 料金ページ</a></li>
+    </ul>
+    <p style="margin-top:12px; color:#8a9499;">Amazon SageMaker HyperPod - Disaggregated Prefill and Decode (DPD) ｜ 2026 年 7 月 6 日</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#FF9900',
+      primaryTextColor: '#232F3E',
+      primaryBorderColor: '#FF9900',
+      lineColor: '#FF9900',
+      secondaryColor: '#F5F5F5',
+      tertiaryColor: '#FAFAFA',
+      background: '#FFFFFF',
+      mainBkg: '#FFF3E0',
+      nodeBorder: '#FF9900',
+      clusterBkg: '#FFF8E1',
+      clusterBorder: '#FF9900',
+      edgeLabelBackground: '#FFFFFF',
+      textColor: '#232F3E'
+    }
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
