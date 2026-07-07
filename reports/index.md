@@ -5,12 +5,21 @@
 
 ## 2026 年
 
+- [2026-07-07 - Amazon RDS for Oracle - Oracle Database 26ai サポート](2026/2026-07-07-amazon-rds-oracle-database-26ai.md)
+- [2026-07-07 - Amazon EKS Auto Mode - GPU 管理料金の引き下げ](2026/2026-07-07-amazon-eks-auto-mode-gpu-price.md)
+- [2026-07-07 - Amazon EC2 C8ine インスタンス - 欧州 (フランクフルト) リージョンで提供開始](2026/2026-07-07-amazon-ec2-c8ine-aws-frankfurt.md)
+- [2026-07-07 - Amazon ECS Managed Instances - GPU 管理手数料の引き下げ](2026/2026-07-07-amazon-ecs-managed-instances-gpu-price.md)
+- [2026-07-07 - Amazon EMR Serverless - 大容量ワーカーサイズのサポート](2026/2026-07-07-amazon-emr-serverless.md)
+- [2026-07-06 - Amazon SageMaker Studio - Hugging Face 統合によるワンクリックモデルデプロイとカスタマイズ](2026/2026-07-06-sagemaker-studio-hugging-face-integration.md)
 - [2026-07-06 - AWS Certificate Manager - ACME プロトコルによるパブリック証明書の自動発行](2026/2026-07-06-aws-certificate-manager-acme.md)
 - [2026-07-06 - AWS Secrets Manager - Paddle および GitLab 向けマネージド外部シークレットサポート](2026/2026-07-06-secrets-manager-managed-external-secrets-paddle-gitlab.md)
+- [2026-07-06 - AWS Security Hub - エクスポージャー検出結果の影響分析](2026/2026-07-06-impact-analysis-aws-security-hub.md)
+- [2026-07-06 - Amazon Cognito - セルフサービスによるプロビジョンド API レート制限](2026/2026-07-06-cognito-provisioned-limits.md)
 - [2026-07-06 - Amazon SageMaker HyperPod - Disaggregated Prefill and Decode (DPD)](2026/2026-07-06-amazon-sagemaker-hyperpod-dpd.md)
 - [2026-07-06 - Amazon CloudWatch Application Signals - Service Events](2026/2026-07-06-cloudwatch-service-events.md)
 - [2026-07-06 - AWS CodePipeline - アジアパシフィック (ニュージーランド) リージョンでの提供開始](2026/2026-07-06-aws-codepipeline-new-zealand.md)
 - [2026-07-06 - Amazon EVS - VMware Cloud Foundation (VCF) 9.0 および 9.1 のサポート](2026/2026-07-06-amazon-evs-vcf9.md)
+- [2026-07-06 - Amazon VPC - VPC Encryption Controls の宣言型ポリシー対応](2026/2026-07-06-vpc-encryption-controls-declarative-controls.md)
 - [2026-07-02 - Amazon SageMaker Unified Studio - Terraform によるプロビジョニングのサポート](2026/2026-07-02-amazon-sagemaker-unified-studio-terraform.md)
 - [2026-07-02 - Amazon EC2 - X8i インスタンスの追加リージョン対応](2026/2026-07-02-amazon-ec2-x8i-instances-ICN-KUL-NRT-region.md)
 - [2026-07-02 - Amazon EC2 - Dedicated Hosts での AMD SEV-SNP サポート](2026/2026-07-02-ec2-amd-sev-snp-dedicated-hosts.md)
