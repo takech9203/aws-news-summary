@@ -5,11 +5,21 @@
 
 ## 2026 年
 
+- [2026-07-08 - AWS Security Hub - Network Scanning](2026/2026-07-08-aws-security-hub-network-scanning.md)
+- [2026-07-08 - Amazon Redshift - RG インスタンスのトレーリングトラック対応](2026/2026-07-08-amazon-redshift-graviton-rg-instances-trailing-track.md)
+- [2026-07-08 - Amazon Connect - タスクとメール向けの予測、計画、スケジューリング](2026/2026-07-08-amazon-connect-customer-agent-scheduling-tasks.md)
+- [2026-07-08 - Amazon Aurora DSQL - Change Data Capture (CDC) 一般提供開始](2026/2026-07-08-amazon-aurora-dsql-cdc-ga.md)
+- [2026-07-07 - Amazon EC2 - High Memory U7i インスタンスが欧州 (チューリッヒ) リージョンで利用可能に](2026/2026-07-07-amazon-ec2-u7i-aws-europe-zurich.md)
+- [2026-07-07 - AWS Systems Manager - Azure VM 管理とハイブリッドノード料金の簡素化](2026/2026-07-07-aws-systems-manager-multicloud-vm.md)
+- [2026-07-07 - Amazon SageMaker - IAM ベースドメインでのデータリネージサポート](2026/2026-07-07-amazon-sagemaker-data-lineage-iam-domain.md)
 - [2026-07-07 - Amazon RDS for Oracle - Oracle Database 26ai サポート](2026/2026-07-07-amazon-rds-oracle-database-26ai.md)
+- [2026-07-07 - Amazon S3 - S3 Express One Zone が欧州 (フランクフルト) リージョンで利用可能に](2026/2026-07-07-s3-express-one-zone-europe-frankfurt.md)
+- [2026-07-07 - Amazon SageMaker Unified Studio - 既存 MWAA 環境のインポートサポート](2026/2026-07-07-amazon-sagemaker-unified-studio-import-existing-mwaa-environments.md)
 - [2026-07-07 - Amazon EKS Auto Mode - GPU 管理料金の引き下げ](2026/2026-07-07-amazon-eks-auto-mode-gpu-price.md)
 - [2026-07-07 - Amazon EC2 C8ine インスタンス - 欧州 (フランクフルト) リージョンで提供開始](2026/2026-07-07-amazon-ec2-c8ine-aws-frankfurt.md)
 - [2026-07-07 - Amazon ECS Managed Instances - GPU 管理手数料の引き下げ](2026/2026-07-07-amazon-ecs-managed-instances-gpu-price.md)
 - [2026-07-07 - Amazon EMR Serverless - 大容量ワーカーサイズのサポート](2026/2026-07-07-amazon-emr-serverless.md)
+- [2026-07-07 - AWS Security Hub - Microsoft Azure リソースの統合セキュリティ管理](2026/2026-07-07-aws-security-hub-supports-monitoring-microsoft-azure.md)
 - [2026-07-06 - Amazon SageMaker Studio - Hugging Face 統合によるワンクリックモデルデプロイとカスタマイズ](2026/2026-07-06-sagemaker-studio-hugging-face-integration.md)
 - [2026-07-06 - AWS Certificate Manager - ACME プロトコルによるパブリック証明書の自動発行](2026/2026-07-06-aws-certificate-manager-acme.md)
 - [2026-07-06 - AWS Secrets Manager - Paddle および GitLab 向けマネージド外部シークレットサポート](2026/2026-07-06-secrets-manager-managed-external-secrets-paddle-gitlab.md)
