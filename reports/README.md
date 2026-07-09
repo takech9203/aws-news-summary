@@ -5,10 +5,17 @@
 
 ## 2026 年
 
+- [2026-07-09 - Amazon SageMaker Unified Studio - IAM ベースドメインでのカスタムアセットタイプ](2026/2026-07-09-smus-custom-asset-types-iam.md)
+- [2026-07-09 - Amazon SageMaker Feature Store - バッチ書き込みとレコード一覧](2026/2026-07-09-amzn-sgm-feature-store-batch-write-list.md)
+- [2026-07-09 - Amazon Timestream for InfluxDB - データベース状態変更イベントの Amazon EventBridge への発行](2026/2026-07-09-timestream-influxdb-eventbridge.md)
+- [2026-07-09 - Amazon MSK Replicator - 外部 Apache Kafka クラスターから MSK Standard ブローカーへのレプリケーション](2026/2026-07-09-amazon-msk-replicator-external-kafka-standard-broker-support.md)
+- [2026-07-08 - AWS Neuron - 2.31.0 (NKI 0.5.0 と UltraServer Operator)](2026/2026-07-08-aws-announce-neuron-2-31-0.md)
 - [2026-07-08 - AWS Security Hub - Network Scanning](2026/2026-07-08-aws-security-hub-network-scanning.md)
+- [2026-07-08 - Amazon SageMaker Unified Studio Workflows - Bedrock、S3 Tables、S3 Vectors、Glue Catalog 向けオペレーターのサポート](2026/2026-07-08-apache-airflow-operators-amazon-sagemaker-unified-studio-workflows.md)
 - [2026-07-08 - Amazon Redshift - RG インスタンスのトレーリングトラック対応](2026/2026-07-08-amazon-redshift-graviton-rg-instances-trailing-track.md)
 - [2026-07-08 - Amazon Connect - タスクとメール向けの予測、計画、スケジューリング](2026/2026-07-08-amazon-connect-customer-agent-scheduling-tasks.md)
 - [2026-07-08 - Amazon Aurora DSQL - Change Data Capture (CDC) 一般提供開始](2026/2026-07-08-amazon-aurora-dsql-cdc-ga.md)
+- [2026-07-08 - AWS Builder Center - 無料サンドボックス環境](2026/2026-07-08-aws-builder-center-sandbox.md)
 - [2026-07-07 - Amazon EC2 - High Memory U7i インスタンスが欧州 (チューリッヒ) リージョンで利用可能に](2026/2026-07-07-amazon-ec2-u7i-aws-europe-zurich.md)
 - [2026-07-07 - AWS Systems Manager - Azure VM 管理とハイブリッドノード料金の簡素化](2026/2026-07-07-aws-systems-manager-multicloud-vm.md)
 - [2026-07-07 - Amazon SageMaker - IAM ベースドメインでのデータリネージサポート](2026/2026-07-07-amazon-sagemaker-data-lineage-iam-domain.md)
