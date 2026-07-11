@@ -7,6 +7,7 @@
 
 - [2026-07-10 - Amazon DocumentDB - R8g.24xlarge および R8g.48xlarge インスタンスのサポート](2026/2026-07-10-amazon-documentdb-r8g-24xl-48xl.md)
 - [2026-07-10 - Amazon Location Service - Places API の住所・検索オプション強化](2026/2026-07-10-amazon-location-service-enhanced-address-search.md)
+- [2026-07-10 - Amazon SageMaker HyperPod - 継続的プロビジョニングでの AMI ベースのノードライフサイクル設定](2026/2026-07-10-ami-configuration-continuous-slurm.md)
 - [2026-07-10 - AWS Organizations - 新規組織へのアカウント離脱防止セキュリティコントロールのデフォルト適用](2026/2026-07-10-aws-organizations-security-controls-new-orgs-console.md)
 - [2026-07-10 - Amazon EC2 G7 インスタンス - US East (バージニア北部) リージョンで利用可能に](2026/2026-07-10-amazon-ec2-g7-available-North-Virginia.md)
 - [2026-07-10 - AWS DMS Schema Conversion - AI エージェント自動化対応](2026/2026-07-10-aws-dms-sc-ai-agent-automation-mcp-server.md)
