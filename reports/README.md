@@ -5,6 +5,11 @@
 
 ## 2026 年
 
+- [2026-07-13 - Amazon SageMaker JumpStart - OpenAI privacy-filter による PII 検出とマスキング](2026/2026-07-13-privacy-filter-on-sagemaker-jumpstart.md)
+- [2026-07-13 - Amazon SageMaker JumpStart - Qwen3 の埋め込み・リランキングモデルの提供開始](2026/2026-07-13-qwen3-search-retrieval-on-sagemaker-jumpstart.md)
+- [2026-07-13 - Amazon SageMaker JumpStart - Gemma-4-E2B-it の提供開始](2026/2026-07-13-gemma-4-e2b-on-sagemaker-jumpstart.md)
+- [2026-07-13 - Amazon SageMaker JumpStart - Voxtral-Mini-4B-Realtime](2026/2026-07-13-voxtral-mini-realtime-on-sagemaker-jumpstart.md)
+- [2026-07-13 - Amazon DocumentDB - Agent Toolkit for AWS のスキルとして提供開始](2026/2026-07-13-amazon-documentdb-agent-skill.md)
 - [2026-07-10 - Amazon DocumentDB - R8g.24xlarge および R8g.48xlarge インスタンスのサポート](2026/2026-07-10-amazon-documentdb-r8g-24xl-48xl.md)
 - [2026-07-10 - Amazon Location Service - Places API の住所・検索オプション強化](2026/2026-07-10-amazon-location-service-enhanced-address-search.md)
 - [2026-07-10 - Amazon SageMaker HyperPod - 継続的プロビジョニングでの AMI ベースのノードライフサイクル設定](2026/2026-07-10-ami-configuration-continuous-slurm.md)
