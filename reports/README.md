@@ -5,11 +5,23 @@
 
 ## 2026 年
 
+- [2026-07-14 - Amazon Aurora DSQL - ヨーロッパ (スペイン) リージョンでの提供開始](2026/2026-07-14-amazon-aurora-dsql-available-in-spain.md)
+- [2026-07-14 - AWS Storage Gateway - ゲートウェイ間でのファイル共有コピー機能](2026/2026-07-14-aws-storage-gateway-console-copy-file-shares.md)
+- [2026-07-14 - Amazon WorkSpaces Personal - PCoIP から DCV への大規模プロトコル移行の簡素化](2026/2026-07-14-amazon-workspaces-personal-pcoip.md)
+- [2026-07-14 - AWS IAM Identity Center - FedRAMP Class C 認証取得](2026/2026-07-14-aws-identity-center-fedramp.md)
+- [2026-07-14 - Amazon CloudFront Functions - CloudFront アクセスログへのカスタムデータ出力](2026/2026-07-14-cloudfront-functions-access-logs.md)
+- [2026-07-14 - AWS Security Hub - AI インベントリ](2026/2026-07-14-aws-security-hub-ai.md)
+- [2026-07-14 - Amazon GuardDuty - AI Protection](2026/2026-07-14-amazon-guardduty-ai-protection-aws.md)
+- [2026-07-13 - Amazon Managed Service for Prometheus - アジアパシフィック (ニュージーランド) リージョンでの提供開始](2026/2026-07-13-amazon-managed-service-prometheus-new-zealand.md)
+- [2026-07-13 - Amazon SageMaker HyperPod - Slurm クラスター向けカスタム AMI サポート](2026/2026-07-13-hyperpod-custom-ami-slurm.md)
 - [2026-07-13 - Amazon SageMaker JumpStart - OpenAI privacy-filter による PII 検出とマスキング](2026/2026-07-13-privacy-filter-on-sagemaker-jumpstart.md)
 - [2026-07-13 - Amazon SageMaker JumpStart - Qwen3 の埋め込み・リランキングモデルの提供開始](2026/2026-07-13-qwen3-search-retrieval-on-sagemaker-jumpstart.md)
 - [2026-07-13 - Amazon SageMaker JumpStart - Gemma-4-E2B-it の提供開始](2026/2026-07-13-gemma-4-e2b-on-sagemaker-jumpstart.md)
+- [2026-07-13 - Amazon Bedrock - OpenAI GPT-5.6 Sol / Terra / Luna の一般提供開始](2026/2026-07-13-openai-gpt-sol-terra.md)
+- [2026-07-13 - Amazon DocumentDB - 46 個の新しい MongoDB オペレーターのサポート](2026/2026-07-13-amazon-documentdb-mongodb-8-0-1-mongo-api.md)
 - [2026-07-13 - Amazon SageMaker JumpStart - Voxtral-Mini-4B-Realtime](2026/2026-07-13-voxtral-mini-realtime-on-sagemaker-jumpstart.md)
 - [2026-07-13 - Amazon DocumentDB - Agent Toolkit for AWS のスキルとして提供開始](2026/2026-07-13-amazon-documentdb-agent-skill.md)
+- [2026-07-13 - Kiro - OpenAI GPT-5.6 Sol、Terra、Luna が利用可能に](2026/2026-07-13-kiro-gpt-5-6.md)
 - [2026-07-10 - Amazon DocumentDB - R8g.24xlarge および R8g.48xlarge インスタンスのサポート](2026/2026-07-10-amazon-documentdb-r8g-24xl-48xl.md)
 - [2026-07-10 - Amazon Location Service - Places API の住所・検索オプション強化](2026/2026-07-10-amazon-location-service-enhanced-address-search.md)
 - [2026-07-10 - Amazon SageMaker HyperPod - 継続的プロビジョニングでの AMI ベースのノードライフサイクル設定](2026/2026-07-10-ami-configuration-continuous-slurm.md)
