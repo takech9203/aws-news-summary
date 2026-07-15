@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Lambda - 自己管理型コードストレージ</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 12px;
+      border-bottom: 3px solid var(--aws-orange);
+      padding-bottom: 20px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+
+    .header-meta {
+      text-align: right;
+      min-width: 140px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    .date-badge {
+      font-size: 14px;
+      color: var(--aws-smile-orange);
+      font-weight: 600;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    p { margin: 10px 0; }
+
+    /* 統計カード */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255,153,0,0.18), rgba(140,79,255,0.12));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 10px;
+      padding: 18px;
+      text-align: center;
+    }
+    .stat-num {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* Before/After 比較 */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: stretch;
+      margin: 20px 0;
+    }
+    .ba-card { border-radius: 8px; padding: 18px; }
+    .ba-before {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+    .ba-after {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+    .ba-label {
+      font-weight: 700;
+      font-size: 15px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ba-before .ba-label { color: #ff6b52; }
+    .ba-after .ba-label { color: #4caf50; }
+    .ba-arrow {
+      display: flex;
+      align-items: center;
+      color: var(--aws-orange);
+      font-size: 32px;
+      font-weight: bold;
+    }
+    .ba-list { list-style: none; padding: 0; margin: 0; }
+    .ba-list li {
+      margin: 10px 0;
+      padding-left: 22px;
+      position: relative;
+      font-size: 14px;
+    }
+    .ba-before .ba-list li::before { content: "✗"; position: absolute; left: 0; color: var(--aws-red); }
+    .ba-after .ba-list li::before { content: "✓"; position: absolute; left: 0; color: var(--aws-green); }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid { display: flex; justify-content: center; }
+
+    .caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      font-style: italic;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* 機能カード */
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 6px;
+      padding: 16px 18px;
+      margin: 14px 0;
+    }
+    .feature-card .fc-title {
+      color: var(--aws-white);
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-card ul { margin: 6px 0 0 0; padding-left: 20px; }
+    .feature-card li { margin: 5px 0; font-size: 14px; }
+
+    /* フロー図 */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+    .flow-step {
+      background: var(--aws-squid-ink);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 14px 18px;
+      text-align: center;
+      min-width: 120px;
+      font-size: 14px;
+    }
+    .flow-step .fs-num {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      border-radius: 50%;
+      width: 22px;
+      height: 22px;
+      line-height: 22px;
+      margin-bottom: 6px;
+    }
+    .flow-arrow { color: var(--aws-orange); font-size: 24px; font-weight: bold; }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+    }
+    tr:hover td { background: rgba(255, 255, 255, 0.03); }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 14px 0;
+    }
+    .usecase .uc-title {
+      color: var(--aws-smile-orange);
+      font-weight: 700;
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+    .usecase .uc-row { margin: 6px 0; font-size: 14px; }
+    .uc-tag { color: var(--aws-orange); font-weight: 600; }
+
+    /* 2カラムメリット */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .merit-box {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 16px 18px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .merit-box h3 { margin-top: 0; color: var(--aws-orange); font-size: 16px; }
+    .merit-box ul { padding-left: 18px; margin: 8px 0 0 0; }
+    .merit-box li { margin: 8px 0; font-size: 14px; }
+
+    /* 注意ボックス */
+    .note-box {
+      background: rgba(255, 173, 51, 0.1);
+      border-left: 4px solid var(--aws-smile-orange);
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin: 14px 0;
+    }
+    .note-box ul { margin: 6px 0; padding-left: 20px; }
+    .note-box li { margin: 6px 0; font-size: 14px; }
+
+    .region-box {
+      background: rgba(0, 161, 201, 0.1);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      border-radius: 8px;
+      padding: 16px 18px;
+      font-size: 15px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+    }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; }
+    .aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+    ul.plain { list-style: none; padding-left: 0; }
+    ul.plain li { margin: 8px 0; padding-left: 24px; position: relative; }
+    ul.plain li::before { content: "→"; position: absolute; left: 0; color: var(--aws-orange); font-weight: bold; }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+    footer a { color: var(--aws-teal); word-break: break-all; }
+
+    @media (max-width: 720px) {
+      .before-after { grid-template-columns: 1fr; }
+      .ba-arrow { transform: rotate(90deg); justify-content: center; }
+      .two-col { grid-template-columns: 1fr; }
+      .stat-row { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <span class="service-badge">⚡ AWS Lambda</span>
+        <h1>自己管理型コードストレージ<br/><span style="font-size:20px;color:var(--aws-light-gray);">Self-managed code storage</span></h1>
+      </div>
+      <div class="header-meta">
+        <div class="date-badge">📅 2026年7月15日</div>
+        <div class="subtitle">サービスアップデート</div>
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>
+        AWS Lambda は、コードストレージとして<span class="highlight">自己管理型の Amazon S3 バケット</span>をサポートするようになりました。
+        お客様は自身の S3 バケット内のソースコードを直接参照でき、Lambda が中間コピーを作成することなく関数やレイヤーを作成、更新できます。
+      </p>
+      <p>
+        従来、Lambda は関数やレイヤーの作成時にデプロイパッケージを常に Lambda 管理のストレージへコピーしていました。このコピーはリージョンごとに 75GB という上限にカウントされ、上限を超える場合はサポートケースによるクォータ引き上げが必要でした。
+        今回のアップデートでは、<span class="highlight">S3ObjectStorageMode パラメータを REFERENCE に設定</span>することで、Lambda がコピーを作成せずにお客様の S3 バケット内のコードを直接参照します。
+      </p>
+
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-num">実質上限なし</div>
+          <div class="stat-label">コードストレージ上限が解消 (S3 容量に依存)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">75GB → 300GB</div>
+          <div class="stat-label">Lambda 管理ストレージのデフォルト上限も引き上げ</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">Lambda 追加料金なし</div>
+          <div class="stat-label">標準の S3 ストレージ料金のみ</div>
+        </div>
+      </div>
+
+      <h3>🔄 アップデートによる変化</h3>
+      <div class="before-after">
+        <div class="ba-card ba-before">
+          <div class="ba-label">❌ Before (アップデート前)</div>
+          <ul class="ba-list">
+            <li>デプロイパッケージを常に Lambda 管理ストレージへコピーしていた</li>
+            <li>コピーがリージョンごと 75GB 上限にカウントされ、上限に達しやすかった</li>
+            <li>コピー処理により、作成・更新後のアクティベーションに時間がかかった</li>
+            <li>ストレージへ複製されるため、単一の信頼できる情報源を維持しにくかった</li>
+          </ul>
+        </div>
+        <div class="ba-arrow">➜</div>
+        <div class="ba-card ba-after">
+          <div class="ba-label">✅ After (アップデート後)</div>
+          <ul class="ba-list">
+            <li>REFERENCE モードで、お客様の S3 バケットのコードを直接参照</li>
+            <li>コピーを作成しないため、コードストレージ上限が実質的に解消</li>
+            <li>コピー処理を省き、アクティベーション時間が短縮</li>
+            <li>お客様のアカウント内で一元管理し、単一の信頼できる情報源を維持</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Before["📦 アップデート前 コピー方式"]
+        direction TB
+        DevA(["👤 開発者"]) --> S3A[("🪣 お客様の<br/>S3 バケット")]
+        S3A -->|"デプロイパッケージ<br/>アップロード"| LambdaA["⚡ Lambda<br/>作成 / 更新"]
+        LambdaA -->|"コピー<br/>75GB 上限にカウント"| ManagedA[("🗄️ Lambda 管理<br/>ストレージ")]
+        ManagedA --> ExecA["⚙️ 関数実行環境"]
+    end
+
+    subgraph After["📦 アップデート後 参照方式 REFERENCE"]
+        direction TB
+        DevB(["👤 開発者"]) --> S3B[("🪣 お客様の<br/>S3 バケット")]
+        S3B -->|"デプロイパッケージ<br/>アップロード"| LambdaB["⚡ Lambda<br/>作成 / 更新"]
+        LambdaB -.->|"直接参照<br/>コピーなし"| S3B
+        S3B --> ExecB["⚙️ 関数実行環境"]
+    end
+
+    classDef box fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+
+    class Before,After box
+    class DevA,DevB user
+    class S3A,S3B storage
+    class ManagedA database
+    class LambdaA,LambdaB,ExecA,ExecB compute
+        </pre>
+      </div>
+      <p class="caption">
+        アップデート前はデプロイパッケージが Lambda 管理ストレージへコピーされ、75GB の上限にカウントされていた。アップデート後は REFERENCE モードにより、Lambda がお客様の S3 バケットを直接参照するため、コピー処理と上限の制約が解消される。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>✨ 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="fc-title">1️⃣ 自己管理型 S3 バケットによるコード参照</div>
+        <ul>
+          <li>お客様自身の S3 バケット内のデプロイパッケージを直接参照する</li>
+          <li>Lambda が中間コピーを作成しないため、コードストレージ上限が実質的に解消される</li>
+          <li>デプロイパッケージをお客様のアカウント内で一元管理できる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">2️⃣ アクティベーション時間の短縮</div>
+        <ul>
+          <li>コピー処理を省くことで、関数の作成、更新後のアクティベーション時間が短縮される</li>
+          <li>大きなデプロイパッケージを扱う場合ほど効果が大きい</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">3️⃣ Lambda 管理ストレージのデフォルト上限引き上げ</div>
+        <ul>
+          <li>デフォルト上限がリージョンごとアカウントごとに 75GB から 300GB へ引き上げ</li>
+          <li>従来のコピー方式を継続する場合も、より多くの関数やレイヤーを保持できる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">4️⃣ 追加の Lambda 料金なし</div>
+        <ul>
+          <li>自己管理型ストレージに対する Lambda の追加料金は発生しない</li>
+          <li>標準の S3 ストレージ料金と、該当する場合のクロスリージョンデータ転送料金のみ</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>主要パラメータと制限</h3>
+      <table>
+        <thead>
+          <tr><th>項目</th><th>詳細</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>パラメータ名</td><td>S3ObjectStorageMode</td></tr>
+          <tr><td>設定値</td><td>REFERENCE (自己管理型), 未指定時は従来のコピー方式</td></tr>
+          <tr><td>対応インターフェイス</td><td>AWS CLI, CloudFormation, SAM, SDK, Lambda コンソール</td></tr>
+          <tr><td>対象リソース</td><td>関数 (Function), レイヤー (Layer)</td></tr>
+          <tr><td>必要な権限</td><td>s3:GetObject, s3:GetObjectVersion (Lambda サービスプリンシパルに付与)</td></tr>
+          <tr><td>Lambda 管理ストレージのデフォルト上限</td><td>75GB から 300GB へ引き上げ (リージョンごとアカウントごと)</td></tr>
+          <tr><td>自己管理型ストレージの上限</td><td>S3 バケットの容量に依存 (実質的に上限なし)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>API 変更履歴</h3>
+      <table>
+        <thead>
+          <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>2026/07/15</td><td>AWS Lambda</td><td>CreateFunction / UpdateFunctionCode / PublishLayerVersion 等に S3ObjectStorageMode パラメータを追加</td></tr>
+        </tbody>
+      </table>
+
+      <h3>IAM ポリシー設定例</h3>
+      <p style="font-size:14px;">Lambda サービスプリンシパルに、対象の S3 バケットへの読み取り権限を付与するバケットポリシーの例です。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">S3 バケットポリシー</span>
+        </div>
+        <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowLambdaReadAccess",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion"
+      ],
+      "Resource": "arn:aws:s3:::my-lambda-code-bucket/*"
+    }
+  ]
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <ul class="plain">
+        <li>デプロイパッケージ (ZIP) を格納する S3 バケットを用意する</li>
+        <li>Lambda サービスプリンシパルに s3:GetObject と s3:GetObjectVersion の権限を付与する</li>
+        <li>AWS CLI, CloudFormation, SAM, SDK のいずれかを使用できる環境を用意する</li>
+      </ul>
+
+      <h3>導入ステップ</h3>
+      <div class="flow-diagram">
+        <div class="flow-step">
+          <div class="fs-num">1</div><br/>
+          🪣 デプロイパッケージを<br/>S3 にアップロード
+        </div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">
+          <div class="fs-num">2</div><br/>
+          ⚡ REFERENCE モードで<br/>関数を作成
+        </div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">
+          <div class="fs-num">3</div><br/>
+          📄 CloudFormation / SAM<br/>で IaC 管理
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ステップ 1: デプロイパッケージを S3 にアップロード</span>
+        </div>
+        <pre><code class="language-bash">aws s3 cp function.zip s3://my-lambda-code-bucket/function.zip</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ステップ 2: REFERENCE モードで関数を作成</span>
+        </div>
+        <pre><code class="language-bash">aws lambda create-function \
+  --function-name my-function \
+  --runtime python3.13 \
+  --role arn:aws:iam::123456789012:role/lambda-exec-role \
+  --handler index.handler \
+  --code S3Bucket=my-lambda-code-bucket,S3Key=function.zip \
+  --s3-object-storage-mode REFERENCE</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">YAML</span>
+          <span class="code-title">ステップ 3: CloudFormation / SAM での設定</span>
+        </div>
+        <pre><code class="language-yaml">Resources:
+  MyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: my-function
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt LambdaExecRole.Arn
+      Code:
+        S3Bucket: my-lambda-code-bucket
+        S3Key: function.zip
+      S3ObjectStorageMode: REFERENCE</code></pre>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>🎯 メリット</h2>
+      <div class="two-col">
+        <div class="merit-box">
+          <h3>💼 ビジネス面</h3>
+          <ul>
+            <li><strong>コスト最適化</strong>: Lambda の追加料金なし、標準の S3 ストレージ料金のみで運用</li>
+            <li><strong>ストレージ上限の解消</strong>: 大量の関数やレイヤーを持つ組織でも上限を気にせずデプロイ</li>
+            <li><strong>運用負荷の軽減</strong>: 75GB 上限到達時のクォータ引き上げサポートケースが不要</li>
+          </ul>
+        </div>
+        <div class="merit-box">
+          <h3>🛠️ 技術面</h3>
+          <ul>
+            <li><strong>アクティベーション時間の短縮</strong>: コピー処理を省き、作成・更新が高速化</li>
+            <li><strong>単一の信頼できる情報源</strong>: デプロイパッケージをお客様のアカウント内で一元管理</li>
+            <li><strong>既存ツールとの統合</strong>: AWS CLI, CloudFormation, SAM, SDK でパラメータ 1 つ追加のみ</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <div class="note-box">
+        <strong style="color: var(--aws-smile-orange);">制限事項</strong>
+        <ul>
+          <li>Lambda サービスプリンシパルに s3:GetObject と s3:GetObjectVersion の権限を付与する必要がある</li>
+          <li>S3 バケット内のオブジェクトを削除、変更すると関数の動作に影響する可能性があり、ライフサイクル管理に注意が必要</li>
+          <li>クロスリージョンで参照する場合、データ転送料金が発生する場合がある</li>
+        </ul>
+      </div>
+      <div class="note-box">
+        <strong style="color: var(--aws-smile-orange);">考慮すべき点</strong>
+        <ul>
+          <li>参照先の S3 オブジェクトが削除された場合の関数動作を、事前に検証しておくことが望ましい</li>
+          <li>バケットポリシーやオブジェクトのバージョニング設定を適切に管理する必要がある</li>
+          <li>従来のコピー方式 (未指定) と REFERENCE 方式を用途に応じて使い分ける</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="uc-title">1. 大量の関数を持つ大規模組織</div>
+        <div class="uc-row"><span class="uc-tag">シナリオ:</span> 数百から数千の Lambda 関数を運用しており、75GB のコードストレージ上限に頻繁に達していた組織。</div>
+        <div class="uc-row"><span class="uc-tag">効果:</span> コードストレージ上限の制約が解消され、クォータ引き上げのためのサポートケース対応が不要になる。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">既存関数を REFERENCE モードへ移行</span></div>
+          <pre><code class="language-bash">aws lambda update-function-configuration \
+  --function-name existing-function \
+  --s3-object-storage-mode REFERENCE</code></pre>
+        </div>
+      </div>
+
+      <div class="usecase">
+        <div class="uc-title">2. 大きなデプロイパッケージの高速デプロイ</div>
+        <div class="uc-row"><span class="uc-tag">シナリオ:</span> 機械学習の推論ライブラリなど、サイズの大きいデプロイパッケージを頻繁に更新するワークロード。</div>
+        <div class="uc-row"><span class="uc-tag">効果:</span> コピー処理を省くことで、更新後のアクティベーション時間が短縮され、デプロイのリードタイムが改善する。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">大きなパッケージの更新</span></div>
+          <pre><code class="language-bash">aws s3 cp large-package.zip s3://my-lambda-code-bucket/large-package.zip
+aws lambda update-function-code \
+  --function-name ml-inference \
+  --s3-bucket my-lambda-code-bucket \
+  --s3-key large-package.zip \
+  --s3-object-storage-mode REFERENCE</code></pre>
+        </div>
+      </div>
+
+      <div class="usecase">
+        <div class="uc-title">3. デプロイパッケージの一元管理</div>
+        <div class="uc-row"><span class="uc-tag">シナリオ:</span> 複数チームで共通のアーティファクトバケットを利用し、デプロイパッケージを一元管理したい環境。</div>
+        <div class="uc-row"><span class="uc-tag">効果:</span> お客様のバケットが単一の信頼できる情報源となり、成果物のガバナンスとバージョン管理が容易になる。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">共通アーティファクトバケットの参照</span></div>
+          <pre><code class="language-yaml">Code:
+  S3Bucket: shared-artifact-bucket
+  S3Key: services/api/v1.2.3/package.zip
+S3ObjectStorageMode: REFERENCE</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金 &amp; 🌍 利用可能リージョン</h2>
+      <div class="note-box">
+        <strong style="color: var(--aws-smile-orange);">料金</strong>
+        <p style="margin:6px 0; font-size:14px;">
+          自己管理型ストレージに対する Lambda の追加料金は発生しません。以下の料金のみが課金されます。
+        </p>
+        <ul>
+          <li>標準の Amazon S3 ストレージ料金</li>
+          <li>該当する場合のクロスリージョンデータ転送料金</li>
+        </ul>
+        <p style="margin:6px 0; font-size:14px;">Lambda 管理のコードストレージについても、料金体系に変更はありません。</p>
+      </div>
+      <table>
+        <thead>
+          <tr><th>使用量</th><th>月額料金 (概算)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>S3 標準ストレージ 100GB (デプロイパッケージ)</td><td>標準の S3 ストレージ料金に準拠</td></tr>
+          <tr><td>同一リージョン内での参照</td><td>データ転送料金なし</td></tr>
+          <tr><td>クロスリージョンでの参照</td><td>該当リージョン間のデータ転送料金</td></tr>
+        </tbody>
+      </table>
+      <div class="region-box">
+        <strong style="color: var(--aws-teal);">🌍 利用可能リージョン</strong>
+        <p style="margin:6px 0;">すべての商用 AWS リージョンで利用可能です。</p>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <ul class="plain">
+        <li><strong>Amazon S3</strong>: デプロイパッケージの格納先であり、REFERENCE モードでは Lambda が直接参照する</li>
+        <li><strong>AWS CloudFormation / AWS SAM</strong>: S3ObjectStorageMode パラメータを IaC で管理できる</li>
+        <li><strong>AWS Lambda レイヤー</strong>: 関数と同様に REFERENCE モードでコードストレージ上限を回避できる</li>
+      </ul>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        自己管理型コードストレージは、Lambda の<span class="highlight">コードストレージ上限という長年の運用上の制約を解消</span>する重要なアップデートです。
+        追加の Lambda 料金なしでアクティベーション時間を短縮でき、大量の関数やレイヤーを扱う組織や大きなデプロイパッケージを扱うワークロードで特に効果を発揮します。
+        既存の関数についても S3ObjectStorageMode を REFERENCE に設定するだけで移行できるため、ストレージ上限に課題を抱えている場合はまず検証環境での導入を検討することをおすすめします。
+      </p>
+    </div>
+
+    <footer>
+      <p>📎 出典 / Source:</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/07/lambda-self-managed-code-storage/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/lambda/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Lambda ドキュメント</a></li>
+      </ul>
+      <p>リリース日: 2026年7月15日 / サービス: AWS Lambda</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

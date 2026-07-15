@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS DRS - Amazon EBS ボリューム初期化レートのサポート</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      background-image: radial-gradient(circle at 15% 10%, rgba(255,153,0,0.08), transparent 45%),
+                        radial-gradient(circle at 85% 90%, rgba(0,161,201,0.08), transparent 45%);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.7;
+      padding: 24px;
+      margin: 0;
+    }
+
+    .container { max-width: 1000px; margin: 0 auto; width: 100%; }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+      border-bottom: 3px solid var(--aws-orange);
+      padding-bottom: 20px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .header-right { text-align: right; font-size: 14px; }
+    .date-pill {
+      background: var(--aws-dark-squid);
+      border: 1px solid rgba(255,153,0,0.4);
+      border-radius: 20px;
+      padding: 6px 16px;
+      color: var(--aws-orange);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h3 {
+      font-size: 18px;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    p { margin: 12px 0; }
+
+    /* Before / After */
+    .ba-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: stretch;
+      margin: 20px 0;
+    }
+    .ba-card {
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .ba-before {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+    .ba-after {
+      background: rgba(29, 129, 2, 0.14);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+    .ba-label { font-weight: 700; font-size: 15px; margin-bottom: 10px; }
+    .ba-before .ba-label { color: #FF7A5C; }
+    .ba-after .ba-label { color: #6DD36B; }
+    .ba-arrow {
+      display: flex; align-items: center; justify-content: center;
+      color: var(--aws-orange); font-size: 32px; font-weight: bold;
+    }
+    .ba-card ul { margin: 0; padding-left: 18px; }
+    .ba-card li { margin: 8px 0; font-size: 14px; }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid { display: flex; justify-content: center; }
+    .caption { font-size: 13px; color: #9AA5A5; text-align: center; margin-top: 8px; }
+
+    /* Feature cards */
+    .feature-card {
+      background: rgba(255,255,255,0.03);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 6px;
+      padding: 16px 18px;
+      margin: 14px 0;
+    }
+    .feature-card .fc-title {
+      font-weight: 700; color: var(--aws-white); font-size: 16px;
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .feature-card ul { margin: 6px 0 0 0; padding-left: 18px; }
+    .feature-card li { margin: 5px 0; font-size: 14px; }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255,153,0,0.18), rgba(140,79,255,0.12));
+      border: 1px solid rgba(255,153,0,0.35);
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-num { font-size: 30px; font-weight: 700; color: var(--aws-orange); line-height: 1.2; }
+    .stat-label { font-size: 13px; color: var(--aws-light-gray); margin-top: 6px; }
+
+    /* Table */
+    table {
+      width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px;
+    }
+    th, td {
+      text-align: left; padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    th { color: var(--aws-orange); font-weight: 600; }
+    td { color: var(--aws-light-gray); }
+    tr:last-child td { border-bottom: none; }
+    td:first-child { font-weight: 600; color: var(--aws-white); white-space: nowrap; }
+
+    /* Code block */
+    .code-block { background: #16181f; border-radius: 8px; overflow: hidden; margin: 16px 0; border: 1px solid rgba(255,153,0,0.2); }
+    .code-header {
+      background: #10131a; padding: 8px 16px;
+      display: flex; justify-content: space-between; font-size: 12px;
+    }
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+    .code-block code { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.6; padding: 16px !important; }
+
+    /* Steps */
+    .steps { counter-reset: step; margin: 16px 0; }
+    .step {
+      position: relative; padding-left: 52px; margin: 16px 0;
+      min-height: 40px;
+    }
+    .step::before {
+      counter-increment: step; content: counter(step);
+      position: absolute; left: 0; top: 0;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--aws-orange); color: var(--aws-squid-ink);
+      font-weight: 700; font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .step .step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+    .step .step-desc { font-size: 14px; }
+
+    /* Use cases */
+    .usecase {
+      background: rgba(255,153,0,0.08);
+      border: 1px solid rgba(255,153,0,0.3);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin: 14px 0;
+    }
+    .uc-title { font-weight: 700; color: var(--aws-orange); font-size: 16px; margin-bottom: 8px; }
+    .uc-effect {
+      margin-top: 10px; padding: 8px 12px;
+      background: rgba(29,129,2,0.15); border-radius: 6px;
+      font-size: 14px; border-left: 3px solid var(--aws-green);
+    }
+
+    /* Two-col lists */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .list-clean { list-style: none; padding: 0; margin: 0; }
+    .list-clean li { margin: 10px 0; padding-left: 26px; position: relative; font-size: 14px; }
+    .list-clean li::before {
+      content: '→'; position: absolute; left: 0; color: var(--aws-orange); font-weight: bold;
+    }
+    .list-warn li::before { content: '⚠'; color: var(--aws-smile-orange); }
+    .list-check li::before { content: '✓'; color: var(--aws-green); }
+
+    .pill-box {
+      display: inline-block; background: rgba(0,161,201,0.15);
+      border: 1px solid rgba(0,161,201,0.4); border-radius: 6px;
+      padding: 4px 10px; margin: 4px; font-size: 13px; color: var(--aws-light-gray);
+    }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+    footer {
+      margin-top: 24px; padding-top: 20px;
+      border-top: 1px dashed rgba(255,255,255,0.25);
+      font-size: 13px; color: var(--aws-light-gray);
+    }
+    footer ul { padding-left: 20px; }
+    footer li { margin: 6px 0; }
+
+    @media (max-width: 640px) {
+      .ba-grid { grid-template-columns: 1fr; }
+      .ba-arrow { transform: rotate(90deg); }
+      .two-col { grid-template-columns: 1fr; }
+      h1, .title { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div>
+        <span class="service-badge">AWS Elastic Disaster Recovery</span>
+        <h1>💾 Amazon EBS ボリューム<br/>初期化レートのサポート</h1>
+      </div>
+      <div class="header-right">
+        <span class="date-pill">📅 2026 年 7 月 14 日</span>
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>
+        AWS Elastic Disaster Recovery (AWS DRS) が、<span class="highlight">Amazon EBS ボリューム初期化レート</span>
+        (Provisioned Rate for Volume Initialization) をサポートしました。災害復旧のドリル (訓練) や実際のリカバリー時に、
+        復元されたボリュームがより早く<span class="highlight">フルパフォーマンス</span>に到達できるようになります。
+      </p>
+      <p>
+        DRS がスナップショットから EBS ボリュームを復元する際、データは Amazon S3 からバックグラウンドで読み込まれます。
+        このため、まだ読み込まれていないブロックへの I/O は初期化完了まで遅くなる可能性がありました。
+        今回のアップデートでは、DRS 管理の EC2 起動テンプレートに初期化レートを設定でき、リカバリー時に自動適用されます。
+        特にデータベースなど I/O 負荷の高いワークロードで、<span class="highlight">目標復旧時間 (RTO)</span> の達成に有効です。
+      </p>
+
+      <div class="ba-grid">
+        <div class="ba-card ba-before">
+          <div class="ba-label">❌ アップデート前の課題</div>
+          <ul>
+            <li>復元した EBS ボリュームは初期化完了まで I/O レイテンシーが増加し、パフォーマンスが低下</li>
+            <li>デフォルトの初期化レートは変動するため、フルパフォーマンス到達までの時間が予測しにくい</li>
+            <li>I/O 負荷の高い DB などでは、リカバリー直後の性能低下が RTO 達成を妨げる要因に</li>
+          </ul>
+        </div>
+        <div class="ba-arrow">➜</div>
+        <div class="ba-card ba-after">
+          <div class="ba-label">✅ アップデート後の改善</div>
+          <ul>
+            <li>DRS 管理の EC2 起動テンプレートにレートを設定でき、リカバリー時に自動適用</li>
+            <li>スナップショットサイズと指定レートに基づき、予測可能な時間でフルパフォーマンスに到達</li>
+            <li>一度設定すればライトサイジングやディスク変更後も設定が保持される</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Source["🏢 ソース環境"]
+        SrcServer["🖥️ ソースサーバー"]
+    end
+
+    subgraph AWS["☁️ AWS リカバリー環境"]
+        subgraph Config["⚙️ DRS 設定"]
+            Template["📋 DRS 管理<br/>EC2 起動テンプレート<br/>初期化レート 100〜300 MiB/s"]
+        end
+        Snapshot[("📸 EBS スナップショット")]
+        S3[("🪣 Amazon S3")]
+        subgraph Recovery["🔄 リカバリーインスタンス"]
+            Vol["💾 復元 EBS ボリューム<br/>指定レートで初期化"]
+        end
+    end
+
+    SrcServer -.->|レプリケーション| Snapshot
+    Template -->|レート適用| Vol
+    Snapshot --> S3
+    S3 -->|指定レートで<br/>ブロック読み込み| Vol
+
+    classDef source fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef config fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef process fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Source source
+    class SrcServer source
+    class AWS cloud
+    class Config,Template config
+    class Snapshot,S3 storage
+    class Recovery,Vol process
+        </pre>
+      </div>
+      <p class="caption">
+        DRS 管理の EC2 起動テンプレートに設定したボリューム初期化レートが、リカバリー時に S3 からのスナップショットブロック読み込みへ自動適用される流れ
+      </p>
+    </div>
+
+    <!-- 統計情報 -->
+    <div class="section">
+      <h2>📊 数字で見るポイント</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-num">100〜300<span style="font-size:16px;"> MiB/s</span></div>
+          <div class="stat-label">指定可能な初期化レート</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">99%<span style="font-size:16px;"> の時間</span></div>
+          <div class="stat-label">指定レートの 10% 以内の平均レートを提供</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">5,000<span style="font-size:16px;"> MiB/s</span></div>
+          <div class="stat-label">リージョンあたりの累積レート上限</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">≒ 34.1<span style="font-size:16px;"> 秒</span></div>
+          <div class="stat-label">10 GiB を 300 MiB/s で初期化する例</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="fc-title">📋 DRS 起動テンプレートへのレート設定</div>
+        <ul>
+          <li>DRS が管理する EC2 起動テンプレートにボリューム初期化レートを設定できる</li>
+          <li>リカバリー時にスナップショットからボリュームを作成する際、指定レートを自動適用</li>
+          <li>ライトサイジングやディスク変更で DRS がテンプレートを更新しても設定が保持される</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">⏱️ 予測可能な初期化時間</div>
+        <ul>
+          <li>スナップショットデータサイズと指定レートから、フルパフォーマンス到達時間を予測できる</li>
+          <li>Amazon EBS は指定レートの 10% 以内の平均レートを 99% の時間で提供</li>
+          <li>複数ボリュームを同時復元しても、予測可能な時間で初期化が完了</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">🛡️ リカバリーをブロックしない設計</div>
+        <ul>
+          <li>何らかの理由でレートを適用できない場合でも、レートなしでリカバリーが完了</li>
+          <li>初期化レートの適用失敗によってリカバリー自体が妨げられることはない</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>指定可能なレート</td><td>100〜300 MiB/s</td></tr>
+        <tr><td>課金・時間の基準</td><td>ボリュームサイズではなくスナップショットデータのサイズ</td></tr>
+        <tr><td>精度</td><td>指定レートの 10% 以内の平均レートを 99% の時間で提供</td></tr>
+        <tr><td>累積レート上限</td><td>同時ボリューム作成リクエスト全体でリージョンあたり 5,000 MiB/s</td></tr>
+        <tr><td>対応ボリュームタイプ</td><td>すべての EBS ボリュームタイプ</td></tr>
+        <tr><td>非対応環境</td><td>AWS Outposts、Local Zones、Wavelength Zones</td></tr>
+      </table>
+
+      <h3>🧮 初期化時間の計算例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Text</span>
+          <span class="code-title">初期化時間 ≒ スナップショットデータサイズ ÷ 指定レート</span>
+        </div>
+        <pre><code class="language-text">例: 10 GiB のスナップショットデータを 300 MiB/s で初期化する場合
+10 GiB (= 10,240 MiB) / 300 MiB/s ≒ 34.1 秒
+
+同じスナップショットで 10 個のボリュームを同時に作成しても、
+それぞれ約 34.1 秒でフル初期化が完了する。</code></pre>
+      </div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <ul class="list-clean list-check">
+        <li>AWS DRS が設定され、ソースサーバーがレプリケーション済みであること</li>
+        <li>ボリューム初期化レートが提供されているリージョンおよび環境であること</li>
+        <li>DRS 管理の EC2 起動テンプレートを編集する権限を持っていること</li>
+      </ul>
+
+      <h3>手順</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-title">DRS 起動テンプレートを開く</div>
+          <div class="step-desc">AWS DRS コンソールでソースサーバーを選択し、関連付けられた EC2 起動テンプレートの設定を開く。リカバリー時に起動されるインスタンスとアタッチされる EBS ボリュームの構成を定義する。</div>
+        </div>
+        <div class="step">
+          <div class="step-title">ボリューム初期化レートを設定する</div>
+          <div class="step-desc">起動テンプレートの EBS ボリュームのブロックデバイスマッピングに対して、100〜300 MiB/s の範囲で初期化レートを指定する。リカバリー時に作成されるボリュームへ自動適用される。</div>
+        </div>
+        <div class="step">
+          <div class="step-title">リカバリーまたはドリルを実行する</div>
+          <div class="step-desc">DRS はスナップショットから EBS ボリュームを作成する際に指定レートを適用。S3 からのブロック読み込みが指定レートで行われ、予測可能な時間でフルパフォーマンスに到達する。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット / デメリット -->
+    <div class="section">
+      <h2>⚖️ メリットと制約事項</h2>
+      <div class="two-col">
+        <div>
+          <h3 style="color:var(--aws-green);">👍 メリット</h3>
+          <p style="font-size:13px;color:var(--aws-orange);font-weight:600;margin:4px 0;">ビジネス面</p>
+          <ul class="list-clean list-check">
+            <li><strong>RTO の改善</strong>: 予測可能な時間でフルパフォーマンス到達、RTO 達成が容易に</li>
+            <li><strong>ドリルの信頼性向上</strong>: リカバリー後性能を実運用に近い状態で検証</li>
+            <li><strong>運用負荷の軽減</strong>: 一度設定すればレートが保持され再設定不要</li>
+          </ul>
+          <p style="font-size:13px;color:var(--aws-orange);font-weight:600;margin:10px 0 4px;">技術面</p>
+          <ul class="list-clean list-check">
+            <li><strong>I/O 集約型に最適化</strong>: DB などのリカバリー直後の性能低下を抑制</li>
+            <li><strong>予測可能な初期化</strong>: サイズとレートから完了時間を計算可能</li>
+            <li><strong>同時復元時の一貫性</strong>: 各ボリュームが予測可能な時間で初期化</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="color:var(--aws-smile-orange);">⚠️ 制約・考慮点</h3>
+          <p style="font-size:13px;color:var(--aws-orange);font-weight:600;margin:4px 0;">制限事項</p>
+          <ul class="list-clean list-warn">
+            <li>指定できるレートは 100〜300 MiB/s の範囲に限られる</li>
+            <li>Outposts、Local Zones、Wavelength Zones では指定不可</li>
+            <li>リージョンあたり 5,000 MiB/s の累積レート上限</li>
+            <li>fast snapshot restore 有効時は指定レートが優先される</li>
+          </ul>
+          <p style="font-size:13px;color:var(--aws-orange);font-weight:600;margin:10px 0 4px;">考慮すべき点</p>
+          <ul class="list-clean list-warn">
+            <li>フルスナップショットサイズと指定レートに基づく追加コストが発生</li>
+            <li>初期化完了前にボリュームを削除しても、指定レート分は課金</li>
+            <li>レート適用不可でも DRS 経由ならレートなしでリカバリー継続</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="uc-title">1. データベースワークロードの災害復旧</div>
+        <p style="font-size:14px;margin:6px 0;"><strong>シナリオ</strong>: 大規模 RDB を DRS で保護。従来はリカバリー直後にボリューム初期化完了までクエリレイテンシーが増大し、サービス再開後の性能が不安定だった。</p>
+        <p style="font-size:14px;margin:6px 0;"><strong>実装例</strong>: データボリュームに 300 MiB/s の初期化レートを設定 → 最速レートで初期化。</p>
+        <div class="uc-effect">💡 リカバリー直後から安定したストレージ性能を確保し、DB の RTO を短縮</div>
+      </div>
+
+      <div class="usecase">
+        <div class="uc-title">2. 定期的な災害復旧ドリル</div>
+        <p style="font-size:14px;margin:6px 0;"><strong>シナリオ</strong>: コンプライアンス要件でドリルを実施。初期化の影響で測定パフォーマンスがばらつき、実性能を正しく評価できなかった。</p>
+        <p style="font-size:14px;margin:6px 0;"><strong>実装例</strong>: 起動テンプレートに一定の初期化レートを設定 → ドリルごとに一貫したパフォーマンスを測定。</p>
+        <div class="uc-effect">💡 ドリル結果の再現性が向上し、実際のリカバリー性能をより正確に評価</div>
+      </div>
+
+      <div class="usecase">
+        <div class="uc-title">3. 複数サーバーの同時リカバリー</div>
+        <p style="font-size:14px;margin:6px 0;"><strong>シナリオ</strong>: 障害時に多数のサーバーを同時リカバリー。各ボリュームの初期化完了時間が読めず、全体の復旧タイミングを見積もれなかった。</p>
+        <p style="font-size:14px;margin:6px 0;"><strong>実装例</strong>: 各起動テンプレートにレートを設定 (累積 5,000 MiB/s の上限に注意) → サイズとレートから完了時間を試算。</p>
+        <div class="uc-effect">💡 全サーバーの初期化完了時間を予測でき、復旧計画の精度が向上</div>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>
+        ボリューム初期化レートを指定して作成すると、<span class="highlight">スナップショットデータの GB 単位</span>、かつ
+        <span class="highlight">指定した初期化レートの MiB 単位あたり</span>の料金が課金されます (リージョンにより異なる)。
+        課金の基準はボリュームサイズではなくスナップショットデータのサイズです。
+        たとえば 100 GiB のボリュームで実データが 50 GiB の場合、課金対象は 50 GiB となります。
+      </p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Text</span>
+          <span class="code-title">課金計算式</span>
+        </div>
+        <pre><code class="language-text">リージョンごとのレート × スナップショットデータサイズ × ボリューム初期化レート</code></pre>
+      </div>
+      <ul class="list-clean list-warn">
+        <li>ボリュームが <code>active</code> 状態になった時点で全額が請求される</li>
+        <li>失敗したリクエストは課金されない</li>
+        <li>初期化完了前にボリュームを削除しても、指定した初期化レート分は課金される</li>
+      </ul>
+    </div>
+
+    <!-- リージョン / 関連サービス -->
+    <div class="section">
+      <h2>🌍 利用可能リージョンと関連サービス</h2>
+      <h3>利用可能リージョン</h3>
+      <p>Amazon EBS ボリューム初期化レートが提供されているすべての AWS リージョンおよび環境で利用できます。</p>
+
+      <h3>関連サービス・機能</h3>
+      <div class="feature-card">
+        <ul>
+          <li><strong>Amazon EBS</strong>: ボリューム初期化レートの基盤機能。DRS はこの Provisioned Rate for Volume Initialization を活用</li>
+          <li><strong>Amazon EC2</strong>: DRS 管理の起動テンプレートでリカバリーインスタンスとボリューム構成を定義</li>
+          <li><strong>Amazon S3</strong>: スナップショットデータを保存し、初期化時にブロックが読み込まれる</li>
+          <li><strong>EBS 高速スナップショット復元 (fast snapshot restore)</strong>: 作成時に完全初期化する代替手段。初期化レート指定時はこちらより優先される</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section" style="border:1px solid rgba(255,153,0,0.4);background:linear-gradient(135deg,rgba(255,153,0,0.08),rgba(26,36,47,1));">
+      <h2>📝 まとめ</h2>
+      <p>
+        このアップデートにより、AWS DRS でのリカバリーやドリルにおいて、復元された EBS ボリュームが
+        <span class="highlight">予測可能な時間でフルパフォーマンスに到達</span>できるようになりました。
+        特にデータベースなど I/O 集約型ワークロードの RTO 改善に有効です。
+        DRS を利用している場合は、重要なボリュームの起動テンプレートに初期化レートを設定し、
+        追加コストとのバランスを考慮しながら災害復旧の信頼性向上を検討してください。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典・参考リンク</p>
+      <ul>
+        <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/07/aws-drs-fast-hydration/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a class="aws-link" href="https://docs.aws.amazon.com/ebs/latest/userguide/initalize-volume.html" target="_blank" rel="noopener noreferrer">Amazon EBS ボリュームの初期化 (ドキュメント)</a></li>
+        <li><a class="aws-link" href="https://docs.aws.amazon.com/drs/latest/userguide/what-is-drs.html" target="_blank" rel="noopener noreferrer">AWS Elastic Disaster Recovery ユーザーガイド</a></li>
+        <li><a class="aws-link" href="https://aws.amazon.com/ebs/pricing/" target="_blank" rel="noopener noreferrer">Amazon EBS 料金ページ</a></li>
+      </ul>
+    </footer>
+
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
