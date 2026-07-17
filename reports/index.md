@@ -5,11 +5,19 @@
 
 ## 2026 年
 
+- [2026-07-17 - Amazon OpenSearch Service - OpenSearch UI ワンクリックダッシュボード移行](2026/2026-07-17-amazon-opensearch-ui-one-click-dashboard-migration.md)
+- [2026-07-16 - Amazon S3 - S3 Standard-IA および S3 One Zone-IA への 30 日間最小移行期間の撤廃](2026/2026-07-16-s3-removes-30-day-transitions-standard-ia-one-zone-ia.md)
+- [2026-07-16 - Amazon EC2 - パブリック AMI に関連付けられたパブリック SSM パラメータの表示](2026/2026-07-16-ec2-public-images-ssm-parameters.md)
 - [2026-07-16 - Amazon EC2 - パブリック AMI に関連付けられたパブリック SSM パラメータの表示](2026/2026-07-16-ec2-pulic-images-ssm-parameters.md)
 - [2026-07-16 - AWS Sustainability - 水使用量 (water withdrawals) データの提供開始](2026/2026-07-16-aws-sustainability-water-withdrawals.md)
+- [2026-07-16 - AWS Backup - 論理的エアギャップ保管庫のリージョン拡大](2026/2026-07-16-aws-backup-logically-air-gapped-vault-regions.md)
 - [2026-07-16 - Amazon S3 - Event Notifications にシステム生成タグを追加](2026/2026-07-16-amazon-s3-event-notifications-system-generated-tags.md)
 - [2026-07-16 - Amazon EC2 High Memory - U7in-24TB インスタンスの欧州 (パリ) リージョン提供開始](2026/2026-07-16-amazon-ec2-high-memory-europe.md)
+- [2026-07-16 - Amazon Aurora DSQL - FedRAMP Moderate 対応](2026/2026-07-16-amazon-aurora-dsql-now-in-scope-for-fedramp-moderate.md)
 - [2026-07-16 - Amazon RDS for PostgreSQL - PostgreSQL 19 Beta 2 が RDS Database Preview Environment で利用可能に](2026/2026-07-16-postgresql-19-beta-2-amazon-rds-database-preview-environment.md)
+- [2026-07-16 - AWS Billing and Cost Management - Cost Efficiency ウィジェット](2026/2026-07-16-monitor-cost-efficiency-using-dashboards.md)
+- [2026-07-16 - Amazon Managed Grafana - AWS GovCloud (US) での FedRAMP High 認証取得](2026/2026-07-16-amazon-managed-grafana-fedramp-high.md)
+- [2026-07-16 - AWS Backup - 復元テスト (Restore Testing) の対応リージョン拡大](2026/2026-07-16-aws-backup-restore-testing-regions.md)
 - [2026-07-16 - Amazon Redshift - rg.large および rg.12xlarge インスタンスサイズの追加](2026/2026-07-16-amazon-redshift-adds-rg-large-12xlarge-instance-sizes.md)
 - [2026-07-16 - AWS Control Tower - Account Factory for Terraform が OU 間のアカウント移動時にカスタマイズを再適用](2026/2026-07-16-aws-control-tower-account.md)
 - [2026-07-15 - Amazon CloudWatch Logs Insights - 25 個の新しいクエリコマンドと関数の追加](2026/2026-07-15-amazon-cloudwatch-logs-insights-ql.md)
@@ -17,6 +25,7 @@
 - [2026-07-15 - Amazon Cognito - パスワードハッシュを含むユーザーインポート](2026/2026-07-15-amazon-cognito-password-hash-import.md)
 - [2026-07-15 - Amazon RDS for Db2 - 追加の AWS 商用リージョンで利用可能に](2026/2026-07-15-amazon-rds-db2-available-additional-aws-commercial-regions.md)
 - [2026-07-15 - AWS Lambda - 自己管理型コードストレージ](2026/2026-07-15-lambda-self-managed-code-storage.md)
+- [2026-07-15 - AWS Glue - SAP OData コネクタと zero-ETL 統合の GovCloud (US) 対応](2026/2026-07-15-aws-glue-sap-zero-etl-govcloud.md)
 - [2026-07-15 - Amazon RDS および Aurora - 追加リージョンでの R8g、M8g データベースインスタンス対応](2026/2026-07-15-amazon-rds-aurora-r8g-m8g-regions.md)
 - [2026-07-15 - Amazon RDS - 24 時間以内に最大 4 回のストレージ変更をサポート](2026/2026-07-15-amazon-rds-upto-four-storage-modifications-24-hours.md)
 - [2026-07-15 - Amazon RDS / Aurora - R8gd および M8gd データベースインスタンスの対応リージョン拡大](2026/2026-07-15-amazon-rds-aurora-r8gd-m8gd-regions.md)
