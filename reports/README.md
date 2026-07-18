@@ -5,6 +5,7 @@
 
 ## 2026 年
 
+- [2026-07-17 - Amazon SageMaker HyperPod - Slurm クラスター向けパーティションレベルトポロジー](2026/2026-07-17-hyperpod-partition-topology-slurm.md)
 - [2026-07-17 - Amazon OpenSearch Service - OpenSearch UI ワンクリックダッシュボード移行](2026/2026-07-17-amazon-opensearch-ui-one-click-dashboard-migration.md)
 - [2026-07-16 - Amazon S3 - S3 Standard-IA および S3 One Zone-IA への 30 日間最小移行期間の撤廃](2026/2026-07-16-s3-removes-30-day-transitions-standard-ia-one-zone-ia.md)
 - [2026-07-16 - Amazon EC2 - パブリック AMI に関連付けられたパブリック SSM パラメータの表示](2026/2026-07-16-ec2-public-images-ssm-parameters.md)
