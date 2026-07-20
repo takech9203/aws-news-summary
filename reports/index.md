@@ -5,6 +5,15 @@
 
 ## 2026 年
 
+- [2026-07-20 - Amazon Managed Service for Apache Flink - Apache Flink 2.3 サポート](2026/2026-07-20-amazon-managed-service-flink-2-3.md)
+- [2026-07-20 - Amazon EC2 - R8i および R8i-flex インスタンスの追加リージョン提供開始](2026/2026-07-20-amazon-ec2-r8i-r8i-flex-instances-in-stockholm-zurich-regions.md)
+- [2026-07-20 - Amazon EC2 - I8ge インスタンスが AWS GovCloud (US) リージョンで利用可能に](2026/2026-07-20-amazon-ec2-i8ge-instances-aws-govcloud-us-regions.md)
+- [2026-07-20 - KNFSD File Cache - プレビュー提供開始](2026/2026-07-20-knfsd-file-cache.md)
+- [2026-07-20 - Amazon Connect - エージェント型音声体験の言語拡大と発話コントロール](2026/2026-07-20-amazon-connect-agentic-voice.md)
+- [2026-07-20 - AWS Local Zone - アテネ (ギリシャ) の一般提供開始](2026/2026-07-20-aws-local-zone-athens-greece.md)
+- [2026-07-20 - AWS CloudTrail - ネットワークアクティビティイベントを ID 単位で選択的にログ記録](2026/2026-07-20-aws-cloudtrail-filter-useridentity-advance-selectors.md)
+- [2026-07-20 - Amazon CloudWatch - Coding Agent Insights](2026/2026-07-20-cloudwatch-coding-agent-insights.md)
+- [2026-07-20 - Amazon WorkSpaces Applications - マルチセッションフリートでの OneDrive / Google Drive サポート](2026/2026-07-20-storage-multi-session-fleets.md)
 - [2026-07-17 - Amazon SageMaker HyperPod - Slurm クラスター向けパーティションレベルトポロジー](2026/2026-07-17-hyperpod-partition-topology-slurm.md)
 - [2026-07-17 - Amazon OpenSearch Service - OpenSearch UI ワンクリックダッシュボード移行](2026/2026-07-17-amazon-opensearch-ui-one-click-dashboard-migration.md)
 - [2026-07-16 - Amazon S3 - S3 Standard-IA および S3 One Zone-IA への 30 日間最小移行期間の撤廃](2026/2026-07-16-s3-removes-30-day-transitions-standard-ia-one-zone-ia.md)

@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KNFSD File Cache - スケーラブルな高速 NFS キャッシュソリューション</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      background-image: radial-gradient(circle at 15% 10%, rgba(255,153,0,0.08), transparent 40%),
+                        radial-gradient(circle at 85% 90%, rgba(0,161,201,0.08), transparent 40%);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.7;
+      padding: 24px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+      border-bottom: 3px solid var(--aws-orange);
+      padding-bottom: 20px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 5px 14px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+    .preview-badge {
+      display: inline-block;
+      background: var(--aws-purple);
+      color: var(--aws-white);
+      font-weight: 700;
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+      margin-left: 8px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    h1 .accent { color: var(--aws-orange); }
+
+    .header-meta {
+      text-align: right;
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      white-space: nowrap;
+    }
+
+    .header-meta .date {
+      display: inline-block;
+      background: var(--aws-dark-squid);
+      border: 1px solid rgba(255,153,0,0.4);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-weight: 600;
+      color: var(--aws-smile-orange);
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h3 {
+      font-size: 18px;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-smile-orange);
+    }
+
+    p { margin: 10px 0; }
+
+    /* Before / After */
+    .ba-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: stretch;
+      margin: 20px 0;
+    }
+    .ba-box {
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .ba-before {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+    .ba-after {
+      background: rgba(29, 129, 2, 0.14);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+    .ba-title { font-weight: 700; margin-bottom: 10px; font-size: 16px; }
+    .ba-before .ba-title { color: #ff7a5c; }
+    .ba-after .ba-title { color: #6fdc4a; }
+    .ba-list { list-style: none; padding: 0; margin: 0; }
+    .ba-list li { display: flex; gap: 8px; margin: 10px 0; font-size: 14px; line-height: 1.5; }
+    .ba-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--aws-orange);
+      font-size: 32px;
+      font-weight: bold;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid { display: flex; justify-content: center; }
+
+    .caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 12px;
+      font-style: italic;
+    }
+
+    /* Feature cards */
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin: 14px 0;
+    }
+    .feature-card .fc-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      font-size: 17px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-card ul { margin: 6px 0 0 0; padding-left: 20px; font-size: 14px; }
+    .feature-card li { margin: 5px 0; }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    th {
+      background: rgba(255,153,0,0.15);
+      color: var(--aws-smile-orange);
+      font-weight: 600;
+    }
+    td { color: var(--aws-light-gray); }
+
+    /* Code blocks */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255,153,0,0.2);
+    }
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+    .code-block code { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; padding: 16px !important; }
+
+    /* Steps */
+    .step {
+      display: flex;
+      gap: 14px;
+      margin: 14px 0;
+      align-items: flex-start;
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+    }
+    .step-body { flex: 1; }
+    .step-body .step-title { font-weight: 600; color: var(--aws-white); }
+
+    /* Two column grid */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .sub-card {
+      background: var(--aws-squid-ink);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+    .sub-card h4 { margin: 0 0 10px 0; color: var(--aws-smile-orange); font-size: 15px; }
+    .sub-card ul { margin: 0; padding-left: 18px; font-size: 14px; }
+    .sub-card li { margin: 6px 0; }
+
+    /* Stat cards */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 8px 0;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255,153,0,0.18), rgba(0,161,201,0.12));
+      border: 1px solid rgba(255,153,0,0.3);
+      border-radius: 10px;
+      padding: 18px;
+      text-align: center;
+    }
+    .stat-num {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      line-height: 1.2;
+    }
+    .stat-label { font-size: 13px; color: var(--aws-light-gray); margin-top: 6px; }
+
+    /* Use case */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255,153,0,0.3);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin: 14px 0;
+    }
+    .usecase .uc-title { font-weight: 700; color: var(--aws-smile-orange); margin-bottom: 8px; }
+    .usecase .uc-row { margin: 6px 0; font-size: 14px; }
+    .uc-label { font-weight: 600; color: var(--aws-white); }
+
+    /* callout */
+    .callout {
+      background: rgba(0,161,201,0.1);
+      border-left: 4px solid var(--aws-teal);
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+
+    .link-list { list-style: none; padding: 0; margin: 0; }
+    .link-list li { margin: 10px 0; display: flex; gap: 8px; }
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+    .related-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+    }
+    .related-card {
+      background: var(--aws-squid-ink);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 14px;
+    }
+    .related-card .rc-name { font-weight: 700; color: var(--aws-teal); margin-bottom: 6px; }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.3);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+    footer a { color: var(--aws-teal); }
+
+    @media (max-width: 720px) {
+      .ba-grid { grid-template-columns: 1fr; }
+      .ba-arrow { transform: rotate(90deg); font-size: 26px; }
+      .two-col { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+      .header-meta { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <span class="service-badge">KNFSD File Cache (AWS Solutions Guidance)</span>
+        <span class="preview-badge">プレビュー</span>
+        <h1>スケーラブルな高速 <span class="accent">NFS キャッシュ</span>を AWS 上に展開</h1>
+      </div>
+      <div class="header-meta">
+        <div class="date">📅 2026 年 7 月 20 日</div>
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>
+        AWS は、スケーラブルで高速な <span class="highlight">NFS (Network File System) キャッシュ</span>を AWS 上に展開するためのオープンソースソリューション
+        「<span class="highlight">KNFSD File Cache</span>」のプレビュー提供を開始しました。KNFSD は kernel NFS daemon の略称で、
+        <span class="highlight">Apache-2.0 ライセンス</span>のもと GitHub 上に公開されています。
+      </p>
+      <p>
+        KNFSD File Cache は、1 つ以上のソース NFS サーバーからエクスポートをマウントし、AWS 内の NFS クライアントに対して再エクスポートする
+        <span class="highlight">キャッシングプロキシ</span>として動作します。ソースはオンプレミス、別の AZ / リージョン、
+        あるいは AWS Interconnect 経由の別クラウド (マルチクラウド) に配置できます。頻繁に読み取られるデータをメモリとローカル NVMe にキャッシュすることで、
+        ファイルは高レイテンシーリンクを<span class="highlight">一度だけ通過</span>し、その後はローカル VPC 速度でコンピュートフリートに提供されます。
+      </p>
+
+      <h3>🔄 アップデートによる変化</h3>
+      <div class="ba-grid">
+        <div class="ba-box ba-before">
+          <div class="ba-title">⚠️ Before - 課題</div>
+          <ul class="ba-list">
+            <li>❗ 高レイテンシーリンクを介した繰り返し読み取りがボトルネックに</li>
+            <li>❗ バーストワークロードでソースファイラーへの負荷や WAN 帯域消費が課題</li>
+            <li>❗ 高速キャッシュ層を独自構築するには設計・デプロイ・監視をゼロから整備が必要</li>
+          </ul>
+        </div>
+        <div class="ba-arrow">➡</div>
+        <div class="ba-box ba-after">
+          <div class="ba-title">✅ After - 改善</div>
+          <ul class="ba-list">
+            <li>✓ メモリ + ローカル NVMe にキャッシュしローカル VPC 速度でデータ提供</li>
+            <li>✓ Packer による AMI ビルドと Terraform モジュールで迅速にデプロイ</li>
+            <li>✓ 70 以上のメトリクスを備えた CloudWatch ダッシュボードで詳細監視</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout">
+        💡 対象ワークロードは VFX レンダリング、シミュレーション、金融サービス、ヘルスケア / ライフサイエンス、半導体設計 (EDA)、気象予測、エネルギーといった<strong>読み取り負荷の高いバースト型コンピュートワークロード</strong>です。フロントに立てる対象はオンプレミスのファイラー、FSx for OpenZFS / FSx for NetApp ONTAP、および NFS v3 / v4.1 / v4.2 準拠のあらゆるファイラーです。
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart LR
+    subgraph Source["🏢 ソース NFS サーバー"]
+        direction LR
+        OnPrem["🗄️ オンプレミスファイラー"]
+        FSx["🪣 FSx for OpenZFS<br/>FSx for NetApp ONTAP"]
+        OnPrem ~~~ FSx
+    end
+
+    subgraph AWS["☁️ AWS VPC"]
+        subgraph Cache["⚡ KNFSD File Cache<br/>EC2 Auto Scaling"]
+            direction LR
+            N1["nfs-kernel-server<br/>+ FS-Cache"]
+            RAM[("💾 メモリ L1")]
+            NVMe[("🗄️ ローカル NVMe L2")]
+            N1 ~~~ RAM ~~~ NVMe
+        end
+        Clients(["👥 NFS クライアント<br/>コンピュートフリート"])
+    end
+
+    Source -.->|高レイテンシーリンク<br/>一度だけ通過| Cache
+    Clients -->|ローカル VPC 速度| Cache
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Source,AWS,Cache cloud
+    class N1 compute
+    class OnPrem,FSx storage
+    class RAM,NVMe database
+    class Clients user
+        </pre>
+      </div>
+      <p class="caption">KNFSD File Cache がソース NFS サーバーとコンピュートフリートの間に立ち、頻繁に読み取られるデータをメモリ (L1) とローカル NVMe (L2) の 2 層でキャッシュすることで、高レイテンシーリンクの通過を最小化する構成を示しています。</p>
+    </div>
+
+    <!-- 統計情報 -->
+    <div class="section">
+      <h2>📊 数字で見る KNFSD File Cache</h2>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-num">70+</div>
+          <div class="stat-label">CloudWatch メトリクス</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">2 層</div>
+          <div class="stat-label">RAM + NVMe キャッシュ</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">10〜12 GB/s</div>
+          <div class="stat-label">im4gn.16xlarge スループット</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">&lt; $6 / 時</div>
+          <div class="stat-label">集約 100 Gb/s あたりコスト</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="fc-title">🐧 標準 Linux カーネル技術による NFS 再エクスポート</div>
+        <ul>
+          <li><code>nfs-kernel-server</code> が NFS の再エクスポートを担当し、ソースを元のファイラーのように提供</li>
+          <li><code>FS-Cache</code> (cachefilesd) が永続的なディスクキャッシュを提供</li>
+          <li>バイト範囲の読み書き、同期 / 非同期書き込み、write-through / write-around モードを完全サポート</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">🗂️ 2 層キャッシュアーキテクチャ</div>
+        <ul>
+          <li>L1: Linux ブロックキャッシュ (RAM) による超低レイテンシーアクセス</li>
+          <li>L2: FS-Cache (ローカル NVMe) による高スループット・再起動をまたぐ永続化・テラバイト級容量</li>
+          <li>まず L1、次に L2 を確認し、完全なミス時のみソースファイラーから取得</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">🚀 柔軟なデプロイと自動スケーリング</div>
+        <ul>
+          <li>Packer でキャッシュ AMI をビルドし、付属の Terraform モジュールでクラスターをデプロイ</li>
+          <li>AMD / Intel / AWS Graviton インスタンス上の EC2 Auto Scaling グループで稼働</li>
+          <li>クライアントトラフィックは DNS ラウンドロビンまたは Network Load Balancer で分散</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="fc-title">📈 豊富な監視機能</div>
+        <ul>
+          <li>CloudWatch ダッシュボードが OpenTelemetry ベースのエージェント経由で 70 以上のメトリクスを公開</li>
+          <li>Prometheus や Grafana などサードパーティツールへのメトリクス発行にも対応</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>2 層キャッシュの構成</h3>
+      <table>
+        <thead>
+          <tr><th>レイヤー</th><th>技術</th><th>メディア</th><th>特性</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>L1</td><td>Linux ブロックキャッシュ</td><td>RAM</td><td>超低レイテンシー、インスタンスメモリで上限が決まる</td></tr>
+          <tr><td>L2</td><td>FS-Cache (cachefilesd)</td><td>ローカル NVMe</td><td>高スループット、再起動をまたいで永続化、テラバイト級容量</td></tr>
+        </tbody>
+      </table>
+
+      <h3>ファンアウトアーキテクチャ (オプション)</h3>
+      <p style="font-size:14px;">高レイテンシー / 低帯域リンク向けに、2 段構成のファンアウトアーキテクチャを利用できます。</p>
+      <table>
+        <thead>
+          <tr><th>ティア</th><th>役割</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>ティア 1</td><td>ソースファイラーとの通信をすべて担当する高メモリプロキシ。各ファイルが WAN を一度だけ通過することを保証</td></tr>
+          <tr><td>ティア 2</td><td>ローカル VPC で多数のクライアントに提供する小型プロキシのクラスター。キャッシュのハイドレーションを維持しながらスケール</td></tr>
+        </tbody>
+      </table>
+
+      <h3>インスタンスタイプの例 (US-East-1、参考値)</h3>
+      <table>
+        <thead>
+          <tr><th>インスタンス</th><th>アーキテクチャ</th><th>ネットワーク</th><th>NVMe</th><th>用途</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>im4gn.16xlarge</td><td>ARM</td><td>100 Gbps</td><td>30 TB</td><td>高スループット、GB/s あたり最良コスト</td></tr>
+          <tr><td>i8g.16xlarge</td><td>ARM</td><td>50 Gbps</td><td>15 TB</td><td>最新世代 NVMe、小さいファイルの IOPS</td></tr>
+          <tr><td>i3en.24xlarge</td><td>x86</td><td>100 Gbps</td><td>60 TB</td><td>大容量キャッシュ</td></tr>
+          <tr><td>i7ie.48xlarge</td><td>x86</td><td>100 Gbps</td><td>120 TB</td><td>レイテンシーに敏感な読み取り</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        📝 <strong>自動スケーリングの考え方</strong>: スケーリングは CPU ではなく<strong>インスタンスあたりのアクティブな NFS 接続数</strong>というカスタム CloudWatch メトリクスに基づきます。CPU はプロキシ負荷を十分に反映しないためです。スケールダウンはウォームキャッシュの破棄やアクティブ NFS マウントの切断につながるため、意図的にスケールアップのみとし、スケールダウンは利用者独自のスケジュールで手動実行します。
+      </div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="two-col">
+        <div class="sub-card">
+          <h4>必要なもの</h4>
+          <ul>
+            <li>VPC のサブネットが用意されていること</li>
+            <li>ソース NFS サーバー (オンプレミス、FSx、他クラウドなど) のエクスポートにアクセスできること</li>
+          </ul>
+        </div>
+        <div class="sub-card">
+          <h4>接続要件</h4>
+          <ul>
+            <li>オンプレミスや別クラウドをソースとする場合、AWS Site-to-Site VPN、AWS Direct Connect、または AWS Interconnect による接続が確立されていること</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>手順</h3>
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">AMI のビルド</div>
+        </div>
+      </div>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Packer でキャッシュ AMI をビルド</span>
+        </div>
+        <pre><code class="language-bash"># Packer でキャッシュ AMI をビルド
+packer build knfsd.pkr.hcl</code></pre>
+      </div>
+      <p style="font-size:14px;">NFS 再エクスポートと FS-Cache を有効化したチューニング済みカーネル、メトリクスエージェント、HTTP ヘルスチェックエージェント、スモークテストを含む Ubuntu AMI を x86 (Intel/AMD) と ARM64 (AWS Graviton) 向けに生成します。</p>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Terraform によるクラスターのデプロイ</div>
+        </div>
+      </div>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Terraform モジュールでデプロイ</span>
+        </div>
+        <pre><code class="language-bash"># Terraform モジュールでキャッシュクラスターをデプロイ
+terraform init
+terraform apply</code></pre>
+      </div>
+      <p style="font-size:14px;">Auto Scaling グループ、セキュリティグループ、ヘルスチェック、DNS レコード、オプションのロードバランサー、FSID データベースを含むクラスターをデプロイします。必要な入力は VPC サブネット、ビルド済み AMI、ソース NFS エクスポートのみです。</p>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">クライアントからのマウント</div>
+          <p style="font-size:14px; margin:6px 0 0 0;">クライアントは特別なドライバーを必要とせず、通常の NFS 共有と同様にキャッシュをマウントします。トラフィックは DNS ラウンドロビンまたは Network Load Balancer 経由で各キャッシュノードに分散されます。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット・デメリット -->
+    <div class="section">
+      <h2>⚖️ メリットと考慮点</h2>
+      <div class="two-col">
+        <div class="sub-card">
+          <h4>💼 ビジネス面のメリット</h4>
+          <ul>
+            <li><strong>ライセンスコスト不要</strong>: オープンソース (Apache-2.0)、消費した AWS リソース料金のみ</li>
+            <li><strong>データ移行の回避</strong>: データを移行・複製せず既存 NFS ストレージを AWS に拡張</li>
+            <li><strong>コスト効率</strong>: キャッシュが KNFSD 層に永続化されるため下流コンピュートを EC2 スポットで実行可能</li>
+          </ul>
+        </div>
+        <div class="sub-card">
+          <h4>🔬 技術面のメリット</h4>
+          <ul>
+            <li><strong>標準技術ベース</strong>: 独自エージェント不要、あらゆる NFSv3/v4 クライアントを変更なしで利用</li>
+            <li><strong>高いスループット</strong>: ローカル VPC 速度で提供し高レイテンシーリンクの通過を最小化</li>
+            <li><strong>詳細な可観測性</strong>: 70 以上のメトリクスと事前構築済みダッシュボードでキャッシュヒット率を監視</li>
+          </ul>
+        </div>
+      </div>
+      <div class="two-col" style="margin-top:16px;">
+        <div class="sub-card" style="border-color: rgba(209,50,18,0.4);">
+          <h4 style="color:#ff7a5c;">🚧 制限事項</h4>
+          <ul>
+            <li>現時点ではプレビュー提供であり、本番利用には十分な検証が必要</li>
+            <li>読み取り負荷の高いワークロードが主対象で、書き込み中心には最適化されていない</li>
+            <li>スケールダウンはウォームキャッシュの破棄を伴うため自動化されておらず手動実施が必要</li>
+          </ul>
+        </div>
+        <div class="sub-card" style="border-color: rgba(209,50,18,0.4);">
+          <h4 style="color:#ff7a5c;">🔍 考慮すべき点</h4>
+          <ul>
+            <li>キャッシュ容量はインスタンスのメモリと NVMe サイズに依存するため、タイプ選定が重要</li>
+            <li>最新のインスタンスタイプと料金は EC2 の公式ドキュメントで確認すること</li>
+            <li>AWS マネージドサービスではなく、利用者が運用管理を行うソリューション</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="uc-title">1️⃣ メディア / エンターテインメントのレンダーファーム</div>
+        <div class="uc-row"><span class="uc-label">シナリオ</span>: オンプレミスのファイラーに保存された大量のアセットを、AWS 上の VFX レンダリングフリートから読み取る。</div>
+        <div class="uc-row"><span class="uc-label">効果</span>: アセットが WAN を一度だけ通過し、以降はローカル VPC 速度で多数のレンダリングノードに提供されるため、レンダリング時間を短縮できる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="uc-title">2️⃣ HPC シミュレーションと EDA</div>
+        <div class="uc-row"><span class="uc-label">シナリオ</span>: 金融サービスのシミュレーションや半導体設計 (EDA) で、共通の入力データセットを多数のコンピュートインスタンスが繰り返し読み取る。</div>
+        <div class="uc-row"><span class="uc-label">効果</span>: キャッシュヒットにより読み取りレイテンシーを削減し、EC2 スポットインスタンスと組み合わせてコスト効率よく大規模な並列処理を実行できる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="uc-title">3️⃣ マルチリージョン / マルチクラウドのデータアクセス</div>
+        <div class="uc-row"><span class="uc-label">シナリオ</span>: 別リージョンや別クラウドに配置された中央 NFS ソースに対し、AWS 上のコンピュートからアクセスする。</div>
+        <div class="uc-row"><span class="uc-label">効果</span>: データをローカルにキャッシュすることで中央ソースへのレイテンシーを排除し、データの複製なしにマルチリージョン / マルチクラウド構成を実現できる。</div>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金と利用可能リージョン</h2>
+      <div class="two-col">
+        <div class="sub-card">
+          <h4>💵 料金</h4>
+          <p style="font-size:14px; margin:0;">オープンソースソリューションのため<span class="highlight">ライセンスコストは不要</span>。消費した AWS リソース (EC2、EBS/NVMe、データ転送、CloudWatch など) の料金のみを支払います。参考値として im4gn.16xlarge は 10〜12 GB/s のスループットを提供し、i3en.24xlarge と同等性能をオンデマンド料金でおよそ半分のコストで実現。集約スループットのコストは 100 Gb/s あたり 1 時間 6 ドル未満とされています。</p>
+        </div>
+        <div class="sub-card">
+          <h4>🌍 利用可能リージョン</h4>
+          <p style="font-size:14px; margin:0;">プレビューとして、<span class="highlight">すべての AWS リージョン</span>で利用可能です。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス</h2>
+      <div class="related-grid">
+        <div class="related-card">
+          <div class="rc-name">Amazon FSx for OpenZFS / NetApp ONTAP</div>
+          KNFSD File Cache のソース NFS サーバーとして利用でき、前段に高速キャッシュ層を配置できる。
+        </div>
+        <div class="related-card">
+          <div class="rc-name">Amazon EC2 Auto Scaling</div>
+          キャッシュノードのクラスター管理と、アクティブ NFS 接続数に基づくスケールアップに使用。
+        </div>
+        <div class="related-card">
+          <div class="rc-name">Amazon CloudWatch</div>
+          70 以上のメトリクス収集と事前構築済みダッシュボードによる監視を提供。
+        </div>
+        <div class="related-card">
+          <div class="rc-name">Direct Connect / Site-to-Site VPN / Interconnect</div>
+          オンプレミスや別クラウドのソース NFS サーバーへの接続に利用。
+        </div>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        KNFSD File Cache は、既存の NFS ストレージを AWS に拡張し、読み取り負荷の高いバースト型コンピュートワークロードを高速化する
+        <span class="highlight">オープンソースソリューション</span>です。標準の Linux カーネル技術をベースにライセンスコストなしで導入でき、
+        Packer と Terraform による自動デプロイと 70 以上のメトリクスによる監視を備えています。VFX レンダリング、HPC、EDA、金融シミュレーションなどで
+        オンプレミスや別クラウドのファイラーへのアクセスに課題を抱えている場合は、まずプレビュー環境で<span class="highlight">キャッシュヒット率</span>などの効果を検証することを推奨します。
+      </p>
+    </div>
+
+    <!-- 参考リンク -->
+    <div class="section">
+      <h2>📚 参考リンク</h2>
+      <ul class="link-list">
+        <li>🔗 <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/07/knfsd-file-cache/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li>🔗 <a class="aws-link" href="https://aws.amazon.com/blogs/media/introducing-knfsd-file-cache-extending-your-nfs-storage-into-the-cloud/" target="_blank" rel="noopener noreferrer">AWS Blog: Introducing KNFSD File Cache</a></li>
+        <li>🔗 <a class="aws-link" href="https://github.com/awslabs/knfsd-file-cache" target="_blank" rel="noopener noreferrer">GitHub リポジトリ (awslabs/knfsd-file-cache)</a></li>
+      </ul>
+    </div>
+
+    <footer>
+      <p>📎 出典: <a href="https://aws.amazon.com/about-aws/whats-new/2026/07/knfsd-file-cache/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/07/knfsd-file-cache/</a></p>
+      <p>KNFSD File Cache - プレビュー提供開始 | リリース日: 2026 年 7 月 20 日</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
