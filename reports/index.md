@@ -5,8 +5,15 @@
 
 ## 2026 年
 
+- [2026-07-21 - Amazon Managed Service for Prometheus - ワークスペースあたり 15 億アクティブメトリクスと 20 万ルールをサポート](2026/2026-07-21-amazon-managed-service-prometheus-1500m-metrics-workspace.md)
+- [2026-07-21 - Amazon SES - 料金プラン (Pricing Plans)](2026/2026-07-21-amazon-ses-pricing-plans.md)
+- [2026-07-21 - Amazon ECS - Action Logs](2026/2026-07-21-amazon-ecs-action-logs.md)
+- [2026-07-21 - Amazon RDS for SQL Server - Microsoft SQL Server 2025 のサポート](2026/2026-07-21-rds-sqlserver-supports-sqlserver-2025.md)
+- [2026-07-21 - Amazon RDS for SQL Server - 最新 CU および GDR アップデートのサポート](2026/2026-07-21-amazon-rds-supports-latest-cu-gdr-microsoft-sql-server.md)
 - [2026-07-20 - Amazon Managed Service for Apache Flink - Apache Flink 2.3 サポート](2026/2026-07-20-amazon-managed-service-flink-2-3.md)
+- [2026-07-20 - Amazon Connect Customer - エージェントキューのメトリクス表示](2026/2026-07-20-amazon-connect-agent-queue-metrics.md)
 - [2026-07-20 - Amazon EC2 - R8i および R8i-flex インスタンスの追加リージョン提供開始](2026/2026-07-20-amazon-ec2-r8i-r8i-flex-instances-in-stockholm-zurich-regions.md)
+- [2026-07-20 - AWS Data Exports - Amazon Bedrock 標準化製品メタデータ](2026/2026-07-20-aws-data-exports-amazon-bedrock-product-metadata.md)
 - [2026-07-20 - Amazon EC2 - I8ge インスタンスが AWS GovCloud (US) リージョンで利用可能に](2026/2026-07-20-amazon-ec2-i8ge-instances-aws-govcloud-us-regions.md)
 - [2026-07-20 - KNFSD File Cache - プレビュー提供開始](2026/2026-07-20-knfsd-file-cache.md)
 - [2026-07-20 - Amazon Connect - エージェント型音声体験の言語拡大と発話コントロール](2026/2026-07-20-amazon-connect-agentic-voice.md)
