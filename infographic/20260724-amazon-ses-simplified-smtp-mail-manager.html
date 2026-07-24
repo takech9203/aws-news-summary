@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon SES - Mail Manager を利用した SMTP 送信の簡素化 | AWS News</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      background-image: radial-gradient(circle at 15% 10%, rgba(255,153,0,0.08) 0%, transparent 40%),
+                        radial-gradient(circle at 85% 90%, rgba(0,161,201,0.08) 0%, transparent 40%);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+      border-bottom: 3px solid var(--aws-orange);
+      padding-bottom: 20px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .header .badge-row {
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .service-badge {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+    }
+
+    .feature-badge {
+      background: rgba(0,161,201,0.2);
+      color: var(--aws-teal);
+      border: 1px solid var(--aws-teal);
+      font-weight: 600;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+      text-align: right;
+      white-space: nowrap;
+    }
+    .subtitle .date-big {
+      font-size: 20px;
+      color: var(--aws-orange);
+      font-weight: 700;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-top: 0;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h3 {
+      font-size: 18px;
+      color: var(--aws-white);
+      margin: 20px 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    p { margin: 10px 0; }
+
+    /* Before/After */
+    .ba-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: stretch;
+      margin: 20px 0;
+    }
+    .ba-box {
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .ba-before {
+      background: rgba(209,50,18,0.12);
+      border: 1px solid rgba(209,50,18,0.5);
+    }
+    .ba-after {
+      background: rgba(29,129,2,0.14);
+      border: 1px solid rgba(29,129,2,0.6);
+    }
+    .ba-title {
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ba-before .ba-title { color: #FF7A5C; }
+    .ba-after .ba-title { color: #6FD35A; }
+    .ba-list { list-style: none; padding: 0; margin: 0; }
+    .ba-list li {
+      margin: 10px 0;
+      padding-left: 22px;
+      position: relative;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .ba-before .ba-list li::before { content: "✕"; position: absolute; left: 0; color: var(--aws-red); font-weight: 700; }
+    .ba-after .ba-list li::before { content: "✓"; position: absolute; left: 0; color: var(--aws-green); font-weight: 700; }
+    .ba-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 34px;
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid { display: flex; justify-content: center; }
+    .diagram-caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      text-align: center;
+      font-style: italic;
+      margin-top: 8px;
+    }
+
+    /* Feature cards */
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin: 14px 0;
+    }
+    .feature-card h3 { margin-top: 0; color: var(--aws-orange); }
+    .feature-card ul { margin: 8px 0 0; padding-left: 20px; }
+    .feature-card li { margin: 6px 0; font-size: 14px; }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+    th {
+      background: rgba(255,153,0,0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+    }
+    tr:hover td { background: rgba(255,255,255,0.03); }
+    td .yes { color: var(--aws-green); font-weight: 600; }
+    td .no { color: var(--aws-red); font-weight: 600; }
+    td a, th a { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    td a:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+    /* Steps */
+    .steps { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
+    .step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 16px 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 18px;
+    }
+    .step-body strong { color: var(--aws-white); display: block; margin-bottom: 4px; }
+    .step-body { font-size: 14px; }
+
+    /* Two column */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .subcard {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .subcard h3 { margin-top: 0; }
+    .subcard ul { margin: 8px 0 0; padding-left: 20px; }
+    .subcard li { margin: 8px 0; font-size: 14px; }
+
+    /* Use cases */
+    .usecase {
+      background: linear-gradient(135deg, rgba(255,153,0,0.14), rgba(255,153,0,0.04));
+      border: 1px solid rgba(255,153,0,0.35);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin: 14px 0;
+    }
+    .usecase h3 { color: var(--aws-smile-orange); margin-top: 0; }
+    .usecase .scenario { font-size: 14px; margin: 8px 0; }
+    .usecase .effect {
+      font-size: 14px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(255,255,255,0.2);
+    }
+    .usecase .label { color: var(--aws-teal); font-weight: 700; }
+
+    /* Deliverable chips */
+    .deliverable-grid { display: flex; flex-wrap: wrap; gap: 14px; margin: 16px 0; }
+    .deliverable {
+      flex: 1 1 260px;
+      background: var(--aws-squid-ink);
+      border: 1px solid rgba(255,153,0,0.4);
+      border-radius: 10px;
+      padding: 18px;
+      text-align: center;
+    }
+    .deliverable .big-icon { font-size: 34px; }
+    .deliverable strong { display: block; color: var(--aws-orange); margin: 8px 0 4px; }
+    .deliverable span { font-size: 13px; }
+
+    /* Note box */
+    .note-box {
+      background: rgba(255,173,51,0.1);
+      border: 1px solid rgba(255,173,51,0.4);
+      border-left: 4px solid var(--aws-smile-orange);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+
+    /* Related services */
+    .rel-item {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 10px 0;
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 14px;
+    }
+    .rel-item strong { color: var(--aws-orange); }
+
+    .region-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,161,201,0.15);
+      border: 1px solid rgba(0,161,201,0.5);
+      border-radius: 20px;
+      padding: 8px 18px;
+      font-size: 14px;
+    }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+    footer {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+    footer ul { list-style: none; padding: 0; }
+    footer li { margin: 8px 0; }
+
+    @media (max-width: 720px) {
+      .ba-grid { grid-template-columns: 1fr; }
+      .ba-arrow { transform: rotate(90deg); font-size: 28px; }
+      .two-col { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+      .subtitle { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>📧 Amazon SES<br/>Mail Manager を利用した SMTP 送信の簡素化</h1>
+        <div class="badge-row">
+          <span class="service-badge">Amazon SES</span>
+          <span class="feature-badge">ガイド付きセットアップ</span>
+          <span class="feature-badge">Mail Manager</span>
+        </div>
+      </div>
+      <div class="subtitle">
+        <div>リリース日</div>
+        <div class="date-big">2026-07-24</div>
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>Amazon SES は、Mail Manager を利用して <span class="highlight">SMTP 経由でメールを送信</span>するための、簡素化されたコンソール体験を発表しました。ガイド付きセットアップが必要なリソースを自動的に作成・構成するため、開発者は<strong>数クリックで送信を開始</strong>できます。</p>
+      <p>このセットアップでは、動作可能な <strong>SMTP エンドポイント</strong>と、ダウンロード可能な<strong>認証情報</strong>が提供されます。取得した認証情報は、SMTP をサポートするあらゆるアプリケーションやフレームワークに組み込んで利用できます。</p>
+      <p>メール通知、パスワードリセット、トランザクションメッセージなどを送信するアプリケーションを開発するチームが、<span class="highlight">本番環境で利用可能な SMTP 設定へ素早く到達</span>したい場合に適しています。</p>
+
+      <h3>🔄 アップデートによる変化</h3>
+      <div class="ba-grid">
+        <div class="ba-box ba-before">
+          <div class="ba-title">😰 Before: 従来の課題</div>
+          <ul class="ba-list">
+            <li>SMTP でメールを送信するために、必要なリソースを個別に構成する必要があった</li>
+            <li>設定完了までに複数のステップを踏む必要があり、初期構築に時間がかかった</li>
+            <li>SMTP エンドポイントと認証情報を利用可能な状態にするまでの導線が明確でなかった</li>
+          </ul>
+        </div>
+        <div class="ba-arrow">➡</div>
+        <div class="ba-box ba-after">
+          <div class="ba-title">😊 After: 改善</div>
+          <ul class="ba-list">
+            <li>ガイド付きセットアップが必要なリソースを自動的に作成・構成</li>
+            <li>数クリックで動作可能な SMTP エンドポイントを取得できる</li>
+            <li>ダウンロード可能な認証情報をあらゆる SMTP 対応アプリへすぐに組み込める</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Console["☁️ Amazon SES コンソール"]
+        Wizard["🧙 ガイド付きセットアップ"]
+    end
+
+    subgraph MailManager["📮 Mail Manager"]
+        direction LR
+        Endpoint["🔌 SMTP エンドポイント"]
+        Creds["🔑 認証情報"]
+        Endpoint ~~~ Creds
+    end
+
+    App(["👤 アプリケーション<br/>SMTP 対応"])
+
+    Wizard -->|自動作成・構成| MailManager
+    Wizard -.->|ダウンロード| Creds
+    Creds --> App
+    App -->|SMTP 送信| Endpoint
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Console cloud
+    class MailManager layer
+    class Wizard process
+    class Endpoint,Creds compute
+    class App user
+        </pre>
+      </div>
+      <p class="diagram-caption">ガイド付きセットアップが Mail Manager のリソースを自動的に作成・構成し、SMTP エンドポイントと認証情報を提供します。アプリケーションはその認証情報を用いて SMTP でメールを送信します。</p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⭐ 主要機能</h2>
+
+      <div class="feature-card">
+        <h3>🧙 ガイド付きセットアップ</h3>
+        <ul>
+          <li>必要な Mail Manager リソースを自動的に作成・構成する</li>
+          <li>従来の複数ステップにわたる個別構成を不要にする</li>
+          <li>数クリックで送信を開始できる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>🔌 動作可能な SMTP エンドポイント</h3>
+        <ul>
+          <li>セットアップ完了時点で利用可能な SMTP エンドポイントが提供される</li>
+          <li>追加の手動構成なしにメール送信を開始できる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>🔑 ダウンロード可能な認証情報</h3>
+        <ul>
+          <li>セットアップ時に SMTP 認証情報を取得できる</li>
+          <li>SMTP をサポートするあらゆるアプリケーションやフレームワークに組み込んで利用できる</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>📦 提供される要素</h3>
+      <table>
+        <tbody>
+          <tr><th>セットアップ方式</th><td>Amazon SES コンソールのガイド付きセットアップ</td></tr>
+          <tr><th>提供物</th><td>動作可能な SMTP エンドポイント、ダウンロード可能な認証情報</td></tr>
+          <tr><th>対象リソース</th><td>Mail Manager の関連リソース (自動作成・構成)</td></tr>
+          <tr><th>連携先</th><td>SMTP をサポートするアプリケーション・フレームワーク</td></tr>
+        </tbody>
+      </table>
+
+      <div class="deliverable-grid">
+        <div class="deliverable">
+          <div class="big-icon">🔌</div>
+          <strong>SMTP エンドポイント</strong>
+          <span>動作可能な状態で提供</span>
+        </div>
+        <div class="deliverable">
+          <div class="big-icon">🔑</div>
+          <strong>認証情報</strong>
+          <span>ダウンロードして利用</span>
+        </div>
+      </div>
+
+      <h3>🔁 API 変更履歴</h3>
+      <div class="note-box">
+        今回のアップデートはコンソール上のセットアップ体験の改善が中心であり、本機能に直接対応する新規 API メソッドの追加は確認されていません。なお、同時期に Amazon SES では以下の API 変更が確認されています (本アップデートとは別のもの)。
+      </div>
+      <table>
+        <thead>
+          <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>2026/07/20</td>
+            <td><a href="https://awsapichanges.com/archive/changes/39540f-email.html" target="_blank" rel="noopener noreferrer">Amazon Simple Email Service</a></td>
+            <td>1 new 1 updated api methods - 新しい料金プラン (Essentials, Pro, Enterprise) の導入。<code>PutAccountPricingAttributes</code> の追加、<code>GetAccount</code> への <code>PricingAttributes</code> フィールド追加</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+
+      <div class="note-box">
+        <strong>📋 前提条件</strong>
+        <ul style="margin:8px 0 0; padding-left:20px;">
+          <li>Amazon SES を利用可能な AWS アカウントを保有していること</li>
+          <li>Amazon SES コンソールへアクセスできる IAM 権限を保有していること</li>
+          <li>送信元として利用する ID (ドメインまたはメールアドレス) の検証準備</li>
+        </ul>
+      </div>
+
+      <h3>📝 セットアップの手順</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>ガイド付きセットアップを開始</strong>
+            Amazon SES コンソールを開き、Mail Manager を利用した SMTP 送信のガイド付きセットアップを開始します。ガイドに従うことで、必要なリソースが自動的に作成・構成されます。
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>SMTP エンドポイントと認証情報を取得</strong>
+            セットアップが完了すると、動作可能な SMTP エンドポイントとダウンロード可能な認証情報が提供されます。認証情報は安全な場所に保管します。
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>アプリケーションへ組み込み</strong>
+            取得した SMTP エンドポイントと認証情報を、SMTP をサポートするアプリケーションやフレームワークに設定してメール送信を開始します。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>💼 ビジネス面</h3>
+          <ul>
+            <li><strong>市場投入までの時間短縮</strong>: 数クリックで本番環境で利用可能な SMTP 設定に到達でき、開発の初速が向上する</li>
+            <li><strong>運用負荷の低減</strong>: リソースの個別構成が不要になり、設定にかかる工数が削減される</li>
+            <li><strong>導入障壁の低下</strong>: SMTP の設定に不慣れなチームでもガイドに沿って構築できる</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h3>🛠️ 技術面</h3>
+          <ul>
+            <li><strong>設定の自動化</strong>: 必要な Mail Manager リソースを自動的に作成・構成する</li>
+            <li><strong>移植性の高さ</strong>: あらゆる SMTP 対応アプリで利用できる標準的な認証情報を取得できる</li>
+            <li><strong>一貫した構成</strong>: ガイドに従うことで構成漏れや設定ミスを抑えられる</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>🚧 制限事項</h3>
+          <ul>
+            <li>本アップデートは Amazon SES コンソール上のセットアップ体験の改善が中心である</li>
+            <li>詳細なリソース構成のカスタマイズが必要な場合は、引き続き個別の設定が必要になる可能性がある</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h3>🤔 考慮すべき点</h3>
+          <ul>
+            <li>SMTP 認証情報は機密情報であるため、安全な管理と適切なローテーションが求められる</li>
+            <li>実際の送信には Amazon SES の送信クォータやサンドボックス制限などの通常のルールが適用される</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+
+      <div class="usecase">
+        <h3>🛒 1. トランザクションメールの送信</h3>
+        <p class="scenario"><span class="label">シナリオ:</span> EC サイトで注文確認やパスワードリセットのメールを送信したい。</p>
+        <p class="effect"><span class="label">効果:</span> ガイド付きセットアップで素早く SMTP エンドポイントと認証情報を取得し、既存アプリケーションに組み込んでトランザクションメールを送信できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h3>🔔 2. 既存フレームワークからのメール通知</h3>
+        <p class="scenario"><span class="label">シナリオ:</span> SMTP に対応した Web アプリケーションフレームワークから、システム通知メールを送信したい。</p>
+        <p class="effect"><span class="label">効果:</span> ダウンロードした認証情報をフレームワークの SMTP 設定に組み込むだけで、追加の構成なしに通知メールを送信できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h3>🚀 3. 新規プロジェクトの迅速な立ち上げ</h3>
+        <p class="scenario"><span class="label">シナリオ:</span> 新しいアプリケーションでメール送信機能を最短で組み込みたい。</p>
+        <p class="effect"><span class="label">効果:</span> 個別のリソース構成を行わずに、数クリックで本番利用可能な SMTP 設定を用意でき、開発の初速を高められる。</p>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>今回の発表内で本機能自体の料金に関する記載はありません。Amazon SES の利用には<span class="highlight">通常の Amazon SES および Mail Manager の料金</span>が適用されます。最新の料金は Amazon SES の料金ページを参照してください。</p>
+    </div>
+
+    <!-- リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p><span class="region-badge">🌐 Amazon SES が提供されているすべての AWS リージョンで利用可能</span></p>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="rel-item"><strong>Amazon SES Mail Manager</strong>: メールの受信・送信・処理を管理する機能。本アップデートのガイド付きセットアップが自動構成する対象</div>
+      <div class="rel-item"><strong>SMTP インターフェイス</strong>: 標準的なメール送信プロトコル。本機能で取得した認証情報を用いて送信を行う</div>
+      <div class="rel-item"><strong>Amazon SES 送信 API</strong>: SMTP 以外のプログラマティックな送信手段としての代替オプション</div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>🎯 まとめ</h2>
+      <p>このアップデートは、Amazon SES で Mail Manager を利用した SMTP 送信のセットアップを<span class="highlight">大幅に簡素化</span>し、開発者が数クリックで本番利用可能な SMTP エンドポイントと認証情報を取得できるようにするものです。トランザクションメールや通知メールを送信するアプリケーションを迅速に立ち上げたいチームにとって有用であり、まずは Amazon SES コンソールのガイド付きセットアップを試すことをお勧めします。</p>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典 / 参考リンク</p>
+      <ul>
+        <li>🔗 <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/07/amazon-ses-simplified-smtp-mail-manager/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/07/amazon-ses-simplified-smtp-mail-manager/</a></li>
+        <li>📖 <a class="aws-link" href="https://docs.aws.amazon.com/ses/" target="_blank" rel="noopener noreferrer">Amazon SES ドキュメント: https://docs.aws.amazon.com/ses/</a></li>
+        <li>💰 <a class="aws-link" href="https://aws.amazon.com/ses/pricing/" target="_blank" rel="noopener noreferrer">Amazon SES 料金ページ: https://aws.amazon.com/ses/pricing/</a></li>
+      </ul>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
