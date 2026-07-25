@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Kinesis Data Streams - ウォームスループットによる書き込み容量のスケールダウン | AWS News</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      background-image: radial-gradient(circle at 15% 10%, rgba(255,153,0,0.08) 0%, transparent 40%),
+                        radial-gradient(circle at 85% 90%, rgba(0,161,201,0.08) 0%, transparent 40%);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+      border-bottom: 3px solid var(--aws-orange);
+      padding-bottom: 20px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .header .badge-row {
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .service-badge {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+    }
+
+    .feature-badge {
+      background: rgba(0,161,201,0.2);
+      color: var(--aws-teal);
+      border: 1px solid var(--aws-teal);
+      font-weight: 600;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+      text-align: right;
+      white-space: nowrap;
+    }
+    .subtitle .date-big {
+      font-size: 20px;
+      color: var(--aws-orange);
+      font-weight: 700;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-top: 0;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h3 {
+      font-size: 18px;
+      color: var(--aws-white);
+      margin: 20px 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    p { margin: 10px 0; }
+
+    /* Before/After */
+    .ba-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: stretch;
+      margin: 20px 0;
+    }
+    .ba-box {
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .ba-before {
+      background: rgba(209,50,18,0.12);
+      border: 1px solid rgba(209,50,18,0.5);
+    }
+    .ba-after {
+      background: rgba(29,129,2,0.14);
+      border: 1px solid rgba(29,129,2,0.6);
+    }
+    .ba-title {
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ba-before .ba-title { color: #FF7A5C; }
+    .ba-after .ba-title { color: #6FD35A; }
+    .ba-list { list-style: none; padding: 0; margin: 0; }
+    .ba-list li {
+      margin: 10px 0;
+      padding-left: 22px;
+      position: relative;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .ba-before .ba-list li::before { content: "✕"; position: absolute; left: 0; color: var(--aws-red); font-weight: 700; }
+    .ba-after .ba-list li::before { content: "✓"; position: absolute; left: 0; color: var(--aws-green); font-weight: 700; }
+    .ba-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 34px;
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid { display: flex; justify-content: center; }
+    .diagram-caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      text-align: center;
+      font-style: italic;
+      margin-top: 8px;
+    }
+
+    /* Feature cards */
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin: 14px 0;
+    }
+    .feature-card h3 { margin-top: 0; color: var(--aws-orange); }
+    .feature-card ul { margin: 8px 0 0; padding-left: 20px; }
+    .feature-card li { margin: 6px 0; font-size: 14px; }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      vertical-align: top;
+    }
+    th {
+      background: rgba(255,153,0,0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+    }
+    tr:hover td { background: rgba(255,255,255,0.03); }
+    td .yes { color: var(--aws-green); font-weight: 600; }
+    td .no { color: var(--aws-red); font-weight: 600; }
+    td a, th a { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    td a:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+    code {
+      background: rgba(255,255,255,0.08);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Steps */
+    .steps { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
+    .step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 16px 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 18px;
+    }
+    .step-body strong { color: var(--aws-white); display: block; margin-bottom: 4px; }
+    .step-body { font-size: 14px; }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 14px 0;
+    }
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      background: none;
+      color: inherit;
+    }
+
+    /* Two column */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .subcard {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .subcard h3 { margin-top: 0; }
+    .subcard ul { margin: 8px 0 0; padding-left: 20px; }
+    .subcard li { margin: 8px 0; font-size: 14px; }
+
+    /* Use cases */
+    .usecase {
+      background: linear-gradient(135deg, rgba(255,153,0,0.14), rgba(255,153,0,0.04));
+      border: 1px solid rgba(255,153,0,0.35);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin: 14px 0;
+    }
+    .usecase h3 { color: var(--aws-smile-orange); margin-top: 0; }
+    .usecase .scenario { font-size: 14px; margin: 8px 0; }
+    .usecase .impl {
+      font-size: 13px;
+      margin: 10px 0;
+      background: var(--aws-squid-ink);
+      border-radius: 6px;
+      padding: 10px 14px;
+      border-left: 3px solid var(--aws-orange);
+      white-space: pre-line;
+      font-family: 'Courier New', monospace;
+      color: var(--aws-light-gray);
+    }
+    .usecase .effect {
+      font-size: 14px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(255,255,255,0.2);
+    }
+    .usecase .label { color: var(--aws-teal); font-weight: 700; }
+
+    /* Stat cards */
+    .stat-grid { display: flex; flex-wrap: wrap; gap: 14px; margin: 16px 0; }
+    .stat-card {
+      flex: 1 1 200px;
+      background: linear-gradient(135deg, rgba(255,153,0,0.18), rgba(255,153,0,0.05));
+      border: 1px solid rgba(255,153,0,0.4);
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-card .num { font-size: 34px; font-weight: 700; color: var(--aws-orange); line-height: 1.2; }
+    .stat-card .desc { font-size: 13px; margin-top: 6px; }
+
+    /* Note box */
+    .note-box {
+      background: rgba(255,173,51,0.1);
+      border: 1px solid rgba(255,173,51,0.4);
+      border-left: 4px solid var(--aws-smile-orange);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+
+    /* Related services */
+    .rel-item {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 10px 0;
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 14px;
+    }
+    .rel-item strong { color: var(--aws-orange); }
+
+    .region-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,161,201,0.15);
+      border: 1px solid rgba(0,161,201,0.5);
+      border-radius: 20px;
+      padding: 8px 18px;
+      font-size: 14px;
+    }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+    footer {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+    footer ul { list-style: none; padding: 0; }
+    footer li { margin: 8px 0; }
+
+    @media (max-width: 720px) {
+      .ba-grid { grid-template-columns: 1fr; }
+      .ba-arrow { transform: rotate(90deg); font-size: 28px; }
+      .two-col { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+      .subtitle { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>📊 Amazon Kinesis Data Streams<br/>ウォームスループットによる書き込み容量のスケールダウン</h1>
+        <div class="badge-row">
+          <span class="service-badge">Amazon Kinesis Data Streams</span>
+          <span class="feature-badge">On-demand Advantage</span>
+          <span class="feature-badge">Warm Throughput</span>
+        </div>
+      </div>
+      <div class="subtitle">
+        <div>リリース日</div>
+        <div class="date-big">2026-07-24</div>
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>Amazon Kinesis Data Streams は、あらゆる規模でデータストリームのキャプチャ・処理・保存を容易に行える<span class="highlight">サーバーレスのストリーミングデータサービス</span>です。オンデマンドストリームは、取り込み使用量の増加に応じて書き込み (ingest) 容量を自動的に増やします。</p>
+      <p>これまで On-demand Advantage モードでは、ウォームスループットを使って書き込み容量を事前に温めておく (プロビジョニングしておく) ことで急激なトラフィック変動に備えられましたが、この操作は容量を<strong>引き上げる方向にしか使えませんでした</strong>。今回のアップデートにより、ウォームスループットを<span class="highlight">引き下げるスケールダウン</span>にも対応し、書き込みスループットを上下双方向で完全に制御できるようになりました。</p>
+      <p>スケールダウンではより低いウォームスループット値を設定します。ストリームは、<strong>リクエストされた容量</strong>、または<strong>直近 1 時間のピーク時取り込み使用量</strong>を支えるために必要な容量のいずれか高い方に調整されます。これにより、現在のトラフィックに十分な容量を保ちつつ、不要な余剰容量を解放できます。On-demand Advantage が有効なすべてのオンデマンドストリームで<span class="highlight">追加費用なし</span>で利用できます。</p>
+
+      <h3>🔄 アップデートによる変化</h3>
+      <div class="ba-grid">
+        <div class="ba-box ba-before">
+          <div class="ba-title">😰 Before: 従来の課題</div>
+          <ul class="ba-list">
+            <li>ウォームスループットは容量を事前に引き上げる用途にしか使えず、書き込み容量を意図的に引き下げる手段がなかった</li>
+            <li>一時的なトラフィックバーストでウォーム容量を大きく超えてスケールした後、拡大した容量を明示的に縮小できなかった</li>
+            <li>余剰容量を抱えたまま運用せざるを得ず、コスト効率とキャパシティ管理の柔軟性に制約があった</li>
+          </ul>
+        </div>
+        <div class="ba-arrow">➡</div>
+        <div class="ba-box ba-after">
+          <div class="ba-title">😊 After: 改善</div>
+          <ul class="ba-list">
+            <li>より低いウォームスループット値を設定するだけで書き込み容量のスケールダウンが可能に</li>
+            <li>直近 1 時間のピーク使用量を下限とし、必要な容量を確保しつつ余剰分のみを解放</li>
+            <li>書き込みスループットを上下双方向で制御でき、追加費用なしでコスト効率を最適化</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph KDS["☁️ Amazon Kinesis Data Streams On-demand Advantage"]
+        direction TB
+        Warm["🎚️ ウォームスループット設定<br/>低い値を設定"]
+        Decision{"⚖️ 容量の決定<br/>いずれか高い方"}
+        Req["📥 リクエストされた容量"]
+        Peak["📈 直近 1 時間の<br/>ピーク取り込み使用量"]
+        Result["🔧 調整後の書き込み容量"]
+    end
+
+    Producer(["👤 データプロデューサー"]) --> Warm
+    Warm --> Decision
+    Req --> Decision
+    Peak --> Decision
+    Decision --> Result
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class KDS cloud
+    class Warm,Result process
+    class Decision decision
+    class Req,Peak input
+    class Producer user
+        </pre>
+      </div>
+      <p class="diagram-caption">スケールダウン要求時、ストリームはリクエスト値と直近 1 時間のピーク使用量を比較し、高い方の容量に調整することで安全に余剰容量を解放します。</p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⭐ 主要機能</h2>
+
+      <div class="feature-card">
+        <h3>🎚️ ウォームスループットによるスケールダウン</h3>
+        <ul>
+          <li>オンデマンドストリームに低いウォームスループット値を設定して書き込み容量を縮小できる</li>
+          <li>一時的なデータバーストでウォーム容量を大きく超えてスケールした場合に、意図的な縮小トリガーとして利用できる</li>
+          <li>書き込みスループットを上下双方向で完全に制御できる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>🛡️ ピーク使用量を下限とした安全な容量調整</h3>
+        <ul>
+          <li>スケールダウン後の容量は、リクエスト値または直近 1 時間のピーク取り込み使用量に必要な容量のいずれか高い方に決定される</li>
+          <li>現在のトラフィックを処理するのに十分な容量を常に確保したうえで余剰分のみを解放</li>
+          <li>スループットを下回る過度な縮小によるスロットリングを防ぐ</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>💵 追加費用なしでの提供</h3>
+        <ul>
+          <li>On-demand Advantage モードが有効なすべてのオンデマンドストリームで追加費用なしで利用できる</li>
+          <li>ウォームスループットの設定自体にも追加費用は発生しない</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様: キャパシティモード比較 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>📦 Kinesis Data Streams のキャパシティモード比較</h3>
+      <table>
+        <thead>
+          <tr><th>モード</th><th>容量管理</th><th>ウォームスループット</th><th>特徴</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>On-demand Standard</td>
+            <td>自動スケール (直近 30 日ピークの最大 2 倍)</td>
+            <td><span class="no">✗ 非対応</span></td>
+            <td>キャパシティプランニング不要。ストリームごとの固定料金あり</td>
+          </tr>
+          <tr>
+            <td>On-demand Advantage</td>
+            <td>自動スケール + ウォームスループットによる事前制御</td>
+            <td><span class="yes">✓ 対応 (今回スケールダウンにも対応)</span></td>
+            <td>アカウントレベル設定。ストリーム固定料金なし。取り込み/取得料金が最低 60% 低い</td>
+          </tr>
+          <tr>
+            <td>Provisioned</td>
+            <td>シャード数を手動指定</td>
+            <td><span class="no">✗ 非対応</span></td>
+            <td><code>UpdateShardCount</code> によるシャードの手動スケール</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>⚙️ スケールダウンの動作</h3>
+      <table>
+        <tbody>
+          <tr><th>スケールダウンの起動方法</th><td>オンデマンドストリームに低いウォームスループット値を設定</td></tr>
+          <tr><th>調整後の容量</th><td>リクエスト値と直近 1 時間のピーク取り込み使用量のうち高い方</td></tr>
+          <tr><th>目的</th><td>現在のトラフィックに必要な容量を確保しつつ余剰容量を解放</td></tr>
+          <tr><th>費用</th><td><span class="yes">追加費用なし</span></td></tr>
+          <tr><th>対象</th><td>On-demand Advantage モードが有効なすべてのオンデマンドストリーム</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+
+      <div class="note-box">
+        <strong>📋 前提条件</strong>
+        <ul style="margin:8px 0 0; padding-left:20px;">
+          <li>AWS アカウントで On-demand Advantage モードが有効になっていること (アカウントレベルの設定)</li>
+          <li>On-demand Advantage 有効化時、リージョン内の全オンデマンドストリームで最低 25 MiB/s のデータ取り込みと 25 MiB/s のデータ取得をコミットすること</li>
+          <li>対象ストリームがオンデマンドモードで稼働していること</li>
+        </ul>
+      </div>
+
+      <h3>📝 手順</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>現在のストリーム状態の確認</strong>
+            対象ストリームのモードと現在のウォームスループット設定を確認します。ステータスが <code>ACTIVE</code> であることを確認してから設定変更を行います。
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>ウォームスループットの引き下げ設定</strong>
+            より低いウォームスループット値を設定することで、ストリームは余剰容量の解放を開始します。実際の縮小幅は、設定値と直近 1 時間のピーク取り込み使用量のうち高い方に基づいて決定されます。
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>調整結果の確認</strong>
+            設定変更後、ストリームのステータスは一時的に <code>UPDATING</code> になります。<code>ACTIVE</code> に戻ったら、<code>describe-stream-summary</code> で調整後の容量を再確認します。
+          </div>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ステップ 1: 現在のストリーム状態の確認</span>
+        </div>
+        <pre><code class="language-bash">aws kinesis describe-stream-summary --stream-name my-stream</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ステップ 2: ウォームスループットの引き下げ設定</span>
+        </div>
+        <pre><code class="language-bash"># ウォームスループットを低い値に設定してスケールダウンを起動
+aws kinesis update-stream-warm-throughput \
+    --stream-name my-stream \
+    --warm-throughput-in-mib-per-second 100</code></pre>
+      </div>
+
+      <div class="note-box">
+        上記のコマンド名およびパラメータ名は一般的な例です。実際の API 名は最新の AWS CLI / API リファレンスで確認してください。
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>💼 ビジネス面</h3>
+          <ul>
+            <li><strong>コスト効率の向上</strong>: 一時的なトラフィック急増後に不要となった余剰容量を解放でき、コストを最適化できる</li>
+            <li><strong>追加費用なし</strong>: On-demand Advantage モードが有効であれば追加料金なしで利用できる</li>
+            <li><strong>運用の柔軟性</strong>: 予測イベントに向けたスケールアップとイベント後のスケールダウンを一貫した仕組みで管理できる</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h3>🛠️ 技術面</h3>
+          <ul>
+            <li><strong>双方向のキャパシティ制御</strong>: 書き込みスループットを上げるだけでなく下げることもでき、完全なコントロールを実現</li>
+            <li><strong>安全な縮小</strong>: 直近 1 時間のピーク使用量を下限とするため、過度な縮小によるスロットリングを防止</li>
+            <li><strong>シンプルな操作</strong>: ウォームスループット値を設定するだけで、シャード数の手動計算なしに容量を調整できる</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>🚧 制限事項</h3>
+          <ul>
+            <li>本機能は On-demand Advantage モードが有効なオンデマンドストリームでのみ利用可能 (Standard や Provisioned は対象外)</li>
+            <li>スケールダウン後の容量は直近 1 時間のピーク使用量を下回れないため、リクエスト値どおりに即座に縮小されるとは限らない</li>
+            <li>On-demand Advantage を有効化すると、無効化まで最低 24 時間待つ必要がある</li>
+            <li>On-demand Standard に戻すには、事前に設定したウォームスループットをすべて削除する必要がある</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h3>🤔 考慮すべき点</h3>
+          <ul>
+            <li>On-demand Advantage はリージョン内の全オンデマンドストリームで最低 25 MiB/s の取り込みと取得をコミットするアカウントレベル設定であるため、使用量が要件を下回る場合はショートフォール (不足分) が課金される</li>
+            <li>スケールダウンの効果を最大化するには、トラフィックのピークが収まったタイミングを見極めて設定を行う必要がある</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+
+      <div class="usecase">
+        <h3>🎉 1. イベント後のキャパシティ縮小</h3>
+        <p class="scenario"><span class="label">シナリオ:</span> セールやライブ配信に向けてウォームスループットを 200 MB/s に引き上げていたが、イベント終了後は通常の 40 MB/s 程度のトラフィックに戻った。</p>
+        <div class="impl">イベント前: warm throughput = 200 MB/s に設定
+イベント後: warm throughput = 40 MB/s に引き下げ
+→ 直近 1 時間のピーク使用量を下回らない範囲で余剰容量を解放</div>
+        <p class="effect"><span class="label">効果:</span> イベントで確保した余剰容量を安全に解放し、キャパシティ管理を最適化できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h3>⚡ 2. 一時的バースト後の容量リセット</h3>
+        <p class="scenario"><span class="label">シナリオ:</span> 突発的なデータバーストにより、オンデマンドストリームがウォーム容量を大きく超えて自動スケールしたまま高い容量を維持している。</p>
+        <div class="impl">バースト後: warm throughput をより低い値に設定してスケールダウンを起動
+→ 直近 1 時間のピーク使用量に必要な容量まで縮小</div>
+        <p class="effect"><span class="label">効果:</span> 一時的な急増で拡大した容量を意図的にリセットし、現在のトラフィックに見合った容量で運用できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h3>🔁 3. 予測可能なトラフィックサイクルへの追従</h3>
+        <p class="scenario"><span class="label">シナリオ:</span> 日中は書き込みトラフィックが高く、夜間は大きく低下するような予測可能なワークロードを運用している。</p>
+        <div class="impl">日中: warm throughput = 高い値
+夜間: warm throughput = 低い値に引き下げ</div>
+        <p class="effect"><span class="label">効果:</span> トラフィックのサイクルに合わせてウォームスループットを上下させ、必要な容量を確保しながら効率的に運用できる。</p>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="num">¥0</div>
+          <div class="desc">ウォームスループットのスケールダウンおよび設定自体は追加費用なし</div>
+        </div>
+        <div class="stat-card">
+          <div class="num">-60%</div>
+          <div class="desc">On-demand Advantage は各料金ディメンションが Standard 比で最低 60% 低い</div>
+        </div>
+      </div>
+      <p>ウォームスループットのスケールダウンは、On-demand Advantage モードが有効なすべてのオンデマンドストリームで<span class="highlight">追加費用なし</span>で利用できます。On-demand Advantage モードではストリームごとの固定料金が撤廃され、データ取り込み・データ取得・オプションの拡張保持の料金のみが課金されます。詳細は料金ページを参照してください。</p>
+    </div>
+
+    <!-- リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p><span class="region-badge">🌐 Amazon Kinesis Data Streams On-demand Advantage がサポートされているすべての AWS リージョンで利用可能</span></p>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="rel-item"><strong>On-demand Advantage モード</strong>: 本機能の前提となるアカウントレベルのキャパシティモード。ウォームスループットによる事前の容量制御と簡素化された料金体系を提供する</div>
+      <div class="rel-item"><strong>AWS Lambda / Amazon Managed Service for Apache Flink</strong>: Kinesis Data Streams のデータをリアルタイムに処理するコンシューマーとして連携する</div>
+      <div class="rel-item"><strong>Enhanced Fan-Out (EFO)</strong>: On-demand Advantage モードでは 1 ストリームあたり最大 50 個のコンシューマーを登録でき、追加のスループット料金なしで利用できる</div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>🎯 まとめ</h2>
+      <p>今回のアップデートにより、Kinesis Data Streams の On-demand Advantage モードでウォームスループットを引き下げるスケールダウンが可能になり、書き込みスループットを<span class="highlight">上下双方向で完全に制御</span>できるようになりました。直近 1 時間のピーク使用量を下限とすることで安全性を保ちながら余剰容量を解放できるため、イベント後や一時的バースト後のキャパシティ管理とコスト最適化に有効です。追加費用なしで利用できるため、On-demand Advantage モードを利用しているワークロードでは積極的に活用を検討することをお勧めします。</p>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典 / 参考リンク</p>
+      <ul>
+        <li>🔗 <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/07/kinesis/on-demand-scale-down" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/07/kinesis/on-demand-scale-down</a></li>
+        <li>📖 <a class="aws-link" href="https://docs.aws.amazon.com/streams/latest/dev/how-do-i-size-a-stream.html" target="_blank" rel="noopener noreferrer">ドキュメント: ストリームのサイジングとモードの選択</a></li>
+        <li>📖 <a class="aws-link" href="https://docs.aws.amazon.com/streams/latest/dev/updating-a-stream.html" target="_blank" rel="noopener noreferrer">ドキュメント: ストリームの更新</a></li>
+        <li>💰 <a class="aws-link" href="https://aws.amazon.com/kinesis/data-streams/pricing/" target="_blank" rel="noopener noreferrer">Amazon Kinesis Data Streams 料金ページ</a></li>
+      </ul>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
