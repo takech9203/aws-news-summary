@@ -7,6 +7,7 @@
 
 - [2026-07-24 - Claude Opus 5 - AWS での提供開始](2026/2026-07-24-claude-opus-5-aws.md)
 - [2026-07-24 - aws-bench - AI エージェント向けオープンソースベンチマーク](2026/2026-07-24-aws-bench.md)
+- [2026-07-24 - Kiro - Claude Opus 5 の提供開始](2026/2026-07-24-kiro-opus-5.md)
 - [2026-07-24 - Kiro - Opus 4.8、Sonnet 5、ユーザーアクティビティモニタリングの AWS GovCloud (US) 対応](2026/2026-07-24-kiro-opus-sonnet-monitoring-launch-aws-govcloud-us.md)
 - [2026-07-24 - Amazon Connect - Azure Virtual Desktop および Windows 365 Cloud PC 向けオーディオ最適化](2026/2026-07-24-amazon-connect.md)
 - [2026-07-24 - Amazon Kinesis Data Streams - ウォームスループットによる書き込み容量のスケールダウン](2026/2026-07-24-on-demand-scale-down.md)
