@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Elemental MediaTailor - 広告タイムアウトと並列処理の設定可能化 | AWS News</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      background-image: radial-gradient(circle at 12% 8%, rgba(255,153,0,0.09) 0%, transparent 42%),
+                        radial-gradient(circle at 88% 92%, rgba(0,161,201,0.09) 0%, transparent 42%);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+      border-bottom: 3px solid var(--aws-orange);
+      padding-bottom: 20px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .header .badge-row {
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .service-badge {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+    }
+
+    .feature-badge {
+      background: rgba(0,161,201,0.2);
+      color: var(--aws-teal);
+      border: 1px solid var(--aws-teal);
+      font-weight: 600;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+      text-align: right;
+      white-space: nowrap;
+    }
+    .subtitle .date-big {
+      font-size: 20px;
+      color: var(--aws-orange);
+      font-weight: 700;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin-top: 0;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h3 {
+      font-size: 18px;
+      color: var(--aws-white);
+      margin: 20px 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    p { margin: 10px 0; }
+    code:not([class]) {
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Before/After */
+    .ba-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: stretch;
+      margin: 20px 0;
+    }
+    .ba-box { border-radius: 10px; padding: 18px; }
+    .ba-before {
+      background: rgba(209,50,18,0.12);
+      border: 1px solid rgba(209,50,18,0.5);
+    }
+    .ba-after {
+      background: rgba(29,129,2,0.14);
+      border: 1px solid rgba(29,129,2,0.6);
+    }
+    .ba-title {
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ba-before .ba-title { color: #FF7A5C; }
+    .ba-after .ba-title { color: #6FD35A; }
+    .ba-list { list-style: none; padding: 0; margin: 0; }
+    .ba-list li {
+      margin: 10px 0;
+      padding-left: 22px;
+      position: relative;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .ba-before .ba-list li::before { content: "✕"; position: absolute; left: 0; color: var(--aws-red); font-weight: 700; }
+    .ba-after .ba-list li::before { content: "✓"; position: absolute; left: 0; color: var(--aws-green); font-weight: 700; }
+    .ba-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 34px;
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    /* Stats */
+    .stat-grid { display: flex; flex-wrap: wrap; gap: 14px; margin: 18px 0 4px; }
+    .stat-card {
+      flex: 1 1 200px;
+      background: linear-gradient(135deg, rgba(255,153,0,0.22), rgba(255,153,0,0.05));
+      border: 1px solid rgba(255,153,0,0.4);
+      border-radius: 10px;
+      padding: 18px 16px;
+      text-align: center;
+    }
+    .stat-card .num {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.15;
+    }
+    .stat-card .num small { font-size: 15px; }
+    .stat-card .label { font-size: 13px; margin-top: 6px; color: var(--aws-light-gray); }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid { display: flex; justify-content: center; }
+    .diagram-caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      text-align: center;
+      font-style: italic;
+      margin-top: 8px;
+    }
+
+    /* Feature cards */
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin: 14px 0;
+    }
+    .feature-card h3 { margin-top: 0; color: var(--aws-orange); }
+    .feature-card ul { margin: 8px 0 0; padding-left: 20px; }
+    .feature-card li { margin: 6px 0; font-size: 14px; }
+    .param-name {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: var(--aws-teal);
+      background: rgba(0,161,201,0.12);
+      border-radius: 4px;
+      padding: 2px 6px;
+      display: inline-block;
+      margin-top: 4px;
+      word-break: break-all;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 11px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      vertical-align: top;
+    }
+    th {
+      background: rgba(255,153,0,0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+    }
+    tr:hover td { background: rgba(255,255,255,0.03); }
+    td code { font-family: 'Courier New', monospace; font-size: 12px; color: var(--aws-teal); word-break: break-all; }
+    td .yes { color: var(--aws-green); font-weight: 600; }
+    td .no { color: var(--aws-red); font-weight: 600; }
+    td a, th a { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    td a:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+    .table-scroll { overflow-x: auto; }
+
+    /* Code blocks */
+    .code-block {
+      background: #1a1a2e;
+      border: 1px solid rgba(255,153,0,0.2);
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.55;
+      padding: 16px !important;
+    }
+
+    /* Steps */
+    .steps { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
+    .step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 16px 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 18px;
+    }
+    .step-body strong { color: var(--aws-white); display: block; margin-bottom: 4px; }
+    .step-body { font-size: 14px; flex: 1; min-width: 0; }
+
+    /* Two column */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .subcard {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .subcard h3 { margin-top: 0; }
+    .subcard ul { margin: 8px 0 0; padding-left: 20px; }
+    .subcard li { margin: 8px 0; font-size: 14px; }
+
+    /* Use cases */
+    .usecase {
+      background: linear-gradient(135deg, rgba(255,153,0,0.14), rgba(255,153,0,0.04));
+      border: 1px solid rgba(255,153,0,0.35);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin: 14px 0;
+    }
+    .usecase h3 { color: var(--aws-smile-orange); margin-top: 0; }
+    .usecase .scenario { font-size: 14px; margin: 8px 0; }
+    .usecase .effect {
+      font-size: 14px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(255,255,255,0.2);
+    }
+    .usecase .label { color: var(--aws-teal); font-weight: 700; }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 20px 0 6px;
+    }
+    .flow-step {
+      background: var(--aws-squid-ink);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 18px;
+      text-align: center;
+      min-width: 110px;
+      font-size: 14px;
+    }
+    .flow-arrow { color: var(--aws-orange); font-size: 24px; font-weight: bold; }
+
+    /* Note box */
+    .note-box {
+      background: rgba(255,173,51,0.1);
+      border: 1px solid rgba(255,173,51,0.4);
+      border-left: 4px solid var(--aws-smile-orange);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+    .warn-box {
+      background: rgba(209,50,18,0.1);
+      border: 1px solid rgba(209,50,18,0.4);
+      border-left: 4px solid var(--aws-red);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+
+    /* Related services */
+    .rel-item {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 10px 0;
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 14px;
+    }
+    .rel-item strong { color: var(--aws-orange); }
+
+    .region-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,161,201,0.15);
+      border: 1px solid rgba(0,161,201,0.5);
+      border-radius: 20px;
+      padding: 8px 18px;
+      font-size: 14px;
+    }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); text-decoration: underline; }
+
+    footer {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+    footer ul { list-style: none; padding: 0; }
+    footer li { margin: 8px 0; }
+
+    @media (max-width: 720px) {
+      .ba-grid { grid-template-columns: 1fr; }
+      .ba-arrow { transform: rotate(90deg); font-size: 28px; }
+      .two-col { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+      .subtitle { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>🎬 AWS Elemental MediaTailor<br/>広告タイムアウトと並列処理の設定可能化</h1>
+        <div class="badge-row">
+          <span class="service-badge">AWS Elemental MediaTailor</span>
+          <span class="feature-badge">AdsPersonalizationTimeouts</span>
+          <span class="feature-badge">AdsPersonalizationConcurrency</span>
+          <span class="feature-badge">SSAI</span>
+        </div>
+      </div>
+      <div class="subtitle">
+        <div>リリース日</div>
+        <div class="date-big">2026-07-27</div>
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>AWS Elemental MediaTailor で、ad decision server (ADS) に対するタイムアウト設定を<span class="highlight">お客様自身が直接制御</span>できるようになりました。従来これらの設定変更には AWS Support への問い合わせが必要でしたが、playback configuration の新しいパラメータ <code>AdsPersonalizationTimeouts</code> と <code>AdsPersonalizationConcurrency</code> を通じて、コンソール、AWS CLI、AWS SDK から直接設定できます。</p>
+      <p>設定できる項目は、個別の HTTP 広告リクエストタイムアウト、ライブ / VOD / ライブ広告プリフェッチそれぞれの広告パーソナライゼーション時間バジェット合計、そして ADS への並列リクエストの有効化です。ライブイベントで時間バジェットを引き上げて<strong>広告フィル率 (ad fill rate) を向上</strong>させたり、VOD ワークフローで並列 ADS リクエストを有効にして<strong>動画の起動を高速化</strong>したりできます。</p>
+      <p>サーバーサイド広告挿入 (SSAI) でライブ配信や VOD を収益化しているブロードキャスター、OTT 事業者、ストリーミングプラットフォーム運営者にとって、<span class="highlight">広告収益とユーザー体験のバランスを自らチューニング</span>できるようになる重要な改善です。</p>
+
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="num">3,000<small> ms</small></div>
+          <div class="label">個別 ADS リクエストタイムアウトのデフォルト</div>
+        </div>
+        <div class="stat-card">
+          <div class="num">6,000<small> ms</small></div>
+          <div class="label">個別タイムアウトの上限</div>
+        </div>
+        <div class="stat-card">
+          <div class="num">10,000<small> ms</small></div>
+          <div class="label">合計時間バジェットの上限</div>
+        </div>
+        <div class="stat-card">
+          <div class="num">100<small> 並列</small></div>
+          <div class="label">ADS 同時リクエスト数の上限</div>
+        </div>
+      </div>
+
+      <h3>🔄 アップデートによる変化</h3>
+      <div class="ba-grid">
+        <div class="ba-box ba-before">
+          <div class="ba-title">😰 Before: 従来の課題</div>
+          <ul class="ba-list">
+            <li>ADS タイムアウト設定の変更には AWS Support への問い合わせが必要で、迅速なチューニングやイベントごとの調整が困難だった</li>
+            <li>応答の遅い ADS を利用する場合、デフォルトのタイムアウト内に広告決定が完了せず、広告フィル率が低下することがあった</li>
+            <li>VOD ワークフローで複数の広告ブレイクを順次処理する必要があり、マニフェスト応答が遅延して動画の起動時間が長くなることがあった</li>
+            <li>プリフェッチ (ライブ広告の事前取得) に特化したタイムアウト制御ができなかった</li>
+          </ul>
+        </div>
+        <div class="ba-arrow">➡</div>
+        <div class="ba-box ba-after">
+          <div class="ba-title">😊 After: 改善</div>
+          <ul class="ba-list">
+            <li>playback configuration の設定として、コンソール、AWS CLI、SDK から ADS タイムアウトをセルフサービスで変更可能になった</li>
+            <li>ライブ / VOD / プリフェッチのワークフローごとに、個別 HTTP リクエストタイムアウトと合計時間バジェットを独立して調整できるようになった</li>
+            <li>VOD の VAST ワークフローで ADS リクエストを並列処理 (最大 100 並列) できるようになり、動画起動の高速化が期待できる</li>
+            <li>ライブイベントで時間バジェットを引き上げることで、広告フィル率の改善が可能になった</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+sequenceDiagram
+    participant P as 📺 プレイヤー
+    participant MT as 🎬 MediaTailor
+    participant ADS as 📡 広告決定サーバー ADS
+
+    Note over MT: 従来は AWS Support 経由でのみ<br/>タイムアウト変更が可能
+
+    P->>MT: マニフェストリクエスト VOD
+    rect rgb(233,247,236)
+        Note over MT,ADS: 並列 ADS リクエスト有効時<br/>MaxConcurrentAdsRequests > 1
+        MT->>ADS: 広告リクエスト 1 ブレイク A
+        MT->>ADS: 広告リクエスト 2 ブレイク B
+        MT->>ADS: 広告リクエスト 3 ブレイク C
+        ADS-->>MT: VAST レスポンス 同時進行
+    end
+    Note over MT: 個別タイムアウト: 250-6000 ms<br/>合計時間バジェット: 250-10000 ms
+    MT-->>P: パーソナライズ済みマニフェスト<br/>応答時間短縮で起動高速化
+        </pre>
+      </div>
+      <p class="diagram-caption">VOD ワークフローで VAST 並列化を有効にした場合の処理フローです。複数の広告ブレイクに対する ADS リクエストを並列に実行することで、マニフェスト応答時間を短縮し、動画の起動を高速化します。</p>
+
+      <h3>⏱️ タイムアウトの適用範囲</h3>
+      <div class="flow-diagram">
+        <div class="flow-step">📺 マニフェスト<br/>リクエスト</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📡 個別 ADS<br/>リクエスト</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🧮 合計時間<br/>バジェット</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">✅ 広告挿入済み<br/>マニフェスト</div>
+      </div>
+      <p class="diagram-caption">個別タイムアウトは 1 回の HTTP リクエストに、合計時間バジェットは 1 つのマニフェストリクエスト内のすべての広告ブレイクに適用されます。</p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⭐ 主要機能</h2>
+
+      <div class="feature-card">
+        <h3>⏱️ 1. 個別 ADS リクエストタイムアウト</h3>
+        <div class="param-name">AdsPersonalizationTimeouts.AdsRequestTimeoutMilliseconds</div>
+        <ul>
+          <li>ライブまたは VOD 再生中の広告決定において、単一の HTTP レスポンスを待機する最大時間をミリ秒単位で設定</li>
+          <li>デフォルト: <span class="highlight">3,000 ms</span>、有効範囲: 250〜6,000 ms</li>
+          <li>応答の遅い ADS に合わせて延長したり、低レイテンシー重視で短縮したりできる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>🧮 2. ワークフロー別の合計時間バジェット</h3>
+        <ul>
+          <li><strong>ライブ</strong> <code>LiveMaximumAdsPersonalizationTimeMilliseconds</code>: ライブマニフェストのパーソナライゼーション中の全 ADS アクティビティに対する合計時間バジェット。デフォルト 10,000 ms、有効範囲 250〜10,000 ms。<strong>1 つのマニフェストリクエスト内のすべての広告ブレイクで共有される</strong></li>
+          <li><strong>VOD</strong> <code>VodMaximumAdsPersonalizationTimeMilliseconds</code>: VOD マニフェストのパーソナライゼーションに対する合計時間バジェット。デフォルト 10,000 ms、有効範囲 250〜10,000 ms</li>
+          <li><strong>プリフェッチ</strong> <code>PrefetchMaximumAdsPersonalizationTimeMilliseconds</code>: プリフェッチ取得中の全 ADS アクティビティに対する合計時間バジェット。デフォルトでは上限なし、有効範囲 250〜10,000 ms</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>🔮 3. プリフェッチ専用の個別タイムアウト</h3>
+        <div class="param-name">AdsPersonalizationTimeouts.PrefetchAdsRequestTimeoutMilliseconds</div>
+        <ul>
+          <li>プリフェッチ取得時の広告決定において、単一の HTTP レスポンスを待機する最大時間を設定</li>
+          <li>デフォルト: 個別 ADS リクエストタイムアウトの値を継承、有効範囲: 250〜10,000 ms</li>
+          <li>ライブストリームの広告取得をよりきめ細かく制御可能</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>⚡ 4. 並列 ADS リクエスト</h3>
+        <div class="param-name">AdsPersonalizationConcurrency</div>
+        <ul>
+          <li><strong>MaxConcurrentAdsRequests</strong>: MediaTailor が ADS に対して同時に実行できるリクエスト数。デフォルト 1、有効範囲 <span class="highlight">1〜100</span></li>
+          <li><strong>EnableVodVastParallelization</strong>: VAST レスポンスを返す VOD ワークフローで ADS リクエストを並列処理。デフォルトは無効。有効化するには MaxConcurrentAdsRequests を 1 より大きい値に設定する必要がある</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>📋 新しい設定パラメータの一覧</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>コンソール設定名</th>
+              <th>API パラメータ</th>
+              <th>デフォルト</th>
+              <th>有効範囲</th>
+              <th>対象ワークフロー</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Individual ADS request timeout</td>
+              <td><code>AdsPersonalizationTimeouts.<br/>AdsRequestTimeoutMilliseconds</code></td>
+              <td>3,000 ms</td>
+              <td>250〜6,000 ms</td>
+              <td>ライブ / VOD</td>
+            </tr>
+            <tr>
+              <td>Live maximum ADS personalization time</td>
+              <td><code>AdsPersonalizationTimeouts.<br/>LiveMaximumAdsPersonalizationTimeMilliseconds</code></td>
+              <td>10,000 ms</td>
+              <td>250〜10,000 ms</td>
+              <td>ライブ</td>
+            </tr>
+            <tr>
+              <td>VOD maximum ADS personalization time</td>
+              <td><code>AdsPersonalizationTimeouts.<br/>VodMaximumAdsPersonalizationTimeMilliseconds</code></td>
+              <td>10,000 ms</td>
+              <td>250〜10,000 ms</td>
+              <td>VOD</td>
+            </tr>
+            <tr>
+              <td>Prefetch ADS request timeout</td>
+              <td><code>AdsPersonalizationTimeouts.<br/>PrefetchAdsRequestTimeoutMilliseconds</code></td>
+              <td>個別タイムアウト値</td>
+              <td>250〜10,000 ms</td>
+              <td>プリフェッチ</td>
+            </tr>
+            <tr>
+              <td>Prefetch maximum ADS personalization time</td>
+              <td><code>AdsPersonalizationTimeouts.<br/>PrefetchMaximumAdsPersonalizationTimeMilliseconds</code></td>
+              <td>上限なし</td>
+              <td>250〜10,000 ms</td>
+              <td>プリフェッチ</td>
+            </tr>
+            <tr>
+              <td>Maximum concurrent ADS requests</td>
+              <td><code>AdsPersonalizationConcurrency.<br/>MaxConcurrentAdsRequests</code></td>
+              <td>1</td>
+              <td>1〜100</td>
+              <td>全般</td>
+            </tr>
+            <tr>
+              <td>Enable VOD VAST parallelization</td>
+              <td><code>AdsPersonalizationConcurrency.<br/>EnableVodVastParallelization</code></td>
+              <td><span class="no">無効</span></td>
+              <td>有効 / 無効</td>
+              <td>VOD (VAST)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>🔗 タイムアウト設定の組み合わせルール</h3>
+      <div class="note-box">
+        ドキュメントによると、各ワークフローで個別タイムアウトと合計時間バジェットは<strong>セットで設定する</strong>必要があります。
+        <ul style="margin:8px 0 0; padding-left:20px;">
+          <li>個別タイムアウトは合計時間バジェットを超えることはできない</li>
+          <li>ライブと VOD は単一の「Individual ADS request timeout」を共有するため、ライブと VOD 両方の合計時間バジェットと一緒に設定する</li>
+          <li>「Prefetch ADS request timeout」と「Prefetch maximum ADS personalization time」も同様にセットで設定する (片方だけの設定は不可)</li>
+        </ul>
+      </div>
+
+      <h3>🔁 API 変更履歴</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2026/07/20</td>
+              <td><a href="https://awsapichanges.com/archive/changes/39540f-api.mediatailor.html" target="_blank" rel="noopener noreferrer">MediaTailor</a></td>
+              <td>3 updated api methods - MediaTailor playback configuration に ADS タイムアウトと並列処理フィールドを設定する API サポートを追加</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+
+      <div class="note-box">
+        <strong>📋 前提条件</strong>
+        <ul style="margin:8px 0 0; padding-left:20px;">
+          <li>AWS Elemental MediaTailor の playback configuration が作成済み、または新規作成すること</li>
+          <li><code>mediatailor:PutPlaybackConfiguration</code> を含む IAM 権限を持っていること</li>
+          <li>利用する ADS の応答特性 (平均応答時間、VAST / VMAP の別) を把握していること</li>
+        </ul>
+      </div>
+
+      <h3>📝 手順</h3>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>現在の playback configuration を確認する</strong>
+            指定した playback configuration の現在の設定内容を取得します。既存のタイムアウト関連設定や ADS URL を確認し、変更の影響範囲を把握します。
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">Bash</span>
+                <span class="code-title">AWS CLI: 現在の設定を確認</span>
+              </div>
+              <pre><code class="language-bash">aws mediatailor get-playback-configuration \
+  --name my-playback-config</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>タイムアウトと並列処理を設定する</strong>
+            <code>PutPlaybackConfiguration</code> API で、個別 ADS リクエストタイムアウトを 4,000 ms に延長し、ライブと VOD の合計時間バジェットを 10,000 ms に設定しています。あわせて最大 5 並列の ADS リクエストと VOD の VAST 並列化を有効化しています。個別タイムアウトと合計時間バジェットはセットで設定する必要がある点に注意してください。
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-lang">Bash</span>
+                <span class="code-title">AWS CLI: タイムアウトと並列処理の設定</span>
+              </div>
+              <pre><code class="language-bash">aws mediatailor put-playback-configuration \
+  --name my-playback-config \
+  --ad-decision-server-url "https://my-ads.example.com/vast?..." \
+  --video-content-source-url "https://origin.example.com/content" \
+  --ads-personalization-timeouts '{
+    "AdsRequestTimeoutMilliseconds": 4000,
+    "LiveMaximumAdsPersonalizationTimeMilliseconds": 10000,
+    "VodMaximumAdsPersonalizationTimeMilliseconds": 10000
+  }' \
+  --ads-personalization-concurrency '{
+    "MaxConcurrentAdsRequests": 5,
+    "EnableVodVastParallelization": true
+  }'</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>コンソールでの設定 (代替手段)</strong>
+            MediaTailor コンソールの playback configuration 作成 / 編集画面にある「Advanced settings」セクションから、以下の項目を設定できます。
+            <ul style="margin:8px 0 0; padding-left:20px;">
+              <li>Individual ADS request timeout</li>
+              <li>Live maximum ADS personalization time</li>
+              <li>VOD maximum ADS personalization time</li>
+              <li>Prefetch ADS request timeout / Prefetch maximum ADS personalization time</li>
+              <li>Maximum concurrent ADS requests / Enable VOD VAST parallelization</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <strong>効果を検証する</strong>
+            設定変更後、CloudWatch Logs のセッションログ (ADS ログ) や CloudWatch メトリクスを確認し、広告フィル率とマニフェスト応答時間の変化を検証します。ライブイベント前にステージング環境の playback configuration でテストすることを推奨します。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>💼 ビジネス面</h3>
+          <ul>
+            <li><strong>広告収益の最大化</strong>: ライブイベントでパーソナライゼーション時間バジェットを引き上げることで、応答に時間のかかる ADS でも広告決定を完了させ、広告フィル率を向上できる</li>
+            <li><strong>視聴体験の向上</strong>: VOD で並列 ADS リクエストを有効にすると応答時間が短縮され、動画起動が高速化することで離脱率の低減が期待できる</li>
+            <li><strong>運用の迅速化</strong>: AWS Support への問い合わせが不要になり、大型ライブイベント前のチューニングや ADS 変更時の調整を即座に実施できる</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h3>🛠️ 技術面</h3>
+          <ul>
+            <li><strong>セルフサービス化</strong>: コンソール、AWS CLI、SDK から設定でき、Infrastructure as Code (CloudFormation や CDK などの IaC ツール) への組み込みやすさが向上する</li>
+            <li><strong>ワークフロー別の細かい制御</strong>: ライブ、VOD、プリフェッチそれぞれに独立した時間バジェットを設定でき、ワークロード特性に合わせた最適化が可能</li>
+            <li><strong>並列度の柔軟な調整</strong>: 最大 100 並列まで ADS リクエストの同時実行数を調整でき、ADS 側のキャパシティに合わせたスロットリングも可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>🚧 制限事項</h3>
+          <ul>
+            <li>個別 ADS リクエストタイムアウトの上限は 6,000 ms、合計時間バジェットの上限は 10,000 ms (これを超える設定はできない)</li>
+            <li>VOD VAST 並列化は VAST レスポンスを返す VOD ワークフローのみが対象で、有効化には MaxConcurrentAdsRequests を 1 より大きくする必要がある</li>
+            <li>個別タイムアウトと合計時間バジェットはセットで設定する必要があり、個別タイムアウトが合計バジェットを超える設定はできない</li>
+            <li>ライブと VOD は個別 ADS リクエストタイムアウトを共有するため、ワークフローごとに異なる個別タイムアウトは設定できない</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h3>🤔 考慮すべき点</h3>
+          <ul>
+            <li>タイムアウトを延長するとマニフェスト応答が遅くなる可能性があるため、広告フィル率と起動時間のトレードオフを考慮してチューニングする</li>
+            <li>並列リクエスト数を増やすと ADS 側の負荷が増加するため、ADS のキャパシティを事前に確認する</li>
+          </ul>
+        </div>
+      </div>
+      <div class="warn-box">
+        <strong>🚨 フリークエンシーキャップへの影響</strong><br/>
+        VAST 並列化を有効にすると、一部の広告サーバーでは並列リクエストに対してフリークエンシーキャップ (広告表示回数制限) が正しく適用されない場合があります。広告サーバープロバイダーに並列リクエスト時のフリークエンシーキャップ対応を確認し、未対応の場合は VMAP への切り替えを検討してください。
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>💡 ユースケース</h2>
+
+      <div class="usecase">
+        <h3>🏟️ 1. 大規模ライブスポーツイベントでの広告フィル率向上</h3>
+        <p class="scenario"><span class="label">シナリオ:</span> 大規模なライブスポーツ配信で、広告ブレイク時にプログラマティック広告の入札処理に時間がかかり、デフォルトのタイムアウト内に広告決定が完了せず、スレート (埋め草) 表示が多発している。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">実装例: 個別タイムアウトを上限まで延長</span>
+          </div>
+          <pre><code class="language-bash">aws mediatailor put-playback-configuration \
+  --name live-sports-config \
+  --ads-personalization-timeouts '{
+    "AdsRequestTimeoutMilliseconds": 6000,
+    "LiveMaximumAdsPersonalizationTimeMilliseconds": 10000,
+    "VodMaximumAdsPersonalizationTimeMilliseconds": 10000
+  }'</code></pre>
+        </div>
+        <p class="effect"><span class="label">効果:</span> 個別タイムアウトを上限の 6,000 ms まで延長することで、応答の遅い ADS でも広告決定を完了でき、スレート表示が減少して広告フィル率と広告収益が向上します。</p>
+      </div>
+
+      <div class="usecase">
+        <h3>🎞️ 2. VOD サービスの動画起動高速化</h3>
+        <p class="scenario"><span class="label">シナリオ:</span> 多数のミッドロール広告ブレイクを含む長尺 VOD コンテンツで、広告ブレイクごとの ADS リクエストが順次処理されるため、マニフェストの初回応答が遅く、動画の起動に時間がかかっている。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">実装例: VAST 並列化を有効化</span>
+          </div>
+          <pre><code class="language-bash">aws mediatailor put-playback-configuration \
+  --name vod-config \
+  --ads-personalization-timeouts '{
+    "AdsRequestTimeoutMilliseconds": 3000,
+    "LiveMaximumAdsPersonalizationTimeMilliseconds": 10000,
+    "VodMaximumAdsPersonalizationTimeMilliseconds": 8000
+  }' \
+  --ads-personalization-concurrency '{
+    "MaxConcurrentAdsRequests": 10,
+    "EnableVodVastParallelization": true
+  }'</code></pre>
+        </div>
+        <p class="effect"><span class="label">効果:</span> 複数の広告ブレイクに対する VAST リクエストが最大 10 並列で処理され、マニフェスト応答時間が短縮されて動画の起動が高速化し、視聴開始までの離脱を低減できます。</p>
+      </div>
+
+      <div class="usecase">
+        <h3>🔮 3. ライブ広告プリフェッチのきめ細かい制御</h3>
+        <p class="scenario"><span class="label">シナリオ:</span> ライブストリームでプリフェッチ機能を利用して広告を事前取得しているが、プリフェッチはリアルタイム性の要求が緩いため、通常再生よりも長いタイムアウトを許容して広告取得の成功率を高めたい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">実装例: プリフェッチ専用タイムアウトの設定</span>
+          </div>
+          <pre><code class="language-bash">aws mediatailor put-playback-configuration \
+  --name live-prefetch-config \
+  --ads-personalization-timeouts '{
+    "AdsRequestTimeoutMilliseconds": 3000,
+    "LiveMaximumAdsPersonalizationTimeMilliseconds": 10000,
+    "VodMaximumAdsPersonalizationTimeMilliseconds": 10000,
+    "PrefetchAdsRequestTimeoutMilliseconds": 8000,
+    "PrefetchMaximumAdsPersonalizationTimeMilliseconds": 10000
+  }'</code></pre>
+        </div>
+        <p class="effect"><span class="label">効果:</span> 通常再生の個別タイムアウトは 3,000 ms に保ちつつ、プリフェッチのみ 8,000 ms まで待機できるようになり、レイテンシーに影響を与えずにプリフェッチ経由の広告取得成功率を高められます。</p>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>このアップデート自体に<span class="highlight">追加料金はありません</span>。MediaTailor の料金は従来どおり、広告挿入 (サーバーサイド広告挿入した広告数またはストリーム時間) とチャンネルアセンブリの使用量に基づく従量課金です。</p>
+      <div class="note-box">
+        並列リクエストやタイムアウト延長により広告フィル率が向上した場合、挿入される広告数の増加に応じて広告挿入料金が増える可能性がありますが、これは収益増加に伴うものです。詳細は <a class="aws-link" href="https://aws.amazon.com/mediatailor/pricing/" target="_blank" rel="noopener noreferrer">MediaTailor 料金ページ</a> を参照してください。
+      </div>
+    </div>
+
+    <!-- リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p><span class="region-badge">🌐 AWS Elemental MediaTailor が利用可能なすべての AWS リージョンで利用できます</span></p>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="rel-item"><strong>MediaTailor 広告プリフェッチ</strong>: ライブストリーム向けに広告を事前取得する機能。今回のアップデートでプリフェッチ専用のタイムアウト制御が可能になった</div>
+      <div class="rel-item"><strong>AWS Elemental MediaPackage / MediaLive</strong>: ライブ配信ワークフローで MediaTailor の上流としてマニフェストを供給するサービス。SCTE-35 マーカーによる広告ブレイク通知と組み合わせて利用</div>
+      <div class="rel-item"><strong>Amazon CloudFront</strong>: MediaTailor のマニフェストと広告セグメント配信を最適化する CDN。タイムアウトチューニングの効果検証時に応答時間の測定にも活用できる</div>
+      <div class="rel-item"><strong>Amazon CloudWatch Logs</strong>: MediaTailor の ADS インタラクションログを記録。タイムアウト変更後の広告フィル率や ADS 応答時間の検証に利用</div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>🎯 まとめ</h2>
+      <p>MediaTailor の ADS タイムアウトと並列処理設定が<span class="highlight">セルフサービス化</span>され、AWS Support への問い合わせなしに広告フィル率と動画起動時間のトレードオフを自らチューニングできるようになりました。</p>
+      <p>SSAI で収益化しているワークロードでは、まず現在の ADS 応答時間とスレート発生状況を CloudWatch Logs で確認し、<strong>ライブでは時間バジェットの引き上げ</strong>、<strong>VOD では VAST 並列化の有効化</strong>を検証することを推奨します。</p>
+      <div class="flow-diagram">
+        <div class="flow-step">🔍 現状を<br/>CloudWatch で確認</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🧪 ステージングで<br/>設定をテスト</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">⚙️ 本番の設定を<br/>更新</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📊 フィル率と<br/>応答時間を検証</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典 / 参考リンク</p>
+      <ul>
+        <li>🔗 <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/07/mediatail-configurable-ad-timeout-and-concurrency" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/07/mediatail-configurable-ad-timeout-and-concurrency</a></li>
+        <li>📖 <a class="aws-link" href="https://docs.aws.amazon.com/mediatailor/latest/ug/configurations-create.html#configurations-advanced-settings" target="_blank" rel="noopener noreferrer">ドキュメント: Playback configuration の Advanced settings</a></li>
+        <li>📘 <a class="aws-link" href="https://docs.aws.amazon.com/mediatailor/latest/apireference/API_PutPlaybackConfiguration.html" target="_blank" rel="noopener noreferrer">API リファレンス: PutPlaybackConfiguration</a></li>
+        <li>🔁 <a class="aws-link" href="https://awsapichanges.com/archive/changes/39540f-api.mediatailor.html" target="_blank" rel="noopener noreferrer">API 変更履歴 (awsapichanges.com)</a></li>
+        <li>💰 <a class="aws-link" href="https://aws.amazon.com/mediatailor/pricing/" target="_blank" rel="noopener noreferrer">料金ページ: https://aws.amazon.com/mediatailor/pricing/</a></li>
+      </ul>
+    </footer>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

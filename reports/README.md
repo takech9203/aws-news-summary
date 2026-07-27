@@ -5,6 +5,9 @@
 
 ## 2026 年
 
+- [2026-07-27 - AWS Security Hub - MCP App (プレビュー)](2026/2026-07-27-aws-security-hub-mcp-app.md)
+- [2026-07-27 - AWS Elemental MediaTailor - 広告タイムアウトと並列処理の設定可能化](2026/2026-07-27-mediatail-configurable-ad-timeout-and-concurrency.md)
+- [2026-07-27 - Amazon RDS for SQL Server - Multi-AZ インスタンスへの TDE データベース復元サポート](2026/2026-07-27-rds-sql-server-supports-tde-for-maz.md)
 - [2026-07-24 - Claude Opus 5 - AWS での提供開始](2026/2026-07-24-claude-opus-5-aws.md)
 - [2026-07-24 - aws-bench - AI エージェント向けオープンソースベンチマーク](2026/2026-07-24-aws-bench.md)
 - [2026-07-24 - Kiro - Claude Opus 5 の提供開始](2026/2026-07-24-kiro-opus-5.md)
