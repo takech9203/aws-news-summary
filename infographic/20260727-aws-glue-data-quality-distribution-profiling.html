@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Glue Data Quality - Distribution Analyzer による分布統計データプロファイリング</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.card p, .card ul { margin: 4px 0; font-size: 14px; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF8A73; }
+.after-box h3 { color: #7ED67E; }
+.before-box ul, .after-box ul {
+  margin: 8px 0 0 0;
+  padding-left: 0;
+  list-style: none;
+  font-size: 14px;
+}
+.before-box li, .after-box li {
+  margin: 8px 0;
+  padding-left: 22px;
+  position: relative;
+}
+.before-box li::before { content: "✗"; position: absolute; left: 0; color: var(--aws-red); font-weight: 700; }
+.after-box li::before { content: "✓"; position: absolute; left: 0; color: #7ED67E; font-weight: 700; }
+
+/* Stat cards */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+code.inline {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Steps */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-content h3 { margin: 4px 0 8px 0; }
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+/* Check lists */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+.check-icon { color: #7ED67E; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Merit grid */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.merit-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 16px;
+}
+.merit-box h3 { margin-top: 0; }
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label {
+  color: var(--aws-white);
+  font-weight: 600;
+}
+
+/* Flow diagram */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Region banner */
+.region-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(0, 161, 201, 0.12);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 14px 18px;
+  font-size: 15px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer a { word-break: break-all; }
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 720px) {
+  .before-after, .merit-grid { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="service-badge">AWS Glue Data Quality</div>
+    <h1>📊 Distribution Analyzer による<br>分布統計データプロファイリング</h1>
+    <div class="subtitle">リリース日: <span class="date">2026 年 7 月 27 日</span> | 機能: Distribution Analyzer による分布統計 (Distribution Statistics) のデータプロファイリング</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>💡 概要</h2>
+    <p>AWS Glue Data Quality が新しい <span class="highlight">Distribution Analyzer</span> をサポート。DQDL の <code class="inline">Analyzers</code> ブロックに <code class="inline">Distribution</code> アナライザーを記述するだけで、数値カラムには <span class="highlight">ヒストグラム</span> (等幅ビンによる度数分布)、カテゴリカル / 日付 / ブールカラムには <span class="highlight">値の頻度分布</span> を自動生成します。</p>
+    <p>歪度 (スキュー)、外れ値、予期しないパターンを <span class="highlight">カスタムコードなし</span> で特定でき、既存の DQDL ルールセットと統合されているため <span class="highlight">1 回の評価実行</span> で品質チェックと分布プロファイリングを両方実行できます。生成された統計は S3 に保存され、Athena でのクエリや SageMaker Unified Studio での可視化に活用できます。</p>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">1 行</div>
+        <div class="stat-label">DQDL に追加するだけで分布プロファイリングが有効化</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">1 回</div>
+        <div class="stat-label">の評価実行で品質チェックと分布プロファイリングを同時処理</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">最大 20</div>
+        <div class="stat-label">ビン数 / 非数値カラムは上位 20 件の最頻値を返却</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <ul>
+          <li>統計は Mean、Sum、StandardDeviation などのスカラー値中心で、データの「形状」を直接プロファイリングできなかった</li>
+          <li>ヒストグラムや頻度分布には Spark / Pandas のカスタムコードと別ジョブの運用が必要だった</li>
+          <li>歪度・外れ値・カテゴリ値の偏りの検出に品質チェックとは別の仕組みが必要だった</li>
+          <li>実行ごとにビン境界が変わると時系列での分布比較が困難だった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <ul>
+          <li>DQDL の Analyzers ブロックに 1 行追加するだけでヒストグラムと値分布を生成</li>
+          <li>bins パラメータでカスタムビン数 (最大 20) を指定可能</li>
+          <li>1 回の評価実行で品質チェックと分布プロファイリングを同時実行</li>
+          <li>統計は S3 保存 + Athena クエリ、ListDataQualityStatistics / GetDataQualityResult API で取得可能</li>
+          <li>ビン境界の固定 (frozen edges) と自動リビニングで一貫した分布比較とレンジ変化への追従を両立</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Source["🗄️ データソース"]
+        direction LR
+        S3Data[("🪣 S3 データ")]
+        Catalog[("📋 Data Catalog テーブル")]
+        S3Data ~~~ Catalog
+    end
+
+    subgraph GlueDQ["⚙️ AWS Glue ETL - Data Quality 評価"]
+        DQDL["📝 DQDL ルールセット<br/>Rules + Analyzers"]
+        Eval["⚡ EvaluateDataQuality<br/>1 回の評価実行"]
+        Dist["📊 Distribution Analyzer<br/>ヒストグラム / 値分布"]
+        DQDL --> Eval --> Dist
+    end
+
+    subgraph Output["📤 分布統計の活用"]
+        direction LR
+        S3Out[("🪣 S3 保存")]
+        API["🔌 Glue API<br/>ListDataQualityStatistics"]
+        S3Out ~~~ API
+    end
+
+    Athena["🔍 Amazon Athena<br/>SQL クエリ"]
+    Viz["📈 SageMaker Unified Studio<br/>可視化ツール"]
+
+    Source --> GlueDQ
+    Dist --> S3Out
+    Dist --> API
+    S3Out --> Athena
+    API --> Viz
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Source,GlueDQ,Output layer
+    class Eval,Dist compute
+    class S3Data,S3Out storage
+    class Catalog database
+    class DQDL internal
+    class Athena,Viz process
+      </pre>
+    </div>
+    <p class="diagram-caption">DQDL ルールセット内の Distribution Analyzer が品質チェックと同じ評価実行の中で分布統計を生成し、結果を S3 と API 経由で Athena や可視化ツールに連携するフロー</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🚀 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">📈 1. 数値カラムのヒストグラム生成</div>
+      <p>カラムの値レンジを等幅の区間 (ビン) に分割し、各ビンの件数をカウント。<code class="inline">bins</code> パラメータでビン数を指定可能 (デフォルト 20、最大 20)。歪度や外れ値、値レンジのシフトをカスタムコードなしで検出できます。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🏷️ 2. カテゴリカル / 日付 / ブールカラムの値分布生成</div>
+      <p>各ディスティンクト値の出現頻度をカウントし、頻度の降順でソートして上位 20 件の最頻値を返却。カテゴリ値の偏りや予期しない値の混入を把握できます。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔗 3. 既存 DQDL ルールセットとの統合</div>
+      <p><code class="inline">Rules</code> ブロックの品質チェックと <code class="inline">Analyzers</code> ブロックの分布プロファイリングを 1 回の評価実行で処理。<code class="inline">Distribution AllColumns</code> で全カラムの分布を一括生成できます。NULL 値は分布計算から除外されます。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🧊 4. ビン境界の固定 (Frozen Edges) と自動リビニング</div>
+      <p>初回実行時にビン境界を計算し、以降は同じ境界を再利用して実行間の分布比較を可能に。範囲外の値はオーバーフロービンにカウントされ、2% 超で情報レベル、5% 超でより強い Observation を生成。5% 超が 3 回連続すると自動でビン境界を再計算します (<code class="inline">rebin = false</code> でオプトアウト可能)。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💾 5. 分布統計の保存と活用</div>
+      <p>分布統計は Amazon S3 に保存され Amazon Athena でクエリ可能。<code class="inline">ListDataQualityStatistics</code> / <code class="inline">GetDataQualityResult</code> API でも取得でき、SageMaker Unified Studio などの可視化ツールやモニタリングワークフローと統合できます。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>⚙️ 技術仕様</h2>
+
+    <h3>Distribution Analyzer の仕様</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>記述場所</td><td>DQDL ルールセットの <code class="inline">Analyzers</code> ブロックのみ (ルールとしては使用不可)</td></tr>
+      <tr><td>対象カラム型</td><td>全カラム型 (数値、文字列、日付、ブールなど)</td></tr>
+      <tr><td>数値カラムの出力</td><td>等幅ビンによるヒストグラム</td></tr>
+      <tr><td>非数値カラムの出力</td><td>頻度降順の値分布 (上位 20 件)</td></tr>
+      <tr><td><code class="inline">bins</code> パラメータ</td><td>ビン数を指定 (デフォルト 20、最大 20、非数値カラムには影響なし)</td></tr>
+      <tr><td><code class="inline">rebin</code> パラメータ</td><td>自動リビニングの有効 / 無効 (デフォルト <code class="inline">true</code>)</td></tr>
+      <tr><td>NULL 値の扱い</td><td>分布計算から除外</td></tr>
+      <tr><td>出力形式</td><td><code class="inline">DistributionValue</code> オブジェクト (<code class="inline">BinEdges</code>、<code class="inline">Count</code>、<code class="inline">DataType</code>)</td></tr>
+      <tr><td>結果取得 API</td><td><code class="inline">ListDataQualityStatistics</code>、<code class="inline">GetDataQualityResult</code></td></tr>
+    </table>
+
+    <h3>DQDL 構文</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">DQDL</span>
+        <span class="code-title">Distribution アナライザーの構文</span>
+      </div>
+      <pre><code class="language-sql">Distribution &lt;COL_NAME&gt;
+Distribution &lt;COL_NAME&gt; with bins = &lt;BIN_COUNT&gt;
+Distribution &lt;COL_NAME&gt; with bins = &lt;BIN_COUNT&gt;, rebin = &lt;true|false&gt;
+Distribution AllColumns</code></pre>
+    </div>
+
+    <h3>ルールセットの記述例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">DQDL</span>
+        <span class="code-title">品質チェックと分布プロファイリングを 1 回の評価で処理</span>
+      </div>
+      <pre><code class="language-sql">Rules = [
+    RowCount &gt; 100,
+    Completeness "Salary" &gt; 0.9
+]
+Analyzers = [
+    Mean "Salary",
+    StandardDeviation "Salary",
+    Distribution "Salary" with bins = 15,
+    Distribution "Department"
+]</code></pre>
+    </div>
+
+    <h3>API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/07/27</td>
+        <td><a href="https://awsapichanges.com/archive/changes/1ea078-glue.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Glue</a></td>
+        <td>1 new 8 updated api methods - <code class="inline">BatchGetDataQualityRulesetEvaluationRun</code> API の追加、異常検知向け <code class="inline">ObservationScope</code> / <code class="inline">ObservationMode</code> パラメータ、評価結果の Data Catalog テーブルへの書き込み、レコメンデーション実行のカスタムロググループパスのサポート</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Glue ETL ジョブで Data Quality 評価 (<code class="inline">EvaluateDataQuality</code> 変換) を使用していること (Analyzers は AWS Glue Data Catalog ベースの Data Quality では未サポート)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Glue ジョブの IAM ロールに、対象データソースおよび結果保存先 S3 バケットへのアクセス権限があること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Athena で統計をクエリする場合は、結果保存先 S3 に対する Athena のアクセス権限があること</span></div>
+
+    <div class="flow-diagram">
+      <div class="flow-step">📝 DQDL に<br>Analyzer 追加</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">⚡ Glue ジョブ<br>実行</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📊 分布統計を<br>取得・確認</div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h3>DQDL ルールセットに Distribution Analyzer を追加</h3>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">DQDL</span><span class="code-title">Analyzers ブロックへの追加</span></div>
+          <pre><code class="language-sql">Rules = [
+    RowCount &gt; 0
+]
+Analyzers = [
+    Distribution "Salary" with bins = 10,
+    Distribution "Department"
+]</code></pre>
+        </div>
+        <p>Glue Studio のビジュアルエディタまたはスクリプト内の <code class="inline">EvaluateDataQuality</code> 変換で追加します。数値カラム <code class="inline">Salary</code> は 10 ビンのヒストグラム、文字列カラム <code class="inline">Department</code> は値の頻度分布としてプロファイリングされます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h3>Glue ジョブを実行して分布統計を生成</h3>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ジョブの実行</span></div>
+          <pre><code class="language-bash">aws glue start-job-run --job-name my-dq-job</code></pre>
+        </div>
+        <p>品質チェックと分布プロファイリングが 1 回の評価実行で処理され、分布統計が生成されます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h3>分布統計を取得・確認</h3>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">統計の取得</span></div>
+          <pre><code class="language-bash">aws glue list-data-quality-statistics \
+  --profile-id &lt;profile-id&gt;</code></pre>
+        </div>
+        <p><code class="inline">ListDataQualityStatistics</code> API で <code class="inline">Distribution</code> 統計 (<code class="inline">BinEdges</code>、<code class="inline">Count</code>、<code class="inline">DataType</code> を含む <code class="inline">DistributionValue</code> オブジェクト) を取得します。S3 に保存された統計は Athena でクエリしたり、SageMaker Unified Studio などの可視化ツールで分析したりできます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>👍 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>データ品質問題の早期発見</strong>: 分布の歪みや外れ値を可視化し、下流の分析や ML モデルに影響が及ぶ前に検出</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>開発・運用コストの削減</strong>: カスタムコードや別ジョブが不要になり、既存の品質評価パイプラインに統合</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>データへの信頼性向上</strong>: 「データがどのような形をしているか」を継続的に把握し、データドリブンな意思決定を支援</span></div>
+      </div>
+      <div class="merit-box">
+        <h3>🔧 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>1 回の評価で完結</strong>: Analyzer を追加するだけで品質チェックと分布プロファイリングを同一実行で処理</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>実行間で比較可能な統計</strong>: frozen edges により時系列での分布比較やデータドリフト検出が有効に機能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>自動リビニングによる運用レス</strong>: 恒常的なレンジ変化には自動再計算、一時的な変動ではビンを安定維持</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>エコシステムとの統合</strong>: S3 + Athena、API、SageMaker Unified Studio などと連携可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>🚫 制限事項</h3>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>Analyzers は AWS Glue ETL でのみサポートされ、Data Catalog ベースの Data Quality では使用不可</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span><code class="inline">Distribution</code> は Analyzers ブロック専用で、ルールとしての合否判定やジョブ停止アクションは設定不可</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>数値カラムのビン数は最大 20</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>非数値カラムの値分布は上位 20 件の最頻値のみ返却</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>NULL 値は分布計算から除外される</span></div>
+      </div>
+      <div class="merit-box">
+        <h3>🤔 考慮すべき点</h3>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>frozen edges では初回実行時のデータレンジが基準となるため、初回データが代表的なレンジを持つことを確認する</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>レンジが恒常的に変化するデータでは、自動リビニングの挙動を理解した上で <code class="inline">rebin = false</code> の要否を判断する</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>オーバーフロービンへの集中 (2% 超 / 5% 超) で Observation が生成されるため、モニタリングでの活用設計が望ましい</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>S3 ストレージ料金と Athena スキャン料金が別途発生する</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">💰 ユースケース 1: 給与データの歪度・外れ値検出</div>
+      <p><span class="label">シナリオ</span>: 人事データレイクの給与カラムに、桁誤りなどの異常値が混入していないかを継続的に監視したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">DQDL</span></div>
+        <pre><code class="language-sql">Rules = [
+    Completeness "Salary" &gt; 0.95
+]
+Analyzers = [
+    Distribution "Salary" with bins = 20
+]</code></pre>
+      </div>
+      <p><span class="label">効果</span>: ヒストグラムにより給与分布の形状を毎回の評価で記録し、末尾ビンへの異常な集中や分布の歪みからデータ入力ミスや上流システムの不具合を早期に検出できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🛒 ユースケース 2: カテゴリカラムのデータドリフト監視</div>
+      <p><span class="label">シナリオ</span>: EC サイトの注文データで、注文ステータスや地域コードなどのカテゴリ値の構成比が想定外に変化していないかを監視したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">DQDL</span></div>
+        <pre><code class="language-sql">Rules = [
+    RowCount &gt; avg(last(3))
+]
+Analyzers = [
+    Distribution "order_status",
+    Distribution "region_code"
+]</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 値の頻度分布 (上位 20 件) を実行ごとに記録し、Athena で時系列比較することで、新しいステータス値の出現や地域構成比の急変といったデータドリフトを検出できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🤖 ユースケース 3: ML 特徴量の分布プロファイリングと可視化</div>
+      <p><span class="label">シナリオ</span>: SageMaker で学習する ML モデルの特徴量について、学習データの分布を定期的にプロファイリングし、モデル再学習の判断材料にしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">DQDL</span></div>
+        <pre><code class="language-sql">Rules = [
+    RowCount &gt; 0
+]
+Analyzers = [
+    Distribution AllColumns
+]</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 全カラムの分布統計を 1 回の評価で一括生成し、S3 に保存された統計を SageMaker Unified Studio で可視化することで、特徴量の分布シフトを踏まえた再学習タイミングの判断ができる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>Distribution Analyzer 自体の <span class="highlight">追加料金はアナウンスされていません</span>。AWS Glue Data Quality の評価は Glue ジョブ (ETL) の一部として実行されるため、既存の AWS Glue の料金体系 (DPU 時間ベースの課金) が適用されます。</p>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>分布統計の保存先である Amazon S3 のストレージ料金、および Athena でクエリする場合のスキャン料金が別途発生します。詳細は <a href="https://aws.amazon.com/glue/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Glue の料金ページ</a> を参照してください。</span></div>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <div class="region-banner">
+      <span style="font-size: 24px;">🌐</span>
+      <span>すべての <strong style="color: var(--aws-white);">AWS 商用リージョン</strong> および <strong style="color: var(--aws-white);">AWS GovCloud (US) リージョン</strong>で利用可能です。</span>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">📝 AWS Glue Data Quality (DQDL)</div>
+      <p>本機能の基盤となるルール定義言語。Rules と Analyzers を組み合わせて品質チェックと統計生成を宣言的に記述できる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔍 Amazon Athena</div>
+      <p>S3 に保存された分布統計を SQL でクエリし、時系列での分布比較やレポーティングに活用できる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📈 Amazon SageMaker Unified Studio</div>
+      <p>分布統計を可視化ツールで分析し、データエンジニアリングと ML ワークフローを横断して活用できる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🪣 Amazon S3</div>
+      <p>分布統計の保存先。ライフサイクルポリシーによる統計データの保持期間管理にも活用できる。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>AWS Glue Data Quality の Distribution Analyzer により、DQDL ルールセットに <span class="highlight">1 行追加するだけ</span>で、数値カラムのヒストグラムとカテゴリカルカラムの値分布を <span class="highlight">カスタムコードなし</span>で生成できるようになりました。frozen edges と自動リビニングにより実行間で比較可能な統計が得られるため、<span class="highlight">データドリフト検出</span>や <span class="highlight">ML 特徴量の監視</span>に特に有効です。</p>
+    <p>既存の Glue Data Quality 評価を運用しているチームは、まず主要な数値・カテゴリカラムに <code class="inline">Distribution</code> アナライザーを追加し、Athena や SageMaker Unified Studio での分布モニタリングを試すことを推奨します。</p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/07/aws-glue-data-quality-distribution-profiling" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/07/aws-glue-data-quality-distribution-profiling</a></li>
+      <li>ドキュメント: DQDL Analyzers (Distribution Analyzer): <a href="https://docs.aws.amazon.com/glue/latest/dg/dqdl.html#dqdl-analyzers" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/glue/latest/dg/dqdl.html#dqdl-analyzers</a></li>
+      <li>ドキュメント: Distribution ルールタイプリファレンス: <a href="https://docs.aws.amazon.com/glue/latest/dg/dqdl-rule-types-Distribution.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/glue/latest/dg/dqdl-rule-types-Distribution.html</a></li>
+      <li>ドキュメント: AWS Glue Data Quality: <a href="https://docs.aws.amazon.com/glue/latest/dg/glue-data-quality.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/glue/latest/dg/glue-data-quality.html</a></li>
+      <li>API 変更履歴: <a href="https://awsapichanges.com/archive/changes/1ea078-glue.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://awsapichanges.com/archive/changes/1ea078-glue.html</a></li>
+      <li>料金ページ: <a href="https://aws.amazon.com/glue/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/glue/pricing/</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-07-27) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

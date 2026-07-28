@@ -5,8 +5,19 @@
 
 ## 2026 年
 
+- [2026-07-28 - AWS Outposts - 第 2 世代 Outposts racks のアジアパシフィック (ムンバイ) リージョンサポート](2026/2026-07-28-aws-outposts-asia-pacific-mumbai.md)
+- [2026-07-28 - Amazon EKS - Provisioned Control Plane による Pod オートスケーリングの高速化](2026/2026-07-28-amazon-eks-provisioned-control.md)
+- [2026-07-28 - AWS Console Home - AWS European Sovereign Cloud (ドイツ) リージョンでの Cost and Usage ウィジェットサポート](2026/2026-07-28-aws-console-home-cost-and-usage-eu-sovereign-cloud.md)
+- [2026-07-28 - AWS DataSync - Enhanced mode が HDFS、Azure Blob、オブジェクトストレージロケーションと Hyper-V エージェントをサポート](2026/2026-07-28-aws-datasync-hdfs-azure-blob-hyper-v.md)
+- [2026-07-28 - Kiro - エディタアクション、ガイド付きフック作成、Code OSS アップグレード](2026/2026-07-28-kiro-changelog-2026-07-28.md)
+- [2026-07-28 - Amazon S3 Tables - Apache Iceberg V3 の Variant データ型サポート](2026/2026-07-28-amazon-s3-tables-variant-iceberg-v3.md)
+- [2026-07-28 - AWS DataSync - Enhanced mode が Amazon EFS と Amazon FSx for Lustre をサポート](2026/2026-07-28-aws-datasync-amazon-efs-fsx-lustre.md)
+- [2026-07-27 - AWS Glue Data Quality - Catalog ベース評価での異常検出と Data Catalog への結果書き込みサポート](2026/2026-07-27-aws-glue-data-quality-catalog-anomaly-detection-write-results.md)
 - [2026-07-27 - AWS Security Hub - MCP App (プレビュー)](2026/2026-07-27-aws-security-hub-mcp-app.md)
 - [2026-07-27 - AWS Elemental MediaTailor - 広告タイムアウトと並列処理の設定可能化](2026/2026-07-27-mediatail-configurable-ad-timeout-and-concurrency.md)
+- [2026-07-27 - Kiro - スペックドラフティングとプランの自動実行](2026/2026-07-27-kiro-changelog-2026-07-27.md)
+- [2026-07-27 - AWS Glue Data Quality - Distribution Analyzer による分布統計データプロファイリング](2026/2026-07-27-aws-glue-data-quality-distribution-profiling.md)
+- [2026-07-27 - Amazon Neptune - IAM タグベースアクセスコントロール (TBAC) サポート](2026/2026-07-27-amazon-neptune-tbac.md)
 - [2026-07-27 - Amazon RDS for SQL Server - Multi-AZ インスタンスへの TDE データベース復元サポート](2026/2026-07-27-rds-sql-server-supports-tde-for-maz.md)
 - [2026-07-24 - Claude Opus 5 - AWS での提供開始](2026/2026-07-24-claude-opus-5-aws.md)
 - [2026-07-24 - aws-bench - AI エージェント向けオープンソースベンチマーク](2026/2026-07-24-aws-bench.md)

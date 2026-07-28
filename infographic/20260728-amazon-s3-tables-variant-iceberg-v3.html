@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon S3 Tables - Apache Iceberg V3 の Variant データ型サポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.date-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--aws-white);
+  font-weight: 500;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  margin-bottom: 8px;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.stat-card {
+  flex: 1;
+  min-width: 200px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* Before/After */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.before-box, .after-box {
+  flex: 1;
+  min-width: 300px;
+  border-radius: 8px;
+  padding: 20px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF6B4A; }
+.after-box h3 { color: #4CAF50; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+.arrow-icon { color: var(--aws-orange); font-size: 16px; flex-shrink: 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+td code, p code, li code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+  word-break: break-all;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+.step-content { flex: 1; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 20px;
+  margin: 16px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+.usecase-label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* 2 カラムメリット */
+.merit-grid {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.merit-col {
+  flex: 1;
+  min-width: 300px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+}
+.merit-col h3 { margin-top: 0; }
+
+/* リージョンリスト */
+.region-grid {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.region-item {
+  background: rgba(0, 161, 201, 0.12);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  color: var(--aws-white);
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 640px) {
+  h1, .title { font-size: 24px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <h1>🧬 Amazon S3 Tables<br>Apache Iceberg V3 の Variant データ型サポート</h1>
+  </div>
+  <div class="subtitle">
+    <span class="service-badge">Amazon S3 Tables</span>
+    <span class="date-badge">📅 リリース日: 2026 年 7 月 28 日</span><br>
+    JSON などの半構造化データを固定スキーマなしで S3 Tables に直接書き込み
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Amazon S3 Tables が、Apache Iceberg V3 仕様で定義された <span class="highlight">Variant データ型</span>をサポートしました。JSON などの半構造化データを、事前に固定スキーマを定義することなく S3 Tables に<span class="highlight">直接書き込める</span>ようになります。スキーマが頻繁に変化するログ、イベント、テレメトリなどのデータをデータレイクに取り込むワークロードに適した機能です。</p>
+    <p>Iceberg V3 互換のクエリエンジンは、書き込み時に半構造化データを隠しカラム (hidden columns) に<span class="highlight">シュレッド (shred)</span> します。これにより Parquet のカラム統計が生成され、<span class="highlight">ファイルプルーニング</span>などのクエリ最適化が有効になり、スキャンするデータ量を削減できます。さらに、Variant カラムを含むテーブルに対しても<span class="highlight">コンパクションなどの自動テーブルメンテナンス</span>が実行され、ストリーミング取り込みで発生しがちな小ファイル問題を運用負荷なしに抑制できます。</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">スキーマレス</div>
+        <div class="stat-label">JSON などの半構造化データを<br>固定スキーマ定義なしで直接書き込み</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">シュレッディング</div>
+        <div class="stat-label">隠しカラムへの分解でカラム統計を生成<br>ファイルプルーニングでスキャン量削減</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">14 リージョン</div>
+        <div class="stat-label">東京を含む 14 リージョンで利用可能<br>追加料金なし (標準料金のみ)</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>🐢 アップデート前の課題</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>半構造化データを S3 Tables に格納するには、事前に固定スキーマを定義するか、JSON 全体を文字列型カラムに格納する必要があった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>文字列格納の JSON はクエリ実行時に毎回パースが必要で、カラム統計によるファイルプルーニングなどの最適化が効かず、スキャン量とクエリコストが増大</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>スキーマが頻繁に変化するデータソースでは、スキーマ進化の管理や ETL パイプラインでの変換処理が運用負荷に</span></div>
+      </div>
+      <div class="after-box">
+        <h3>🚀 アップデート後の改善</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span>事前のスキーマ定義なしで、JSON などの半構造化データを Variant 型カラムとして S3 Tables に直接書き込み可能に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>Iceberg V3 互換エンジンが書き込み時にデータを隠しカラムへシュレッドし、Parquet カラム統計に基づくファイルプルーニングなどのクエリ最適化が有効に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>Variant カラムを含むテーブルでもコンパクションなどの自動テーブルメンテナンスが提供され、小ファイル統合による性能維持が運用作業なしで実現</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Source(["📥 半構造化データ<br/>JSON / ログ / イベント"]) --> Engine["⚙️ Iceberg V3 互換エンジン<br/>書き込み時にシュレッド"]
+
+    subgraph S3Tables["🪣 Amazon S3 Tables Iceberg V3"]
+        direction LR
+        Variant["🧬 Variant カラム<br/>隠しカラムに分解して格納"]
+        Stats["📊 Parquet カラム統計<br/>min / max など"]
+        Variant ~~~ Stats
+    end
+
+    Engine --> Variant
+    Engine --> Stats
+
+    Maint["🔧 自動テーブルメンテナンス<br/>コンパクションで小ファイルを統合"] -.-> Variant
+
+    Query["🔍 クエリエンジン"] --> Stats
+    Stats --> Prune["✂️ ファイルプルーニング<br/>スキャン量を削減"]
+    Prune --> Result(["📈 クエリ結果"])
+
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Source,Result input
+    class Engine,Query,Prune process
+    class Maint internal
+    class Variant,Stats storage
+    class S3Tables layer
+      </pre>
+    </div>
+    <p>Iceberg V3 互換エンジンが半構造化データを書き込み時に隠しカラムへシュレッドして Parquet カラム統計を生成し、クエリ時にはその統計を利用したファイルプルーニングでスキャン量を削減します。Variant カラムに対しても S3 Tables の自動コンパクションが動作します。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">1️⃣ Variant データ型による半構造化データの直接書き込み</div>
+      <p style="margin:0;">Apache Iceberg V3 仕様で定義された Variant データ型を S3 Tables でサポート。JSON などの半構造化データを<span class="highlight">事前の固定スキーマ定義なし</span>で直接書き込み可能。スキーマが頻繁に変化するログ、イベント、テレメトリなどのデータ取り込みに適合します。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">2️⃣ シュレッディングによるクエリ最適化</div>
+      <p style="margin:0;">Iceberg V3 互換エンジンが書き込み時に半構造化データを<span class="highlight">隠しカラムにシュレッド</span>。シュレッドされたカラムに対して Parquet カラム統計が生成され、ファイルプルーニングなどの最適化によりクエリのスキャンデータ量を削減します。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">3️⃣ Variant カラムに対する自動テーブルメンテナンス</div>
+      <p style="margin:0;">コンパクションなどの継続的なテーブルメンテナンスを Variant カラムを含むテーブルにも提供。小さなファイルを Iceberg エンジンから読み取り可能な大きなファイルへ自動的に統合し、ストリーミング取り込みで発生しがちな<span class="highlight">小ファイル問題を運用負荷なし</span>に抑制します。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>📐 技術仕様</h2>
+
+    <h3>Apache Iceberg V3 と AWS サービスの対応状況</h3>
+    <table>
+      <tr><th>AWS サービス</th><th>V3 サポート</th></tr>
+      <tr><td>Amazon EMR for Apache Spark</td><td>Amazon EMR リリース 7.12 以降</td></tr>
+      <tr><td>AWS Glue</td><td>あり</td></tr>
+      <tr><td>AWS Glue Iceberg REST API / テーブルメンテナンス</td><td>あり</td></tr>
+      <tr><td>Amazon SageMaker Unified Studio ノートブック</td><td>あり</td></tr>
+      <tr><td>Amazon S3 Tables (Iceberg REST API、テーブルメンテナンス)</td><td>あり</td></tr>
+      <tr><td>Amazon Athena (Trino)</td><td>なし</td></tr>
+    </table>
+
+    <h3>Iceberg V3 の主な機能</h3>
+    <table>
+      <tr><th>機能</th><th>説明</th></tr>
+      <tr><td><strong>Variant データ型</strong></td><td>半構造化データを固定スキーマなしで格納。シュレッディングによりカラム統計とファイルプルーニングが有効 <span class="highlight">(今回のアップデート)</span></td></tr>
+      <tr><td>Deletion Vectors</td><td>V2 の位置削除ファイルを Puffin ファイル形式の効率的なバイナリに置き換え、更新・削除時の書き込み増幅を削減</td></tr>
+      <tr><td>Row Lineage</td><td>行レベルの変更追跡を組み込みで提供し、CDC ワークフローの増分処理を効率化</td></tr>
+    </table>
+
+    <h3>V3 テーブルの作成例</h3>
+    <p>Spark SQL で <code>format-version</code> テーブルプロパティを 3 に設定することで、Iceberg V3 テーブルを作成できます。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">V3 テーブルの新規作成</span></div>
+      <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS myns.events_v3 (
+    event_id bigint,
+    event_time timestamp,
+    payload variant
+)
+USING iceberg
+TBLPROPERTIES (
+    'format-version' = '3'
+)</code></pre>
+    </div>
+    <p>既存の V2 テーブルは、データを書き換えることなく V3 にアップグレードできます (V3 から V2 へのダウングレードは不可)。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">V2 テーブルの V3 へのアップグレード</span></div>
+      <pre><code class="language-sql">ALTER TABLE myns.existing_table
+SET TBLPROPERTIES ('format-version' = '3')</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🔧 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="arrow-icon">→</span><span>S3 Tables のテーブルバケットが作成済みであること</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span>Iceberg V3 互換のクエリエンジン (Amazon EMR 7.12 以降の Apache Spark、AWS Glue など) を利用できること</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span>テーブルバケットおよびテーブルへのアクセスに必要な IAM 権限が設定済みであること</span></div>
+
+    <h3>手順</h3>
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">テーブルバケットの作成</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">テーブルバケットの作成</span></div>
+          <pre><code class="language-bash">aws s3tables create-table-bucket \
+    --region us-east-1 \
+    --name my-variant-table-bucket</code></pre>
+        </div>
+        <p>S3 Tables のテーブルバケットを作成します。テーブルバケットは Iceberg テーブル専用に最適化されたバケットタイプです。</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">Variant カラムを含む V3 テーブルの作成</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">Variant カラム付き V3 テーブル</span></div>
+          <pre><code class="language-sql">CREATE TABLE s3tablescatalog.myns.app_events (
+    event_id bigint,
+    event_time timestamp,
+    payload variant
+)
+USING iceberg
+TBLPROPERTIES (
+    'format-version' = '3'
+)</code></pre>
+        </div>
+        <p>Iceberg V3 互換エンジン (Spark など) から、<code>format-version = 3</code> を指定してテーブルを作成し、半構造化データ用のカラムに <code>variant</code> 型を指定します。</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">半構造化データの書き込みとクエリ</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">Variant データの書き込みとクエリ</span></div>
+          <pre><code class="language-sql">-- JSON データを Variant カラムに書き込み
+INSERT INTO s3tablescatalog.myns.app_events
+SELECT event_id, event_time, parse_json(raw_json) AS payload
+FROM staging_events;
+
+-- Variant カラムのフィールドを参照してクエリ
+SELECT event_id, payload:user.country
+FROM s3tablescatalog.myns.app_events
+WHERE event_time > current_date() - INTERVAL 7 DAYS;</code></pre>
+        </div>
+        <p>JSON 文字列を Variant 型に変換して書き込みます。エンジンが書き込み時にデータを隠しカラムへシュレッドし、以降のクエリではカラム統計に基づくファイルプルーニングが適用されます。クエリ構文はエンジンにより異なるため、利用するエンジンのドキュメントを確認してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-col">
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>データ活用までの時間短縮</strong>: スキーマ設計や ETL での変換処理を待たずに半構造化データをそのまま取り込めるため、分析開始までのリードタイムが短縮される</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>クエリコストの削減</strong>: ファイルプルーニングによりスキャンデータ量が減少し、スキャン量課金のエンジンではクエリコストの削減につながる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の軽減</strong>: Variant カラムを含むテーブルでもコンパクションなどのメンテナンスがマネージドで実行され、小ファイル対策の運用作業が不要</span></div>
+      </div>
+      <div class="merit-col">
+        <h3>🛠️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>スキーマレスな取り込みと最適化の両立</strong>: 固定スキーマ不要の柔軟性と、シュレッディングによるカラム統計・ファイルプルーニングという列指向フォーマットの最適化を同時に実現</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>オープン仕様への準拠</strong>: Apache Iceberg V3 という標準仕様に基づくため、V3 互換の複数エンジンから同じテーブルを利用できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>スキーマ進化への耐性</strong>: データソース側のフィールド追加・変更があっても、テーブルスキーマの変更なしに取り込みを継続できる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Variant データ型の利用には Iceberg V3 対応が必要であり、書き込み時のシュレッディングは Iceberg V3 互換エンジン側で行われる</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Amazon Athena (Trino) は本記事執筆時点で Iceberg V3 をサポートしていないため、利用するエンジンの V3 対応状況の確認が必要</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>V2 から V3 へのアップグレードは一方向であり、V3 にアップグレードしたテーブルを V2 に戻すことはできない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>利用可能リージョンは 14 リージョンに限定される</span></div>
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>テーブルにアクセスするすべてのエンジン・サードパーティツールが V3 仕様に対応しているかを事前に確認する必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>シュレッディングの挙動やカラム統計の生成粒度はエンジンの実装に依存するため、想定するクエリパターンで性能検証を行うことが望ましい</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>頻繁にフィルタ条件として使用するフィールドが明確に決まっている場合は、通常の型付きカラムとして定義する設計との比較検討が有効</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. アプリケーションログ・イベントデータの直接取り込み</div>
+      <p><span class="usecase-label">シナリオ</span>: マイクロサービス群が出力する JSON 形式のイベントログは、サービスごと・バージョンごとにフィールド構成が異なり、頻繁に変化する。従来は取り込み前にスキーマを統一する ETL が必要だった。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-sql">CREATE TABLE s3tablescatalog.logs.service_events (
+    service_name string,
+    event_time timestamp,
+    event variant
+)
+USING iceberg
+TBLPROPERTIES ('format-version' = '3')</code></pre>
+      </div>
+      <p style="margin-bottom:0;"><span class="usecase-label">効果</span>: スキーマ統一の ETL を省略してイベントをそのまま取り込みつつ、シュレッディングによるファイルプルーニングで特定サービス・期間のクエリを効率的に実行できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. IoT テレメトリデータの分析基盤</div>
+      <p><span class="usecase-label">シナリオ</span>: 多種多様なデバイスから送信されるテレメトリはデバイス種別ごとにペイロード構造が異なる。デバイスの追加やファームウェア更新のたびにスキーマ変更が発生していた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-sql">INSERT INTO s3tablescatalog.iot.telemetry
+SELECT device_id, ingest_time, parse_json(payload) AS metrics
+FROM kinesis_staging</code></pre>
+      </div>
+      <p style="margin-bottom:0;"><span class="usecase-label">効果</span>: デバイス追加時のスキーマ変更作業が不要になり、ストリーミング取り込みで発生する小ファイルも自動コンパクションで統合されるため、性能を維持しながら取り込みパイプラインを簡素化できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. 半構造化データを含む既存 V2 テーブルの近代化</div>
+      <p><span class="usecase-label">シナリオ</span>: 既存の Iceberg V2 テーブルでは JSON を文字列カラムに格納しており、クエリのたびにパースが発生してスキャン量も大きい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-sql">ALTER TABLE s3tablescatalog.myns.legacy_table
+SET TBLPROPERTIES ('format-version' = '3');
+-- 以降、新規カラムに variant 型を採用し、JSON 文字列カラムから移行</code></pre>
+      </div>
+      <p style="margin-bottom:0;"><span class="usecase-label">効果</span>: V3 へのアップグレード後に Variant 型へ移行することで、パースコストの削減とカラム統計による最適化が可能になる。ただし V3 へのアップグレードは一方向のため、非本番環境での事前検証が推奨される。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>Variant データ型の利用自体に<span class="highlight">追加料金は発生せず</span>、S3 Tables の標準料金 (ストレージ、リクエスト、モニタリング、コンパクション処理) が適用されます。コンパクションは処理されたデータ量とオブジェクト数に基づいて課金されます。詳細は <a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon S3 の料金ページ</a>を参照してください。</p>
+    <p>なお、ファイルプルーニングによりクエリエンジン側のスキャンデータ量が削減されるため、スキャン量に基づいて課金されるエンジンでは<span class="highlight">クエリコストの削減効果</span>が期待できます。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>本機能は以下の <span class="highlight">14 リージョン</span>で利用可能です。</p>
+    <div class="region-grid">
+      <div class="region-item">🇺🇸 米国東部 (バージニア北部)</div>
+      <div class="region-item">🇺🇸 米国東部 (オハイオ)</div>
+      <div class="region-item">🇺🇸 米国西部 (オレゴン)</div>
+      <div class="region-item">🇮🇳 アジアパシフィック (ムンバイ)</div>
+      <div class="region-item">🇰🇷 アジアパシフィック (ソウル)</div>
+      <div class="region-item">🇸🇬 アジアパシフィック (シンガポール)</div>
+      <div class="region-item">🇦🇺 アジアパシフィック (シドニー)</div>
+      <div class="region-item">🇯🇵 アジアパシフィック (東京)</div>
+      <div class="region-item">🇨🇦 カナダ (中部)</div>
+      <div class="region-item">🇩🇪 欧州 (フランクフルト)</div>
+      <div class="region-item">🇮🇪 欧州 (アイルランド)</div>
+      <div class="region-item">🇬🇧 欧州 (ロンドン)</div>
+      <div class="region-item">🇫🇷 欧州 (パリ)</div>
+      <div class="region-item">🇸🇪 欧州 (ストックホルム)</div>
+      <div class="region-item">🇧🇷 南米 (サンパウロ)</div>
+    </div>
+  </div>
+
+  <!-- 関連サービス・機能 -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="check-item"><span class="arrow-icon">→</span><span><strong>Amazon S3 Tables</strong>: Apache Iceberg テーブル専用に最適化されたテーブルバケットを提供するストレージ機能。コンパクション、スナップショット管理、参照されないファイルの削除などのメンテナンスを自動実行</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span><strong>AWS Glue</strong>: Iceberg V3 対応の ETL エンジンおよびデータカタログ。Iceberg REST API とテーブルメンテナンスをサポート</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span><strong>Amazon EMR</strong>: リリース 7.12 以降の Apache Spark で Iceberg V3 をサポートし、Variant 型データの書き込み・クエリに利用可能</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span><strong>Amazon SageMaker Lakehouse / Unified Studio</strong>: S3 Tables と統合したレイクハウス環境で Iceberg テーブルへのアクセスを提供</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>✅ まとめ</h2>
+    <p>Amazon S3 Tables の Variant データ型サポートにより、JSON などの半構造化データを<span class="highlight">事前のスキーマ定義なしで直接格納</span>しながら、<span class="highlight">シュレッディングとカラム統計によるクエリ最適化</span>、<span class="highlight">自動コンパクションによる性能維持</span>を両立できるようになりました。ログやテレメトリなど、スキーマが変化しやすいデータをデータレイクで扱うワークロードでは、V3 テーブルと Variant 型の採用を検討する価値があります。導入にあたっては、利用するクエリエンジンの Iceberg V3 対応状況を確認し、非本番環境での性能検証から始めることを推奨します。</p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/07/amazon-s3-tables-variant-iceberg-v3/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/07/amazon-s3-tables-variant-iceberg-v3/</a></li>
+      <li>Amazon S3 Tables 製品ページ: <a href="https://aws.amazon.com/s3/features/tables/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/s3/features/tables/</a></li>
+      <li>AWS Prescriptive Guidance: Iceberg テーブル仕様バージョン 3: <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/apache-iceberg-on-aws/table-spec-v3.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/prescriptive-guidance/latest/apache-iceberg-on-aws/table-spec-v3.html</a></li>
+      <li>S3 Tables のテーブルメンテナンス: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables-maintenance-overview.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables-maintenance-overview.html</a></li>
+      <li>Apache Iceberg テーブル仕様: <a href="https://iceberg.apache.org/spec/" target="_blank" rel="noopener noreferrer" class="aws-link">https://iceberg.apache.org/spec/</a></li>
+      <li>Amazon S3 料金ページ: <a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/s3/pricing/</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-07-28-amazon-s3-tables-variant-iceberg-v3.md) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

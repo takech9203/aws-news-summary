@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon EKS - Provisioned Control Plane による Pod オートスケーリングの高速化</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.date-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--aws-white);
+  font-weight: 500;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  margin-bottom: 8px;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.stat-card {
+  flex: 1;
+  min-width: 200px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* Before/After */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.before-box, .after-box {
+  flex: 1;
+  min-width: 300px;
+  border-radius: 8px;
+  padding: 20px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF6B4A; }
+.after-box h3 { color: #4CAF50; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+.arrow-icon { color: var(--aws-orange); font-size: 16px; flex-shrink: 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+td code, p code, li code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+  word-break: break-all;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+.step-content { flex: 1; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 20px;
+  margin: 16px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+.usecase-label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* 2 カラムメリット */
+.merit-grid {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.merit-col {
+  flex: 1;
+  min-width: 300px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+}
+.merit-col h3 { margin-top: 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 640px) {
+  h1, .title { font-size: 24px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <h1>🚀 Amazon EKS<br>Provisioned Control Plane による Pod オートスケーリングの高速化</h1>
+  </div>
+  <div class="subtitle">
+    <span class="service-badge">Amazon EKS</span>
+    <span class="date-badge">📅 リリース日: 2026 年 7 月 28 日</span><br>
+    Provisioned Control Plane における HPA sync concurrency の引き上げ
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Amazon EKS は、すべての <span class="highlight">Provisioned Control Plane</span> クラスターにおいて、Horizontal Pod Autoscaler (HPA) の sync concurrency を Kubernetes のデフォルト値の<span class="highlight">最大 40 倍</span>に引き上げました。HPA sync concurrency とは、Kubernetes のコントローラーマネージャーが並列に処理する HPA オブジェクトの数です。アップストリーム Kubernetes のデフォルト値は 5 ですが、Provisioned Control Plane クラスターではスケーリングティアに応じて <span class="highlight">50〜200</span> に設定されます。</p>
+    <p>数百から数千の HPA オブジェクトを持つ大規模クラスターでは、コントロールプレーンがより多くの HPA を同時に評価できるようになり、負荷の変化を検知してから Pod のスケールアウトが実行されるまでの時間が短縮されます。本改善は<span class="highlight">設定変更不要で自動適用</span>され、大規模な AI 推論、e コマース、マイクロサービスなどのワークロードでオートスケーリングの応答性が向上します。</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">最大 40 倍</div>
+        <div class="stat-label">HPA sync concurrency の引き上げ幅<br>(デフォルト 5 → 最大 200)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">50〜200</div>
+        <div class="stat-label">スケーリングティアに応じた並列数<br>(XL: 50 / 2XL: 100 / 4XL・8XL: 200)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">設定不要</div>
+        <div class="stat-label">全 Provisioned Control Plane<br>クラスターに自動適用</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>🐢 アップデート前の課題</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>HPA コントローラーの並列処理数は Kubernetes デフォルトの 5 が上限。数百〜数千の HPA を持つクラスターでは順次処理となり、リコンサイルの待ち行列が発生</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>負荷スパイク検知から Pod スケールアウトまでの遅延が大きく、トラフィック急増時のレイテンシー悪化やエラー増加につながる可能性</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>HPA 処理のバックログ (<code>workqueue_depth</code>) が積み上がり、オートスケーリングの判断が遅延するリスク</span></div>
+      </div>
+      <div class="after-box">
+        <h3>🚀 アップデート後の改善</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span>HPA sync concurrency がティアに応じて 50〜200 (デフォルト値 5 の最大 40 倍) に引き上げられ、多数の HPA オブジェクトを並列にリコンサイル可能に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>負荷検知から Pod スケールアウトまでの時間が短縮され、大規模クラスターでのオートスケーリング応答性が向上</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>Provisioned Control Plane の全ユーザーに設定変更不要で自動適用。追加の運用作業なしで恩恵を受けられる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Before["🐢 Standard の HPA 処理 デフォルト"]
+        direction LR
+        Q1["📋 HPA オブジェクト<br/>数百〜数千"] --> W1["⚙️ HPA コントローラー<br/>並列数 5"]
+        W1 --> S1["📈 スケール判断<br/>順次処理で遅延"]
+    end
+
+    subgraph After["🚀 Provisioned Control Plane の HPA 処理"]
+        direction LR
+        Q2["📋 HPA オブジェクト<br/>数百〜数千"] --> W2["⚙️ HPA コントローラー<br/>並列数 50〜200"]
+        W2 --> S2["📈 スケール判断<br/>並列処理で高速化"]
+    end
+
+    Metrics["📊 Metrics Server<br/>CPU / メモリ / カスタムメトリクス"] -.-> W1
+    Metrics -.-> W2
+    S2 --> Pods["🧩 Pod スケールアウト<br/>負荷検知から短時間で実行"]
+
+    classDef beforeStyle fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef afterStyle fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Q1,W1,S1 beforeStyle
+    class Q2,W2,S2 afterStyle
+    class Metrics,Pods process
+    class Before,After layer
+      </pre>
+    </div>
+    <p>Standard モードのデフォルトでは HPA コントローラーの並列数が 5 であるのに対し、Provisioned Control Plane ではティアに応じて 50〜200 に引き上げられ、HPA オブジェクトのリコンサイルが並列化されることでスケール判断までの時間が短縮されます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">1️⃣ HPA sync concurrency の引き上げ</div>
+      <p style="margin:0;">Kubernetes コントローラーマネージャーが並列処理する HPA オブジェクト数を、アップストリームのデフォルト値 5 からスケーリングティアに応じて <span class="highlight">50〜200 (最大 40 倍)</span> に設定。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">2️⃣ 全 Provisioned Control Plane クラスターへの自動適用</div>
+      <p style="margin:0;">Provisioned Control Plane を利用するすべてのユーザーが対象。設定変更は一切不要で自動的に適用される。Standard モードの動作には変更なし。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">3️⃣ オートスケーリング応答性の向上</div>
+      <p style="margin:0;">並列数の増加により、より多くの HPA オブジェクトを同時にリコンサイル可能。負荷の変化からスケーリングアクションまでの時間を短縮し、数百〜数千の HPA を持つ大規模クラスターで特に効果が大きい。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">4️⃣ 効果の観測が可能</div>
+      <p style="margin:0;">コントローラーマネージャーの workqueue メトリクスで効果を確認可能。<code>workqueue_depth{name="horizontalpodautoscaler"}</code> が処理待ちの HPA オブジェクト数を示し、ゼロ付近で安定していれば HPA 処理に追従できていることを意味する。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>📐 技術仕様</h2>
+
+    <h3>スケーリングティア別の HPA sync concurrency</h3>
+    <table>
+      <tr><th>Provisioned Control Plane スケーリングティア</th><th>HPA sync concurrency</th></tr>
+      <tr><td>XL</td><td>50</td></tr>
+      <tr><td>2XL</td><td>100</td></tr>
+      <tr><td>4XL</td><td>200</td></tr>
+      <tr><td>8XL</td><td>200</td></tr>
+    </table>
+    <p>参考: アップストリーム Kubernetes のデフォルト値は 5 です。4XL / 8XL ティアの 200 はデフォルト値の 40 倍に相当します。</p>
+
+    <h3>Provisioned Control Plane スケーリングティアの概要 (EKS v1.34 以降)</h3>
+    <table>
+      <tr><th>ティア</th><th>API リクエスト同時実行数 (seats)</th><th>Pod スケジューリングレート (pods/秒)</th><th>クラスターデータベースサイズ (GB)</th><th>SLA (1 分間隔で測定)</th></tr>
+      <tr><td>XL</td><td>2000</td><td>167</td><td>16</td><td>99.99%</td></tr>
+      <tr><td>2XL</td><td>4000</td><td>283</td><td>16</td><td>99.99%</td></tr>
+      <tr><td>4XL</td><td>8000</td><td>400</td><td>16</td><td>99.99%</td></tr>
+      <tr><td>8XL</td><td>16000</td><td>400</td><td>16</td><td>99.99%</td></tr>
+    </table>
+
+    <h3>効果測定に使用できるメトリクス</h3>
+    <table>
+      <tr><th>観測項目</th><th>メトリクス</th><th>説明</th></tr>
+      <tr><td>HPA 処理のバックログ</td><td><code>workqueue_depth{name="horizontalpodautoscaler"}</code></td><td>HPA コントローラーの処理待ちオブジェクト数。ゼロ付近で安定していれば遅延なし</td></tr>
+      <tr><td>API リクエスト同時実行数</td><td><code>apiserver_flowcontrol_current_executing_seats</code></td><td>コントロールプレーンの API 処理状況</td></tr>
+      <tr><td>Pod スケジューリングレート</td><td><code>scheduler_schedule_attempts_total</code></td><td>スケジューラーの処理状況</td></tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🔧 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="arrow-icon">→</span><span>Amazon EKS クラスター (Kubernetes v1.28 以降)</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span>Provisioned Control Plane モードの利用 (Standard モードからのオプトインが必要)</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span>HPA を利用するワークロードと Metrics Server などのメトリクスソース</span></div>
+
+    <h3>手順</h3>
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">Provisioned Control Plane へのオプトイン</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ティア指定でオプトイン</span></div>
+          <pre><code class="language-bash">aws eks update-cluster-config \
+  --name my-cluster \
+  --scaling-config tier=XL</code></pre>
+        </div>
+        <p>クラスターのコントロールプレーンを Provisioned モードの指定ティアに変更します。HPA sync concurrency の引き上げは、Provisioned Control Plane クラスターであれば追加設定なしで自動的に適用されます。</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">現在のスケーリングティアの確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">クラスター詳細の取得</span></div>
+          <pre><code class="language-bash">aws eks describe-cluster --name my-cluster</code></pre>
+        </div>
+        <p>クラスターの詳細情報を取得し、現在のコントロールプレーンのスケーリングティアを確認します。ティア変更の進捗は <code>ScalingTierConfigUpdate</code> タイプのクラスター更新として確認できます。</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">HPA 処理状況のモニタリング</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">workqueue メトリクスの確認</span></div>
+          <pre><code class="language-bash">kubectl get --raw /metrics | grep 'workqueue_depth{name="horizontalpodautoscaler"}'</code></pre>
+        </div>
+        <p>HPA オブジェクトの処理待ち数を観測します。この値がゼロ付近で安定していれば、コントロールプレーンが HPA オブジェクトの処理に追従できています。EKS コンソールの [Monitor cluster] からコントロールプレーンモニタリングダッシュボードでも確認できます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-col">
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>機会損失の低減</strong>: トラフィック急増時のスケールアウト遅延が短縮され、e コマースセールやイベント時のレイテンシー悪化・エラーによる機会損失を抑制</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: 設定変更が不要で自動適用されるため、チューニング作業や検証の工数が発生しない</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>予測可能なパフォーマンス</strong>: Provisioned Control Plane の 99.99% SLA と組み合わせ、ミッションクリティカルなワークロードで一貫した応答性を確保</span></div>
+      </div>
+      <div class="merit-col">
+        <h3>🛠️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>オートスケーリングの高速化</strong>: HPA オブジェクトの並列リコンサイルにより、負荷検知からスケーリングアクションまでの時間が短縮</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>大規模クラスターへの対応</strong>: 数百〜数千の HPA オブジェクトを持つクラスターでも、処理のバックログが発生しにくい</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>観測性の確保</strong>: workqueue メトリクスにより、改善効果を定量的に確認できる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>本改善は Provisioned Control Plane クラスターのみが対象。Standard モードのクラスターには適用されない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>HPA sync concurrency の値はティアごとに固定されており、ユーザーが個別にカスタマイズすることはできない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Provisioned Control Plane は明示的なオプトインが必要で、ティアごとの時間課金が EKS の標準料金に追加される</span></div>
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>実際のオートスケーリング応答性は、コントロールプレーン以外の要素にも依存する。メトリクスソース (Metrics Server やカスタム / 外部メトリクスアダプター) の応答が遅い場合は、並列数を増やしても効果が制限される</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>並列処理の効果を最大化するには、リクエスト量に見合った Metrics Server のレプリカ数の確保と、効率的なメトリクスクエリのスコープ設定が推奨される</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>Provisioned モードでクラスターデータベース (etcd) サイズが 8 GB を超えた場合、8 GB 未満に削減するまで Standard モードに戻せない</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. 大規模マイクロサービス基盤のオートスケーリング高速化</div>
+      <p><span class="usecase-label">シナリオ</span>: 数百のマイクロサービスをそれぞれ HPA で管理している大規模クラスターで、トラフィック急増時にスケールアウトの開始が遅れ、一部サービスでレイテンシーが悪化している。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># Provisioned Control Plane 2XL ティアへオプトイン
+aws eks update-cluster-config \
+  --name microservices-cluster \
+  --scaling-config tier=2XL
+
+# HPA 処理バックログの確認
+kubectl get --raw /metrics | grep 'workqueue_depth{name="horizontalpodautoscaler"}'</code></pre>
+      </div>
+      <p style="margin-bottom:0;"><span class="usecase-label">効果</span>: HPA sync concurrency が 5 から 100 に引き上げられ、数百の HPA オブジェクトが並列にリコンサイルされる。負荷検知からスケールアウトまでの遅延が短縮され、トラフィック急増時のレイテンシー悪化を抑制できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. e コマースセールイベントへの事前準備</div>
+      <p><span class="usecase-label">シナリオ</span>: 大型セールイベントを控え、注文処理・在庫・決済など多数のサービスの HPA が同時に反応する状況で、スケーリングの応答性を最大化したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># イベント前に 4XL ティアへスケールアップ
+aws eks update-cluster-config \
+  --name commerce-cluster \
+  --scaling-config tier=4XL
+
+# ティア変更の進捗確認
+aws eks list-updates --name commerce-cluster</code></pre>
+      </div>
+      <p style="margin-bottom:0;"><span class="usecase-label">効果</span>: HPA sync concurrency 200 (デフォルトの 40 倍) と API リクエスト同時実行数 8000 により、イベント時の急激な負荷変動に対して多数の HPA が即座に反応し、Pod スケールアウトが迅速に実行される。ティア変更中も API サーバーのダウンタイムは発生しない。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. AI 推論ワークロードの需要追従</div>
+      <p><span class="usecase-label">シナリオ</span>: 多数の推論エンドポイントをそれぞれ HPA で管理し、リクエスト数やカスタムメトリクスに基づいて Pod 数を調整している。推論リクエストの急増に対しスケールアウトの追従を速くしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">HPA 定義例</span></div>
+        <pre><code class="language-yaml">apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: inference-endpoint-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: inference-endpoint
+  minReplicas: 2
+  maxReplicas: 100
+  metrics:
+    - type: Pods
+      pods:
+        metric:
+          name: inference_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: "50"</code></pre>
+      </div>
+      <p style="margin-bottom:0;"><span class="usecase-label">効果</span>: 多数の推論エンドポイント用 HPA が並列にリコンサイルされ、リクエスト急増時の Pod 追加が高速化される。メトリクスアダプターの応答性能を確保することで、並列化の効果を最大限に引き出せる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>今回の HPA sync concurrency 引き上げ自体に<span class="highlight">追加料金はありません</span>。Provisioned Control Plane の利用には、選択したスケーリングティアの時間課金が EKS の標準サポートまたは延長サポートの時間課金に追加されます。ティアごとの料金は <a href="https://aws.amazon.com/eks/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon EKS 料金ページ</a>を参照してください。8XL より大きなティアが必要な場合は、AWS アカウントチームへの問い合わせが必要です。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>EKS Provisioned Control Plane は、<span class="highlight">すべての AWS 商用リージョン、AWS GovCloud (US)、中国リージョン</span>でサポートされています。Kubernetes v1.28 以降のクラスターで利用できます。今回の HPA sync concurrency の引き上げは、すべての Provisioned Control Plane クラスターに適用されます。</p>
+  </div>
+
+  <!-- 関連サービス・機能 -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="check-item"><span class="arrow-icon">→</span><span><strong>Horizontal Pod Autoscaler (HPA)</strong>: 今回の改善対象。ワークロードのメトリクスを監視し、需要に応じて Pod 数を自動調整する Kubernetes の標準機能</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span><strong>Kubernetes Metrics Server</strong>: HPA が CPU / メモリ使用率を取得するメトリクスソース。並列化の効果を得るには十分なレプリカ数の確保が推奨される</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span><strong>Amazon CloudWatch</strong>: コントロールプレーンのティア使用率メトリクス (<code>apiserver_flowcontrol_current_executing_seats</code> など) を確認可能</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span><strong>EKS コントロールプレーンモニタリング</strong>: EKS コンソールの観測性ダッシュボードでコントロールプレーンの使用状況を可視化</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>✅ まとめ</h2>
+    <p>Amazon EKS Provisioned Control Plane の HPA sync concurrency が Kubernetes デフォルト値の<span class="highlight">最大 40 倍 (ティアに応じて 50〜200)</span> に引き上げられ、多数の HPA オブジェクトを持つ大規模クラスターでのオートスケーリング応答性が<span class="highlight">設定変更不要</span>で向上しました。Provisioned Control Plane を利用中のユーザーは、<code>workqueue_depth{name="horizontalpodautoscaler"}</code> メトリクスで効果を確認するとともに、Metrics Server の容量を見直して並列化の恩恵を最大化することを推奨します。</p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/07/amazon-eks-provisioned-control/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/07/amazon-eks-provisioned-control/</a></li>
+      <li>ドキュメント: Amazon EKS Provisioned Control Plane: <a href="https://docs.aws.amazon.com/eks/latest/userguide/eks-provisioned-control-plane.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/eks/latest/userguide/eks-provisioned-control-plane.html</a></li>
+      <li>Kubernetes ドキュメント: Horizontal Pod Autoscaling: <a href="https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/" target="_blank" rel="noopener noreferrer" class="aws-link">https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/</a></li>
+      <li>料金ページ: <a href="https://aws.amazon.com/eks/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/eks/pricing/</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-07-28-amazon-eks-provisioned-control.md) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
