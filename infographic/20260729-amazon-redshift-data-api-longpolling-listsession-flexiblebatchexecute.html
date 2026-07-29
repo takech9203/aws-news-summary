@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Redshift Data API - ロングポーリング、ListSessions、柔軟なバッチ実行</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+
+.card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.card li {
+  margin: 6px 0;
+}
+
+/* 3 つの新機能サマリーカード */
+.feature-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.feature-summary-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.feature-summary-card .icon { font-size: 30px; }
+
+.feature-summary-card .name {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 8px 0 4px;
+}
+
+.feature-summary-card .desc {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF8A73; }
+.after-box .ba-title { color: #6BCB4A; }
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+code.inline {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 90%;
+  color: var(--aws-smile-orange);
+}
+
+/* チェックリスト */
+.check-item, .cross-item, .caution-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #6BCB4A; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+.caution-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* ユースケース */
+.usecase {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(255, 173, 51, 0.05));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+
+.effect-box {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 4px solid var(--aws-green);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+/* 関連サービス */
+.related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.related-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+}
+
+.related-item .name {
+  font-weight: 700;
+  color: var(--aws-teal);
+  margin-bottom: 4px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .feature-summary { grid-template-columns: 1fr; }
+  .before-after { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="service-badge">☁️ Amazon Redshift (Redshift Data API)</div>
+    <h1>🗄️ Amazon Redshift Data API<br>ロングポーリング・ListSessions・柔軟なバッチ実行</h1>
+    <div class="subtitle">
+      <span class="release-date">📅 リリース日: 2026 年 7 月 29 日</span><br>
+      WaitTimeSeconds によるロングポーリング / ListSessions API / BatchExecuteStatement の ExecutionMode と SqlParameter 配列サポート
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon Redshift Data API に <span class="highlight">3 つの新機能</span>が追加されました。Data API は JDBC/ODBC ドライバーや永続的な接続管理なしに HTTPS 経由で Redshift に SQL を実行できる API であり、Lambda や Step Functions などの<span class="highlight">サーバーレスアプリケーション</span>から広く利用されています。
+    </p>
+
+    <div class="feature-summary">
+      <div class="feature-summary-card">
+        <div class="icon">⏱️</div>
+        <div class="name">ロングポーリング</div>
+        <div class="desc">WaitTimeSeconds で SQL 完了まで API レスポンスを待機。ポーリングループが不要に</div>
+      </div>
+      <div class="feature-summary-card">
+        <div class="icon">📋</div>
+        <div class="name">ListSessions API</div>
+        <div class="desc">アクティブなセッションを一覧表示。セッション ID の外部管理が不要に</div>
+      </div>
+      <div class="feature-summary-card">
+        <div class="icon">🔀</div>
+        <div class="name">柔軟なバッチ実行</div>
+        <div class="desc">ExecutionMode=AUTO_COMMIT と SqlParameter 配列でバッチの柔軟性が向上</div>
+      </div>
+    </div>
+
+    <p>対象ユーザーは、Data API を利用して <span class="highlight">ETL パイプライン</span>、イベント駆動型アプリケーション、管理スクリプトを構築している開発者やデータエンジニアです。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ アップデート前の課題</div>
+        <ul>
+          <li>SQL 完了検知のために DescribeStatement を繰り返すポーリングループが必要で、API 呼び出し増加とコード複雑化を招いていた</li>
+          <li>アクティブセッションの一覧取得手段がなく、セッション ID を DynamoDB や環境変数など外部で管理する必要があった</li>
+          <li>BatchExecuteStatement は単一トランザクション実行のため、1 つの失敗でバッチ全体がロールバックされていた</li>
+          <li>BatchExecuteStatement でパラメータ化クエリが使えず、リテラル値の埋め込みが必要だった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <ul>
+          <li>WaitTimeSeconds によりステートメント完了まで同期的に待機でき、ポーリングループの実装が不要になった</li>
+          <li>ListSessions API でステータス、コンピュートターゲット、データベースによるフィルタリング付き一覧表示が可能になった</li>
+          <li>ExecutionMode=AUTO_COMMIT で各ステートメントが独立実行され、一部の失敗がバッチ全体に影響しなくなった</li>
+          <li>SqlParameter 配列サポートにより、パラメータを一度定義して全ステートメントから参照できるようになった</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図: ロングポーリング導入前後の比較</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+sequenceDiagram
+    participant App as ⚡ アプリケーション
+    participant API as 🔌 Redshift Data API
+    participant RS as 🗄️ Amazon Redshift
+
+    rect rgb(255,235,238)
+        Note over App,RS: 従来: ポーリングループが必要
+        App->>API: ExecuteStatement
+        API-->>App: Id を即時返却
+        loop 完了までポーリング
+            App->>API: DescribeStatement
+            API-->>App: Status = STARTED
+        end
+        App->>API: GetStatementResult
+        API-->>App: 結果セット
+    end
+
+    rect rgb(233,247,236)
+        Note over App,RS: 今回: ロングポーリングで 1 回の呼び出し
+        App->>API: ExecuteStatement WaitTimeSeconds=30
+        API->>RS: SQL 実行
+        RS-->>API: 実行完了
+        API-->>App: Status = FINISHED を返却
+        App->>API: GetStatementResult
+        API-->>App: 結果セット
+    end
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      ロングポーリング導入前後の API 呼び出しフローの比較です。WaitTimeSeconds を指定すると、ステートメント完了まで API がレスポンスを保留するため、ポーリングループによる繰り返し呼び出しが不要になります。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ ロングポーリング (WaitTimeSeconds パラメータ)</div>
+      <ul>
+        <li>ExecuteStatement、BatchExecuteStatement、DescribeStatement、GetStatementResult、GetStatementResultV2 の <span class="highlight">5 つの API 操作</span>に WaitTimeSeconds パラメータが追加</li>
+        <li>パラメータを設定すると、SQL ステートメントが完了するまで API が同期レスポンスを遅延</li>
+        <li>ExecuteStatement と BatchExecuteStatement のレスポンスに <code class="inline">Status</code>、<code class="inline">HasResultSet</code>、<code class="inline">RedshiftPid</code> フィールドが追加され、実行結果を即座に判断可能</li>
+        <li>完了検知のための繰り返しポーリングが不要になり、API 呼び出し回数を削減</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ ListSessions API</div>
+      <ul>
+        <li>アクティブなセッションを一覧表示する<span class="highlight">新しい API</span></li>
+        <li>ステータス (AVAILABLE、BUSY、CLOSED)、コンピュートターゲット (ClusterIdentifier、WorkgroupName)、データベースでフィルタリング可能</li>
+        <li>レスポンスに SessionId、Status、CreatedAt、UpdatedAt、SessionAliveSeconds、SessionTtl、CurrentStatementId などのセッション詳細を含む</li>
+        <li>セッション再利用アプリケーションで、セッション ID を外部システムで管理する必要がなくなる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ BatchExecuteStatement の ExecutionMode</div>
+      <ul>
+        <li><span class="highlight">TRANSACTION</span> (従来の動作、デフォルト) と <span class="highlight">AUTO_COMMIT</span> の 2 つのモードを選択可能</li>
+        <li>AUTO_COMMIT モードでは、バッチ内の各ステートメントが独立したトランザクションとして実行される</li>
+        <li>1 つのステートメントが失敗しても他はロールバックされないため、部分的な完了が許容される ETL パイプラインや管理スクリプトに有効</li>
+        <li>DescribeStatement のレスポンスにも ExecutionMode フィールドが追加され、実行モードを確認可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ BatchExecuteStatement の SqlParameter 配列サポート</div>
+      <ul>
+        <li>リクエストに <code class="inline">Parameters</code> フィールドが追加され、<span class="highlight">パラメータ化クエリ</span>が利用可能に</li>
+        <li>パラメータを一度定義すると、バッチ内のすべてのステートメントから参照できる</li>
+        <li>各クエリへのリテラル値埋め込みが不要になり、SQL インジェクション対策とコードの保守性が向上</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📡 新規・更新された API 操作</h3>
+    <table>
+      <tr><th>API 操作</th><th>変更内容</th></tr>
+      <tr><td><strong>ListSessions</strong> 🆕</td><td>新規 API。セッション一覧の取得とフィルタリング</td></tr>
+      <tr><td>ExecuteStatement</td><td>WaitTimeSeconds パラメータ追加。レスポンスに Status、HasResultSet、RedshiftPid 追加</td></tr>
+      <tr><td>BatchExecuteStatement</td><td>WaitTimeSeconds、ExecutionMode、Parameters パラメータ追加。レスポンスに Status、HasResultSet、RedshiftPid 追加</td></tr>
+      <tr><td>DescribeStatement</td><td>WaitTimeSeconds パラメータ追加。レスポンスに ExecutionMode 追加</td></tr>
+      <tr><td>GetStatementResult</td><td>WaitTimeSeconds パラメータ追加</td></tr>
+      <tr><td>GetStatementResultV2</td><td>WaitTimeSeconds パラメータ追加</td></tr>
+    </table>
+
+    <h3>🔍 ListSessions のリクエストパラメータ</h3>
+    <table>
+      <tr><th>パラメータ</th><th>詳細</th></tr>
+      <tr><td>SessionId</td><td>特定のセッション ID でフィルタリング</td></tr>
+      <tr><td>Status</td><td>AVAILABLE、BUSY、CLOSED でフィルタリング</td></tr>
+      <tr><td>ClusterIdentifier</td><td>Provisioned クラスターでフィルタリング</td></tr>
+      <tr><td>WorkgroupName</td><td>Serverless ワークグループでフィルタリング</td></tr>
+      <tr><td>Database</td><td>データベース名でフィルタリング</td></tr>
+      <tr><td>RoleLevel</td><td>ロールレベルでの絞り込み</td></tr>
+      <tr><td>MaxResults / NextToken</td><td>ページネーション制御</td></tr>
+    </table>
+
+    <h3>📜 API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/07/23</td>
+        <td><a href="https://awsapichanges.com/archive/changes/b71d56-redshift-data.html" target="_blank" rel="noopener noreferrer" class="aws-link">Redshift Data API Service</a></td>
+        <td>1 new 5 updated api methods - ロングポーリング用の WaitTimeSeconds パラメータを 5 つの API 操作に追加、新 API ListSessions、BatchExecuteStatement に ExecutionMode パラメータを追加</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon Redshift Provisioned クラスターまたは Redshift Serverless ワークグループが稼働していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Data API を呼び出す IAM プリンシパルに <code class="inline">redshift-data:*</code> 系の適切な権限 (ExecuteStatement、ListSessions など) が付与されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS CLI または SDK が最新バージョンに更新されていること (新パラメータのサポートに必要)</span></div>
+
+    <h3>ステップ 1: ロングポーリングを使用した SQL 実行</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">WaitTimeSeconds によるロングポーリング</span></div>
+      <pre><code class="language-bash">aws redshift-data execute-statement \
+  --workgroup-name my-workgroup \
+  --database dev \
+  --sql "SELECT count(*) FROM sales" \
+  --wait-time-seconds 30</code></pre>
+    </div>
+    <p>ステートメントが 30 秒以内に完了した場合、レスポンスの Status に <span class="highlight">FINISHED</span> が返却され、追加のポーリングなしで完了を検知できます。</p>
+
+    <h3>ステップ 2: アクティブセッションの一覧表示</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ListSessions によるセッション検索</span></div>
+      <pre><code class="language-bash">aws redshift-data list-sessions \
+  --workgroup-name my-workgroup \
+  --database dev \
+  --status AVAILABLE</code></pre>
+    </div>
+    <p>再利用可能な (AVAILABLE 状態の) セッションを一覧表示します。返却された SessionId を ExecuteStatement の <code class="inline">--session-id</code> に指定することで、既存セッションを再利用できます。</p>
+
+    <h3>ステップ 3: AUTO_COMMIT モードでのバッチ実行</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">各ステートメントを独立トランザクションとして実行</span></div>
+      <pre><code class="language-bash">aws redshift-data batch-execute-statement \
+  --workgroup-name my-workgroup \
+  --database dev \
+  --sqls "VACUUM table_a" "VACUUM table_b" "ANALYZE table_c" \
+  --execution-mode AUTO_COMMIT</code></pre>
+    </div>
+    <p>各ステートメントは独立したトランザクションとして実行されるため、途中のステートメントが失敗しても、成功したステートメントの結果は保持されます。</p>
+
+    <h3>ステップ 4: パラメータ化バッチクエリの実行</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">SqlParameter 配列によるパラメータ化バッチ</span></div>
+      <pre><code class="language-bash">aws redshift-data batch-execute-statement \
+  --workgroup-name my-workgroup \
+  --database dev \
+  --sqls "DELETE FROM sales WHERE region = :region" \
+         "INSERT INTO audit_log VALUES (:region, current_timestamp)" \
+  --parameters name=region,value=us-west</code></pre>
+    </div>
+    <p>パラメータを一度定義し、バッチ内の複数のステートメントから参照します。リテラル値の埋め込みが不要になります。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>開発コストの削減</strong>: ポーリングループやセッション ID の外部管理といった定型コードが不要になり、開発とメンテナンスの工数を削減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用効率の向上</strong>: ETL パイプラインで部分的な失敗が許容され、失敗時の全体再実行が不要になり、処理時間とコンピュートコストを削減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>API コストの最適化</strong>: 完了検知のための繰り返し API 呼び出しが削減され、Lambda 実行時間や API スロットリングリスクを低減</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>シンプルな同期型プログラミングモデル</strong>: 非同期 API を同期的に扱えるようになり、Step Functions のポーリングステートや Lambda の待機ロジックを簡素化</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>セッションの可視性向上</strong>: 再起動後やマルチプロセス環境でも既存セッションを検出して再利用でき、セッション作成のオーバーヘッドを回避</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>セキュリティの向上</strong>: パラメータ化クエリにより SQL インジェクションのリスクを低減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟なエラーハンドリング</strong>: ステートメント単位での成否管理が可能になり、DescribeStatement の SubStatements で個別のステータスを確認可能</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>🚫 制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>WaitTimeSeconds で指定した時間内にステートメントが完了しない場合は、従来どおり DescribeStatement による追加確認が必要</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>ExecutionMode のデフォルトは TRANSACTION であり、AUTO_COMMIT を利用するには明示的な指定が必要</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>VACUUM などトランザクション内で実行できないコマンドの扱いは実行モードに依存するため、事前に動作確認が必要</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="caution-item"><span class="caution-icon">⚡</span><span>AUTO_COMMIT モードでは原子性が失われるため、全ステートメントの成功が必須の処理 (整合性が必要なデータ更新など) には従来の TRANSACTION モードを使用すべき</span></div>
+    <div class="caution-item"><span class="caution-icon">⚡</span><span>ロングポーリング使用時は、呼び出し元 (Lambda など) のタイムアウト設定と WaitTimeSeconds の値の整合性に注意が必要</span></div>
+    <div class="caution-item"><span class="caution-icon">⚡</span><span>既存のポーリングベースの実装は引き続き動作するため、移行は段階的に実施できる</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🎯 ユースケース 1: Lambda からの同期的なクエリ実行</div>
+      <p><strong>シナリオ</strong>: API Gateway + Lambda の構成で、Redshift に対する短時間のルックアップクエリを実行し、結果をレスポンスとして返却したい。従来はポーリングループの実装が必要だった。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Python</span><span class="code-title">ロングポーリングによる同期実行</span></div>
+        <pre><code class="language-python">import boto3
+
+client = boto3.client("redshift-data")
+
+# ロングポーリングで実行し、完了を待つ
+response = client.execute_statement(
+    WorkgroupName="my-workgroup",
+    Database="dev",
+    Sql="SELECT product_id, stock FROM inventory WHERE product_id = :id",
+    Parameters=[{"name": "id", "value": "P-1001"}],
+    WaitTimeSeconds=20,
+)
+
+if response["Status"] == "FINISHED" and response["HasResultSet"]:
+    result = client.get_statement_result(Id=response["Id"])
+    print(result["Records"])</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: ポーリングループが不要になり、Lambda のコードが簡素化される。API 呼び出し回数の削減により実行時間とコストも低減する。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🎯 ユースケース 2: セッション再利用による一時テーブルベースの処理</div>
+      <p><strong>シナリオ</strong>: 一時テーブルを使用する多段階の ETL 処理で、同一セッションを複数の Lambda 呼び出しにまたがって再利用したい。従来はセッション ID を DynamoDB などで管理する必要があった。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Python</span><span class="code-title">ListSessions によるセッション再利用</span></div>
+        <pre><code class="language-python"># 再利用可能なセッションを検索
+sessions = client.list_sessions(
+    WorkgroupName="my-workgroup",
+    Database="dev",
+    Status="AVAILABLE",
+)
+
+if sessions["Sessions"]:
+    session_id = sessions["Sessions"][0]["SessionId"]
+    # 既存セッションを再利用して一時テーブルにアクセス
+    client.execute_statement(
+        Sql="INSERT INTO final_table SELECT * FROM temp_staging",
+        SessionId=session_id,
+    )
+else:
+    # 新規セッションを作成
+    client.execute_statement(
+        WorkgroupName="my-workgroup",
+        Database="dev",
+        Sql="CREATE TEMP TABLE temp_staging (...)",
+        SessionKeepAliveSeconds=300,
+    )</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: セッション ID の外部管理が不要になり、アーキテクチャが簡素化される。セッション再利用により接続確立のオーバーヘッドも削減できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🎯 ユースケース 3: 部分的な失敗を許容するメンテナンスバッチ</div>
+      <p><strong>シナリオ</strong>: 夜間バッチで複数テーブルの VACUUM や ANALYZE、統計更新を一括実行したい。従来は 1 つのテーブルでエラーが発生するとバッチ全体がロールバックされ、すべてやり直しになっていた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Python</span><span class="code-title">AUTO_COMMIT モードのバッチ実行と成否確認</span></div>
+        <pre><code class="language-python">response = client.batch_execute_statement(
+    WorkgroupName="my-workgroup",
+    Database="dev",
+    Sqls=[
+        "ANALYZE sales",
+        "ANALYZE customers",
+        "ANALYZE orders",
+    ],
+    ExecutionMode="AUTO_COMMIT",
+)
+
+# サブステートメントごとの成否を確認
+desc = client.describe_statement(Id=response["Id"])
+for sub in desc["SubStatements"]:
+    print(sub["QueryString"], sub["Status"], sub.get("Error", ""))</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: 一部のテーブルで処理が失敗しても、成功したテーブルの処理結果は保持される。失敗したステートメントのみ再実行すればよく、バッチ全体の処理時間を短縮できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      Redshift Data API 自体の利用に<span class="highlight">追加料金はありません</span>。Amazon Redshift Provisioned クラスターまたは Redshift Serverless の通常のコンピュート料金が適用されます。ロングポーリングの利用によりポーリング用の API 呼び出しが削減されるため、Lambda などの呼び出し元のコンピュート時間を間接的に削減できる場合があります。
+    </p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>
+      Amazon Redshift Data API が利用可能な<span class="highlight">すべての AWS 商用リージョンおよび AWS GovCloud (US) リージョン</span>で、Amazon Redshift Provisioned と Amazon Redshift Serverless の両方に対して一般提供が開始されています。
+    </p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="related-item">
+        <div class="name">⚡ AWS Lambda</div>
+        Data API の主要な利用元。ロングポーリングによりポーリングロジックが不要になり、関数コードが簡素化される
+      </div>
+      <div class="related-item">
+        <div class="name">🔄 AWS Step Functions</div>
+        Redshift Data API との統合でワークフローを構築する際、完了待機のステート設計が簡素化される
+      </div>
+      <div class="related-item">
+        <div class="name">🔐 AWS Secrets Manager</div>
+        Data API の認証情報管理に使用。SecretArn パラメータで指定する
+      </div>
+      <div class="related-item">
+        <div class="name">📨 Amazon EventBridge</div>
+        WithEvent パラメータと組み合わせて、ステートメント完了イベントを非同期に処理するパターンも引き続き利用可能
+      </div>
+      <div class="related-item">
+        <div class="name">🗄️ Amazon Redshift Serverless</div>
+        WorkgroupName を指定して Data API から利用可能。今回の新機能はすべて Serverless でもサポートされる
+      </div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section summary-box">
+    <h2>📝 まとめ</h2>
+    <p>
+      Redshift Data API のロングポーリング、ListSessions、柔軟なバッチ実行の追加により、サーバーレスアプリケーションから Redshift を利用する際の<span class="highlight">定型コードが大幅に削減</span>されます。特にポーリングループやセッション ID の外部管理を実装している既存アプリケーションは、SDK/CLI を最新化した上で <span class="highlight">WaitTimeSeconds と ListSessions への移行</span>を検討することを推奨します。ETL パイプラインでは、処理の性質に応じて TRANSACTION と AUTO_COMMIT を使い分けることで、エラーハンドリングと再実行の効率を改善できます。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/07/amazon-redshift-data-api-longpolling-listsession-flexiblebatchexecute/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li><a href="https://docs.aws.amazon.com/redshift/latest/mgmt/data-api.html" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon Redshift Data API 開発者ガイド</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/b71d56-redshift-data.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS API Changes - Redshift Data API Service</a></li>
+      <li><a href="https://aws.amazon.com/redshift/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon Redshift 料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-07-29) を基に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

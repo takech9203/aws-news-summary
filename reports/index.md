@@ -5,6 +5,9 @@
 
 ## 2026 年
 
+- [2026-07-29 - Amazon Redshift - Data API のロングポーリング、セッション管理、柔軟なバッチ実行](2026/2026-07-29-amazon-redshift-data-api-longpolling-listsession-flexiblebatchexecute.md)
+- [2026-07-29 - AWS IAM Identity Center - Identity Center directory へのマルチリージョンサポート拡張](2026/2026-07-29-aws-iam-identity-center-extends-multi-region-support-to-identity-center-directory.md)
+- [2026-07-29 - AWS Interconnect - multicloud の Oracle Cloud Infrastructure 接続が GA](2026/2026-07-29-aws-announces-AWS-interconnect-multicloud-OCI-GA.md)
 - [2026-07-28 - AWS Outposts - 第 2 世代 Outposts racks のアジアパシフィック (ムンバイ) リージョンサポート](2026/2026-07-28-aws-outposts-asia-pacific-mumbai.md)
 - [2026-07-28 - Amazon EKS - Provisioned Control Plane による Pod オートスケーリングの高速化](2026/2026-07-28-amazon-eks-provisioned-control.md)
 - [2026-07-28 - AWS Console Home - AWS European Sovereign Cloud (ドイツ) リージョンでの Cost and Usage ウィジェットサポート](2026/2026-07-28-aws-console-home-cost-and-usage-eu-sovereign-cloud.md)
@@ -19,6 +22,7 @@
 - [2026-07-27 - AWS Glue Data Quality - Distribution Analyzer による分布統計データプロファイリング](2026/2026-07-27-aws-glue-data-quality-distribution-profiling.md)
 - [2026-07-27 - Amazon Neptune - IAM タグベースアクセスコントロール (TBAC) サポート](2026/2026-07-27-amazon-neptune-tbac.md)
 - [2026-07-27 - Amazon RDS for SQL Server - Multi-AZ インスタンスへの TDE データベース復元サポート](2026/2026-07-27-rds-sql-server-supports-tde-for-maz.md)
+- [2026-07-27 - Amazon EKS - クラスター OIDC エンドポイントの AWS PrivateLink サポート](2026/2026-07-27-amazon-eks-oidc-endpoint-privatelink.md)
 - [2026-07-24 - Claude Opus 5 - AWS での提供開始](2026/2026-07-24-claude-opus-5-aws.md)
 - [2026-07-24 - aws-bench - AI エージェント向けオープンソースベンチマーク](2026/2026-07-24-aws-bench.md)
 - [2026-07-24 - Kiro - Claude Opus 5 の提供開始](2026/2026-07-24-kiro-opus-5.md)
