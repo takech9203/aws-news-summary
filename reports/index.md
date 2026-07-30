@@ -5,7 +5,22 @@
 
 ## 2026 年
 
+- [2026-07-30 - Amazon Bedrock - OpenAI GPT-5.6 モデルの最大 80% 値下げ](2026/2026-07-30-openai-gpt-terra-luna-pricing-bedrock.md)
+- [2026-07-30 - AWS Directory Service - AWS Managed Microsoft AD の Standard から Enterprise Edition へのアップグレード対応](2026/2026-07-30-aws-microsoft-ad-edition-upgrade.md)
+- [2026-07-30 - Amazon OpenSearch Service - OpenSearch 3.7 サポート](2026/2026-07-30-amazon-opensearch-service.md)
+- [2026-07-30 - Amazon MSK - Express ブローカーによる Apache Iceberg ストリーミングテーブルへのデータ配信](2026/2026-07-30-aws-msk-streaming-tables-for-apache-iceberg.md)
+- [2026-07-30 - AWS Transit Gateway - ポリシーベースルーティング (PBR) の一般提供開始](2026/2026-07-30-aws-transit-gateway-policy-based-routing.md)
+- [2026-07-30 - AWS Direct Connect - 仮想インターフェイスの BGP ルート可視化](2026/2026-07-30-aws-direct-connect-bgp-visibility.md)
+- [2026-07-30 - Amazon Bedrock - xAI 製 Grok 4.3 が AWS GovCloud (US-West) で利用可能に](2026/2026-07-30-grok-4-3-bedrock-govcloud.md)
+- [2026-07-30 - Amazon Bedrock - Gemma 4 モデルが AWS GovCloud (US-West) で利用可能に](2026/2026-07-30-gemma-4-bedrock-govcloud.md)
+- [2026-07-30 - AWS IAM - IAM Policy Simulator の IAM コンソール統合と機能強化](2026/2026-07-30-iam-policy-simulator-iam-console.md)
+- [2026-07-30 - Amazon Redshift - RG large / 12xlarge インスタンスのトレーリングトラック対応](2026/2026-07-30-amazon-redshift-rg-large-12xlarge-trailing-track.md)
+- [2026-07-30 - Amazon MSK - Express ブローカーによる Amazon S3 へのデータ配信](2026/2026-07-30-aws-msk-express-brokers-delivers-to-amazon-s3.md)
+- [2026-07-29 - AWS Glue - REST API コネクタの VPC サポート、フィルタプッシュダウン、パーティションサポート](2026/2026-07-29-aws-glue-rest-connector-filtering-partitioning-vpc.md)
 - [2026-07-29 - Amazon Redshift - Data API のロングポーリング、セッション管理、柔軟なバッチ実行](2026/2026-07-29-amazon-redshift-data-api-longpolling-listsession-flexiblebatchexecute.md)
+- [2026-07-29 - AWS WAF - プリパーステキスト変換と 10 種類の新テキスト変換](2026/2026-07-29-aws-waf.md)
+- [2026-07-29 - Amazon EC2 Auto Scaling - CloudFormation での Instance Refresh サポート](2026/2026-07-29-ec2-auto-scaling-instance-refresh-cloudformation.md)
+- [2026-07-29 - Amazon Connect Customer - コーチング向け評価事例の自動サジェスト](2026/2026-07-29-amazon-connect-customer-example-evaluations-for-agent-coaching.md)
 - [2026-07-29 - AWS IAM Identity Center - Identity Center directory へのマルチリージョンサポート拡張](2026/2026-07-29-aws-iam-identity-center-extends-multi-region-support-to-identity-center-directory.md)
 - [2026-07-29 - AWS Interconnect - multicloud の Oracle Cloud Infrastructure 接続が GA](2026/2026-07-29-aws-announces-AWS-interconnect-multicloud-OCI-GA.md)
 - [2026-07-28 - AWS Outposts - 第 2 世代 Outposts racks のアジアパシフィック (ムンバイ) リージョンサポート](2026/2026-07-28-aws-outposts-asia-pacific-mumbai.md)

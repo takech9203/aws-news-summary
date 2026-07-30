@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Direct Connect - 仮想インターフェイスの BGP ルート可視化</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.ba-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-box ul { margin: 0; padding-left: 4px; list-style: none; }
+.ba-box li {
+  margin: 8px 0;
+  padding-left: 22px;
+  position: relative;
+  font-size: 14px;
+}
+.ba-before li::before { content: "✗"; position: absolute; left: 0; color: #FF6B4A; font-weight: 700; }
+.ba-after li::before { content: "✓"; position: absolute; left: 0; color: #4CAF50; font-weight: 700; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+code.inline {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* ステップ */
+.step-list { counter-reset: step; }
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+.step-number {
+  counter-increment: step;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--aws-squid-ink);
+  background: var(--aws-smile-orange);
+  padding: 1px 8px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+
+.usecase p { margin: 8px 0; font-size: 14px; }
+
+/* メリット 2 カラム */
+.merit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.merit-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.merit-box h3 { margin-top: 0; color: var(--aws-teal); font-size: 16px; }
+
+.merit-box ul { margin: 0; padding-left: 4px; list-style: none; }
+.merit-box li {
+  margin: 8px 0;
+  padding-left: 22px;
+  position: relative;
+  font-size: 14px;
+}
+.merit-box li::before { content: "✓"; position: absolute; left: 0; color: #4CAF50; font-weight: 700; }
+.merit-box li strong { color: var(--aws-white); }
+
+/* 関連サービス */
+.related-item {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+  font-size: 14px;
+  align-items: flex-start;
+}
+.related-item .icon { flex-shrink: 0; }
+.related-item strong { color: var(--aws-white); }
+
+/* まとめ */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+
+ul.plain { margin: 8px 0; padding-left: 20px; }
+ul.plain li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="service-badge">☁️ AWS Direct Connect</div>
+    <h1>🔍 仮想インターフェイスの BGP ルート可視化</h1>
+    <div class="subtitle">
+      AWS とオンプレミス間で交換される BGP ルートをコンソール / API から直接確認
+      &nbsp;|&nbsp; <span class="release-date">📅 リリース日: 2026 年 7 月 30 日</span>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      AWS Direct Connect が、仮想インターフェイス (VIF) 上で AWS とオンプレミスルーター間で交換される BGP ルートを確認できる
+      <span class="highlight">BGP ルート可視化</span> 機能をサポートしました。
+      <span class="highlight">プライベート VIF、トランジット VIF、パブリック VIF のすべての VIF タイプ</span>が対象です。
+    </p>
+    <p>
+      AWS がお客様のルーターから受信したルート (accepted routes) と、AWS が広報しているルート (advertised routes) の両方を、
+      Direct Connect コンソールまたは新しい <code class="inline">ListVirtualInterfaceRoutes</code> API アクションで確認できます。
+      各ルートエントリには、プレフィックス、アドレスファミリー、AS パス、BGP コミュニティ値、インストールされたタイムスタンプが表示されます。
+    </p>
+    <p>
+      ハイブリッドネットワークを運用するネットワーク管理者にとって、ルーティングの問題調査、ルート伝播の検証、
+      BGP ポリシー設定の妥当性確認、予期しないトラフィックパターンの診断が大幅に容易になるアップデートです。
+    </p>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">😰 Before: アップデート前の課題</div>
+        <ul>
+          <li>AWS 側が実際に受信・広報している BGP ルートを AWS 上で直接確認する手段がなく、オンプレミスルーター側の情報や AWS サポートへの問い合わせに依存</li>
+          <li>ルート伝播やフィルタリングの問題発生時、AWS 側とオンプレミス側のどちらに原因があるかの切り分けに時間がかかる</li>
+          <li>BGP コミュニティや AS パスによるルーティングポリシーが意図通りかを AWS 側の視点で検証できない</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">😊 After: アップデート後の改善</div>
+        <ul>
+          <li>コンソールまたは API から、AWS が受信したルートと広報しているルートをセルフサービスで確認可能</li>
+          <li>プレフィックス、AS パス、コミュニティ、アドレスファミリーによるフィルタリングで特定のルーティング動作を迅速に特定</li>
+          <li>各ルートのインストールタイムスタンプにより、ルート変更のタイミングを把握可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart LR
+    subgraph OnPrem["🏢 オンプレミス"]
+        CR["📡 カスタマールーター"]
+    end
+
+    subgraph DXLoc["🔌 Direct Connect ロケーション"]
+        DXR["📡 AWS Direct Connect ルーター"]
+    end
+
+    subgraph AWS["☁️ AWS"]
+        VIF["🔗 仮想インターフェイス<br/>プライベート / トランジット / パブリック"]
+        VPC["🌐 VPC / Transit Gateway / パブリックサービス"]
+    end
+
+    Admin(["👤 ネットワーク管理者"])
+    Console["🖥️ Direct Connect コンソール"]
+    API["🔌 ListVirtualInterfaceRoutes API"]
+
+    CR <-->|"BGP ピアリング<br/>ルート交換"| DXR
+    DXR --> VIF
+    VIF --> VPC
+
+    Admin --> Console
+    Admin --> API
+    Console -.->|"受信ルート / 広報ルートを表示"| VIF
+    API -.->|"受信ルート / 広報ルートを取得"| VIF
+
+    classDef onprem fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef dx fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef aws fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef tool fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class CR onprem
+    class DXR dx
+    class VIF,VPC aws
+    class Admin user
+    class Console,API tool
+    class OnPrem,DXLoc,AWS boundary
+      </pre>
+    </div>
+    <p class="diagram-caption">オンプレミスルーターと AWS の間で BGP により交換されるルートを、コンソールまたは API から直接確認できます</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="feature-grid">
+      <div class="card">
+        <div class="card-title">🔄 受信ルートと広報ルートの可視化</div>
+        <p style="margin:0; font-size:14px;">AWS がお客様のルーターから受信 (accept) したルートと、広報 (advertise) しているルートの両方向を確認可能。プライベート / トランジット / パブリック VIF のすべてに対応。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">📋 詳細なルート属性の表示</div>
+        <p style="margin:0; font-size:14px;">プレフィックス、アドレスファミリー (IPv4 / IPv6)、AS パス、BGP コミュニティ値、ルートがインストールされたタイムスタンプを表示。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🔍 フィルタリングによる迅速な調査</div>
+        <p style="margin:0; font-size:14px;">プレフィックス、AS パス、コミュニティ、アドレスファミリーによるフィルタリングに対応し、特定のルーティング動作を素早く特定可能。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🖥️ 2 つのアクセス方法</div>
+        <p style="margin:0; font-size:14px;">Direct Connect コンソールからの GUI 操作と、新しい <code class="inline">ListVirtualInterfaceRoutes</code> API アクションによるプログラムからのアクセスの両方に対応。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対象 VIF タイプ</td><td>プライベート VIF、トランジット VIF、パブリック VIF</td></tr>
+      <tr><td>ルートの方向</td><td>受信ルート (accepted)、広報ルート (advertised)</td></tr>
+      <tr><td>表示属性</td><td>プレフィックス、アドレスファミリー、AS パス、BGP コミュニティ、インストールタイムスタンプ</td></tr>
+      <tr><td>フィルタリング</td><td>プレフィックス、AS パス、コミュニティ、アドレスファミリー</td></tr>
+      <tr><td>アクセス方法</td><td>Direct Connect コンソール、<code class="inline">ListVirtualInterfaceRoutes</code> API</td></tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Direct Connect 接続と仮想インターフェイス (VIF) が作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>VIF 上で BGP ピアリングが確立されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Direct Connect の該当 API を呼び出す IAM 権限があること</span></div>
+
+    <h3>📝 手順</h3>
+    <div class="step-list">
+      <div class="step-item">
+        <div class="step-number">1</div>
+        <div>
+          <strong style="color: var(--aws-white);">コンソールで BGP ルートを確認</strong>
+          <p style="margin: 4px 0 0 0; font-size: 14px;">Direct Connect コンソールで対象の仮想インターフェイスを選択し、BGP ルート情報を表示します。受信ルートと広報ルートを切り替えて確認できます。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-number">2</div>
+        <div style="width: 100%;">
+          <strong style="color: var(--aws-white);">API で BGP ルートを取得</strong>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">BGP ルートの一覧取得</span>
+            </div>
+            <pre><code class="language-bash"># 仮想インターフェイスの BGP ルートを一覧取得
+aws directconnect list-virtual-interface-routes \
+  --virtual-interface-id dxvif-xxxxxxxx</code></pre>
+          </div>
+          <p style="margin: 4px 0 0 0; font-size: 14px;">新しい <code class="inline">ListVirtualInterfaceRoutes</code> API アクションで、指定した VIF のルート情報をプログラムから取得します。実際のパラメーター仕様は最新の AWS CLI / API リファレンスを確認してください。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-number">3</div>
+        <div>
+          <strong style="color: var(--aws-white);">フィルタリングで特定ルートを調査</strong>
+          <p style="margin: 4px 0 0 0; font-size: 14px;">コンソールまたは API のフィルター機能で、プレフィックス、AS パス、コミュニティ、アドレスファミリーを条件に絞り込み、意図したルートが交換されているかを検証します。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>💼 ビジネス面</h3>
+        <ul>
+          <li><strong>障害対応時間の短縮</strong>: ルーティング問題の切り分けをセルフサービスで実施でき、ダウンタイムやサポート問い合わせを削減</li>
+          <li><strong>運用コストの削減</strong>: AWS 側のルート状態確認のための追加ツールや手作業での突き合わせが不要</li>
+          <li><strong>監査・コンプライアンス対応</strong>: 広報・受信ルートの実態を確認でき、ネットワークポリシーの遵守状況を検証可能</li>
+        </ul>
+      </div>
+      <div class="merit-box">
+        <h3>⚙️ 技術面</h3>
+        <ul>
+          <li><strong>双方向のルート可視性</strong>: AWS 視点での受信・広報ルートを直接確認でき、オンプレミス側の情報と突き合わせた正確な切り分けが可能</li>
+          <li><strong>BGP ポリシー検証</strong>: AS パスプリペンドや BGP コミュニティによる経路制御が意図通りに反映されているかを検証可能</li>
+          <li><strong>自動化との親和性</strong>: API 経由で取得できるため、定期的なルート監視や構成検証の自動化に組み込み可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>表示されるのは BGP ルート情報であり、実際のトラフィックフローの統計情報ではない</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>API の詳細仕様 (ページネーション、フィルターパラメーターなど) は最新のドキュメントでの確認が必要</span></div>
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">💭</span><span>ルート情報の確認には適切な IAM 権限の設定が必要</span></div>
+    <div class="check-item"><span class="warn-icon">💭</span><span>複数の VIF や Direct Connect ゲートウェイを利用する大規模構成では、確認対象の VIF を体系的に管理する運用が必要</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1️⃣ ルート伝播のトラブルシューティング</div>
+      <p><span class="usecase-label">シナリオ</span>オンプレミスから特定の VPC サブネットへ通信できない。オンプレミスルーターではルートを広報しているつもりだが、AWS 側で受信されているか不明。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">受信ルートの確認</span>
+        </div>
+        <pre><code class="language-bash">aws directconnect list-virtual-interface-routes \
+  --virtual-interface-id dxvif-xxxxxxxx
+# 出力から対象プレフィックスが受信ルートに含まれるかを確認</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>AWS 側で受信されているルートを直接確認でき、オンプレミス側のフィルター設定ミスか AWS 側の問題かを迅速に切り分けられる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2️⃣ BGP ポリシー設定の検証</div>
+      <p><span class="usecase-label">シナリオ</span>アクティブ / スタンバイ構成のため、スタンバイ側 VIF で AS パスプリペンドと BGP コミュニティを設定した。意図通り AWS に伝わっているかを確認したい。</p>
+      <p style="font-size: 14px; background: rgba(255,255,255,0.05); border-radius: 6px; padding: 10px;">
+        🖥️ Direct Connect コンソールで対象 VIF の受信ルートを表示し、AS パスとコミュニティ値でフィルタリングして設定値を確認
+      </p>
+      <p><span class="usecase-label">効果</span>フェイルオーバー設計が意図通りに機能することをリリース前に検証でき、切り替えテスト時の想定外動作を防止できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3️⃣ マルチリージョン構成でのルート監査</div>
+      <p><span class="usecase-label">シナリオ</span>Direct Connect ゲートウェイと複数リージョンの Transit Gateway を組み合わせた構成で、各トランジット VIF で交換されるルートを定期的に監査したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">定期取得スクリプトの例</span>
+        </div>
+        <pre><code class="language-bash"># 各 VIF のルートを定期取得して差分を監視するスクリプトの例
+for vif in dxvif-aaaa dxvif-bbbb; do
+  aws directconnect list-virtual-interface-routes \
+    --virtual-interface-id "$vif" > "routes_${vif}_$(date +%Y%m%d).json"
+done</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>ルート数の増減や意図しないプレフィックスの混入を早期に検知し、複雑なマルチリージョン構成の健全性を継続的に確認できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p style="margin:0; font-size:14px;">公式発表では本機能に関する<span class="highlight">追加料金の記載はありません</span>。AWS Direct Connect 自体の料金は、従来どおりポート時間とアウトバウンドデータ転送に基づいて課金されます。詳細は <a href="https://aws.amazon.com/directconnect/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Direct Connect 料金ページ</a> を参照してください。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 利用可能リージョン</div>
+      <p style="margin:0; font-size:14px;"><span class="highlight">すべての AWS 商用リージョン</span>、および AWS 中国リージョン (Sinnet が運営する北京リージョン、NWCD が運営する寧夏リージョン) で利用可能です。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-item"><span class="icon">🌐</span><span><strong>AWS Direct Connect ゲートウェイ</strong>: 複数リージョンの VPC や Transit Gateway と VIF を接続する構成で、本機能によるルート確認が特に有効</span></div>
+    <div class="related-item"><span class="icon">🚉</span><span><strong>AWS Transit Gateway</strong>: トランジット VIF 経由で接続する Transit Gateway のルート伝播状況の切り分けに活用可能</span></div>
+    <div class="related-item"><span class="icon">📊</span><span><strong>Amazon CloudWatch</strong>: Direct Connect の接続・VIF メトリクス監視と組み合わせることで、ネットワークの状態をより包括的に把握可能</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin: 0 0 12px 0;">
+        AWS Direct Connect の BGP ルート可視化により、これまで<span class="highlight">ブラックボックスになりがちだった AWS 側の BGP ルート状態</span>を、
+        コンソールと API から直接確認できるようになりました。
+      </p>
+      <div class="check-item"><span class="check-icon">✓</span><span>ルーティング障害時の切り分け手順に本機能を組み込む</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>BGP ポリシー変更時の検証プロセスへの活用を検討する</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>API を活用した定期的なルート監査・監視の自動化を検討する</span></div>
+    </div>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul class="plain">
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/07/aws-direct-connect-bgp-visibility/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/07/aws-direct-connect-bgp-visibility/</a></li>
+      <li><a href="https://docs.aws.amazon.com/directconnect/latest/UserGuide/Welcome.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Direct Connect ユーザーガイド</a></li>
+      <li><a href="https://aws.amazon.com/directconnect/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Direct Connect 料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-07-30-aws-direct-connect-bgp-visibility.md) を基に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon MSK - Express ブローカーによる Apache Iceberg ストリーミングテーブルへのデータ配信</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.card ul { margin: 0; padding-left: 20px; }
+.card li { margin: 4px 0; font-size: 14.5px; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.stat-card {
+  flex: 1;
+  min-width: 200px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13.5px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: stretch;
+  margin: 16px 0;
+}
+.before-box, .after-box {
+  flex: 1;
+  min-width: 300px;
+  border-radius: 8px;
+  padding: 18px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.before-box .ba-title { color: #FF6B4A; }
+.after-box .ba-title { color: #4CAF50; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 6px 0; font-size: 14.5px; }
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 12px 0;
+}
+.spec-table th {
+  background: rgba(255, 153, 0, 0.2);
+  color: var(--aws-white);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.spec-table td {
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+.spec-table tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+.table-wrap { overflow-x: auto; }
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase p { margin: 6px 0; font-size: 14.5px; }
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid #4CAF50;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-content p { margin: 6px 0; font-size: 14.5px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+p { margin: 10px 0; }
+
+@media (max-width: 640px) {
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+  body { padding: 12px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="service-badge">☁️ Amazon MSK</div>
+    <h1>🧊 Express ブローカーによる Apache Iceberg ストリーミングテーブルへのデータ配信</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 7 月 30 日 | Amazon Managed Streaming for Apache Kafka (Amazon MSK) | MSK Data Delivery</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Amazon MSK Express ブローカーが、Apache Kafka トピックを <span class="highlight">Amazon S3 Tables 上の Apache Iceberg テーブル</span>として継続的にマテリアライズする新機能をサポート。<span class="highlight">コネクタや追加インフラの管理が不要</span>になり、Kafka のストリーミングデータをクエリ可能な Iceberg テーブルとして自動的に蓄積できます。</p>
+    <p>ストリーミング書き込みで課題となる「スモールファイル問題」を<span class="highlight">インテリジェントなインラインコンパクション</span>で解決し、高スループットな並行書き込みのコミット競合も組み込みコーディネーションで自動解決。配信されたテーブルは Amazon Athena、Apache Spark、Trino、Apache Flink などからクエリ・変換が可能です。</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">最大 60%</div>
+        <div class="stat-label">取り込み・配信コスト削減<br>(セルフマネージド比)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">最大 30%</div>
+        <div class="stat-label">下流のクエリコスト削減<br>(インラインコンパクション効果)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">10 GB/s</div>
+        <div class="stat-label">最大スループット<br>(手動スケーリング不要)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">5〜15 分</div>
+        <div class="stat-label">データ鮮度 (設定可能)<br>生成後すぐにクエリ可能</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: セルフマネージドパイプラインの運用負荷</div>
+        <ul>
+          <li>Kafka Connect の Iceberg Sink や Spark / Flink ジョブを自前で構築し、スケーリング・パッチ適用を継続的に実施</li>
+          <li>大量の小さいファイルがクエリ性能を劣化させ、コンパクションジョブを別途設計・運用</li>
+          <li>複数ライターのコミット競合への対処が必要。コネクタ経由の読み取りがブローカーのエグレススループットを消費し、ピークに合わせたキャパシティ設計が必要</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: Channel 作成だけでストリーミングレイクハウス</div>
+        <ul>
+          <li>Channel を作成するだけで Kafka トピックが S3 Tables 上の Iceberg テーブルとして継続的にマテリアライズ</li>
+          <li>インラインコンパクションとライター間コーディネーションで、スモールファイル問題とコミット競合をサービス側で自動解決</li>
+          <li>ブローカーのエグレススループットを消費せず、最大 10 GB/s まで手動スケーリング不要。取り込みコスト最大 60%、クエリコスト最大 30% 削減</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Producer(["👤 プロデューサー"]) --> Topic
+
+    subgraph MSK["☁️ Amazon MSK Provisioned クラスター"]
+        Topic["📨 Kafka トピック<br/>Express ブローカー"]
+        Channel["⚡ Data Delivery Channel<br/>インラインコンパクション<br/>ライター間コーディネーション"]
+        Topic --> Channel
+    end
+
+    GSR["📋 AWS Glue Schema Registry<br/>JSON スキーマ"] -.-> Channel
+    Channel -->|"Parquet ファイル<br/>最大 10 GB/s"| Iceberg[("🧊 Apache Iceberg テーブル<br/>S3 Table バケット")]
+    Channel -.->|処理不能レコード| DLQ[("🗄️ DLQ 用 S3 バケット<br/>エラーコンテキスト付き")]
+    Iceberg --> Query["⚙️ クエリ / 変換エンジン<br/>Athena / Spark / Trino / Flink"]
+    Maint["🔧 S3 Tables 自動メンテナンス<br/>コンパクション / スナップショット失効"] -.-> Iceberg
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class MSK cloud
+    class Topic,Channel compute
+    class Iceberg storage
+    class DLQ warning
+    class Producer user
+    class Query process
+    class GSR,Maint internal
+      </pre>
+    </div>
+    <p>Express ブローカー上の Kafka トピックから Data Delivery Channel がレコードを読み取り、AWS Glue Schema Registry のスキーマを使用して Parquet ファイルに変換し、S3 Table バケット内の Iceberg テーブルに登録します。処理できないレコードは必須のデッドレターキュー (DLQ) 用 S3 バケットにルーティングされ、配信は中断されません。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ Kafka トピックの Iceberg テーブルへの継続的マテリアライズ</div>
+      <ul>
+        <li>Express ブローカーを使用する MSK Provisioned クラスター上に Channel を作成するだけで配信を開始</li>
+        <li>JSON レコードを AWS Glue Schema Registry のスキーマで変換し、Parquet データファイル (ZSTD / Snappy 圧縮) として書き込み、S3 Table バケット内の新規 Iceberg テーブルに登録</li>
+        <li>入力形式は JSON (GSR スキーマ ARN を指定) または JSON_SCHEMA_GSR (GSR シリアライズ済みでスキーマ ID を埋め込み) に対応</li>
+        <li>生成されたデータは 5〜15 分以内 (設定可能なデータ鮮度) にクエリ可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ インテリジェントなインラインコンパクション</div>
+      <ul>
+        <li>スモールファイル問題を配信時のインラインコンパクションで解消し、クエリ性能を予測可能に維持</li>
+        <li>組み込みコーディネーションにより、高スループットな並行書き込みにおけるライター間のコミット競合を自動解決</li>
+        <li>S3 Tables のオプションの自動メンテナンス (コンパクション、スナップショット失効、未参照ファイルのクリーンアップ) との組み合わせで、継続書き込みでもメタデータの肥大化を防止</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 自動スケーリングとブローカー非依存の設計</div>
+      <ul>
+        <li>最大 10 GB/s のスループットまで手動スケーリングなしで対応</li>
+        <li>ネイティブブローカー機能としてエグレススループットを消費せず、プロデューサーとコンシューマーのワークロードに影響なし</li>
+        <li>キャパシティスケーリングやバージョンアップグレードといった定常運用も配信の中断なしにサービス側で処理</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ 組み込みのエラーハンドリングと運用統合</div>
+      <ul>
+        <li>処理不能なレコードはエラーコンテキスト付きで DLQ (S3 バケット) にルーティングされ、配信は中断しない</li>
+        <li>CloudWatch によるメトリクスと運用ログ、CloudTrail による API 監査、AWS KMS によるカスタマーマネージドキー暗号化をサポート</li>
+        <li>MSK コンソールから数クリックで有効化できるほか、MSK API や MCP サーバーからも設定可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📋 主な仕様</h3>
+    <div class="table-wrap">
+      <table class="spec-table">
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対応ブローカー</td><td>MSK Express ブローカーのみ (Standard ブローカー、MSK Serverless は非対応)</td></tr>
+        <tr><td>宛先</td><td>S3 Table バケット内のマネージド Iceberg テーブル (MSK クラスターと同一リージョン)</td></tr>
+        <tr><td>入力形式</td><td>JSON または JSON_SCHEMA_GSR</td></tr>
+        <tr><td>AWS Glue Schema Registry</td><td>必須 (トピックデータと一致するスキーマの登録が必要)</td></tr>
+        <tr><td>出力</td><td>Apache Parquet ファイル (ZSTD / Snappy 圧縮)</td></tr>
+        <tr><td>パーティショニング</td><td>時間ベース</td></tr>
+        <tr><td>スキーマ進化</td><td>非サポート</td></tr>
+        <tr><td>最大スループット</td><td>10 GB/s</td></tr>
+        <tr><td>データ鮮度</td><td>5〜15 分で設定可能 (最短 5 分にはトピックあたり非圧縮 2.4 MB/s 以上の生成が目安)</td></tr>
+        <tr><td>バックフィル</td><td>非対応 (Channel 有効化後に生成されたデータのみ配信)</td></tr>
+        <tr><td>既存テーブルへの配信</td><td>非対応 (Channel は設定ごとに新規 Iceberg テーブルを作成)</td></tr>
+        <tr><td>DLQ</td><td>必須 (S3 バケット)</td></tr>
+        <tr><td>暗号化</td><td>AWS KMS カスタマーマネージドキー対応</td></tr>
+      </table>
+    </div>
+
+    <h3>🔀 宛先タイプの比較 (同時発表の S3 汎用バケット宛先との違い)</h3>
+    <div class="table-wrap">
+      <table class="spec-table">
+        <tr><th>項目</th><th>S3 Tables (Iceberg)</th><th>S3 汎用バケット</th></tr>
+        <tr><td>宛先</td><td>S3 Table バケット内のマネージド Iceberg テーブル</td><td>汎用 S3 バケット内のオブジェクト</td></tr>
+        <tr><td>入力形式</td><td>JSON または JSON_SCHEMA_GSR</td><td>JSON、ByteArray、String</td></tr>
+        <tr><td>AWS Glue Schema Registry</td><td>必須</td><td>不要</td></tr>
+        <tr><td>出力</td><td>Parquet ファイル (ZSTD / Snappy 圧縮)</td><td>オブジェクト (オプションで GZIP / ZSTD 圧縮)</td></tr>
+        <tr><td>パーティショニング</td><td>時間ベース</td><td>オブジェクトキーテンプレート</td></tr>
+        <tr><td>スキーマ進化</td><td>非サポート</td><td>該当なし</td></tr>
+        <tr><td>主な用途</td><td>分析用ストリーミングレイクハウス</td><td>アーカイブ、リプレイ、ML トレーニング</td></tr>
+      </table>
+    </div>
+
+    <h3>🔄 API 変更履歴</h3>
+    <div class="table-wrap">
+      <table class="spec-table">
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/07/30</td>
+          <td><a href="https://awsapichanges.com/archive/changes/c60f41-kafka.html" target="_blank" rel="noopener noreferrer" class="aws-link">kafka</a></td>
+          <td>5 new api methods - <code>CreateChannel</code>、<code>DescribeChannel</code>、<code>UpdateChannel</code>、<code>DeleteChannel</code>、<code>ListChannels</code> が追加され、Iceberg および S3 汎用バケット宛先の Channel 管理が可能に</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚠️ マネージドテーブルに関する注意</div>
+      <p style="margin: 0; font-size: 14.5px;">Channel が S3 Tables 内に作成する Iceberg テーブルは Amazon MSK サービスによって管理されます。AWS の分析サービスや互換性のあるクエリエンジンからのクエリは可能ですが、スキーマの更新、テーブルプロパティの変更、データの直接的な書き込み・削除は行うべきではありません。</p>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>MSK Express ブローカーを使用する Amazon MSK Provisioned クラスター (Standard ブローカーおよび MSK Serverless は非対応)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>JSON または JSON_SCHEMA_GSR 形式のデータを持つ Kafka トピック</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>トピックデータと一致するスキーマが AWS Glue Schema Registry に登録済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>MSK クラスターと同一リージョンの S3 Table バケット</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>DLQ 用の S3 バケット (必須) と、Channel が引き受ける IAM サービスロール</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">スキーマと S3 Table バケットの準備</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">Glue スキーマ登録と S3 Table バケット作成</span></div>
+          <pre><code class="language-bash"># AWS Glue Schema Registry にスキーマを登録
+aws glue create-schema \
+  --schema-name my-topic-schema \
+  --registry-id RegistryName=my-registry \
+  --data-format JSON \
+  --compatibility BACKWARD \
+  --schema-definition file://schema.json
+
+# S3 Table バケットを作成
+aws s3tables create-table-bucket --name my-streaming-tables</code></pre>
+        </div>
+        <p>トピックデータの構造を定義する JSON スキーマを Glue Schema Registry に登録し、Iceberg テーブルの格納先となる S3 Table バケットを MSK クラスターと同一リージョンに作成します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">IAM サービスロールの作成</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">サービスロール作成</span></div>
+          <pre><code class="language-bash">aws iam create-role \
+  --role-name msk-iceberg-delivery-role \
+  --assume-role-policy-document file://trust-policy.json</code></pre>
+        </div>
+        <p>Channel がデータ配信時に引き受ける IAM サービスロールを作成します。信頼ポリシーで MSK サービスからの引き受けを許可し、S3 Tables への書き込み、Glue Schema Registry の読み取り、DLQ バケットへの書き込み権限をアタッチします。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">Channel の作成と確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">Channel 作成と状態確認</span></div>
+          <pre><code class="language-bash"># MSK コンソールの場合: クラスターを選択し、数クリックで有効化
+# CLI の場合: Iceberg 宛先を指定して Channel を作成
+aws kafka create-channel \
+  --channel-name my-iceberg-channel \
+  --cluster-arn &lt;クラスター ARN&gt; \
+  --topic-configuration-list '[{"RecordConverter": {"ValueConverter": "JSON"}, "TopicArn": "&lt;トピック ARN&gt;"}]' \
+  ...
+
+# 状態確認
+aws kafka describe-channel \
+  --channel-arn &lt;Channel ARN&gt; \
+  --cluster-arn &lt;クラスター ARN&gt;</code></pre>
+        </div>
+        <p>S3 Tables を宛先とする Channel を作成し、ステータスが <span class="highlight">ACTIVE</span> になったことを確認します。以降、トピックに生成されたデータが設定したデータ鮮度 (5〜15 分) 以内に Iceberg テーブルに反映され、Athena や Spark からクエリできるようになります。あわせて S3 Tables の自動メンテナンスジョブの有効化が推奨されます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">最大 60% の取り込みコスト削減</strong>: セルフマネージドのデプロイと比較して、取り込みと配信のコストを最大 60% 削減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">最大 30% のクエリコスト削減</strong>: インラインコンパクションによりファイルが最適化され、セルフマネージド Kafka と比較して下流のクエリコストを最大 30% 削減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">運用負荷の解消</strong>: コネクタフリートやコンパクションジョブの構築・運用が不要になり、レイクハウス取り込みパイプラインの人的コストを削減</span></div>
+
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">スモールファイル問題の自動解決</strong>: インラインコンパクションによりデータ鮮度を犠牲にせずクエリ性能を予測可能に維持</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">ブローカーへの影響なし</strong>: エグレススループットを消費しないため、既存のプロデューサー / コンシューマーに影響を与えず、実需要に合わせたキャパシティ設計が可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">オープンなエコシステム</strong>: Iceberg 標準に準拠し、Athena、Apache Spark、Trino、Apache Flink など幅広いエンジンからクエリ・変換可能</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>🚫 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Express ブローカーを使用する MSK Provisioned クラスターのみ対応 (Standard ブローカー、MSK Serverless は非対応)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>入力は JSON 系形式のみで、AWS Glue Schema Registry へのスキーマ登録が必須 (Avro や Protobuf のネイティブ対応は明記されていない)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>スキーマ進化 (schema evolution) は非サポート</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Channel は設定ごとに新規 Iceberg テーブルを作成し、既存の Iceberg テーブルへの配信は不可</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>バックフィルは非対応で、Channel 有効化後に生成されたデータのみが配信される</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>パーティショニングは時間ベースのみで、任意のカラムによるパーティショニングは選択できない</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>作成される Iceberg テーブルは MSK 管理のマネージドテーブルであり、スキーマ変更やデータの直接更新・削除を行うべきではない</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>最短 5 分のデータ鮮度を得るには、トピックあたり非圧縮 2.4 MB/s 以上のデータ生成が目安。低スループットのトピックでは鮮度を長め (最大 15 分) に設定</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>スキーマ変更が頻繁なワークロードでは、スキーマ進化非対応の制約を踏まえたテーブルの再作成・移行戦略の検討が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>ストレージ最適化とコスト管理のため、S3 Tables の自動メンテナンスジョブ (コンパクション、スナップショット失効、未参照ファイルクリーンアップ) の有効化が推奨される</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📊 ユースケース 1: ニアリアルタイム分析基盤の構築</div>
+      <p><strong>シナリオ</strong>: e コマース企業が、注文イベントやクリックストリームを数分以内に BI ダッシュボードへ反映したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">Channel 設定例</span></div>
+        <pre><code class="language-plaintext">Channel 設定:
+- 入力: JSON トピック + Glue Schema Registry スキーマ
+- データ鮮度: 5 分 (高スループットトピック)
+- 宛先: S3 Table バケット内の Iceberg テーブル
+- Athena / QuickSight からストリーミングテーブルを直接クエリ</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: ETL ジョブやコネクタなしで、生成から 5〜15 分以内のデータを SQL でクエリでき、ニアリアルタイムのダッシュボードを低運用負荷で実現できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🏗️ ユースケース 2: ストリーミングレイクハウスの簡素化</div>
+      <p><strong>シナリオ</strong>: データプラットフォームチームが、Kafka Connect の Iceberg Sink と Spark コンパクションジョブで運用してきたレイクハウス取り込みを簡素化したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">移行手順</span></div>
+        <pre><code class="language-plaintext">移行手順:
+1. 対象トピックのスキーマを Glue Schema Registry に登録
+2. Express ブローカークラスターに Channel を作成
+3. 新規 Iceberg テーブルへの配信を検証後、下流のクエリを切り替え
+4. Kafka Connect フリートとコンパクションジョブを廃止</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: コネクタとコンパクションジョブの運用が不要になり、取り込みコストを最大 60% 削減。ライター競合やスモールファイル問題への個別対処からも解放される。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🏭 ユースケース 3: IoT テレメトリの時系列分析</div>
+      <p><strong>シナリオ</strong>: 製造業企業が、工場設備のセンサーデータを Kafka で収集し、時系列分析と異常検知に活用したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">Channel 設定例</span></div>
+        <pre><code class="language-plaintext">Channel 設定:
+- 入力: JSON_SCHEMA_GSR 形式のテレメトリトピック
+- パーティショニング: 時間ベース (自動)
+- S3 Tables のレコード失効ジョブで保持期間を自動管理
+- Spark / Flink で異常検知モデルの特徴量を生成</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: 時間ベースパーティションにより期間指定クエリが効率化され、レコード失効ジョブと組み合わせてストレージコストとデータ保持要件を自動的に管理できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>本機能はフルマネージド機能として提供され、ブローカーのエグレススループットを追加でプロビジョニングする必要はありません。セルフマネージドのデプロイと比較して<span class="highlight">取り込み・配信コストを最大 60%</span>、<span class="highlight">下流のクエリコストを最大 30%</span> 削減できるとされています。S3 Tables のストレージ料金、リクエスト料金、メンテナンスジョブの料金は別途発生します。</p>
+    <p>詳細は <a href="https://aws.amazon.com/msk/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon MSK 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>MSK Express ブローカーが利用可能なすべての AWS リージョンで利用できます。最新のリージョン対応状況は <a href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS リージョン別サービス一覧</a> を参照してください。</p>
+  </div>
+
+  <!-- 関連サービス・機能 -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🪣 Amazon S3 Tables</div>
+      <p style="margin: 0; font-size: 14.5px;">配信先となるマネージド Iceberg テーブルストレージ。自動コンパクション、スナップショット失効、レコード失効などのメンテナンスジョブを提供。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📋 AWS Glue Schema Registry</div>
+      <p style="margin: 0; font-size: 14.5px;">トピックデータのスキーマ管理 (Iceberg 宛先では必須)。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">⚙️ Amazon Athena / Apache Spark / Trino / Apache Flink</div>
+      <p style="margin: 0; font-size: 14.5px;">ストリーミングテーブルのクエリ・変換に使用できるエンジン。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🗄️ Amazon MSK Data Delivery (S3 汎用バケット宛先)</div>
+      <p style="margin: 0; font-size: 14.5px;">同時発表された姉妹機能。ソース形式のまま S3 にアーカイブする用途向け。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🚚 Amazon Data Firehose</div>
+      <p style="margin: 0; font-size: 14.5px;">従来から提供されている Iceberg テーブルへの配信手段。本機能はブローカーネイティブでエグレススループットを消費しない点が異なる。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>Amazon MSK Express ブローカーのネイティブ機能として、Kafka トピックを S3 Tables 上の Apache Iceberg テーブルとして継続的にマテリアライズできるようになり、<span class="highlight">コネクタやコンパクションジョブを自前で運用することなくストリーミングレイクハウスを構築</span>できます。</p>
+    <div class="check-item"><span class="check-icon">✓</span><span>Kafka から Iceberg への取り込みパイプラインをセルフマネージドで運用しているチームは、コスト削減効果 (取り込み最大 60%、クエリ最大 30%) と運用簡素化の観点から本機能への移行の評価を推奨</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>スキーマ進化非対応や新規テーブル作成のみといった制約があるため、まずは開発環境でスキーマ設計と下流クエリの互換性を検証するとよい</span></div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/07/aws-msk-streaming-tables-for-apache-iceberg" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/07/aws-msk-streaming-tables-for-apache-iceberg</a></li>
+      <li><a href="https://docs.aws.amazon.com/msk/latest/developerguide/msk-data-delivery.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Amazon MSK Data Delivery</a></li>
+      <li><a href="https://docs.aws.amazon.com/msk/latest/developerguide/msk-data-delivery-iceberg.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Iceberg behaviors (S3 Tables destination)</a></li>
+      <li><a href="https://aws.amazon.com/msk/features/express-brokers-for-amazon-msk/" target="_blank" rel="noopener noreferrer" class="aws-link">Express brokers for Amazon MSK</a></li>
+      <li><a href="https://aws.amazon.com/msk/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon MSK 料金ページ</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/c60f41-kafka.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 (awsapichanges.com)</a></li>
+    </ul>
+    <p>ベースレポート: reports/2026/2026-07-30-aws-msk-streaming-tables-for-apache-iceberg.md | 生成日: 2026 年 7 月 30 日</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
