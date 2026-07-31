@@ -5,6 +5,13 @@
 
 ## 2026 年
 
+- [2026-07-31 - Amazon Aurora DSQL - マルチリージョンクラスターを 4 つの追加リージョンでサポート](2026/2026-07-31-amazon-aurora-dsql-adds-multi-region-clusters-four-more-regions.md)
+- [2026-07-31 - Amazon EC2 - C7i-flex インスタンスが欧州 (ミラノ) リージョンで利用可能に](2026/2026-07-31-amazon-ec2-c7i-flex-instances-MXP-region.md)
+- [2026-07-31 - AWS CodeDeploy - 5 つの追加リージョンで利用可能に](2026/2026-07-31-aws-codedeploy-five-additional-regions.md)
+- [2026-07-31 - Kiro - タンジェント (サイド会話) と /context のツール別トークン内訳](2026/2026-07-31-kiro-changelog-2026-07-31.md)
+- [2026-07-31 - Kiro - GPT-5.6 アップデート: Terra と Luna のクレジット倍率引き下げ](2026/2026-07-31-kiro-gpt-5-6-pricing.md)
+- [2026-07-31 - Amazon EC2 - C7i インスタンスが欧州 (ミラノ) およびカナダ西部 (カルガリー) リージョンで利用可能に](2026/2026-07-31-amazon-ec2-c7i-instances-mxp-yyc-region.md)
+- [2026-07-31 - Amazon CloudWatch - マネージド Prometheus コレクター](2026/2026-07-31-cloudwatch-managed-collectors.md)
 - [2026-07-30 - Amazon Bedrock - OpenAI GPT-5.6 モデルの最大 80% 値下げ](2026/2026-07-30-openai-gpt-terra-luna-pricing-bedrock.md)
 - [2026-07-30 - AWS Directory Service - AWS Managed Microsoft AD の Standard から Enterprise Edition へのアップグレード対応](2026/2026-07-30-aws-microsoft-ad-edition-upgrade.md)
 - [2026-07-30 - Amazon OpenSearch Service - OpenSearch 3.7 サポート](2026/2026-07-30-amazon-opensearch-service.md)
@@ -15,6 +22,7 @@
 - [2026-07-30 - Amazon Bedrock - Gemma 4 モデルが AWS GovCloud (US-West) で利用可能に](2026/2026-07-30-gemma-4-bedrock-govcloud.md)
 - [2026-07-30 - AWS IAM - IAM Policy Simulator の IAM コンソール統合と機能強化](2026/2026-07-30-iam-policy-simulator-iam-console.md)
 - [2026-07-30 - Amazon Redshift - RG large / 12xlarge インスタンスのトレーリングトラック対応](2026/2026-07-30-amazon-redshift-rg-large-12xlarge-trailing-track.md)
+- [2026-07-30 - Amazon SageMaker Unified Studio - 全プロジェクトツールでのリッチな Git バージョン管理](2026/2026-07-30-amazon-sagemaker-unified-studio-git.md)
 - [2026-07-30 - Amazon MSK - Express ブローカーによる Amazon S3 へのデータ配信](2026/2026-07-30-aws-msk-express-brokers-delivers-to-amazon-s3.md)
 - [2026-07-29 - AWS Glue - REST API コネクタの VPC サポート、フィルタプッシュダウン、パーティションサポート](2026/2026-07-29-aws-glue-rest-connector-filtering-partitioning-vpc.md)
 - [2026-07-29 - Amazon Redshift - Data API のロングポーリング、セッション管理、柔軟なバッチ実行](2026/2026-07-29-amazon-redshift-data-api-longpolling-listsession-flexiblebatchexecute.md)
