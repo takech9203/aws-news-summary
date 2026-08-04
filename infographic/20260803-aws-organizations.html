@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Organizations - Service Quotas でのアカウント数上限クォータ可視化</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+      margin-right: 8px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 12px 0;
+    }
+
+    .feature-card h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .feature-card p, .feature-card ul {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 700px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px 20px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 { margin-top: 0; }
+    .before-box h3 { color: #FF6B4A; }
+    .after-box h3 { color: #4CAF50; }
+
+    .before-box ul, .after-box ul {
+      padding-left: 0;
+      list-style: none;
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li {
+      margin: 8px 0;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .check-icon { color: #4CAF50; flex-shrink: 0; }
+    .cross-icon { color: #FF6B4A; flex-shrink: 0; }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* Stats */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 20px 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code blocks */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* Use cases */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 14px 0;
+    }
+
+    .usecase h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-orange);
+      font-size: 16px;
+    }
+
+    .usecase p { margin: 6px 0; font-size: 14px; }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 3px solid var(--aws-green);
+      padding: 8px 12px;
+      border-radius: 0 6px 6px 0;
+      margin-top: 10px;
+    }
+
+    /* Steps */
+    .step {
+      display: flex;
+      gap: 14px;
+      margin: 16px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .step-content { flex: 1; min-width: 0; }
+    .step-content h4 { margin: 4px 0 8px 0; color: var(--aws-white); font-size: 16px; }
+    .step-content p, .step-content ol { margin: 6px 0; font-size: 14px; }
+
+    .icon-text {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      color: var(--aws-light-gray);
+    }
+
+    .arrow { color: var(--aws-orange); font-size: 18px; flex-shrink: 0; }
+
+    ul.plain {
+      list-style: none;
+      padding-left: 0;
+      margin: 8px 0;
+    }
+
+    ul.plain li {
+      margin: 8px 0;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      font-size: 14px;
+    }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    .note-box {
+      background: rgba(255, 153, 0, 0.1);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 12px 16px;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    .warn-box {
+      background: rgba(209, 50, 18, 0.1);
+      border-left: 4px solid var(--aws-red);
+      border-radius: 0 8px 8px 0;
+      padding: 12px 16px;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { padding-left: 18px; margin: 8px 0; }
+    footer li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <span class="service-badge">AWS Organizations</span>
+        <span class="service-badge">AWS Service Quotas</span>
+      </div>
+      <h1>🏢 アカウント数上限クォータを Service Quotas で可視化</h1>
+      <div class="subtitle">📅 リリース日: 2026 年 8 月 3 日 | 組織の最大アカウント数クォータと利用状況をセルフサービスで確認可能に</div>
+    </div>
+
+    <!-- Overview -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>
+        AWS Organizations の<span class="highlight">組織内の最大アカウント数クォータとその利用状況</span>を、AWS Service Quotas を通じて直接確認できるようになりました。
+        これまで必要だった AWS Support や AWS アカウントチームへの問い合わせが不要になり、<span class="highlight">セルフサービス</span>で確認できます。
+      </p>
+      <p>
+        確認方法は、管理アカウントで <strong>Service Quotas コンソール</strong>にアクセスするか、<strong>GetServiceQuota API</strong> を呼び出すかのいずれかです。
+        利用状況をモニタリングし、上限に達する前に引き上げをリクエストすることで、アカウント数の増加を事前に計画できます。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>😰 アップデート前</h3>
+          <ul>
+            <li><span class="cross-icon">✗</span>上限確認には AWS Support やアカウントチームへの問い合わせが必要</li>
+            <li><span class="cross-icon">✗</span>利用状況をセルフサービスで確認する手段がなかった</li>
+            <li><span class="cross-icon">✗</span>アカウント作成時にクォータ超過で失敗して初めて気づくリスク</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>😊 アップデート後</h3>
+          <ul>
+            <li><span class="check-icon">✓</span>Service Quotas コンソールで適用値と利用状況を直接確認</li>
+            <li><span class="check-icon">✓</span>GetServiceQuota API でプログラムから取得可能</li>
+            <li><span class="check-icon">✓</span>上限到達前にクォータ引き上げをプロアクティブに計画</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value">10</div>
+          <div class="stat-label">新規組織のデフォルトアカウント数上限</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">50,000</div>
+          <div class="stat-label">引き上げ可能な最大アカウント数</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">2 通り</div>
+          <div class="stat-label">確認方法 (コンソール / API)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Before["🕐 アップデート前"]
+        direction LR
+        Admin1(["👤 管理者"]) -->|問い合わせ| Support["🎫 AWS Support /<br/>アカウントチーム"]
+        Support -->|回答を待つ| Admin1
+    end
+
+    subgraph After["✨ アップデート後"]
+        Admin2(["👤 管理者<br/>管理アカウント"])
+        subgraph SQ["📊 AWS Service Quotas"]
+            Console["🖥️ Service Quotas<br/>コンソール"]
+            API["🔌 GetServiceQuota<br/>API"]
+        end
+        Quota["📈 最大アカウント数クォータ<br/>適用値と利用状況"]
+        Admin2 --> Console
+        Admin2 --> API
+        Console --> Quota
+        API --> Quota
+        Quota -.->|上限到達前に| Increase["📝 クォータ引き上げ<br/>リクエスト"]
+    end
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef old fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Admin1,Admin2 user
+    class Support old
+    class Console,API compute
+    class Quota internal
+    class Increase input
+    class Before,After,SQ layer
+        </pre>
+      </div>
+      <p style="font-size: 14px;">
+        アップデート前は AWS Support への問い合わせが必要でしたが、アップデート後は管理アカウントから Service Quotas コンソールまたは API で直接クォータと利用状況を確認し、上限到達前に引き上げをリクエストできます。
+      </p>
+    </div>
+
+    <!-- Key features -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <h4>👁️ 最大アカウント数クォータの可視化</h4>
+        <ul class="plain">
+          <li><span class="arrow">→</span>組織内の最大アカウント数クォータの適用値を Service Quotas で直接確認可能</li>
+          <li><span class="arrow">→</span>AWS Support や AWS アカウントチームへの問い合わせが不要に</li>
+          <li><span class="arrow">→</span>管理アカウントにログインして確認する</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h4>📈 クォータ利用状況のモニタリング</h4>
+        <ul class="plain">
+          <li><span class="arrow">→</span>現在のアカウント数がクォータに対してどの程度かを利用状況 (Utilization) として確認可能</li>
+          <li><span class="arrow">→</span>上限に近づいていることを事前に把握し、アカウント増加の計画に活用できる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h4>🖥️ コンソールと API の両方に対応</h4>
+        <ul class="plain">
+          <li><span class="arrow">→</span>Service Quotas コンソールでの GUI 確認に対応</li>
+          <li><span class="arrow">→</span>GetServiceQuota API によるプログラムからの取得に対応し、自動化やモニタリングへの組み込みが可能</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Technical specs -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>確認方法</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>確認元アカウント</td><td>組織の管理アカウント</td></tr>
+        <tr><td>コンソール</td><td>Service Quotas コンソールで AWS Organizations のクォータを表示</td></tr>
+        <tr><td>API</td><td>Service Quotas の GetServiceQuota API</td></tr>
+        <tr><td>確認できる情報</td><td>最大アカウント数クォータの適用値と利用状況</td></tr>
+      </table>
+
+      <h3>最大アカウント数クォータの基本情報</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>デフォルト値</td><td>10 (新規組織の場合。組織によってはこれより低い場合あり)</td></tr>
+        <tr><td>調整可否</td><td>調整可能。Service Quotas コンソールから引き上げをリクエスト可能</td></tr>
+        <tr><td>引き上げ上限</td><td>お客様の利用状況に基づき最大 50,000 アカウントまで</td></tr>
+        <tr><td>リクエスト元</td><td>組織の管理アカウントのみが引き上げリクエストを送信可能</td></tr>
+        <tr><td>カウント対象</td><td>送信済みの招待もクォータにカウントされる (辞退・キャンセル・期限切れで返却)。閉鎖済みアカウントも完全閉鎖まではカウント対象</td></tr>
+      </table>
+    </div>
+
+    <!-- Setup -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <ul class="plain">
+        <li><span class="check-icon">✓</span>AWS Organizations の組織が作成済みであること</li>
+        <li><span class="check-icon">✓</span>組織の管理アカウントにログインできること</li>
+        <li><span class="check-icon">✓</span>Service Quotas へのアクセス権限 (servicequotas:GetServiceQuota など) を持つ IAM プリンシパルを使用すること</li>
+      </ul>
+
+      <h3>手順</h3>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h4>コンソールでクォータを確認する</h4>
+          <ol>
+            <li>管理アカウントでサインインし、Service Quotas コンソールを開く</li>
+            <li>ナビゲーションペインで [AWS services] を選択する</li>
+            <li>サービス一覧から AWS Organizations を選択する</li>
+            <li>最大アカウント数のクォータを選択し、適用値と利用状況を確認する</li>
+          </ol>
+          <p>コンソールでは、クォータ名、適用されているクォータ値、AWS デフォルト値、利用状況、調整可否が表示されます。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h4>API でクォータを確認する</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">最大アカウント数クォータの取得</span>
+            </div>
+            <pre><code class="language-bash"># AWS CLI で AWS Organizations の最大アカウント数クォータを取得
+aws service-quotas get-service-quota \
+    --service-code organizations \
+    --quota-code &lt;クォータコード&gt;</code></pre>
+          </div>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">クォータコードの確認</span>
+            </div>
+            <pre><code class="language-bash"># AWS Organizations のクォータ一覧からクォータコードを確認
+aws service-quotas list-service-quotas \
+    --service-code organizations</code></pre>
+          </div>
+          <p>list-service-quotas コマンドで対象サービスのクォータ一覧を取得し、目的のクォータのコードと現在値を確認します。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h4>必要に応じてクォータ引き上げをリクエストする</h4>
+          <p>利用状況が上限に近づいている場合、Service Quotas コンソールからクォータ引き上げをリクエストします。最大アカウント数クォータの引き上げリクエストは、<span class="highlight">組織の管理アカウントからのみ</span>送信できます。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+
+      <h3>💼 ビジネス面</h3>
+      <ul class="plain">
+        <li><span class="check-icon">✓</span><span><strong>プロアクティブな成長計画</strong>: 利用状況を常時把握でき、組織拡大やプロジェクト増加に伴うアカウント払い出し計画を事前に立てられる</span></li>
+        <li><span class="check-icon">✓</span><span><strong>運用工数の削減</strong>: AWS Support への問い合わせと回答待ちが不要になり、確認にかかる時間を削減できる</span></li>
+        <li><span class="check-icon">✓</span><span><strong>障害リスクの低減</strong>: 上限到達によるアカウント作成失敗を未然に防ぎ、新規プロジェクトの立ち上げ遅延を回避できる</span></li>
+      </ul>
+
+      <h3>⚙️ 技術面</h3>
+      <ul class="plain">
+        <li><span class="check-icon">✓</span><span><strong>セルフサービス化</strong>: コンソールと API の両方でクォータ情報を取得でき、確認作業が自己完結する</span></li>
+        <li><span class="check-icon">✓</span><span><strong>自動化への組み込み</strong>: GetServiceQuota API により、アカウント払い出しの自動化パイプラインやモニタリングツールにクォータチェックを組み込める</span></li>
+        <li><span class="check-icon">✓</span><span><strong>他のクォータ管理との統合</strong>: Service Quotas という単一のインターフェースで、他の AWS サービスのクォータと同様に一元管理できる</span></li>
+      </ul>
+    </div>
+
+    <!-- Limitations -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>制限事項</h3>
+      <ul class="plain">
+        <li><span class="cross-icon">✗</span>クォータの確認は組織の管理アカウントから行う必要がある</li>
+        <li><span class="cross-icon">✗</span>現時点で利用可能なリージョンは米国東部 (バージニア北部) のみ</li>
+        <li><span class="cross-icon">✗</span>最大アカウント数クォータの引き上げリクエストは管理アカウントのみが送信できる</li>
+      </ul>
+
+      <h3>考慮すべき点</h3>
+      <div class="warn-box">
+        送信済みの招待や完全閉鎖前のアカウントもクォータにカウントされるため、実際のアクティブアカウント数と利用状況の数値が一致しない場合があります。
+      </div>
+      <div class="warn-box">
+        クォータ引き上げは自動承認とは限らず、利用状況に基づいて審査される場合があります。
+      </div>
+    </div>
+
+    <!-- Use cases -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h4>1️⃣ マルチアカウント環境の成長計画</h4>
+        <p><strong>シナリオ</strong>: プロジェクトごとにアカウントを払い出す運用をしている企業が、来期のプロジェクト増加に備えてアカウント数の余裕を確認したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">現在のクォータと利用状況を確認</span>
+          </div>
+          <pre><code class="language-bash">aws service-quotas list-service-quotas \
+    --service-code organizations \
+    --query "Quotas[?contains(QuotaName, 'account')]"</code></pre>
+        </div>
+        <p class="effect">✅ <strong>効果</strong>: 上限と利用状況を即座に把握し、不足が見込まれる場合は事前に引き上げをリクエストできるため、プロジェクト立ち上げの遅延を防止できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h4>2️⃣ アカウント払い出し自動化パイプラインでの事前チェック</h4>
+        <p><strong>シナリオ</strong>: Account Factory などでアカウント作成を自動化しており、作成前にクォータ超過にならないかを検証したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">パイプライン内のクォータチェック</span>
+          </div>
+          <pre><code class="language-bash">aws service-quotas get-service-quota \
+    --service-code organizations \
+    --quota-code &lt;クォータコード&gt; \
+    --query "Quota.Value"</code></pre>
+        </div>
+        <p class="effect">✅ <strong>効果</strong>: アカウント作成の失敗を事前に検知し、パイプラインの途中失敗による手戻りを回避できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h4>3️⃣ 定期的なガバナンスレポートへの組み込み</h4>
+        <p><strong>シナリオ</strong>: クラウド管理チームが、月次のガバナンスレポートに組織のアカウント数上限と利用率を含めたい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">定期実行スクリプトでの取得</span>
+          </div>
+          <pre><code class="language-bash">aws service-quotas get-service-quota \
+    --service-code organizations \
+    --quota-code &lt;クォータコード&gt; \
+    --output json</code></pre>
+        </div>
+        <p class="effect">✅ <strong>効果</strong>: 経営層や監査向けのレポートにアカウント利用状況を自動で反映し、ガバナンス状況の透明性を高められる。</p>
+      </div>
+    </div>
+
+    <!-- Pricing & Regions -->
+    <div class="section">
+      <h2>💰 料金・利用可能リージョン</h2>
+      <div class="card">
+        <div class="icon-text">
+          <span class="arrow">→</span>
+          <span><strong>料金</strong>: Service Quotas によるクォータの表示および利用状況の確認に<span class="highlight">追加料金なし</span>。AWS Organizations 自体も無料で利用可能</span>
+        </div>
+        <div class="icon-text">
+          <span class="arrow">→</span>
+          <span><strong>利用可能リージョン</strong>: 現在、<span class="highlight">米国東部 (バージニア北部)</span> リージョンで利用可能</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Related services -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="feature-card">
+        <h4>📊 AWS Service Quotas</h4>
+        <p>AWS サービスのクォータを一元的に表示・管理・引き上げリクエストできるサービス。今回のアップデートで AWS Organizations の最大アカウント数クォータが確認可能になった。</p>
+      </div>
+      <div class="feature-card">
+        <h4>🏢 AWS Organizations</h4>
+        <p>複数の AWS アカウントを一元管理するサービス。SCP によるガバナンスや一括請求などを提供。</p>
+      </div>
+      <div class="feature-card">
+        <h4>🗼 AWS Control Tower</h4>
+        <p>マルチアカウント環境のセットアップとガバナンスを自動化するサービス。Account Factory によるアカウント払い出しでアカウント数クォータの管理が重要になる。</p>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        AWS Organizations の最大アカウント数クォータが Service Quotas で直接確認できるようになり、これまで必要だった <span class="highlight">AWS Support への問い合わせが不要</span>になりました。
+      </p>
+      <div class="note-box">
+        マルチアカウント環境を運用している場合は、管理アカウントから現在のクォータと利用状況を一度確認し、上限に近い場合は早めに引き上げをリクエストすることを推奨します。GetServiceQuota API を利用すれば、アカウント払い出しの自動化やガバナンスレポートへの組み込みも容易です。
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典・参考リンク</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/08/aws-organizations/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/servicequotas/latest/userguide/gs-request-quota.html" target="_blank" rel="noopener noreferrer" class="aws-link">Viewing service quotas - Service Quotas ユーザーガイド</a></li>
+        <li><a href="https://docs.aws.amazon.com/organizations/latest/userguide/orgs_reference_limits.html" target="_blank" rel="noopener noreferrer" class="aws-link">Quotas for AWS Organizations - AWS Organizations ユーザーガイド</a></li>
+        <li><a href="https://docs.aws.amazon.com/servicequotas/2019-06-24/apireference/API_GetServiceQuota.html" target="_blank" rel="noopener noreferrer" class="aws-link">GetServiceQuota API リファレンス</a></li>
+      </ul>
+      <p>ベース: reports/2026/2026-08-03-aws-organizations.md | 生成日: 2026-08-04</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
