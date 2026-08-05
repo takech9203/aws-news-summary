@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS HealthOmics - WDL ワークフローのタスクレベルタイムアウト対応</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+    <style>
+        :root {
+            --aws-orange: #FF9900;
+            --aws-dark-squid: #232F3E;
+            --aws-light-squid: #37475A;
+            --aws-blue: #146EB4;
+            --aws-light-blue: #2D72B8;
+            --aws-green: #1D8102;
+            --aws-light-gray: #EAEDED;
+            --aws-white: #FFFFFF;
+            --bg-primary: #0F1419;
+            --bg-secondary: #1A1F2E;
+            --bg-accent: #232F3E;
+            --text-primary: #FFFFFF;
+            --text-secondary: #AAB7B8;
+            --border-color: rgba(255, 153, 0, 0.3);
+            --tag-bg: rgba(255, 153, 0, 0.2);
+            --tag-border: rgba(255, 153, 0, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'ヒラギノ角ゴ ProN W3', Meiryo, 'メイリオ', sans-serif;
+            background: linear-gradient(135deg, #0F1419 0%, #1A1F2E 50%, #232F3E 100%);
+            color: var(--text-primary);
+            line-height: 1.8;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: var(--bg-secondary);
+            border-radius: 20px;
+            padding: 60px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border: 2px solid var(--border-color);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-bottom: 30px;
+            border-bottom: 3px solid var(--aws-orange);
+        }
+
+        .service-tag {
+            display: inline-block;
+            background: var(--tag-bg);
+            color: var(--aws-orange);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            border: 1px solid var(--tag-border);
+        }
+
+        h1 {
+            font-size: 42px;
+            color: var(--text-primary);
+            margin: 20px 0;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+
+        .release-date {
+            color: var(--text-secondary);
+            font-size: 16px;
+            margin-top: 15px;
+        }
+
+        .overview {
+            background: var(--bg-accent);
+            padding: 30px;
+            border-radius: 12px;
+            margin: 30px 0;
+            border-left: 5px solid var(--aws-orange);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .overview h2 {
+            color: var(--aws-orange);
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+
+        .overview p {
+            color: var(--text-primary);
+            font-size: 16px;
+            line-height: 1.9;
+            margin-bottom: 15px;
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .comparison-card {
+            background: var(--bg-accent);
+            padding: 25px;
+            border-radius: 12px;
+            border: 2px solid var(--border-color);
+        }
+
+        .comparison-card.before {
+            border-left: 5px solid #EC7211;
+        }
+
+        .comparison-card.after {
+            border-left: 5px solid var(--aws-green);
+        }
+
+        .comparison-card h3 {
+            font-size: 22px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .comparison-card.before h3 {
+            color: #EC7211;
+        }
+
+        .comparison-card.after h3 {
+            color: var(--aws-green);
+        }
+
+        .comparison-card ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .comparison-card li {
+            padding: 8px 0 8px 25px;
+            position: relative;
+            color: var(--text-primary);
+            font-size: 15px;
+        }
+
+        .comparison-card.before li:before {
+            content: "✗";
+            position: absolute;
+            left: 0;
+            color: #EC7211;
+            font-weight: bold;
+        }
+
+        .comparison-card.after li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: var(--aws-green);
+            font-weight: bold;
+        }
+
+        .section {
+            margin: 40px 0;
+        }
+
+        .section-title {
+            font-size: 32px;
+            color: var(--aws-orange);
+            margin-bottom: 25px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .mermaid-container {
+            background: var(--aws-white);
+            border-radius: 12px;
+            padding: 30px;
+            margin: 25px 0;
+            border: 2px solid var(--border-color);
+            overflow-x: auto;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 25px 0;
+        }
+
+        .feature-card {
+            background: var(--bg-accent);
+            padding: 25px;
+            border-radius: 12px;
+            border: 2px solid var(--border-color);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--aws-orange);
+        }
+
+        .feature-card h3 {
+            color: var(--aws-orange);
+            font-size: 20px;
+            margin-bottom: 12px;
+        }
+
+        .feature-card p {
+            color: var(--text-primary);
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        .code-block {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 20px 0;
+            border: 1px solid var(--border-color);
+        }
+
+        .code-header {
+            background: #16213e;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .code-lang {
+            color: var(--aws-orange);
+            font-weight: bold;
+        }
+
+        .code-title {
+            color: var(--text-secondary);
+        }
+
+        .code-block pre {
+            margin: 0;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'Courier New', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            padding: 20px !important;
+            display: block;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: var(--bg-accent);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: var(--aws-dark-squid);
+            color: var(--aws-orange);
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        td {
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .steps {
+            margin: 25px 0;
+        }
+
+        .step {
+            background: var(--bg-accent);
+            padding: 25px;
+            margin: 15px 0;
+            border-radius: 12px;
+            border-left: 5px solid var(--aws-orange);
+        }
+
+        .step h4 {
+            color: var(--aws-orange);
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+
+        .step p {
+            color: var(--text-primary);
+            margin-bottom: 15px;
+            line-height: 1.8;
+        }
+
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin: 25px 0;
+        }
+
+        .benefit-section {
+            background: var(--bg-accent);
+            padding: 25px;
+            border-radius: 12px;
+            border: 2px solid var(--border-color);
+        }
+
+        .benefit-section h3 {
+            color: var(--aws-orange);
+            font-size: 22px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .benefit-section ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .benefit-section li {
+            padding: 10px 0 10px 30px;
+            position: relative;
+            color: var(--text-primary);
+            font-size: 15px;
+        }
+
+        .benefit-section li:before {
+            content: "▶";
+            position: absolute;
+            left: 0;
+            color: var(--aws-orange);
+            font-size: 12px;
+        }
+
+        .constraints {
+            background: rgba(236, 114, 17, 0.1);
+            border-left: 5px solid #EC7211;
+            padding: 25px;
+            border-radius: 12px;
+            margin: 25px 0;
+        }
+
+        .constraints h3 {
+            color: #EC7211;
+            font-size: 22px;
+            margin-bottom: 15px;
+        }
+
+        .constraints ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .constraints li {
+            padding: 8px 0 8px 25px;
+            position: relative;
+            color: var(--text-primary);
+            font-size: 15px;
+        }
+
+        .constraints li:before {
+            content: "⚠";
+            position: absolute;
+            left: 0;
+            color: #EC7211;
+        }
+
+        .use-case {
+            background: var(--bg-accent);
+            padding: 30px;
+            margin: 20px 0;
+            border-radius: 12px;
+            border: 2px solid var(--border-color);
+        }
+
+        .use-case h3 {
+            color: var(--aws-orange);
+            font-size: 22px;
+            margin-bottom: 15px;
+        }
+
+        .use-case h4 {
+            color: var(--aws-light-blue);
+            font-size: 18px;
+            margin: 15px 0 10px 0;
+        }
+
+        .use-case p {
+            color: var(--text-primary);
+            margin-bottom: 15px;
+            line-height: 1.8;
+        }
+
+        .region-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .region-item {
+            background: var(--bg-accent);
+            padding: 15px 20px;
+            border-radius: 8px;
+            border-left: 4px solid var(--aws-orange);
+            color: var(--text-primary);
+            font-size: 15px;
+        }
+
+        .related-services {
+            background: var(--bg-accent);
+            padding: 25px;
+            border-radius: 12px;
+            margin: 25px 0;
+            border: 2px solid var(--border-color);
+        }
+
+        .related-services h3 {
+            color: var(--aws-orange);
+            font-size: 22px;
+            margin-bottom: 15px;
+        }
+
+        .related-services ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .related-services li {
+            padding: 10px 0;
+            color: var(--text-primary);
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        .related-services strong {
+            color: var(--aws-orange);
+        }
+
+        .links {
+            background: var(--bg-accent);
+            padding: 25px;
+            border-radius: 12px;
+            margin: 25px 0;
+            border: 2px solid var(--border-color);
+        }
+
+        .links h3 {
+            color: var(--aws-orange);
+            font-size: 22px;
+            margin-bottom: 15px;
+        }
+
+        .links ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .links li {
+            padding: 8px 0;
+        }
+
+        .links a {
+            color: var(--aws-light-blue);
+            text-decoration: none;
+            font-size: 15px;
+            transition: color 0.3s ease;
+        }
+
+        .links a:hover {
+            color: var(--aws-orange);
+            text-decoration: underline;
+        }
+
+        .summary {
+            background: linear-gradient(135deg, var(--bg-accent) 0%, var(--aws-dark-squid) 100%);
+            padding: 35px;
+            border-radius: 12px;
+            margin: 30px 0;
+            border: 2px solid var(--aws-orange);
+            box-shadow: 0 8px 20px rgba(255, 153, 0, 0.2);
+        }
+
+        .summary h2 {
+            color: var(--aws-orange);
+            font-size: 28px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .summary p {
+            color: var(--text-primary);
+            font-size: 16px;
+            line-height: 1.9;
+            text-align: center;
+        }
+
+        footer {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 2px solid var(--border-color);
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        footer a {
+            color: var(--aws-light-blue);
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        footer a:hover {
+            color: var(--aws-orange);
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 32px;
+            }
+
+            .comparison, .benefits-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="service-tag">🧬 AWS HealthOmics</div>
+            <h1>WDL ワークフローの<br/>タスクレベルタイムアウト対応</h1>
+            <p class="release-date">📅 リリース日: 2026 年 8 月 3 日</p>
+        </header>
+
+        <section class="overview">
+            <h2>🎯 概要</h2>
+            <p>AWS HealthOmics は、HIPAA 適格のマネージドバイオインフォマティクスワークフローサービスで、WDL (Workflow Description Language) ワークフローのタスクレベルタイムアウト機能をサポートしました。これにより、個々のタスクの最大実行時間を細かく制御できるようになり、コスト管理と自動エラー復旧が可能になります。</p>
+            <p>バイオインフォマティクスワークフローでは、ゲノム解析やデータ処理タスクが予期せず長時間実行されることがあり、コスト増大や次の処理への遅延を引き起こす可能性がありました。新しい omicsTimeout ランタイム属性により、タスクごとに最大実行時間を指定でき、タイムアウト時には自動的にタスクを停止し、ワークフローの状態を失敗としてマークします。</p>
+        </section>
+
+        <div class="comparison">
+            <div class="comparison-card before">
+                <h3>❌ アップデート前の課題</h3>
+                <ul>
+                    <li>WDL ワークフローでタスクが予期せず長時間実行された場合、手動で停止する必要があった</li>
+                    <li>タスクレベルでの実行時間制御ができず、コストの予測と管理が困難だった</li>
+                    <li>タイムアウト処理を実装するには、ワークフロー外部の監視システムが必要だった</li>
+                    <li>異常に長時間実行されるタスクにより、後続タスクの実行が遅延し、全体のワークフロー効率が低下した</li>
+                </ul>
+            </div>
+            <div class="comparison-card after">
+                <h3>✅ アップデート後の改善</h3>
+                <ul>
+                    <li>WDL タスクの runtime セクションに omicsTimeout 属性を追加するだけで、タスクレベルのタイムアウトを設定可能</li>
+                    <li>タイムアウト時に自動的にタスクを停止し、タスクとワークフロー実行のステータスを失敗に設定</li>
+                    <li>90s (90 秒)、2h (2 時間)、1d (1 日) など、柔軟な時間指定が可能</li>
+                    <li>コスト管理と自動エラー復旧により、ワークフロー運用の効率が向上</li>
+                </ul>
+            </div>
+        </div>
+
+        <section class="section">
+            <h2 class="section-title">🏗️ アーキテクチャ図</h2>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+sequenceDiagram
+    participant User as 👤 ユーザー
+    participant HO as 🧬 HealthOmics
+    participant Task as ⚙️ WDL タスク
+    participant Monitor as 🕒 タイムアウト監視
+
+    User->>HO: WDL ワークフロー実行<br/>omicsTimeout 設定
+    HO->>Task: タスク開始
+    HO->>Monitor: タイムアウト監視開始
+
+    alt タイムアウト前に完了
+        Task-->>HO: タスク完了
+        HO-->>User: 成功ステータス
+    else タイムアウト発生
+        Monitor->>Task: タイムアウト検出
+        Monitor->>Task: タスク停止
+        Task-->>HO: 停止完了
+        HO->>HO: タスクステータス<br/>失敗に設定
+        HO->>HO: ワークフロー実行<br/>ステータス失敗に設定
+        HO-->>User: 失敗ステータス<br/>タイムアウト理由
+    end
+                </pre>
+            </div>
+            <p style="text-align: center; color: var(--text-secondary); font-size: 15px; margin-top: 15px;">WDL ワークフローでタスクに omicsTimeout を設定すると、HealthOmics が自動的にタイムアウトを監視し、指定時間を超えた場合にタスクを停止します。</p>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">🌟 主要機能</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>⏱️ omicsTimeout ランタイム属性</h3>
+                    <p>WDL タスクの runtime セクションに追加可能な新しい属性。タスクの最大実行時間を指定し、超過時に自動停止。HealthOmics 固有の拡張属性として実装されています。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔧 柔軟な時間指定フォーマット</h3>
+                    <p>秒 (s)、分 (m)、時間 (h)、日 (d) の単位をサポート。例: 90s (90 秒)、2h (2 時間)、1d (1 日)。タスクの特性に応じて適切な粒度で時間を設定可能です。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📊 自動ステータス管理</h3>
+                    <p>タイムアウト発生時、タスクステータスを自動的に失敗に設定。ワークフロー実行全体のステータスも失敗としてマーク。エラー理由として明確にタイムアウトを記録します。</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">⚙️ 技術仕様</h2>
+
+            <h3 style="color: var(--aws-orange); font-size: 22px; margin: 25px 0 15px 0;">omicsTimeout の設定例</h3>
+            <p style="color: var(--text-primary); margin-bottom: 15px;">WDL タスクの runtime セクションに omicsTimeout を追加します。</p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">WDL</span>
+                    <span class="code-title">タスク定義例</span>
+                </div>
+                <pre><code class="language-wdl">task MyGenomeAnalysisTask {
+  input {
+    File genome_file
+  }
+
+  command <<<
+    # ゲノム解析処理
+    analyze_genome ~{genome_file}
+  >>>
+
+  runtime {
+    docker: "my-analysis-image:latest"
+    cpu: 4
+    memory: "16 GB"
+    omicsTimeout: "2h"  # 2時間でタイムアウト
+  }
+
+  output {
+    File results = "results.vcf"
+  }
+}</code></pre>
+            </div>
+
+            <h3 style="color: var(--aws-orange); font-size: 22px; margin: 25px 0 15px 0;">タイムアウト時の動作</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>項目</th>
+                        <th>詳細</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>監視対象</td>
+                        <td>WDL ワークフロー内の個々のタスク実行</td>
+                    </tr>
+                    <tr>
+                        <td>タイムアウト検出</td>
+                        <td>指定時間経過後、HealthOmics が自動検出</td>
+                    </tr>
+                    <tr>
+                        <td>タスク停止</td>
+                        <td>実行中のタスクを強制停止</td>
+                    </tr>
+                    <tr>
+                        <td>ステータス</td>
+                        <td>タスクとワークフロー実行の両方を失敗に設定</td>
+                    </tr>
+                    <tr>
+                        <td>エラー情報</td>
+                        <td>タイムアウトが原因であることを明記</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">🛠️ 設定方法</h2>
+
+            <div style="background: var(--bg-accent); padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                <h3 style="color: var(--aws-orange); font-size: 20px; margin-bottom: 15px;">前提条件</h3>
+                <ul style="list-style: none; padding-left: 0;">
+                    <li style="padding: 8px 0 8px 25px; position: relative; color: var(--text-primary);">
+                        <span style="position: absolute; left: 0; color: var(--aws-orange);">1.</span>
+                        AWS HealthOmics のワークフローが既に作成されている
+                    </li>
+                    <li style="padding: 8px 0 8px 25px; position: relative; color: var(--text-primary);">
+                        <span style="position: absolute; left: 0; color: var(--aws-orange);">2.</span>
+                        WDL (Workflow Description Language) でワークフローが記述されている
+                    </li>
+                    <li style="padding: 8px 0 8px 25px; position: relative; color: var(--text-primary);">
+                        <span style="position: absolute; left: 0; color: var(--aws-orange);">3.</span>
+                        適切な IAM 権限 (HealthOmics ワークフロー実行権限) が付与されている
+                    </li>
+                </ul>
+            </div>
+
+            <div class="steps">
+                <div class="step">
+                    <h4>ステップ 1: WDL タスクに omicsTimeout を追加</h4>
+                    <p>タスクの runtime セクションに omicsTimeout 属性を追加します。値は秒 (s)、分 (m)、時間 (h)、日 (d) の単位で指定できます。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">WDL</span>
+                        </div>
+                        <pre><code class="language-wdl">runtime {
+  docker: "my-image:latest"
+  cpu: 2
+  memory: "8 GB"
+  omicsTimeout: "90s"  # 90秒でタイムアウト
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h4>ステップ 2: ワークフローを HealthOmics に登録</h4>
+                    <p>omicsTimeout 属性を含む WDL ワークフローを HealthOmics に登録します。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">Bash</span>
+                        </div>
+                        <pre><code class="language-bash">aws omics create-workflow \
+  --name my-workflow-with-timeout \
+  --definition-uri s3://my-bucket/workflow.wdl \
+  --engine WDL</code></pre>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h4>ステップ 3: ワークフローを実行</h4>
+                    <p>ワークフローを実行します。タスクが omicsTimeout で指定した時間を超えると、自動的に停止され、失敗ステータスが設定されます。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">Bash</span>
+                        </div>
+                        <pre><code class="language-bash">aws omics start-run \
+  --workflow-id 1234567 \
+  --role-arn arn:aws:iam::123456789012:role/OmicsWorkflowRole \
+  --parameters file://parameters.json</code></pre>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h4>ステップ 4: 実行ステータスを確認</h4>
+                    <p>ワークフロー実行のステータスを確認します。タイムアウトが発生した場合、タスクとワークフロー実行の両方が失敗ステータスとなり、エラー情報にタイムアウトが記録されます。</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">Bash</span>
+                        </div>
+                        <pre><code class="language-bash">aws omics get-run --id run-123456</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">💡 メリット</h2>
+            <div class="benefits-grid">
+                <div class="benefit-section">
+                    <h3>📈 ビジネス面</h3>
+                    <ul>
+                        <li><strong>コスト管理の向上</strong>: タスクごとに最大実行時間を制限することで、予期しないコスト増大を防止</li>
+                        <li><strong>運用効率の改善</strong>: タイムアウト処理が自動化され、手動介入の必要性が減少</li>
+                        <li><strong>予測可能な実行時間</strong>: ワークフロー全体の実行時間をより正確に見積もることが可能</li>
+                    </ul>
+                </div>
+                <div class="benefit-section">
+                    <h3>🔧 技術面</h3>
+                    <ul>
+                        <li><strong>自動エラー復旧</strong>: タイムアウトを検出してワークフローを停止し、リトライロジックと組み合わせた自動復旧が可能</li>
+                        <li><strong>リソース効率化</strong>: 長時間実行タスクを自動停止することで、コンピュートリソースを効率的に利用</li>
+                        <li><strong>デバッグの容易化</strong>: タスクが異常に長時間実行される問題を早期に検出し、原因調査が容易に</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">⚠️ デメリット・制約事項</h2>
+
+            <div class="constraints">
+                <h3>制限事項</h3>
+                <ul>
+                    <li>omicsTimeout は WDL ワークフローのみで利用可能 (Nextflow など他のワークフロー言語では未サポート)</li>
+                    <li>タイムアウト時にタスクは強制停止されるため、部分的な結果は保存されない</li>
+                    <li>タイムアウト時間の動的な調整はサポートされていない (ワークフロー定義時に固定値を指定)</li>
+                </ul>
+            </div>
+
+            <div class="constraints">
+                <h3>考慮すべき点</h3>
+                <ul>
+                    <li>タイムアウト時間は、タスクの通常実行時間を考慮して余裕を持って設定する必要がある</li>
+                    <li>タイムアウト発生時の処理 (リトライ、エラー通知など) は別途実装が必要</li>
+                    <li>大規模ゲノムデータ処理など、実行時間が大きく変動するタスクでは慎重に時間を設定</li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">🎯 ユースケース</h2>
+
+            <div class="use-case">
+                <h3>ユースケース 1: ゲノムバリアントコーリングのタイムアウト制御</h3>
+                <h4>シナリオ</h4>
+                <p>ゲノムバリアントコーリングタスクが通常 1 時間で完了するが、稀に 5 時間以上かかることがあり、コストが増大する。</p>
+
+                <h4>実装例</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">WDL</span>
+                    </div>
+                    <pre><code class="language-wdl">task VariantCalling {
+  input {
+    File bam_file
+  }
+
+  command <<<
+    gatk HaplotypeCaller -I ~{bam_file} -O variants.vcf
+  >>>
+
+  runtime {
+    docker: "broadinstitute/gatk:latest"
+    cpu: 8
+    memory: "32 GB"
+    omicsTimeout: "2h"  # 2時間でタイムアウト
+  }
+
+  output {
+    File vcf = "variants.vcf"
+  }
+}</code></pre>
+                </div>
+
+                <h4>効果</h4>
+                <p>2 時間を超えるタスクを自動停止し、異常な実行を早期に検出してコストを削減。</p>
+            </div>
+
+            <div class="use-case">
+                <h3>ユースケース 2: データ前処理パイプラインの SLA 遵守</h3>
+                <h4>シナリオ</h4>
+                <p>データ前処理パイプラインで、各ステップの最大実行時間を保証し、全体の SLA を遵守する必要がある。</p>
+
+                <h4>実装例</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">WDL</span>
+                    </div>
+                    <pre><code class="language-wdl">workflow DataPreprocessing {
+  call FastQC { runtime { omicsTimeout: "30m" } }
+  call Trimmomatic { runtime { omicsTimeout: "1h" } }
+  call Alignment { runtime { omicsTimeout: "2h" } }
+  call Sorting { runtime { omicsTimeout: "30m" } }
+}</code></pre>
+                </div>
+
+                <h4>効果</h4>
+                <p>各ステップにタイムアウトを設定し、パイプライン全体の実行時間を予測可能にし、SLA を遵守。</p>
+            </div>
+
+            <div class="use-case">
+                <h3>ユースケース 3: リトライロジックとの組み合わせ</h3>
+                <h4>シナリオ</h4>
+                <p>タスクが一時的なリソース不足でタイムアウトする可能性があるため、自動リトライを実装する。</p>
+
+                <h4>実装例</h4>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">Python</span>
+                    </div>
+                    <pre><code class="language-python">import boto3
+
+omics = boto3.client('omics')
+
+def run_workflow_with_retry(workflow_id, max_retries=3):
+    for attempt in range(max_retries):
+        response = omics.start_run(workflowId=workflow_id, ...)
+        run_id = response['id']
+
+        # 実行完了を待機
+        status = wait_for_completion(run_id)
+
+        if status == 'COMPLETED':
+            return run_id
+        elif status == 'FAILED':
+            # タイムアウトエラーの場合はリトライ
+            print(f"Attempt {attempt + 1} failed, retrying...")
+
+    raise Exception("Workflow failed after max retries")</code></pre>
+                </div>
+
+                <h4>効果</h4>
+                <p>タイムアウトを検出して自動的にワークフローをリトライし、一時的な問題からの自動復旧を実現。</p>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">💰 料金</h2>
+            <div style="background: var(--bg-accent); padding: 25px; border-radius: 12px; margin: 20px 0;">
+                <p style="color: var(--text-primary); margin-bottom: 15px; line-height: 1.8;">AWS HealthOmics の料金は、ワークフロー実行時に使用されたコンピュートリソース (vCPU、メモリ、ストレージ) に基づいて課金されます。omicsTimeout 機能自体に追加料金はかかりません。</p>
+                <p style="color: var(--text-primary); margin-bottom: 20px; line-height: 1.8;">タイムアウトによりタスクが早期に停止された場合、実際に使用された時間分のみが課金されるため、長時間実行タスクを停止することでコストを削減できます。</p>
+
+                <h3 style="color: var(--aws-orange); font-size: 20px; margin: 20px 0 15px 0;">料金例</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>シナリオ</th>
+                            <th>実行時間</th>
+                            <th>vCPU</th>
+                            <th>メモリ</th>
+                            <th>月額料金 (概算)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>タイムアウトなし (5 時間実行)</td>
+                            <td>5 時間</td>
+                            <td>8</td>
+                            <td>32 GB</td>
+                            <td>約 $2.50</td>
+                        </tr>
+                        <tr>
+                            <td>タイムアウトあり (2 時間で停止)</td>
+                            <td>2 時間</td>
+                            <td>8</td>
+                            <td>32 GB</td>
+                            <td>約 $1.00</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p style="color: var(--text-secondary); font-size: 14px; margin-top: 15px; text-align: center;">(料金は目安であり、リージョンや使用状況により異なります)</p>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">🌏 利用可能リージョン</h2>
+            <p style="color: var(--text-primary); margin-bottom: 20px;">AWS HealthOmics が利用可能なすべてのリージョンで omicsTimeout 機能を使用できます。</p>
+            <div class="region-grid">
+                <div class="region-item">🇺🇸 米国東部 (バージニア北部)</div>
+                <div class="region-item">🇺🇸 米国西部 (オレゴン)</div>
+                <div class="region-item">🇮🇪 欧州 (アイルランド)</div>
+                <div class="region-item">🇬🇧 欧州 (ロンドン)</div>
+                <div class="region-item">🇸🇬 アジアパシフィック (シンガポール)</div>
+                <div class="region-item">🇦🇺 アジアパシフィック (シドニー)</div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="related-services">
+                <h3>🔗 関連サービス・機能</h3>
+                <ul>
+                    <li><strong>AWS Batch</strong>: コンテナベースのバッチ処理サービス。HealthOmics のワークフローエンジンと連携</li>
+                    <li><strong>Amazon S3</strong>: ゲノムデータや解析結果の保存に使用</li>
+                    <li><strong>AWS Step Functions</strong>: ワークフローオーケストレーション。HealthOmics ワークフローと組み合わせて複雑なパイプラインを構築</li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="links">
+                <h3>📚 参考リンク</h3>
+                <ul>
+                    <li>📄 <a href="https://aws.amazon.com/about-aws/whats-new/2026/08/aws-healthomics-wdl-task-level-timeout/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+                    <li>📖 <a href="https://docs.aws.amazon.com/omics/" target="_blank" rel="noopener noreferrer">AWS HealthOmics ドキュメント</a></li>
+                    <li>🔧 <a href="https://github.com/openwdl/wdl" target="_blank" rel="noopener noreferrer">WDL 仕様</a></li>
+                    <li>💰 <a href="https://aws.amazon.com/omics/pricing/" target="_blank" rel="noopener noreferrer">AWS HealthOmics 料金ページ</a></li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="summary">
+            <h2>📝 まとめ</h2>
+            <p>AWS HealthOmics の WDL ワークフローにタスクレベルタイムアウト機能が追加され、omicsTimeout ランタイム属性を使用することで、個々のタスクの最大実行時間を細かく制御できるようになりました。これにより、予期しないコスト増大を防ぎ、自動エラー復旧を実現し、バイオインフォマティクスワークフローの運用効率が向上します。ゲノム解析やデータ処理パイプラインを運用している場合は、この機能を活用してコスト管理と SLA 遵守を強化することをお勧めします。</p>
+        </section>
+
+        <footer>
+            <p>📎 出典: <a href="https://takech9203.github.io/aws-news-summary/" target="_blank" rel="noopener noreferrer">AWS News Summary</a></p>
+            <p style="margin-top: 10px;">Generated with Claude Code - AWS News Infographic Generator</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#FF9900',
+                primaryTextColor: '#232F3E',
+                primaryBorderColor: '#FF9900',
+                lineColor: '#FF9900',
+                secondaryColor: '#F5F5F5',
+                tertiaryColor: '#FAFAFA',
+                background: '#FFFFFF',
+                mainBkg: '#FFF3E0',
+                nodeBorder: '#FF9900',
+                clusterBkg: '#FFF8E1',
+                clusterBorder: '#FF9900',
+                edgeLabelBackground: '#FFFFFF',
+                textColor: '#232F3E'
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

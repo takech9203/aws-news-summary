@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon DynamoDB - リアルタイムベクトル検索のサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.stat-card {
+  flex: 1;
+  min-width: 200px;
+  background: linear-gradient(135deg, rgba(255,153,0,0.25), rgba(140,79,255,0.2));
+  border: 1px solid rgba(255,153,0,0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.ba-card {
+  flex: 1;
+  min-width: 300px;
+  border-radius: 8px;
+  padding: 18px;
+}
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+.ba-card ul { margin: 0; padding-left: 4px; list-style: none; }
+.ba-card li {
+  margin: 8px 0;
+  padding-left: 24px;
+  position: relative;
+  font-size: 14px;
+}
+.ba-before li::before { content: "✗"; position: absolute; left: 0; color: #FF6B4A; font-weight: 700; }
+.ba-after li::before { content: "✓"; position: absolute; left: 0; color: #4CAF50; font-weight: 700; }
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+.feature-card ul {
+  margin: 6px 0 0 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+.feature-card li { margin: 4px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+.table-wrap { overflow-x: auto; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+}
+.step-number {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 4px;
+  padding-top: 4px;
+}
+.step-content p { margin: 8px 0; font-size: 14px; }
+
+/* チェックリスト */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+.check-icon { color: #4CAF50; font-weight: 700; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-weight: 700; flex-shrink: 0; }
+.warn-icon { flex-shrink: 0; }
+
+/* メリットグリッド */
+.merit-grid {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.merit-col {
+  flex: 1;
+  min-width: 300px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.merit-col-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+/* ユースケース */
+.usecase-card {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 16px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+.usecase-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--aws-squid-ink);
+  background: var(--aws-smile-orange);
+  border-radius: 4px;
+  padding: 1px 8px;
+  margin: 8px 0 4px 0;
+}
+.usecase-card p { margin: 6px 0; font-size: 14px; }
+.usecase-steps {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.usecase-steps ol { margin: 0; padding-left: 20px; }
+.usecase-steps li { margin: 4px 0; }
+
+/* リンクリスト */
+.link-list { list-style: none; padding: 0; margin: 0; }
+.link-list li {
+  margin: 8px 0;
+  padding-left: 22px;
+  position: relative;
+  font-size: 14px;
+}
+.link-list li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--aws-orange);
+  font-weight: 700;
+}
+
+/* 関連サービス */
+.related-card {
+  background: rgba(0, 161, 201, 0.08);
+  border-left: 4px solid var(--aws-teal);
+  border-radius: 0 8px 8px 0;
+  padding: 12px 16px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+.related-name { font-weight: 700; color: var(--aws-teal); }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { list-style: none; padding-left: 0; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 640px) {
+  h1 { font-size: 26px; }
+  h2 { font-size: 20px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">☁️ Amazon DynamoDB</span>
+    <h1>🔍 リアルタイムベクトル検索のサポート</h1>
+    <div class="subtitle">
+      <span class="date">📅 リリース日: 2026 年 8 月 5 日</span> ｜ 機能: ベクトルインデックスと SearchVectors API (GA)
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon DynamoDB が<span class="highlight">ネイティブなベクトル検索機能の一般提供 (GA)</span> を発表しました。ベクトル埋め込みをテーブル内の他の属性と一緒に保存し、リアルタイムでインデックス化と検索が可能になります。埋め込みの生成には Amazon Bedrock で利用できるモデル (Amazon Titan Text Embeddings、Cohere Embed など) を含む任意のモデルを使用でき、<span class="highlight">SearchVectors API</span> で近似最近傍 (ANN) 検索を実行します。サーバーレスな運用モデル (インフラ管理不要、従量課金) はそのまま維持されます。
+    </p>
+    <p>
+      AI エージェントのメモリに対するセマンティック検索、RAG (検索拡張生成)、商品類似検索、パーソナライズ広告、レコメンデーションなど、生成 AI 時代の主要ユースケースを DynamoDB 単体で実現できる大型アップデートです。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">1 桁 ms</div>
+        <div class="stat-label">検索レイテンシー</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">99%+</div>
+        <div class="stat-label">再現率 (リコール)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">数兆</div>
+        <div class="stat-label">対応可能なベクトル規模</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">4,096</div>
+        <div class="stat-label">最大次元数</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-card ba-before">
+        <div class="ba-title">😰 Before: 外部ベクトル DB との併用が必要</div>
+        <ul>
+          <li>OpenSearch Service や専用ベクトルデータベースを別途構築・運用</li>
+          <li>レプリケーションパイプライン (Streams + Lambda など) の構築と保守が必要</li>
+          <li>レプリケーション遅延で書き込み直後のデータが検索に反映されない</li>
+          <li>複数データストアの運用でコストと運用負荷が増大</li>
+        </ul>
+      </div>
+      <div class="ba-card ba-after">
+        <div class="ba-title">🎉 After: DynamoDB 単体で完結</div>
+        <ul>
+          <li>ベクトル埋め込みの保存と類似検索が DynamoDB 単体で完結</li>
+          <li>レプリケーションパイプラインの構築・保守が不要</li>
+          <li>1 桁ミリ秒レイテンシーと 99% 以上の再現率でリアルタイム検索</li>
+          <li>パーティションキーで数兆ベクトル規模まで水平スケール</li>
+          <li>サーバーレスかつ従量課金のまま、インフラ管理不要</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph App["🖥️ アプリケーション"]
+        direction LR
+        Writer["✍️ 書き込み処理"]
+        Searcher["🔍 検索処理"]
+        Writer ~~~ Searcher
+    end
+
+    subgraph Bedrock["🤖 埋め込み生成"]
+        EmbModel["🧠 埋め込みモデル<br/>Amazon Bedrock など"]
+    end
+
+    subgraph DDB["☁️ Amazon DynamoDB"]
+        Table[("📋 テーブル<br/>アイテム属性 + ベクトル属性")]
+        VIndex[("🧭 ベクトルインデックス<br/>ANN 検索 + パーティションキー")]
+        Table -.->|自動同期| VIndex
+    end
+
+    Writer -->|テキストや画像| EmbModel
+    EmbModel -->|ベクトル埋め込み| Writer
+    Writer -->|PutItem / UpdateItem| Table
+    Searcher -->|クエリテキスト| EmbModel
+    EmbModel -->|クエリベクトル| Searcher
+    Searcher -->|SearchVectors<br/>TopK + フィルタ| VIndex
+    VIndex -->|類似度スコア付き結果| Searcher
+
+    classDef app fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef bedrock fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef container fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Writer,Searcher app
+    class EmbModel bedrock
+    class Table,VIndex database
+    class App,Bedrock,DDB container
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      アプリケーションは埋め込みモデルで生成したベクトルを通常の <span class="highlight">PutItem / UpdateItem</span> でテーブルに書き込み、DynamoDB が自動的にベクトルインデックスへ同期します。検索時は <span class="highlight">SearchVectors API</span> にクエリベクトルを渡し、類似度スコア付きの結果を取得します。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">🧭 1. ベクトルインデックス</div>
+      <ul>
+        <li>GSI や LSI と並ぶ新しいインデックスタイプで、ベクトル埋め込みに対する類似検索を実現</li>
+        <li>既存の CreateTable / UpdateTable API の VectorIndexes / VectorIndexUpdates パラメータで管理</li>
+        <li>ベクトルは既存の List 型 (Number のリスト) で保存。新しいデータ型やスキーマ変更は不要</li>
+        <li>最大 4,096 次元、テーブルあたり最大 5 個のベクトルインデックスをサポート</li>
+        <li>インデックス内のベクトルは 32 ビット浮動小数点 (f32) 精度で保存</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🔍 2. SearchVectors API による ANN 検索</div>
+      <ul>
+        <li>クエリベクトル、TopK (最大 100 件)、オプションのフィルタ条件を指定して近似最近傍検索を実行</li>
+        <li>結果は類似度スコア順にランク付けされ、射影された属性とともに返却</li>
+        <li>距離関数は COSINE、DOT_PRODUCT、EUCLIDEAN の 3 種類から選択 (インデックス作成後は変更不可)</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">📈 3. ベクトルインデックスパーティションキーによるスケーリング</div>
+      <ul>
+        <li>SearchSchema で HASH (パーティションキー) を最大 1 つ指定可能</li>
+        <li>同じパーティションキー値のアイテムがまとめて格納され、検索対象を該当パーティションのみに限定</li>
+        <li>パーティションキー値を分散させることで検索スループットが線形にスケール</li>
+        <li>カテゴリや国など、低〜中カーディナリティの属性が推奨</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🎯 4. インラインフィルタ</div>
+      <ul>
+        <li>フィルタ属性をベクトルインデックスに射影し、ストレージレイヤーで検索中にフィルタリング</li>
+        <li>SearchConditionExpression で等価演算子 (=) をサポート (範囲条件や IN は現時点で未対応)</li>
+        <li>インデックスあたり最大 18 個のインラインフィルタを定義可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🔗 5. 既存機能との統合</div>
+      <ul>
+        <li>DynamoDB Streams、グローバルテーブル、PITR / バックアップ、TTL、S3 インポート / エクスポートと併用可能</li>
+        <li>グローバルテーブルではベクトルインデックス定義が各レプリカリージョンへ自動レプリケート</li>
+        <li>DAX は SearchVectors を未サポート (DynamoDB へ直接リクエストする)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📋 ベクトルインデックスの仕様</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対象テーブル</td><td>オンデマンドキャパシティモードのテーブルのみ</td></tr>
+        <tr><td>ベクトルの保存形式</td><td>List 型 (Number のリスト)、インデックス内は f32 精度</td></tr>
+        <tr><td>距離関数</td><td>COSINE / DOT_PRODUCT / EUCLIDEAN (作成後変更不可)</td></tr>
+        <tr><td>最大次元数</td><td>4,096 (変更不可)</td></tr>
+        <tr><td>テーブルあたりのベクトルインデックス数</td><td>5 (上限緩和可能)</td></tr>
+        <tr><td>SearchVectors の最大 TopK</td><td>100 (変更不可)</td></tr>
+        <tr><td>パーティションキー (HASH)</td><td>インデックスあたり最大 1 個</td></tr>
+        <tr><td>インラインフィルタ</td><td>インデックスあたり最大 18 個、等価条件のみ</td></tr>
+        <tr><td>検索レート</td><td>パーティションキーあたり 1 GBps (上限緩和可能)</td></tr>
+        <tr><td>書き込みレート</td><td>パーティションキーあたり 10 MBps (上限緩和可能)</td></tr>
+        <tr><td>インデックス作成可能なテーブルサイズ</td><td>600 GB まで (超える場合は AWS サポートに連絡)</td></tr>
+        <tr><td>射影</td><td>KEYS_ONLY / INCLUDE / ALL</td></tr>
+      </table>
+    </div>
+
+    <h3>📐 距離関数の選択指針</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>距離関数</th><th>スコアの解釈</th><th>適したユースケース</th></tr>
+        <tr>
+          <td><strong>COSINE</strong></td>
+          <td>小さいほど類似 (0〜2)</td>
+          <td>テキスト埋め込みによるセマンティック検索、RAG、FAQ マッチング。迷った場合の安全なデフォルト</td>
+        </tr>
+        <tr>
+          <td><strong>DOT_PRODUCT</strong></td>
+          <td>大きいほど類似 (負値あり)</td>
+          <td>人気度スコアでベクトル長を調整するレコメンデーション、モデルがドット積を推奨する場合</td>
+        </tr>
+        <tr>
+          <td><strong>EUCLIDEAN</strong></td>
+          <td>小さいほど類似</td>
+          <td>画像・音声埋め込み、重複検出、クラスタリング、異常検知</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>📅 API 変更履歴</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/08/04</td>
+          <td><a href="https://awsapichanges.com/archive/changes/7451e2-dynamodb.html" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon DynamoDB</a></td>
+          <td>1 new 23 updated api methods - SearchVectors API の新規追加、CreateTable / UpdateTable / DescribeTable などへのベクトルインデックス関連パラメータの追加</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>オンデマンドキャパシティモードの DynamoDB テーブル (ベクトルインデックスはオンデマンドのみ対応)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>埋め込み生成用のモデルへのアクセス (例: Amazon Bedrock の Amazon Titan Text Embeddings)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>dynamodb:UpdateTable および dynamodb:SearchVectors を許可する IAM 権限</span></div>
+
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">ベクトル埋め込みをアイテムに保存する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">PutItem でベクトルを保存</span>
+          </div>
+          <pre><code class="language-bash"># Amazon Bedrock で埋め込みを生成し、List 型属性としてアイテムに保存
+aws dynamodb put-item \
+  --table-name ProductCatalog \
+  --item '{
+    "ProductId": {"S": "prod-001"},
+    "Category": {"S": "footwear"},
+    "Description": {"S": "軽量ランニングシューズ"},
+    "descriptionEmbedding": {"L": [
+      {"N": "0.123"}, {"N": "-0.456"}, {"N": "0.789"}
+    ]}
+  }'</code></pre>
+        </div>
+        <p>埋め込みモデルで生成したベクトルを、既存の List 型 (Number のリスト) 属性としてアイテムに書き込みます。新しいデータ型は不要で、通常の PutItem / UpdateItem をそのまま使用します。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">ベクトルインデックスを作成する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">UpdateTable でベクトルインデックスを追加</span>
+          </div>
+          <pre><code class="language-bash"># UpdateTable でベクトルインデックスを追加
+aws dynamodb update-table \
+  --table-name ProductCatalog \
+  --vector-index-updates '[{
+    "Create": {
+      "IndexName": "ProductDescriptionIndex",
+      "VectorConfiguration": {
+        "AttributeName": "descriptionEmbedding",
+        "Dimensions": 1024,
+        "DistanceFunction": "COSINE"
+      },
+      "SearchSchema": [
+        {"AttributeName": "Category", "SearchKeyType": "HASH"}
+      ],
+      "Projection": {"ProjectionType": "ALL"}
+    }
+  }]'</code></pre>
+        </div>
+        <p>ベクトル属性名、次元数 (最大 4,096)、距離関数を指定してベクトルインデックスを作成します。SearchSchema でパーティションキーを定義すると、検索対象がパーティション単位に限定され、大規模データでもスケールします。IndexStatus が ACTIVE になりバックフィルが完了すると検索可能になります。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">SearchVectors で類似検索を実行する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">クエリベクトルで ANN 検索</span>
+          </div>
+          <pre><code class="language-bash"># クエリベクトルで近似最近傍検索を実行
+aws dynamodb search-vectors \
+  --table-name ProductCatalog \
+  --index-name ProductDescriptionIndex \
+  --search-vector '[{"N": "0.111"}, {"N": "-0.222"}, {"N": "0.333"}]' \
+  --top-k 5 \
+  --search-condition-expression "Category = :cat" \
+  --expression-attribute-values '{":cat": {"S": "footwear"}}'</code></pre>
+        </div>
+        <p>検索クエリのテキストを同じ埋め込みモデルでベクトル化し、SearchVectors API に渡します。TopK で取得件数 (最大 100) を指定し、パーティションキーやインラインフィルタで検索範囲を絞り込めます。結果は類似度スコア順に返却されます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-col">
+        <div class="merit-col-title">💼 ビジネス面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>アーキテクチャの簡素化によるコスト削減</strong>: 外部ベクトルデータベースとレプリケーションパイプラインが不要になり、インフラコストと運用コストを削減できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>生成 AI アプリケーションの迅速な構築</strong>: 既存テーブルにベクトルインデックスを追加するだけで、RAG やエージェントメモリなどの AI 機能を実装できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>従量課金でスモールスタート可能</strong>: pay-per-request モデルのまま利用でき、初期投資なしで始められる</span></div>
+      </div>
+      <div class="merit-col">
+        <div class="merit-col-title">⚙️ 技術面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>リアルタイム性</strong>: 書き込んだベクトルが即座に検索対象となり、レプリケーション遅延の問題が解消される</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>高性能と高精度の両立</strong>: 1 桁ミリ秒レイテンシーと 99% 以上の再現率を実現し、規模が拡大してもトレードオフが生じにくい</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>超大規模スケール</strong>: パーティションキーにより検索スループットが線形にスケールし、数兆ベクトル規模にも対応</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用データとの一体管理</strong>: 埋め込みと業務データを同一アイテムで管理でき、データの一貫性が保ちやすい</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>既存機能との親和性</strong>: Streams、グローバルテーブル、PITR、TTL など既存機能と組み合わせて利用できる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="merit-grid">
+      <div class="merit-col">
+        <div class="merit-col-title">🚫 制限事項</div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>オンデマンドキャパシティモードのテーブルのみ対応 (プロビジョンドモードは不可)</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>距離関数はインデックス作成後に変更できない</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>インラインフィルタは等価条件 (=) のみで、範囲条件 (&lt;、&gt;、BETWEEN) や IN は未対応</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>SearchVectors のレスポンスは 16 MB までで、ページネーションは未サポート</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>SearchVectors はきめ細かなアクセス制御 (FGAC)、PartiQL、DAX に未対応</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>ベクトルインデックスは Query / Scan では読み取れない</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>600 GB を超える既存テーブルへのインデックス作成には AWS サポートへの申請が必要</span></div>
+      </div>
+      <div class="merit-col">
+        <div class="merit-col-title">🤔 考慮すべき点</div>
+        <div class="warn-item"><span class="warn-icon">⚠️</span><span>ANN 検索のため、厳密な最近傍と結果がわずかに異なる場合がある。グローバルテーブルではリージョン間で結果の順序が異なる可能性もある</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠️</span><span>パーティションキーを定義しない場合は全インデックスを検索するため、データ増加に伴いレイテンシーとコストが増加する。大規模ワークロードではパーティションキーの設計が重要</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠️</span><span>パーティションキーを定義した場合、SearchVectors は単一のパーティションキー値にスコープされるため、クエリパターンに合ったキー選定が必要</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠️</span><span>埋め込みモデルが推奨する距離関数と一致させることが検索品質の鍵となる</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠️</span><span>射影されていない属性は検索結果に含められないため、射影設計を事前に検討する必要がある</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase-card">
+      <div class="usecase-title">🤖 ユースケース 1: AI エージェントのメモリ (エージェンティックグラウンディング)</div>
+      <p><strong>シナリオ</strong>: カスタマーサポート AI エージェントが過去の会話履歴をセマンティックに検索し、セッションをまたいでコンテキストを維持する。</p>
+      <span class="usecase-label">実装例</span>
+      <div class="usecase-steps">
+        <ol>
+          <li>会話ターンごとにテキストを Amazon Bedrock の埋め込みモデルでベクトル化</li>
+          <li>UserId をベクトルインデックスのパーティションキーとして会話アイテムを保存</li>
+          <li>新しい質問が来たら質問文をベクトル化し、SearchVectors で該当ユーザーの過去会話から意味的に関連する記憶を TopK=10 で取得</li>
+          <li>取得した記憶を LLM のプロンプトに含めて応答を生成</li>
+        </ol>
+      </div>
+      <p><strong>効果</strong>: エージェントがユーザーごとの長期記憶を低レイテンシーで参照でき、パーソナライズされた一貫性のある応答を実現できる。</p>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">🛍️ ユースケース 2: EC サイトの商品類似検索</div>
+      <p><strong>シナリオ</strong>: EC サイトで商品説明の意味的な類似性に基づく検索とレコメンデーションを提供する。</p>
+      <span class="usecase-label">実装例</span>
+      <div class="usecase-steps">
+        <ol>
+          <li>商品説明文の埋め込みを descriptionEmbedding 属性として商品アイテムに保存</li>
+          <li>Category をパーティションキー、Brand をインラインフィルタとするベクトルインデックスを作成 (距離関数: COSINE)</li>
+          <li>「夏用の軽量ランニングシューズ」などの検索クエリをベクトル化し、SearchVectors で Category = "footwear" のパーティション内を検索</li>
+          <li>類似度スコア上位 5 件を検索結果として表示</li>
+        </ol>
+      </div>
+      <p><strong>効果</strong>: キーワード一致では拾えない意味的に関連する商品を提示でき、検索体験とコンバージョン率の向上が期待できる。カテゴリ単位のパーティション分割により大規模カタログでも低レイテンシーを維持できる。</p>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">📚 ユースケース 3: RAG による社内ナレッジ検索</div>
+      <p><strong>シナリオ</strong>: 社内ドキュメントを DynamoDB に格納し、LLM と組み合わせた質問応答システムを構築する。</p>
+      <span class="usecase-label">実装例</span>
+      <div class="usecase-steps">
+        <ol>
+          <li>ドキュメントをチャンク分割し、各チャンクの埋め込みをドキュメントメタデータとともに DynamoDB に保存</li>
+          <li>Department をパーティションキーとするベクトルインデックスを作成</li>
+          <li>ユーザーの質問をベクトル化し、SearchVectors で関連チャンクを取得</li>
+          <li>取得したチャンクをコンテキストとして LLM に渡し、回答を生成</li>
+          <li>TTL を設定して古いドキュメントを自動削除 (インデックスからも自動除去)</li>
+        </ol>
+      </div>
+      <p><strong>効果</strong>: 別途ベクトルデータベースを構築せずに RAG パイプラインを実現でき、ドキュメント更新が即座に検索結果へ反映される。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      ベクトルインデックスは DynamoDB の既存の<span class="highlight">従量課金 (pay-per-request) モデル</span>に従います。オンデマンドキャパシティモードのテーブルで利用し、使用した分だけ課金されます。発表時点で個別の料金レートは公表されておらず、詳細は DynamoDB の料金ページを参照してください。
+    </p>
+    <div class="check-item"><span class="check-icon">✓</span><span>ベクトルインデックスにストレージ上限はなし</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>インフラのプロビジョニングや事前のキャパシティ予約は不要</span></div>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>
+      <span class="highlight">すべての AWS 商用リージョンおよび AWS GovCloud (US) リージョン</span>で利用可能です (🗼 東京・🏯 大阪リージョンを含む)。
+    </p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-card">
+      <span class="related-name">🤖 Amazon Bedrock</span>: Amazon Titan Text Embeddings や Cohere Embed などの埋め込みモデルでベクトルを生成し、DynamoDB に保存する組み合わせが典型的
+    </div>
+    <div class="related-card">
+      <span class="related-name">🪣 Amazon S3 Vectors</span>: S3 ベースの低コストなベクトルストレージ。大量ベクトルの低頻度アクセスは S3 Vectors、リアルタイム性が求められる運用データとの一体管理は DynamoDB ベクトル検索と使い分けられる
+    </div>
+    <div class="related-card">
+      <span class="related-name">🔎 Amazon OpenSearch Service</span>: 従来の DynamoDB + ベクトル検索の組み合わせ先。全文検索や複雑な集計が必要な場合は引き続き有力な選択肢
+    </div>
+    <div class="related-card">
+      <span class="related-name">🌐 DynamoDB グローバルテーブル</span>: ベクトルインデックスをマルチリージョンに自動レプリケートし、グローバルなアプリケーションで低レイテンシー検索を実現
+    </div>
+    <div class="related-card">
+      <span class="related-name">⚙️ DynamoDB Streams / TTL / PITR</span>: ベクトルインデックスと併用可能な既存機能。TTL による期限切れアイテムはインデックスからも自動削除される
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      DynamoDB にネイティブなベクトル検索が加わったことで、外部ベクトルデータベースやレプリケーションパイプラインなしに、<span class="highlight">運用データと埋め込みを一体管理しながらリアルタイム類似検索</span>を実現できるようになりました。RAG や AI エージェントメモリなど生成 AI アプリケーションを DynamoDB 上で構築している場合、アーキテクチャを大幅に簡素化できる可能性があります。
+    </p>
+    <p>
+      まずは既存のオンデマンドテーブルにベクトルインデックスを作成し、<span class="highlight">パーティションキー設計と距離関数の選定</span>を検証することをお勧めします。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li>→ <a href="https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-dynamodb-vector-search" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon DynamoDB vector search</a></li>
+      <li>→ <a href="https://aws.amazon.com/blogs/aws/amazon-dynamodb-now-supports-real-time-vector-search-at-any-scale" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: Amazon DynamoDB now supports real-time vector search at any scale</a></li>
+      <li>→ <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/VectorSearch.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Using vector indexes in DynamoDB</a></li>
+      <li>→ <a href="https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_SearchVectors.html" target="_blank" rel="noopener noreferrer" class="aws-link">API リファレンス: SearchVectors</a></li>
+      <li>→ <a href="https://awsapichanges.com/archive/changes/7451e2-dynamodb.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴: Amazon DynamoDB (2026/08/04)</a></li>
+      <li>→ <a href="https://aws.amazon.com/dynamodb/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-08-05) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
