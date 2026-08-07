@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon ECS - フラクショナル GPU スケジューリング (EC2 G6f) サポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 12px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+  h1 { font-size: 26px; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3 { color: #FF6B4A; margin-top: 0; }
+.after-box h3 { color: #4CAF50; margin-top: 0; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.arrow-icon { color: var(--aws-orange); font-size: 16px; flex-shrink: 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.2);
+  color: var(--aws-white);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+.table-wrap { overflow-x: auto; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase .effect {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.step-body { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+
+.note-box {
+  background: rgba(255, 153, 0, 0.1);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 14px 0;
+  font-size: 14px;
+}
+
+.warn-box {
+  background: rgba(209, 50, 18, 0.1);
+  border-left: 4px solid var(--aws-red);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+ul { padding-left: 22px; margin: 8px 0; }
+li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { list-style: none; padding-left: 0; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Amazon ECS</span>
+    <h1>🧩 フラクショナル GPU スケジューリングをサポート</h1>
+    <div class="subtitle">Amazon EC2 G6f インスタンスで GPU を 1/8 単位から割り当て可能に | リリース日: 2026 年 8 月 6 日</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Amazon ECS が <span class="highlight">EC2 G6f インスタンス</span>を使用したフラクショナル GPU (GPU の分割割り当て) スケジューリングをサポートしました。G6f は NVIDIA L4 Tensor Core GPU を<span class="highlight">ハードウェアレベルで分割</span>したインスタンスで、タスク定義に <span class="highlight">GPU=0.125 / 0.25 / 0.5</span> と小数値を指定するだけで、ECS が適切な G6f インスタンスへタスクを自動配置します。</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">1/8 GPU</div>
+        <div class="stat-label">最小割り当て単位 (GPU メモリ 3 GB)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">3 種類</div>
+        <div class="stat-label">指定可能な小数値 (0.125 / 0.25 / 0.5)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">機能自体は無料 (インスタンス料金のみ)</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>GPU 要求は整数値のみ。軽量ワークロードでも GPU 1 基全体を占有</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>小規模モデルの推論・実験では GPU 使用率が低く、リソースが無駄に</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>GPU 分割共有には Kubernetes の MIG / タイムスライシングなど複雑な構成が必要</span></div>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span>小数値の指定だけで 1/8〜1/2 GPU 単位のスケジューリングが可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>必要な GPU 容量のみ割り当ててインフラコストを削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>G6f とフル GPU インスタンスを同一キャパシティプロバイダーに混在可能。GPU 値で自動ルーティング</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>Managed Instances なら運用管理 (プロビジョニング〜障害時交換) を AWS に委任</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <p>タスク定義で宣言した GPU 値 (小数または整数) に基づいて、ECS スケジューラーがフラクショナル GPU インスタンス (G6f) またはフル GPU インスタンスへタスクを自動的にルーティングします。</p>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph TaskDefs["📋 ECS タスク定義"]
+        direction LR
+        T1["🤖 推論タスク<br/>GPU: 0.125"]
+        T2["🧪 実験タスク<br/>GPU: 0.25"]
+        T3["🎨 レンダリング<br/>GPU: 0.5"]
+        T4["🏋️ 学習タスク<br/>GPU: 1"]
+        T1 ~~~ T2 ~~~ T3 ~~~ T4
+    end
+
+    Scheduler{"⚙️ Amazon ECS<br/>スケジューラー"}
+
+    subgraph CP["☁️ キャパシティプロバイダー 混在可能"]
+        subgraph Frac["🧩 フラクショナル GPU"]
+            direction LR
+            G1["g6f.large / xlarge<br/>1/8 L4 GPU 3 GB"]
+            G2["g6f.2xlarge<br/>1/4 L4 GPU 6 GB"]
+            G3["g6f.4xlarge<br/>1/2 L4 GPU 12 GB"]
+            G1 ~~~ G2 ~~~ G3
+        end
+        subgraph Full["💪 フル GPU"]
+            G4["G5 / G6 など<br/>L4 GPU 1 基以上"]
+        end
+    end
+
+    T1 --> Scheduler
+    T2 --> Scheduler
+    T3 --> Scheduler
+    T4 --> Scheduler
+
+    Scheduler -->|GPU=0.125| G1
+    Scheduler -->|GPU=0.25| G2
+    Scheduler -->|GPU=0.5| G3
+    Scheduler -->|GPU=1 以上| G4
+
+    classDef taskdef fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef frac fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef full fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class T1,T2,T3,T4 taskdef
+    class Scheduler decision
+    class G1,G2,G3 frac
+    class G4 full
+    class TaskDefs,CP,Frac,Full layer
+      </pre>
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">🧩 フラクショナル GPU のスケジューリング</div>
+      <p style="margin:0;">タスク定義の <code>resourceRequirements</code> で GPU 値として 0.125 / 0.25 / 0.5 の小数値を指定可能。G6f は NVIDIA L4 GPU をハードウェアレベルでパーティション分割し、各インスタンスは<span class="highlight">専用の GPU メモリとコンピュート</span>を持つ固定 GPU スライス (1/8、1/4、1/2) を提供します。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔀 フル GPU インスタンスとの混在キャパシティプロバイダー</div>
+      <p style="margin:0;">G6f と G5 / G6 などのフル GPU インスタンスを同一のキャパシティプロバイダーに含めることが可能。整数値はフル GPU 要求、小数値はフラクショナル GPU 要求として扱われ、ECS が適切なインスタンスタイプへ自動ルーティング。<span class="highlight">GPU ファミリーごとにキャパシティプロバイダーを分ける必要がありません</span>。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🛠️ Amazon ECS Managed Instances との統合</div>
+      <p style="margin:0;">プロビジョニング、スケーリング、パッチ適用、ライフサイクル管理を AWS が実施。CloudWatch Container Insights による GPU メトリクスの取得や、GPU ハードウェア障害時にインスタンスを自動交換する<span class="highlight">GPU auto-repair</span> も利用できます。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🚀 幅広い起動タイプのサポート</div>
+      <p style="margin:0;">Amazon ECS Managed Instances と Amazon ECS on EC2 の両方で利用可能。AWS Management Console、CLI、SDK、CloudFormation などの IaC ツールから設定できます。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>フラクショナル GPU 値と対応インスタンスタイプ</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>GPU 値</th><th>GPU 割合</th><th>GPU メモリ</th><th>対応インスタンスタイプ</th></tr>
+        <tr><td><strong>0.125</strong></td><td>1/8 GPU</td><td>3 GB</td><td>g6f.large、g6f.xlarge</td></tr>
+        <tr><td><strong>0.25</strong></td><td>1/4 GPU</td><td>6 GB</td><td>g6f.2xlarge</td></tr>
+        <tr><td><strong>0.5</strong></td><td>1/2 GPU</td><td>12 GB</td><td>g6f.4xlarge、gr6f.4xlarge</td></tr>
+      </table>
+    </div>
+
+    <h3>スケジューリングの動作</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>小数値の指定</td><td>0.125 / 0.25 / 0.5 のみサポート。対応する GPU パーティションを持つ G6f インスタンスに配置</td></tr>
+        <tr><td>整数値の指定</td><td>従来どおりフル GPU 要求として扱われ、フル GPU を持つインスタンスにのみ配置</td></tr>
+        <tr><td>ALL の指定</td><td>コンテナインスタンス上のすべての GPU をコンテナに割り当て</td></tr>
+        <tr><td>タスク内の制約</td><td>フラクショナル GPU を要求できるのは 1 タスクにつき 1 コンテナのみ。小数値を指定した場合、同一タスク定義内の他のコンテナは GPU リソース要求を持てない</td></tr>
+        <tr><td>対応起動タイプ</td><td>ECS Managed Instances、ECS on EC2 (Fargate と ECS Anywhere は非対応)</td></tr>
+      </table>
+    </div>
+
+    <h3>タスク定義の設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">NVIDIA L4 GPU の 1/4 (6 GB) を割り当てる軽量推論タスク定義</span>
+      </div>
+      <pre><code class="language-json">{
+  "family": "fractional-gpu-inference",
+  "networkMode": "awsvpc",
+  "executionRoleArn": "arn:aws:iam::account-id:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "inference",
+      "image": "nvidia/cuda:12.0.0-base-ubuntu22.04",
+      "essential": true,
+      "command": ["nvidia-smi"],
+      "resourceRequirements": [
+        {
+          "type": "GPU",
+          "value": "0.25"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/fractional-gpu-inference",
+          "awslogs-region": "region",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ],
+  "requiresCompatibilities": [
+    "MANAGED_INSTANCES"
+  ],
+  "cpu": "2048",
+  "memory": "4096"
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>📝 設定方法</h2>
+    <div class="note-box">
+      <strong>前提条件</strong>: ECS クラスター作成済み / G6f インスタンスを含むキャパシティプロバイダー設定済み / G6f が利用可能なリージョン / タスク実行ロール (<code>ecsTaskExecutionRole</code>) が用意済み
+    </div>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">G6f インスタンスを含むキャパシティプロバイダーの設定</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">キャパシティプロバイダーをクラスターに関連付け</span></div>
+          <pre><code class="language-bash">aws ecs put-cluster-capacity-providers \
+  --cluster my-gpu-cluster \
+  --capacity-providers my-g6f-capacity-provider \
+  --default-capacity-provider-strategy capacityProvider=my-g6f-capacity-provider,weight=1</code></pre>
+        </div>
+        <p style="margin:8px 0 0 0; font-size:14px;">フラクショナル GPU インスタンス (G6f) とフル GPU インスタンス (G5、G6 など) を同一のキャパシティプロバイダーに含めることができます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">フラクショナル GPU を指定したタスク定義の登録</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">小数の GPU 値を含む JSON でタスク定義を登録</span></div>
+          <pre><code class="language-bash">aws ecs register-task-definition \
+  --cli-input-json file://fractional-gpu-inference.json</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">サービスまたはタスクの起動</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">GPU 値 0.25 に基づき g6f.2xlarge へ自動配置</span></div>
+          <pre><code class="language-bash">aws ecs create-service \
+  --cluster my-gpu-cluster \
+  --service-name fractional-inference-service \
+  --task-definition fractional-gpu-inference \
+  --desired-count 4</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <div class="step-title">GPU メトリクスの確認</div>
+        <p style="margin:0; font-size:14px;">Managed Instances 使用時は CloudWatch Container Insights で GPU 使用率などを確認可能。GPU ハードウェア障害が検出された場合はインスタンスが自動的に交換されます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>インフラコストの削減</strong>: 必要な分 (最小 1/8 GPU) だけを割り当てて GPU インフラのコストを最適化</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>GPU 利用効率の向上</strong>: 遊休 GPU リソースを削減し、投資対効果を向上</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>小規模 AI ワークロードの導入障壁の低下</strong>: 推論や実験を低コストで開始でき、AI 活用のスモールスタートが容易に</span></div>
+
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>シンプルな設定</strong>: GPU 値を小数にするだけ。MIG やタイムスライシングのような複雑な GPU 分割設定が不要</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ハードウェアレベルの分離</strong>: 専用の GPU メモリとコンピュートを持つパーティションにより、ワークロード間の干渉が起きにくい</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟なキャパシティ管理</strong>: フラクショナルとフル GPU を単一のキャパシティプロバイダーで管理、GPU 値に応じて自動ルーティング</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の軽減</strong>: Managed Instances でプロビジョニングから GPU 障害時の自動交換まで AWS に委任</span></div>
+  </div>
+
+  <!-- 制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="warn-box">サポートされる小数値は <strong>0.125 / 0.25 / 0.5 の 3 種類のみ</strong> (G6f インスタンスタイプの GPU パーティションに依存)</div>
+    <div class="warn-box">フラクショナル GPU を要求できるのは <strong>1 タスクにつき 1 コンテナのみ</strong>。同一タスク内の他のコンテナは GPU を要求不可</div>
+    <div class="warn-box"><strong>AWS Fargate と Amazon ECS Anywhere は非対応</strong></div>
+    <div class="warn-box">利用できるのは <strong>EC2 G6f / Gr6f インスタンスが提供されているリージョン</strong>に限られる</div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="arrow-icon">→</span><span>GPU パーティションは固定サイズ (1/8、1/4、1/2) のため、GPU メモリ要件 (3 GB / 6 GB / 12 GB) を事前に見積もる必要がある</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span>整数値の GPU 要求はフル GPU インスタンスにのみ配置。G6f への移行にはタスク定義の GPU 値を小数に変更する必要がある</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span>GPU メモリは最大 12 GB のため、大規模モデルの推論や学習には引き続きフル GPU インスタンスが必要</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. 🤖 小規模モデルの AI 推論サービス</div>
+      <p style="margin:0 0 8px 0;">数億〜数十億パラメータ規模の軽量モデル (画像分類、埋め込み生成、小規模 LLM など) を推論 API として提供。フル GPU では容量が過剰でコストが見合わないケース。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-json">"resourceRequirements": [
+  { "type": "GPU", "value": "0.25" }
+]</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 1/4 GPU (6 GB) で推論コンテナを実行し、必要容量に応じたコストに最適化。トラフィック増加時は ECS サービスのスケールアウトで対応。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. 🧪 モデル実験・開発環境の集約</div>
+      <p style="margin:0 0 8px 0;">データサイエンスチームの複数メンバーが軽量な実験用 GPU 環境を必要とするが、メンバーごとのフル GPU 割り当てはコストが高いケース。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-json">"resourceRequirements": [
+  { "type": "GPU", "value": "0.125" }
+]</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 最小 1/8 GPU (3 GB) の実験用タスクを多数実行でき、開発・検証環境の GPU コストを大幅に削減。ハードウェアパーティションによりユーザー間の干渉も防止。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. 🔀 フル GPU と混在した推論プラットフォーム</div>
+      <p style="margin:0 0 8px 0;">大規模モデルにはフル GPU、軽量モデルにはフラクショナル GPU を使い分けたいが、キャパシティプロバイダーを分けて管理するのは運用負荷が高いケース。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Plaintext</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-plaintext"># 同一キャパシティプロバイダーに G6f と G6 を混在
+# 軽量モデル用タスク定義: "value": "0.5"  → g6f.4xlarge に配置
+# 大規模モデル用タスク定義: "value": "1"   → G6 などフル GPU に配置</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 単一のキャパシティプロバイダーで異なる GPU 要件のワークロードを管理。ECS が GPU 値に基づいて自動ルーティングし、運用がシンプルに。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <p>フラクショナル GPU スケジューリング機能自体に<span class="highlight">追加料金はありません</span>。使用した EC2 G6f / Gr6f インスタンスの料金が発生します。G6f は NVIDIA L4 GPU のフラクションを提供するため、フル GPU 搭載の同世代インスタンスより低い時間単価で GPU ワークロードを実行できます。</p>
+    <div class="check-item"><span class="arrow-icon">→</span><span><strong>ECS on EC2</strong>: EC2 インスタンス料金のみ (ECS 自体は追加料金なし)</span></div>
+    <div class="check-item"><span class="arrow-icon">→</span><span><strong>ECS Managed Instances</strong>: EC2 インスタンス料金に加えて Managed Instances の管理料金が発生</span></div>
+    <div class="note-box">🌍 <strong>利用可能リージョン</strong>: Amazon EC2 G6f インスタンスが利用可能なすべての AWS リージョン</div>
+    <p style="font-size:14px;">最新の料金: <a class="aws-link" href="https://aws.amazon.com/ec2/instance-types/g6/" target="_blank" rel="noopener noreferrer">Amazon EC2 G6 インスタンス</a> / <a class="aws-link" href="https://aws.amazon.com/ecs/pricing/" target="_blank" rel="noopener noreferrer">Amazon ECS の料金</a></p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🖥️ Amazon EC2 G6f / Gr6f インスタンス</div>
+      <p style="margin:0; font-size:14px;">NVIDIA L4 GPU をハードウェアレベルで分割 (1/8、1/4、1/2) したインスタンスファミリー。本機能の基盤。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🛠️ Amazon ECS Managed Instances</div>
+      <p style="margin:0; font-size:14px;">プロビジョニング、スケーリング、パッチ適用などを AWS が管理するキャパシティオプション。GPU 障害時の自動交換にも対応。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 Amazon CloudWatch Container Insights</div>
+      <p style="margin:0; font-size:14px;">ECS タスク・インスタンスの GPU メトリクスを含む詳細なモニタリングを提供。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📄 AWS CloudFormation</div>
+      <p style="margin:0; font-size:14px;">キャパシティプロバイダーやタスク定義を IaC として管理可能。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>✅ まとめ</h2>
+    <p>Amazon ECS のフラクショナル GPU スケジューリングにより、タスク定義の GPU 値を小数 (0.125 / 0.25 / 0.5) にするだけで、G6f インスタンスの GPU パーティションを活用した<span class="highlight">低コストな GPU ワークロード運用</span>が可能になりました。小規模モデルの推論や実験など GPU 1 基をフルに使わないワークロードを ECS で運用している場合は、タスク定義の GPU 値の見直しと G6f インスタンスを含むキャパシティプロバイダーの導入を検討することを推奨します。</p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>・<a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-ecs-fractional-gpu/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): Amazon ECS fractional GPU</a></li>
+      <li>・<a class="aws-link" href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-gpu-specifying.html#ecs-gpu-specifying-fractional" target="_blank" rel="noopener noreferrer">ドキュメント: Specifying fractional GPUs</a></li>
+      <li>・<a class="aws-link" href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/managed-instances-gpu-auto-repair.html" target="_blank" rel="noopener noreferrer">ドキュメント: Managed Instances GPU auto-repair</a></li>
+      <li>・<a class="aws-link" href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Container-Insights-enhanced-observability-metrics-ECS.html" target="_blank" rel="noopener noreferrer">ドキュメント: CloudWatch Container Insights メトリクス</a></li>
+      <li>・<a class="aws-link" href="https://aws.amazon.com/ecs/managed-instances/" target="_blank" rel="noopener noreferrer">Amazon ECS Managed Instances</a></li>
+      <li>・<a class="aws-link" href="https://aws.amazon.com/ec2/instance-types/g6/" target="_blank" rel="noopener noreferrer">Amazon EC2 G6 インスタンス</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-08-06) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

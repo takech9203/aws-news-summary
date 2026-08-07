@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Glue Data Quality - ETL 異常検知の無料化と異常予測の改善</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 200px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.05));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After 比較 */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  flex: 1;
+  min-width: 300px;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-title { color: #FF8A70; font-weight: 700; margin-bottom: 10px; font-size: 17px; }
+.after-title { color: #6BCB4A; font-weight: 700; margin-bottom: 10px; font-size: 17px; }
+
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 8px 0; font-size: 14px; }
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #6BCB4A; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF8A70; font-size: 18px; flex-shrink: 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 8px 0; font-size: 14px; }
+
+.effect-label {
+  display: inline-block;
+  background: rgba(29, 129, 2, 0.25);
+  color: #6BCB4A;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  margin-right: 6px;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 6px; }
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+code.inline {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+ul.plain { margin: 8px 0; padding-left: 22px; }
+ul.plain li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+
+@media (max-width: 640px) {
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+  body { padding: 12px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="service-badge">☁️ AWS Glue Data Quality</div>
+    <h1>📊 ETL 異常検知の無料化と異常予測の改善</h1>
+    <div class="subtitle">
+      <span class="release-date">📅 リリース日: 2026 年 8 月 5 日</span> |
+      ETL ジョブの異常検知 (Anomaly Detection) が無料に + 新しい観測モード (Fixed モード) を追加
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>💡 概要</h2>
+    <p>
+      AWS Glue Data Quality の異常検知機能が強化され、<span class="highlight">誤検知 (false anomaly) を削減する新しい観測モード</span>が追加されるとともに、
+      <span class="highlight">AWS Glue ETL ジョブにおける異常検知の料金が無料化</span>されました。
+      すべての Glue パイプラインで、コストを気にすることなくデータ品質の異常を監視できます。
+    </p>
+    <p>
+      新しい <strong>Fixed モード</strong>は、線形トレンドではなく一定のベースラインを使用してトレンドの過剰な外挿を回避し、より正確なアラートとノイズの削減を実現します。
+      ノートブックベースの探索的ワークフローや、不規則な間隔でデータが到着するケースで特に効果を発揮します。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">ETL ジョブでの異常検知の追加料金<br>(従来は統計ごとに 1 DPU)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">2 モード</div>
+        <div class="stat-label">Linear (デフォルト) + Fixed (新規)<br>データ特性に応じて選択可能</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">全リージョン</div>
+        <div class="stat-label">すべての AWS 商用リージョンと<br>AWS GovCloud (US) で利用可能</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="before-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>ETL ジョブで異常検知を有効化すると統計ごとに <strong>1 DPU の追加料金</strong>が発生し、大規模パイプラインではコストが懸念事項だった</li>
+          <li>アルゴリズムが線形トレンドとシーズナリティを前提としていたため、フラットなデータや不規則なスケジュールでは<strong>トレンドの過剰外挿による誤検知</strong>が発生しやすかった</li>
+          <li>ノートブックなどで不定期にチェックを実行すると、実行間隔のばらつきにより不正確な予測レンジが算出され、<strong>ノイズとなるアラートが増加</strong>していた</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="after-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>ETL ジョブにおける異常検知が<strong>追加コストなし</strong>で利用可能になり、すべての Glue パイプラインで異常監視を有効化しやすくなった</li>
+          <li>新しい <strong>Fixed モード</strong>により、一定のベースラインで予測を行い、誤検知を削減できるようになった</li>
+          <li>不規則なデータ到着間隔を適切に処理でき、<strong>探索的データ分析やノートブック環境でも精度の高い異常検知</strong>が可能になった</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Sources["📥 データソース"]
+        direction LR
+        S3IN[("🪣 Amazon S3")]
+        RDS[("📋 データベース")]
+        S3IN ~~~ RDS
+    end
+
+    subgraph Glue["⚙️ AWS Glue"]
+        ETL["⚡ Glue ETL ジョブ<br/>EvaluateDataQuality"]
+        DQ["✅ Data Quality<br/>ルール + アナライザー"]
+        STATS["📊 データ統計の収集<br/>時系列で保存"]
+        subgraph AD["🤖 異常検知 ETL では無料"]
+            direction LR
+            LINEAR["📈 Linear モード<br/>トレンドと季節性を学習"]
+            FIXED["📏 Fixed モード NEW<br/>一定ベースラインで予測"]
+            LINEAR ~~~ FIXED
+        end
+    end
+
+    subgraph Output["📤 結果"]
+        OBS["🔔 異常オブザベーション<br/>上限 / 下限からの逸脱を検出"]
+        LAKE[("🪣 データレイク")]
+    end
+
+    Sources --> ETL
+    ETL --> DQ
+    DQ --> STATS
+    STATS --> AD
+    AD --> OBS
+    ETL --> LAKE
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef new fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+    classDef alert fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+
+    class Sources,Glue,AD,Output layer
+    class ETL compute
+    class DQ,STATS process
+    class LINEAR internal
+    class FIXED new
+    class OBS alert
+    class S3IN,RDS,LAKE storage
+      </pre>
+    </div>
+    <p class="diagram-note">
+      Glue ETL ジョブがデータ品質評価で収集した統計を時系列で保存し、機械学習ベースの異常検知が予測レンジからの逸脱を検出する流れを示しています。
+      今回のアップデートで、ETL ジョブでの異常検知が無料になり、Fixed モード (一定ベースライン) が選択可能になりました。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🚀 主要機能</h2>
+    <div class="card">
+      <div class="card-title">1️⃣ ETL ジョブにおける異常検知の無料化</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>AWS Glue ETL ジョブでの異常検知が追加コストなしで利用可能に</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>従来は統計ごとに 1 DPU の追加課金が発生していたが、ETL ジョブではこの課金が撤廃</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>すべての Glue パイプラインで、料金を気にせずデータ品質の異常監視を有効化できる</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">2️⃣ 新しい観測モード (Fixed モード) の追加</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>実行間隔の実際の時間差に関係なく、すべてのデータポイントを等間隔として扱う</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>時間ベースの増加・減少を仮定せず、観測値から一定のベースラインを確立して予測</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>線形トレンドの過剰な外挿を回避し、誤検知を削減してアラートの精度を向上</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">3️⃣ 従来モード (Linear モード) との使い分け</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>Linear モード (デフォルト) はデータのトレンドとシーズナリティ (週次・日次パターン) を学習して外挿</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>Fixed モードはフラットまたはランダムに変動するデータ、不規則な実行間隔、ノートブックでの探索的分析に適する</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>モードは評価実行時にパラメータで指定でき、未指定の場合は Linear モードが使用される</span></div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📊 異常検知モードの比較</h3>
+    <table>
+      <tr>
+        <th>項目</th>
+        <th>📈 Linear モード (デフォルト)</th>
+        <th>📏 Fixed モード (新規)</th>
+      </tr>
+      <tr>
+        <td><strong>予測方法</strong></td>
+        <td>トレンドと季節性を学習して外挿</td>
+        <td>一定のベースラインから予測</td>
+      </tr>
+      <tr>
+        <td><strong>時間間隔の扱い</strong></td>
+        <td>実行間隔の時間差を考慮</td>
+        <td>すべてのデータポイントを等間隔として扱う</td>
+      </tr>
+      <tr>
+        <td><strong>適したデータ</strong></td>
+        <td>一貫した増加・減少トレンド、季節パターンのあるデータ</td>
+        <td>フラットまたはランダムに変動するデータ</td>
+      </tr>
+      <tr>
+        <td><strong>適した実行パターン</strong></td>
+        <td>定期的なスケジュール実行</td>
+        <td>不規則・予測不能な間隔での実行</td>
+      </tr>
+      <tr>
+        <td><strong>適したユースケース</strong></td>
+        <td>確立されたトレンドの逸脱検出</td>
+        <td>ノートブックでの探索的分析、ユーザー主導のデータ変更</td>
+      </tr>
+    </table>
+
+    <h3>📋 異常検知の基本仕様</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>最小データポイント数</td><td>異常検知には最低 3 つのデータポイントが必要</td></tr>
+      <tr><td>統計の保存上限</td><td>アカウントあたり 100,000 統計</td></tr>
+      <tr><td>統計の保存期間</td><td>最大 2 年間 (保存自体は無料)</td></tr>
+      <tr><td>暗号化</td><td>AWS KMS キーによる統計の暗号化に対応</td></tr>
+      <tr><td>対象</td><td>AWS Glue ETL および AWS Glue Data Catalog の異常検知</td></tr>
+      <tr><td>ETL ジョブ設定</td><td><code class="inline">observations.scope</code> / <code class="inline">observations.mode</code> オプション</td></tr>
+      <tr><td>Data Catalog 設定</td><td><code class="inline">AdditionalRunOptions</code> の <code class="inline">ObservationScope</code> / <code class="inline">ObservationMode</code> フィールド</td></tr>
+    </table>
+
+    <h3>🛠️ API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/07/27</td>
+        <td><a href="https://awsapichanges.com/archive/changes/1ea078-glue.html" target="_blank" rel="noopener noreferrer" class="aws-link">glue</a></td>
+        <td>1 new 8 updated api methods - 異常検知用の <code class="inline">ObservationScope</code> / <code class="inline">ObservationMode</code> パラメータの追加、複数の評価実行を一括取得する <code class="inline">BatchGetDataQualityRulesetEvaluationRun</code> API の追加など</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <ul class="plain">
+      <li>AWS Glue Data Quality のルールまたはアナライザーが設定済みであること</li>
+      <li>Glue ジョブまたは評価実行に使用する IAM ロールに適切な権限が付与されていること</li>
+      <li>異常検知には最低 3 回分のデータ統計 (データポイント) が蓄積されている必要があること</li>
+    </ul>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">ルールとアナライザーの定義</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">DQDL</span>
+            <span class="code-title">ルール + アナライザー定義</span>
+          </div>
+          <pre><code class="language-python">Rules = [
+    RowCount > 0,
+    IsComplete "passenger_count"
+]
+
+Analyzers = [
+    AllStatistics "fare_amount",
+    DistinctValuesCount "pulocationid",
+    RowCount
+]</code></pre>
+        </div>
+        <p>DQDL (Data Quality Definition Language) でデータへの期待値をルールとして定義します。具体的なルールを書けない列は、アナライザーで統計のみを収集して異常検知の対象にできます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">ETL ジョブで異常検知を有効化</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <span class="code-title">EvaluateDataQuality の追加オプション</span>
+          </div>
+          <pre><code class="language-python">additional_options = {
+    "observations.scope": "ALL",
+    "observations.mode": "FIXED"
+}
+
+result = EvaluateDataQuality.process_rows(
+    frame=dynamic_frame,
+    ruleset=ruleset,
+    publishing_options=publishing_options,
+    additional_options=additional_options
+)</code></pre>
+        </div>
+        <p><code class="inline">observations.scope</code> を <code class="inline">ALL</code> に設定して異常検知を有効化し、<code class="inline">observations.mode</code> でモードを指定します。定期実行でトレンドのあるデータには <code class="inline">LINEAR</code> (デフォルト)、不規則実行やフラットなデータには <code class="inline">FIXED</code> を選択します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">Data Catalog テーブルでの評価実行 (オプション)</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI での評価実行</span>
+          </div>
+          <pre><code class="language-bash">aws glue start-data-quality-ruleset-evaluation-run \
+  --data-source '{
+    "GlueTable": {
+      "DatabaseName": "my_database",
+      "TableName": "my_table"
+    }
+  }' \
+  --role "arn:aws:iam::123456789012:role/GlueServiceRole" \
+  --ruleset-names '["my_ruleset"]' \
+  --additional-run-options '{
+    "ObservationScope": "ALL",
+    "ObservationMode": "FIXED"
+  }'</code></pre>
+        </div>
+        <p>Data Catalog に登録されたテーブルに対して、異常検知を有効化 (<code class="inline">ObservationScope: ALL</code>) した品質評価実行を開始するコマンドです。<code class="inline">ObservationMode</code> で Fixed モードを指定しています。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">異常オブザベーションの確認とフィードバック</div>
+        <p>AWS Glue Studio の Data Quality 画面で検出された異常 (Anomaly Observation) を確認します。検出された異常値は以降のモデル学習で正常値として扱われるため、真の異常については明示的に除外 (exclude) のフィードバックを行い、モデルの精度を維持します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>👍 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>監視コストの削減</strong>: ETL ジョブでの異常検知が無料になったことで、これまでコストを理由に異常検知を限定的にしか使えなかったチームも、全パイプラインへの適用を検討できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>データ品質インシデントの早期発見</strong>: 固定しきい値のルールでは検出できないビジネス環境の変化やパイプライン障害による異常を、機械学習ベースで自動検出できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>アラート疲れの軽減</strong>: 誤検知の削減により、担当者が本物の異常への対応に集中でき、運用負荷が軽減される</span></div>
+    <h3>🔬 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>不規則な実行パターンへの対応</strong>: Fixed モードにより、ノートブックでのアドホックな実行や不定期なスケジュールでも精度の高い異常検知が可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>過剰外挿の回避</strong>: 一定のベースラインを使用することで、フラットまたはランダムなデータに対して線形トレンドを誤って当てはめる問題を解消</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>導入の容易さ</strong>: 既存の <code class="inline">EvaluateDataQuality</code> 変換にオプションを 1 つ追加するだけでモードを切り替えられ、既存パイプラインへの影響が最小限</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚧 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>異常検知には最低 3 つのデータポイント (過去の統計) が必要であり、導入直後は異常を検出できない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>統計の保存はアカウントあたり 100,000 統計が上限で、保存期間は最大 2 年間</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>無料化の対象は AWS Glue ETL ジョブにおける異常検知であり、Data Catalog での異常検知は引き続き統計ごとに 1 DPU の課金が発生する (料金ページの記載に基づく)</span></div>
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="cross-icon">!</span><span>検出された異常値は以降のモデルで正常値として学習されるため、真の異常は明示的に除外するフィードバック運用が必要</span></div>
+    <div class="check-item"><span class="cross-icon">!</span><span>Fixed モードは時間ベースのトレンドや季節性を学習しないため、明確なトレンドや週次・日次パターンを持つデータには Linear モードの方が適する</span></div>
+    <div class="check-item"><span class="cross-icon">!</span><span>モード未指定時は Linear モードが使用されるため、探索的ワークフローでは明示的に <code class="inline">FIXED</code> を指定する必要がある</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. 全 ETL パイプラインへの異常監視の標準適用</div>
+      <p><strong>シナリオ</strong>: 数百の Glue ETL パイプラインを運用するデータプラットフォームチームが、コストの制約からこれまで重要パイプラインのみに異常検知を適用していた。無料化を機に全パイプラインへ展開する。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">共通の Data Quality 設定を全ジョブに適用</span>
+        </div>
+        <pre><code class="language-python"># 共通の Data Quality 設定を全ジョブに適用
+additional_options = {
+    "observations.scope": "ALL"
+    # 定期実行ジョブのためデフォルトの LINEAR モードを使用
+}
+result = EvaluateDataQuality.process_rows(
+    frame=dynamic_frame,
+    ruleset=common_ruleset,
+    publishing_options=publishing_options,
+    additional_options=additional_options
+)</code></pre>
+      </div>
+      <p><span class="effect-label">効果</span>追加コストなしで全パイプラインの行数・完全性などの統計を継続監視でき、上流システムの障害による静かなデータ欠損を早期に検出できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. ノートブックでの探索的データ分析における品質チェック</div>
+      <p><strong>シナリオ</strong>: データサイエンティストが Glue Studio ノートブックや Interactive Sessions で不定期にデータセットを検証している。実行間隔がばらばらのため、従来の線形トレンドベースの予測では誤検知が多発していた。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">Fixed モードでの探索的分析</span>
+        </div>
+        <pre><code class="language-python">additional_options = {
+    "observations.scope": "ALL",
+    "observations.mode": "FIXED"
+}
+result = EvaluateDataQuality.process_rows(
+    frame=exploration_frame,
+    ruleset=ruleset,
+    publishing_options=publishing_options,
+    additional_options=additional_options
+)</code></pre>
+      </div>
+      <p><span class="effect-label">効果</span>実行間隔に依存しない一定ベースラインでの予測により、ノイズとなるアラートが減り、実際のデータ品質問題のみに注目できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. フラットな参照データ・マスタデータの監視</div>
+      <p><strong>シナリオ</strong>: 店舗マスタや商品カテゴリなど、通常はほぼ一定件数で推移し、ユーザー主導の更新で変化する参照データを監視したい。自然な増加トレンドがないため、Linear モードではトレンドの過剰外挿が発生していた。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">マスタデータへの Fixed モード適用</span>
+        </div>
+        <pre><code class="language-bash">aws glue start-data-quality-ruleset-evaluation-run \
+  --data-source '{"GlueTable": {"DatabaseName": "master", "TableName": "stores"}}' \
+  --role "arn:aws:iam::123456789012:role/GlueServiceRole" \
+  --ruleset-names '["master_ruleset"]' \
+  --additional-run-options '{"ObservationScope": "ALL", "ObservationMode": "FIXED"}'</code></pre>
+      </div>
+      <p><span class="effect-label">効果</span>一定ベースラインからの逸脱のみを異常として検出するため、マスタデータの大量欠損や重複投入といった本当に対応が必要な変化を的確に捉えられる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      今回のアップデートにより、<span class="highlight">AWS Glue ETL ジョブにおける異常検知は追加料金なし</span>で利用できるようになりました。
+      ETL ジョブ内のデータ品質チェック自体は、従来どおりジョブの実行時間・DPU 消費の増加分として課金されます。
+    </p>
+    <p>
+      AWS Glue Data Catalog での異常検知については、料金ページの記載に基づくと、引き続き統計ごとに 1 DPU で異常検知にかかった時間分の課金が発生します (1 統計あたり平均 10〜20 秒程度)。
+      また、モデルの再学習 (統計の除外・包含) にも 1 DPU の課金があります。統計の保存自体は無料です。
+    </p>
+    <h3>💵 料金例</h3>
+    <table>
+      <tr><th>使用量</th><th>月額料金 (概算)</th></tr>
+      <tr>
+        <td>ETL ジョブ (6 DPU、20 分、日次実行) + 異常検知有効</td>
+        <td>6 DPU × 1/3 時間 × $0.44 × 30 日 = 約 $7.92 <strong>(異常検知の追加料金は $0)</strong></td>
+      </tr>
+      <tr>
+        <td>Data Catalog 評価 (20 統計、異常検知 15 秒/統計、日次実行)</td>
+        <td>異常検知分: 20 × 1 DPU × 15/3600 時間 × $0.44 × 30 日 = 約 $1.10</td>
+      </tr>
+    </table>
+    <p>最新の料金は <a href="https://aws.amazon.com/glue/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Glue 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>すべての <span class="highlight">AWS 商用リージョン</span>および <span class="highlight">AWS GovCloud (US) リージョン</span>で利用可能です。</p>
+  </div>
+
+  <!-- 関連サービス・機能 -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🗂️ AWS Glue Data Catalog</div>
+      <p style="margin: 0; font-size: 14px;">Data Catalog に登録されたテーブルに対しても、評価実行時に <code class="inline">ObservationScope: ALL</code> を指定することで異常検知を有効化できる</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🎨 AWS Glue Studio</div>
+      <p style="margin: 0; font-size: 14px;">検出された異常オブザベーションの可視化 (実測値、導出トレンド、上限・下限) と、異常の除外・承認によるモデルへのフィードバックが可能</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📈 Amazon CloudWatch / Amazon EventBridge</div>
+      <p style="margin: 0; font-size: 14px;">データ品質結果や異常検知結果をもとにアラート通知や後続処理の自動化を構成できる</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔑 AWS KMS</div>
+      <p style="margin: 0; font-size: 14px;">Glue サービス内に保存されるデータ品質統計を KMS キーで暗号化できる</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      AWS Glue ETL ジョブでの異常検知が無料化されたことで、コストを理由に異常監視を見送っていたパイプラインにも気軽に適用できるようになりました。
+      あわせて追加された Fixed モードにより、ノートブックでの探索的分析や不規則な実行間隔のワークロードでも誤検知を抑えた精度の高い監視が可能です。
+    </p>
+    <p>
+      まずは主要な ETL ジョブで <code class="inline">observations.scope: ALL</code> を設定して異常検知を有効化し、データ特性に応じて <span class="highlight">Linear / Fixed モードを使い分ける</span>ことを推奨します。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul class="plain">
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/08/aws-glue-data-quality-anomaly-detection-free" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/08/aws-glue-data-quality-anomaly-detection-free</a></li>
+      <li><a href="https://docs.aws.amazon.com/glue/latest/dg/data-quality-anomaly-detection.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Anomaly detection in AWS Glue Data Quality</a></li>
+      <li><a href="https://aws.amazon.com/glue/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Glue 料金ページ</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/1ea078-glue.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 (awsapichanges.com)</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-08-05) をもとに生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
