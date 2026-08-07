@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Timestream for InfluxDB - バックアップ・リストア機能</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .ba-title { color: #FF8A73; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #6FCF4F; font-weight: 700; margin-bottom: 8px; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 4px; list-style: none; }
+.before-box li, .after-box li { margin: 8px 0; display: flex; gap: 8px; align-items: flex-start; }
+.before-box li::before { content: "✗"; color: var(--aws-red); font-weight: 700; }
+.after-box li::before { content: "✓"; color: #6FCF4F; font-weight: 700; }
+
+/* Stats */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.02); }
+code.inline {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Check lists */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-item::before { content: "✓"; color: #6FCF4F; font-weight: 700; }
+.cross-item::before { content: "⚠"; color: var(--aws-smile-orange); font-weight: 700; }
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+.usecase .effect {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* Two-column grid */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .grid-2 { grid-template-columns: 1fr; }
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="service-badge">Amazon Timestream for InfluxDB</div>
+    <h1>💾 カスタマー主導のバックアップ・リストア機能</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 8 月 7 日 | InfluxDB 2 / InfluxDB 3 両エンジン対応</div>
+  </div>
+
+  <!-- Overview -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon Timestream for InfluxDB が<span class="highlight">カスタマー主導のバックアップ・リストア機能</span>をサポートしました。
+      ユーザー自身がバックアップを作成・管理し、必要なタイミングでデータをリストアできます。
+      <span class="highlight">InfluxDB 2 / InfluxDB 3 両エンジン</span>に対応し、AWS マネジメントコンソール、AWS CLI、Timestream for InfluxDB API から利用できます。
+    </p>
+    <p>
+      リスクの高い移行や設定変更の前に取得する<strong>ワンタイムのオンデマンドバックアップ</strong>に加え、
+      リソースごとに<strong>最大 4 つの自動バックアップ設定</strong> (毎時・日次・週次・月次・カスタムスケジュール、個別の保持期間付き) を構成可能。
+      初回はフルコピー、以降は<span class="highlight">増分バックアップ</span>となり、稼働中のワークロードへの影響を最小限に抑えます。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">最大 4 つ</div>
+        <div class="stat-label">リソースごとの自動バックアップ設定数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">5 種類</div>
+        <div class="stat-label">スケジュール (毎時/日次/週次/月次/カスタム)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">2 モード</div>
+        <div class="stat-label">リストア (新規リソース / インプレース)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">5 つ</div>
+        <div class="stat-label">新規追加された API</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">😰 Before: アップデート前の課題</div>
+        <ul>
+          <li>任意のタイミングでバックアップを取得・管理するネイティブな仕組みがなく、<code class="inline">influx backup</code> コマンドや外部エクスポートなど独自の仕組みが必要</li>
+          <li>リスクの高い移行や設定変更の前に、簡単に復元ポイントを作成する手段がなかった</li>
+          <li>バックアップの頻度や保持期間を要件に合わせて柔軟に制御することが困難だった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">🎉 After: アップデート後の改善</div>
+        <ul>
+          <li>コンソール・CLI・API からワンタイムのオンデマンドバックアップを取得可能に</li>
+          <li>最大 4 つの自動バックアップ設定を個別の保持期間付きで構成可能に</li>
+          <li>初回フルコピー以降は増分方式で、影響を抑えつつ高頻度バックアップが可能に</li>
+          <li>新規リソースへのリストアとインプレースリストアを選択可能に</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 管理者"])
+
+    subgraph Ops["🛠️ バックアップ操作"]
+        direction LR
+        OnDemand["⚡ オンデマンド&lt;br/&gt;バックアップ"]
+        Auto["🕒 自動バックアップ&lt;br/&gt;最大 4 設定&lt;br/&gt;毎時/日次/週次/月次/カスタム"]
+        OnDemand ~~~ Auto
+    end
+
+    subgraph TSI["☁️ Amazon Timestream for InfluxDB"]
+        Source["🗄️ ソースリソース&lt;br/&gt;InfluxDB 2 / InfluxDB 3"]
+    end
+
+    Backup[("💾 バックアップ&lt;br/&gt;初回フル + 以降増分&lt;br/&gt;保持期間を個別設定")]
+    KMS["🔑 AWS KMS&lt;br/&gt;CMK 使用時は同じキーで暗号化"]
+
+    subgraph Restore["♻️ リストア"]
+        direction LR
+        NewRes["🆕 新規リソースへ復元&lt;br/&gt;ソース設定を継承"]
+        InPlace["🔄 インプレース復元&lt;br/&gt;既存リソースを置換"]
+        NewRes ~~~ InPlace
+    end
+
+    User --&gt;|コンソール / CLI / API| Ops
+    Ops --&gt; Source
+    Source --&gt; Backup
+    KMS -.-&gt; Backup
+    Backup --&gt; Restore
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef security fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef restore fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+
+    class User user
+    class Ops,TSI,Restore layer
+    class OnDemand,Auto,Source process
+    class Backup storage
+    class KMS security
+    class NewRes,InPlace restore
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      オンデマンドまたは自動スケジュールでソースリソースのバックアップを取得し、新規リソースへの復元またはインプレース復元を選択できる構成です。
+      CMK で暗号化されたソースのバックアップは同じ KMS キーで暗号化されます。
+    </p>
+  </div>
+
+  <!-- Key features -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ オンデマンドバックアップ</div>
+      <p style="margin: 0;">任意のタイミングでワンタイムのバックアップを作成可能。リスクの高い移行や設定変更の前の復元ポイント作成に有効。<code class="inline">CreateDbBackup</code> API で名前・対象リソース・保持日数 (retentionDays)・タグを指定して作成。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ 自動バックアップ設定 (最大 4 つ)</div>
+      <p style="margin: 0;">リソースごとに最大 4 つの設定を構成可能。スケジュールタイプは毎時 (HOURLY)・日次 (DAILY)・週次 (WEEKLY)・月次 (MONTHLY)・カスタム (CUSTOM_SCHEDULE) から選択し、各設定に個別の保持期間を指定。<code class="inline">CreateDbInstance</code> / <code class="inline">CreateDbCluster</code> での新規作成時、または <code class="inline">UpdateDbInstance</code> / <code class="inline">UpdateDbCluster</code> での更新時に設定可能。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 増分バックアップ</div>
+      <p style="margin: 0;">初回バックアップはデータベースの完全コピー (フルバックアップ)。2 回目以降は増分バックアップとなり、実行中のワークロードへのパフォーマンス影響を軽減。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ 柔軟なリストアオプション</div>
+      <p style="margin: 0;"><strong>新規リソースへの復元 (NEW_RESOURCE)</strong>: ソース設定を継承した新しいインスタンス/クラスターとして復元。<strong>インプレース復元 (REPLACE_EXISTING)</strong>: 既存リソースを置き換えて復元。<code class="inline">RestoreFromDbBackup</code> API では VPC サブネット、セキュリティグループ、ポート、デプロイタイプなどの上書き指定も可能。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">5️⃣ KMS 暗号化との統合</div>
+      <p style="margin: 0;">カスタマーマネージドキー (CMK) で暗号化されたソースのバックアップは、同じ KMS キーで暗号化。今回の API リリースでは、新規 DbInstance / DbCluster 作成時の CMK 暗号化 (<code class="inline">kmsKeyId</code> パラメータ) のサポートも追加。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">6️⃣ 両エンジン・全デプロイタイプ対応</div>
+      <p style="margin: 0;">InfluxDB 2 エンジンと InfluxDB 3 エンジン (Core / Enterprise) の両方をサポート。シングル AZ、マルチ AZ スタンバイ、マルチノードリードレプリカの各デプロイタイプに対応。</p>
+    </div>
+  </div>
+
+  <!-- Technical specs -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>📋 バックアップ仕様</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>バックアップ種別</td><td>オンデマンド (ON_DEMAND)、自動 (HOURLY / DAILY / WEEKLY / MONTHLY / CUSTOM_SCHEDULE)</td></tr>
+      <tr><td>自動バックアップ設定数</td><td>リソースあたり最大 4 つ</td></tr>
+      <tr><td>保持期間</td><td>設定ごとに個別指定 (retentionDays)</td></tr>
+      <tr><td>バックアップ方式</td><td>初回フルコピー、以降は増分</td></tr>
+      <tr><td>対象エンジン</td><td>INFLUXDB_V2、INFLUXDB_V3_CORE、INFLUXDB_V3_ENTERPRISE</td></tr>
+      <tr><td>対象デプロイタイプ</td><td>SINGLE_AZ、WITH_MULTIAZ_STANDBY、MULTI_NODE_READ_REPLICAS</td></tr>
+      <tr><td>リストアモード</td><td>NEW_RESOURCE (新規リソース)、REPLACE_EXISTING (インプレース)</td></tr>
+      <tr><td>暗号化</td><td>CMK 暗号化ソースのバックアップは同一 KMS キーを使用</td></tr>
+      <tr><td>削除時のオプション</td><td><code class="inline">retainAutomatedBackups</code> で削除後も自動バックアップの保持が可能</td></tr>
+      <tr><td>操作インターフェース</td><td>AWS マネジメントコンソール、AWS CLI、Timestream for InfluxDB API</td></tr>
+    </table>
+
+    <h3>🆕 新規 API (5 つ)</h3>
+    <table>
+      <tr><th>API</th><th>説明</th></tr>
+      <tr><td><code class="inline">CreateDbBackup</code></td><td>オンデマンドバックアップの作成</td></tr>
+      <tr><td><code class="inline">GetDbBackup</code></td><td>バックアップの詳細取得</td></tr>
+      <tr><td><code class="inline">ListDbBackups</code></td><td>対象リソースのバックアップ一覧取得</td></tr>
+      <tr><td><code class="inline">DeleteDbBackup</code></td><td>バックアップの削除</td></tr>
+      <tr><td><code class="inline">RestoreFromDbBackup</code></td><td>バックアップからのリストア (新規 / インプレース)</td></tr>
+    </table>
+
+    <h3>♻️ 主な更新 API</h3>
+    <p style="font-size: 14px;">
+      <code class="inline">CreateDbInstance</code> / <code class="inline">CreateDbCluster</code> / <code class="inline">UpdateDbInstance</code> / <code class="inline">UpdateDbCluster</code> に
+      <code class="inline">dbBackupConfigurations</code> パラメータが追加され、
+      <code class="inline">DeleteDbInstance</code> / <code class="inline">DeleteDbCluster</code> に <code class="inline">retainAutomatedBackups</code> が追加されました。
+      また、リソースステータスに <code class="inline">RESTORING</code> / <code class="inline">RESTORE_FAILED</code> が追加されています。
+      (API 変更: 2026/08/03、5 new / 13 updated api methods)
+    </p>
+  </div>
+
+  <!-- Setup -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item">Amazon Timestream for InfluxDB の DB インスタンスまたは DB クラスターが作成済みであること</div>
+    <div class="check-item">AWS CLI が最新バージョンに更新されていること (新 API を利用する場合)</div>
+    <div class="check-item">IAM ユーザー/ロールに Timestream for InfluxDB のバックアップ関連 API の実行権限があること</div>
+    <div class="check-item">CMK 暗号化を使用する場合、対象 KMS キーへのアクセス権限があること</div>
+
+    <h3>ステップ 1: オンデマンドバックアップの作成</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">オンデマンドバックアップ</span>
+      </div>
+      <pre><code class="language-bash">aws timestream-influxdb create-db-backup \
+  --name "pre-migration-backup" \
+  --db-resource-id "db-XXXXXXXXXX" \
+  --retention-days 30 \
+  --tags Purpose=Migration</code></pre>
+    </div>
+    <p style="font-size: 14px;"><code class="inline">--retention-days</code> で保持日数を指定し、期限を過ぎたバックアップは自動削除されます。移行や設定変更などのリスクの高い操作の前に実行することを推奨します。</p>
+
+    <h3>ステップ 2: 自動バックアップ設定の追加</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">自動バックアップ設定 (日次/週次/月次)</span>
+      </div>
+      <pre><code class="language-bash">aws timestream-influxdb update-db-instance \
+  --identifier "db-XXXXXXXXXX" \
+  --db-backup-configurations \
+    '[{"type":"DAILY","retentionDays":7,"enabled":true},
+      {"type":"WEEKLY","retentionDays":30,"enabled":true},
+      {"type":"MONTHLY","retentionDays":365,"enabled":true}]'</code></pre>
+    </div>
+    <p style="font-size: 14px;">日次 (7 日保持)、週次 (30 日保持)、月次 (365 日保持) の 3 つを構成する例。最大 4 つまで設定でき、<code class="inline">CUSTOM_SCHEDULE</code> タイプでは <code class="inline">customSchedule</code> によるカスタムスケジュールの指定も可能です。</p>
+
+    <h3>ステップ 3: バックアップの一覧確認</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">バックアップ一覧の取得</span>
+      </div>
+      <pre><code class="language-bash">aws timestream-influxdb list-db-backups \
+  --db-resource-id "db-XXXXXXXXXX"</code></pre>
+    </div>
+    <p style="font-size: 14px;">各バックアップのステータス (IN_PROGRESS / COMPLETED / FAILED など)、種別 (ON_DEMAND / DAILY など)、作成日時、有効期限を確認できます。</p>
+
+    <h3>ステップ 4: バックアップからのリストア</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">新規リソース復元 / インプレース復元</span>
+      </div>
+      <pre><code class="language-bash"># 新規リソースとして復元
+aws timestream-influxdb restore-from-db-backup \
+  --name "restored-influxdb" \
+  --db-backup-id "backup-XXXXXXXXXX" \
+  --restore-mode NEW_RESOURCE
+
+# 既存リソースを置き換えて復元 (インプレース)
+aws timestream-influxdb restore-from-db-backup \
+  --name "restored-influxdb" \
+  --db-backup-id "backup-XXXXXXXXXX" \
+  --restore-mode REPLACE_EXISTING</code></pre>
+    </div>
+    <p style="font-size: 14px;"><code class="inline">NEW_RESOURCE</code> ではソース設定を継承した新規リソースが作成され、VPC サブネットやセキュリティグループ、デプロイタイプなどの上書きも可能。<code class="inline">REPLACE_EXISTING</code> では既存リソースが置き換えられます。リストア中はステータスが <code class="inline">RESTORING</code> になります。</p>
+  </div>
+
+  <!-- Merits / considerations -->
+  <div class="section">
+    <h2>💡 メリットと考慮点</h2>
+    <div class="grid-2">
+      <div>
+        <h3 style="margin-top: 0;">📈 ビジネス面のメリット</h3>
+        <div class="check-item"><span><strong>データ保護の強化</strong>: 復元ポイントをユーザー主導で管理でき、オペレーションミスや障害からの復旧手段を確保</span></div>
+        <div class="check-item"><span><strong>コンプライアンス対応</strong>: 日次・週次・月次など複数の保持ポリシーで組織のデータ保持要件に柔軟に対応</span></div>
+        <div class="check-item"><span><strong>運用コストの削減</strong>: 独自のバックアップスクリプトや外部エクスポートの構築・維持が不要に</span></div>
+
+        <h3>⚙️ 技術面のメリット</h3>
+        <div class="check-item"><span><strong>増分バックアップによる低影響</strong>: 稼働中のワークロードへの影響を抑えつつ高頻度バックアップが可能</span></div>
+        <div class="check-item"><span><strong>柔軟なリストア</strong>: 新規復元とインプレース復元の使い分けで検証用途と本番復旧の両方に対応</span></div>
+        <div class="check-item"><span><strong>KMS 統合</strong>: CMK 暗号化ソースのバックアップは同じキーで暗号化され、セキュリティポリシーの一貫性を維持</span></div>
+        <div class="check-item"><span><strong>API による自動化</strong>: CI/CD パイプラインへの組み込み (変更前バックアップの自動取得など) が容易</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">🚧 制限事項</h3>
+        <div class="cross-item"><span>自動バックアップ設定はリソースあたり最大 4 つまで</span></div>
+        <div class="cross-item"><span>初回バックアップはフルコピーのため、データ量によっては完了までに時間を要する可能性</span></div>
+        <div class="cross-item"><span>CMK 暗号化ソースのバックアップは同じ KMS キーを使用するため、キーを削除・無効化するとリストア不可</span></div>
+
+        <h3>🤔 考慮すべき点</h3>
+        <div class="cross-item"><span>保持期間 (retentionDays) を過ぎると自動削除されるため、長期保持が必要なバックアップは適切な保持期間を設定</span></div>
+        <div class="cross-item"><span>インプレース復元 (REPLACE_EXISTING) は既存リソースを置き換えるため、実行前に影響範囲を十分確認</span></div>
+        <div class="cross-item"><span>リソース削除時の自動バックアップ保持は <code class="inline">retainAutomatedBackups</code> で明示的に制御</span></div>
+        <div class="cross-item"><span>バックアップストレージに関する料金は料金ページで確認が必要</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Use cases -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. メジャーバージョン移行前の復元ポイント作成</div>
+      <p style="margin: 0; font-size: 14px;"><strong>シナリオ</strong>: InfluxDB 2 から InfluxDB 3 への移行や、インスタンスタイプ変更などのリスクの高い作業の前に、確実に元の状態へ戻せるようにしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">移行作業直前のオンデマンドバックアップ</span></div>
+        <pre><code class="language-bash">aws timestream-influxdb create-db-backup \
+  --name "pre-upgrade-$(date +%Y%m%d)" \
+  --db-resource-id "db-XXXXXXXXXX" \
+  --retention-days 14</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 移行に問題が発生した場合でも、バックアップからインプレース復元することで迅速に元の状態へ戻せる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. IoT プラットフォームの多層バックアップポリシー</div>
+      <p style="margin: 0; font-size: 14px;"><strong>シナリオ</strong>: 製造業の IoT センサーデータを蓄積しており、短期の運用復旧用と長期のコンプライアンス用で異なる保持ポリシーが必要。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">毎時 + 日次 + 月次の多層構成</span></div>
+        <pre><code class="language-bash">aws timestream-influxdb update-db-instance \
+  --identifier "db-XXXXXXXXXX" \
+  --db-backup-configurations \
+    '[{"type":"HOURLY","retentionDays":2,"enabled":true},
+      {"type":"DAILY","retentionDays":14,"enabled":true},
+      {"type":"MONTHLY","retentionDays":365,"enabled":true}]'</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 毎時バックアップで直近の障害に迅速に対応しつつ、月次バックアップで 1 年間の長期保持要件を満たす多層的なデータ保護を実現。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. 本番データを使った検証環境の構築</div>
+      <p style="margin: 0; font-size: 14px;"><strong>シナリオ</strong>: 本番の時系列データでクエリ性能のチューニングや新しいダッシュボードの検証を行いたいが、本番環境には影響を与えたくない。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">本番バックアップから検証用リソースを作成</span></div>
+        <pre><code class="language-bash">aws timestream-influxdb restore-from-db-backup \
+  --name "staging-influxdb" \
+  --db-backup-id "backup-XXXXXXXXXX" \
+  --restore-mode NEW_RESOURCE \
+  --db-instance-type db.influx.large \
+  --tags Environment=Staging</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 本番と同じデータを持つ検証環境を数ステップで構築でき、本番ワークロードに影響を与えずに検証作業を実施できる。</div>
+    </div>
+  </div>
+
+  <!-- Pricing / regions / related -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p style="margin: 0;">What's New の発表には具体的な料金情報は記載されていません。バックアップストレージに関する料金の詳細は <a href="https://aws.amazon.com/timestream/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon Timestream 料金ページ</a> を参照してください。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌏 利用可能リージョン</div>
+      <p style="margin: 0;">Amazon Timestream for InfluxDB が利用可能なすべての AWS リージョンで利用できます。対象リージョンの一覧は <a href="https://docs.aws.amazon.com/general/latest/gr/timestream.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS リージョン別サービス表</a> を参照してください。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🔑 AWS KMS</div>
+      <p style="margin: 0;">CMK で暗号化されたソースのバックアップは同じ KMS キーで暗号化。新規 DbInstance / DbCluster 作成時の CMK 暗号化も今回の API リリースでサポート。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📡 Amazon EventBridge</div>
+      <p style="margin: 0;">Timestream for InfluxDB は 2026 年 7 月に EventBridge 統合をサポート済み。リソースのステータス変化 (RESTORING など) をイベントとして通知する運用と組み合わせ可能。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🗄️ AWS Backup</div>
+      <p style="margin: 0;">他の AWS サービスの集中バックアップ管理サービス。Timestream for InfluxDB の本機能はサービスネイティブのバックアップとして提供される。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">💽 Amazon RDS</div>
+      <p style="margin: 0;">自動バックアップ・スナップショットの概念が類似しており、RDS の運用経験があれば同様のモデルで理解しやすい。</p>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      Amazon Timestream for InfluxDB に<span class="highlight">カスタマー主導のバックアップ・リストア機能</span>が追加され、
+      オンデマンドバックアップと最大 4 つの自動バックアップ設定、柔軟なリストアオプションが利用可能になりました。
+      これまで独自の仕組みで対応していたデータ保護がマネージド機能として提供され、増分バックアップにより運用への影響も最小限に抑えられます。
+    </p>
+    <div class="flow-diagram" style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 24px 0;">
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">🕒 日次などの<br/>自動バックアップを有効化</div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">⚡ 重要な変更前に<br/>オンデマンドバックアップ</div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-green); border-radius: 8px; padding: 12px 20px; text-align: center;">♻️ 必要時に<br/>新規 / インプレース復元</div>
+    </div>
+    <p>
+      Timestream for InfluxDB を本番運用しているユーザーは、まず日次などの自動バックアップ設定を有効化し、
+      重要な変更作業の前にはオンデマンドバックアップを取得する運用を検討することを推奨します。
+    </p>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/07/timestream-influxdb-backup-restore/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/07/timestream-influxdb-backup-restore/</a></li>
+      <li><a href="https://docs.aws.amazon.com/timestream/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon Timestream ドキュメント: https://docs.aws.amazon.com/timestream/</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/9e1c25-timestream-influxdb.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更詳細 (awsapichanges.com): https://awsapichanges.com/archive/changes/9e1c25-timestream-influxdb.html</a></li>
+      <li><a href="https://aws.amazon.com/timestream/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ: https://aws.amazon.com/timestream/pricing/</a></li>
+    </ul>
+    <p>基レポート: reports/2026/2026-08-07-timestream-influxdb-backup-restore.md | 生成日: 2026-08-07</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
