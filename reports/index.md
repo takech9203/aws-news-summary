@@ -5,6 +5,9 @@
 
 ## 2026 年
 
+- [2026-08-10 - AWS Elastic Disaster Recovery - Linux サーバーの UEFI ブートモード保持](2026/2026-08-10-aws-drs-linux-uefi.md)
+- [2026-08-10 - Amazon OpenSearch Serverless - コレクショングループあたり最大 10,000 コレクションをサポート](2026/2026-08-10-amazon-opensearch-serverless-supports-10000-collections-per-collection-group.md)
+- [2026-08-10 - Amazon EC2 - アプリケーションステータスチェック](2026/2026-08-10-amazon-ec2-application-status-checks.md)
 - [2026-08-07 - AWS IAM Identity Center - 新規組織インスタンスのワンクリックマルチリージョンオプション](2026/2026-08-07-aws-iam-identity-center-supports-one-click-multi-region-option-new-organization-instances.md)
 - [2026-08-07 - Amazon OpenSearch Service - レガシーバージョン向け追加アップグレード猶予期間と追加バージョンのサポート期限の発表](2026/2026-08-07-amazon-opensearch-service-additional-upgrade-runway-support-dates.md)
 - [2026-08-07 - Amazon Cognito - Agent Toolkit for AWS のコアスキル aws-auth として提供開始](2026/2026-08-07-aws-auth-agent-skill.md)
