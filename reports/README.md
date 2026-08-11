@@ -5,8 +5,21 @@
 
 ## 2026 年
 
+- [2026-08-11 - AWS Glue - AWS コンソールからの SageMaker Unified Studio ワンクリックアクセス](2026/2026-08-11-smus-glue-access.md)
+- [2026-08-11 - Amazon SageMaker JumpStart - NVIDIA Nemotron 3.5 Lightning モデルの提供開始](2026/2026-08-11-nvidia-nemotron-3.5-lightning-on-sagemaker-jumpstart.md)
+- [2026-08-11 - AWS Secrets Manager - Jenkins と SonarQube のマネージド外部シークレット対応](2026/2026-08-11-secrets-manager-integration-jenkins-sonarqube.md)
+- [2026-08-11 - Amazon Connect Customer - Cases パフォーマンスダッシュボード](2026/2026-08-11-amazon-connect-cases-dashboard.md)
+- [2026-08-11 - Amazon SageMaker JumpStart - LocateAnything-3B、Qwen-AgentWorld-35B-A3B、Qwen3.5-122B-A10B モデルの提供開始](2026/2026-08-11-locateAnything-3B-qwen-agentworld-35B-A3B-qwen3.5-122B-A10B-on-sagemaker-jumpstart.md)
+- [2026-08-11 - AWS Clean Rooms - SQL 分析向けプライバシー強化分析ログのエクスポート](2026/2026-08-11-aws-clean-rooms-export-analysis-log-sql.md)
+- [2026-08-11 - Amazon RDS for MariaDB - MariaDB 12.3 サポート](2026/2026-08-11-amazon-rds-mariadb-1232-available.md)
+- [2026-08-11 - Amazon Bedrock - bedrock-mantle エンドポイントへの IAM プリンシパル別コスト配分の拡張](2026/2026-08-11-amazon-bedrock-expands-iam-principal-cost-allocation-bedrock-mantle.md)
 - [2026-08-10 - AWS Elastic Disaster Recovery - Linux サーバーの UEFI ブートモード保持](2026/2026-08-10-aws-drs-linux-uefi.md)
+- [2026-08-10 - Amazon SageMaker JumpStart - FLUX.2-small-decoder および gemma-4-12B-it モデルの提供開始](2026/2026-08-10-flux.2-small-decoder-gemma-4-12B-it-on-sagemaker-jumpstart.md)
 - [2026-08-10 - Amazon OpenSearch Serverless - コレクショングループあたり最大 10,000 コレクションをサポート](2026/2026-08-10-amazon-opensearch-serverless-supports-10000-collections-per-collection-group.md)
+- [2026-08-10 - Amazon SageMaker JumpStart - langcache-embed-v3-small、Mellum2-12B-A2.5B-Thinking、LightOnOCR-2-1B モデルの提供開始](2026/2026-08-10-langcache-embed-v3-small-mellum2-12B-A2.5B-thinking-lightOnOCR-2-1B-on-sagemaker-jumpstart.md)
+- [2026-08-10 - AWS Identity and Access Management - アカウントアクセスマネージャーによるワークフォースユーザーへの IAM ロール割り当て](2026/2026-08-10-aws-iam-aam.md)
+- [2026-08-10 - Amazon SageMaker JumpStart - GLM-5.2 FP8、NVIDIA-Nemotron-Nano-12B-v2、GLM-OCR モデルの提供開始](2026/2026-08-10-glm-5.2-fp8-nemotron-nano-12b-v2-glm-ocr-on-sagemaker-jumpstart.md)
+- [2026-08-10 - Amazon EC2 - High Memory U7in-24TB インスタンスの南米 (サンパウロ) リージョン対応](2026/2026-08-10-amazon-ec2-high-memory-u7i-south-america.md)
 - [2026-08-10 - Amazon EC2 - アプリケーションステータスチェック](2026/2026-08-10-amazon-ec2-application-status-checks.md)
 - [2026-08-07 - AWS IAM Identity Center - 新規組織インスタンスのワンクリックマルチリージョンオプション](2026/2026-08-07-aws-iam-identity-center-supports-one-click-multi-region-option-new-organization-instances.md)
 - [2026-08-07 - Amazon OpenSearch Service - レガシーバージョン向け追加アップグレード猶予期間と追加バージョンのサポート期限の発表](2026/2026-08-07-amazon-opensearch-service-additional-upgrade-runway-support-dates.md)
