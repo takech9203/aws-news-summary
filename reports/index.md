@@ -5,7 +5,17 @@
 
 ## 2026 年
 
+- [2026-08-13 - Amazon Bedrock - OpenAI Daybreak Red / Daybreak Blue の提供開始](2026/2026-08-13-openai-daybreak-red-and-blue-on-amazon-bedrock.md)
+- [2026-08-13 - Amazon EC2 - Spot Placement Score の Local Zones 対応](2026/2026-08-13-spot-placement-score-local-zones.md)
+- [2026-08-13 - Amazon S3 - アクセス拒否エラーメッセージへのポリシー詳細の追加](2026/2026-08-13-s3-additional-policy-details-access-denied-error-messages.md)
+- [2026-08-13 - Amazon Quick - Microsoft 365 拡張機能の一般提供開始](2026/2026-08-13-amazon-quick-microsoft-365-extensions-generally-available.md)
+- [2026-08-12 - Amazon Quick - Microsoft Purview 連携によるデータ損失防止 DLP](2026/2026-08-12-amazon-quick-dlp-purview.md)
+- [2026-08-12 - AWS Global View - AWS リージョンと AWS Local Zones のインタラクティブマップビュー](2026/2026-08-12-aws-global-view-map-view.md)
+- [2026-08-12 - Amazon Quick - カスタム権限のデフォルト拒否 (Deny by Default)](2026/2026-08-12-amazon-quick-deny-by-default-permissions.md)
 - [2026-08-12 - Amazon EKS - Kubernetes コントロールプレーンの高度な設定パラメータのサポート](2026/2026-08-12-amazon-eks-control-plane-configuration-parameters.md)
+- [2026-08-12 - Kiro - どの Kiro アプリを選ぶべきか? (Which Kiro app should I pick?)](2026/2026-08-12-kiro-which-kiro-app-should-i-pick.md)
+- [2026-08-12 - AWS IAM - role manager による IAM ロールの自動セットアップ](2026/2026-08-12-aws-iam-role-manager.md)
+- [2026-08-12 - Kiro - 音声モード、クラウドセッションのオプトイン化、スペックレビュー画面](2026/2026-08-12-kiro-changelog-2026-08-12.md)
 - [2026-08-12 - Amazon Connect Customer - キュー内エージェントファーストコールバックの手動割り当て](2026/2026-08-12-amazon-connect-agent-callbacks.md)
 - [2026-08-11 - Amazon Bedrock - bedrock-mantle エンドポイントへの IAM プリンシパル別コスト配分の拡張](2026/2026-08-11-amazon-bedrock-expands-iam-principal-cost-allocation-bedrock-mantle.md)
 - [2026-08-11 - Amazon SageMaker JumpStart - LocateAnything-3B、Qwen-AgentWorld-35B-A3B、Qwen3.5-122B-A10B モデルの提供開始](2026/2026-08-11-locateAnything-3B-qwen-agentworld-35B-A3B-qwen3.5-122B-A10B-on-sagemaker-jumpstart.md)
