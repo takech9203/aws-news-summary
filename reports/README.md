@@ -5,11 +5,20 @@
 
 ## 2026 年
 
+- [2026-08-14 - Amazon SES - クリックトラッキングのカスタム URL パス対応 (モバイルアプリディープリンク)](2026/2026-08-14-amazon-ses-supports-customurl-deeplinking.md)
+- [2026-08-14 - Amazon RDS for Oracle - Oracle Application Express (APEX) バージョン 26.1 サポート](2026/2026-08-14-amazon-rds-oracle-apex-26-1.md)
+- [2026-08-14 - AWS Billing and Cost Management - Managed Dashboards](2026/2026-08-14-aws-billing-and-cost-management-managed-dashboards.md)
 - [2026-08-13 - Amazon Bedrock - OpenAI Daybreak Red / Daybreak Blue の提供開始](2026/2026-08-13-openai-daybreak-red-and-blue-on-amazon-bedrock.md)
+- [2026-08-13 - AWS Client VPN - CLI サポート、管理者コントロール、接続高速化](2026/2026-08-13-aws-client-vpn-cli.md)
+- [2026-08-13 - AWS Certificate Manager - E メール検証から DNS 検証への切り替えサポート](2026/2026-08-13-AWS-Certificate-Manager-Email-DNS-Switch.md)
 - [2026-08-13 - Amazon EC2 - Spot Placement Score の Local Zones 対応](2026/2026-08-13-spot-placement-score-local-zones.md)
 - [2026-08-13 - Amazon S3 - アクセス拒否エラーメッセージへのポリシー詳細の追加](2026/2026-08-13-s3-additional-policy-details-access-denied-error-messages.md)
+- [2026-08-13 - AWS Clean Rooms - カスタム分析ルールでの最小集計しきい値サポート](2026/2026-08-13-aws-clean-rooms-minimum-aggregation-custom-analysis-rules.md)
 - [2026-08-13 - Amazon Quick - Microsoft 365 拡張機能の一般提供開始](2026/2026-08-13-amazon-quick-microsoft-365-extensions-generally-available.md)
+- [2026-08-13 - Kiro - ネストされた AGENTS.md サポートと長時間セッションの効率化](2026/2026-08-13-kiro-changelog-2026-08-13.md)
 - [2026-08-12 - Amazon Quick - Microsoft Purview 連携によるデータ損失防止 DLP](2026/2026-08-12-amazon-quick-dlp-purview.md)
+- [2026-08-12 - Amazon Quick - ユーザー単位のリソース制限 (Limits Management)](2026/2026-08-12-amazon-quick-per-user-resource-limits.md)
+- [2026-08-12 - Amazon Quick - 共有に対する承認ポリシーのサポート](2026/2026-08-12-amazon-quick-approval-policies-sharing.md)
 - [2026-08-12 - AWS Global View - AWS リージョンと AWS Local Zones のインタラクティブマップビュー](2026/2026-08-12-aws-global-view-map-view.md)
 - [2026-08-12 - Amazon Quick - カスタム権限のデフォルト拒否 (Deny by Default)](2026/2026-08-12-amazon-quick-deny-by-default-permissions.md)
 - [2026-08-12 - Amazon EKS - Kubernetes コントロールプレーンの高度な設定パラメータのサポート](2026/2026-08-12-amazon-eks-control-plane-configuration-parameters.md)

@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Clean Rooms - カスタム分析ルールでの最小集計しきい値サポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* 統計カード */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: var(--aws-smile-orange);
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-content { flex: 1; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase .label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+.effect-box {
+  background: rgba(29, 129, 2, 0.12);
+  border-left: 4px solid #4CAF50;
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+ul { margin: 8px 0; padding-left: 22px; }
+li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { list-style: none; padding-left: 0; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">☁️ AWS Clean Rooms</span>
+    <h1>🔒 カスタム分析ルールでの<br>最小集計しきい値サポート</h1>
+    <div class="subtitle">
+      <span class="date">📅 リリース日: 2026 年 8 月 13 日</span> ｜ 機能: Minimum Aggregation Thresholds &amp; Comparison Controls
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      AWS Clean Rooms のカスタム分析ルール (Custom analysis rule) が<span class="highlight">最小集計しきい値</span>をサポート。クエリ結果のすべての行が<span class="highlight">指定した数以上の異なるデータ主体</span> (例: ユーザー ID) を表すことを保証し、個人や少人数グループの情報漏洩リスクを<strong>自動的に防止</strong>できます。
+    </p>
+    <p>
+      データ提供者はアイデンティティ列と最小アイデンティティ数を設定し、出力列ごとのしきい値上書きや、比較コントロール (Comparison Controls) による列の利用制限も可能。広告測定、メディアプランニング、オーディエンス分析などのデータコラボレーションで、<strong>プライバシー保護とクエリの柔軟性を両立</strong>する重要な機能強化です。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">2〜100,000</div>
+        <div class="stat-label">設定可能な最小アイデンティティ数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">列ごと</div>
+        <div class="stat-label">出力列単位でしきい値を上書き可能</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">自動抑制</div>
+        <div class="stat-label">しきい値未満の行は結果から除外</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">😰 アップデート前の課題</div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>カスタム SQL に集計しきい値保護を適用するには、事前承認済みの分析テンプレートと手動コードレビューが必要</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>データ提供者はパートナーのクエリを 1 つずつレビューする運用負荷を負担</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>アドホッククエリを許可すると、少人数グループを特定する結果が返るリスクを制御できない</span></div>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">😊 アップデート後の改善</div>
+        <div class="check-item"><span class="check-icon">✓</span><span>事前構造化クエリや承認ワークフローなしで、カスタム分析ルールに直接しきい値を設定可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>各行が最低 N 人の異なるデータ主体を表すことを自動保証、しきい値未満の行は自動抑制</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>列ごとのしきい値上書きと比較コントロールで、きめ細かなプライバシー制御を実現</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Collab["🤝 AWS Clean Rooms コラボレーション"]
+        subgraph Provider["🏢 データ提供者 パブリッシャー"]
+            Table[("📋 impressions テーブル<br/>user_id / campaign_id / event_date")]
+            Rule["📜 カスタム分析ルール<br/>最小集計しきい値: 100<br/>比較コントロール"]
+        end
+        Engine["⚙️ クエリエンジン<br/>しきい値を自動適用"]
+    end
+
+    Advertiser(["👤 広告主 クエリ実行者"]) -->|"アドホック SQL クエリ"| Engine
+    Rule -.->|"制御を適用"| Engine
+    Table --> Engine
+    Engine -->|"100 人以上の行のみ返却"| Result["✅ クエリ結果"]
+    Engine -.->|"しきい値未満の行"| Suppressed["🚫 自動抑制"]
+
+    classDef collab fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef provider fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef error fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+
+    class Collab collab
+    class Provider provider
+    class Table database
+    class Rule internal
+    class Engine compute
+    class Advertiser user
+    class Result input
+    class Suppressed error
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      💡 データ提供者がカスタム分析ルールに最小集計しきい値を設定すると、クエリ実行者のアドホッククエリに対して AWS Clean Rooms が自動的にしきい値を適用し、条件を満たさない行を結果から抑制します。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ 最小集計しきい値 (Aggregation Thresholds)</div>
+      <ul>
+        <li>アイデンティティ列 (<code class="inline">identityColumns</code>) と最小アイデンティティ数 (<code class="inline">minimumIdentityCount</code>) を指定し、各結果行が<strong>最低 N 人の異なるデータ主体</strong>を表すことを保証</li>
+        <li><code class="inline">minimumIdentityCount</code> は <span class="highlight">2〜100,000</span> の範囲で設定可能</li>
+        <li>アイデンティティ列は <code class="inline">string</code>、<code class="inline">varchar</code>、<code class="inline">char</code> 型である必要がある</li>
+        <li>集計タイプは <code class="inline">COUNT_DISTINCT</code> (異なる値のカウント)</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ 出力列ごとのしきい値の上書き (Output Column Thresholds)</div>
+      <ul>
+        <li>出力列の機密性レベルに応じて、列ごとに異なる <code class="inline">minimumIdentityCount</code> を適用可能</li>
+        <li>例: 低機密の <code class="inline">campaign_id</code> にはしきい値 5、高機密の <code class="inline">postal_code</code> や <code class="inline">income_bracket</code> にはしきい値 100 を適用</li>
+        <li>上書き値に <code class="inline">0</code> を指定すると、その列を最小集計の対象から除外できる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 集計関数内のネスト式の制御 (Allowed Aggregate Expression Type)</div>
+      <ul>
+        <li>デフォルトは <code class="inline">COLUMNS_ONLY</code> で、集計関数内には列のみ許可 (例: <code class="inline">SUM(cost)</code>)。<span class="highlight">プライバシー強化構成として推奨</span></li>
+        <li>信頼できるパートナーとの場合は <code class="inline">ANY_EXPRESSION</code> で <code class="inline">SUM(cost * quantity)</code> のような式も利用可能 (再識別リスク増のため、プライバシー・法務・コンプライアンスチームへの相談が必要)</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ 比較コントロール (Comparison Controls)</div>
+      <ul>
+        <li><code class="inline">allowedLiteralComparisonColumns</code>: リテラル値との比較 (例: <code class="inline">WHERE state = 'New York'</code>) を許可する列を指定</li>
+        <li><code class="inline">allowedColumnComparisonColumns</code>: 列間比較によるテーブル結合 (例: <code class="inline">JOIN ... ON t.user_id = partner.user_id</code>) を許可する列を指定</li>
+        <li>郵便番号や年齢層などカーディナリティの低い準識別子列による意図しない絞り込みリスクを軽減</li>
+        <li><span class="highlight">最小集計しきい値との併用が推奨構成</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📐 最小集計しきい値のパラメータ</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td><code class="inline">identityColumns</code></td><td>データ主体を一意に識別する列 (例: <code class="inline">user_id</code>)。<code class="inline">string</code>、<code class="inline">varchar</code>、<code class="inline">char</code> 型のみ</td></tr>
+      <tr><td><code class="inline">minimumIdentityCount</code></td><td>各結果行が表すべき最小の異なるデータ主体数。2〜100,000</td></tr>
+      <tr><td><code class="inline">type</code></td><td><code class="inline">COUNT_DISTINCT</code> (固定)</td></tr>
+      <tr><td><code class="inline">allowedAggregateExpressionType</code></td><td><code class="inline">COLUMNS_ONLY</code> (デフォルト、推奨) または <code class="inline">ANY_EXPRESSION</code></td></tr>
+      <tr><td><code class="inline">outputColumnThresholds</code></td><td>出力列ごとのしきい値の上書き。<code class="inline">0</code> (除外) または 2〜100,000</td></tr>
+      <tr><td><code class="inline">comparisonControls</code></td><td>リテラル比較および列間比較を許可する列のリスト</td></tr>
+    </table>
+
+    <h3>📋 API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/08/13</td>
+        <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/db5022-cleanrooms.html" target="_blank" rel="noopener noreferrer">cleanrooms</a></td>
+        <td>8 updated api methods - カスタム分析ルールタイプへの最小集計しきい値と比較コントロールのサポート追加</td>
+      </tr>
+    </table>
+
+    <h3>💻 カスタム分析ルールの設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">カスタム分析ルール設定</span>
+      </div>
+      <pre><code class="language-json">{
+  "aggregationThresholds": [
+    {
+      "identityColumns": [
+        "user_id"
+      ],
+      "minimumIdentityCount": 100,
+      "type": "COUNT_DISTINCT",
+      "allowedAggregateExpressionType": "COLUMNS_ONLY",
+      "outputColumnThresholds": [
+        {
+          "outputColumnName": "campaign_id",
+          "minimumIdentityCount": 5
+        }
+      ]
+    }
+  ],
+  "comparisonControls": {
+    "allowedLiteralComparisonColumns": [
+      "campaign_id",
+      "event_date"
+    ],
+    "allowedColumnComparisonColumns": [
+      "user_id"
+    ]
+  },
+  "allowedAnalyses": [
+    "ANY_QUERY"
+  ],
+  "allowedAnalysisProviders": [
+    "444455556666"
+  ]
+}</code></pre>
+    </div>
+    <p style="font-size: 14px;">
+      💡 この例では、すべての結果行が最低 100 人の異なるユーザーを表すことを要求しつつ、低機密の <code class="inline">campaign_id</code> 列にはしきい値 5 を適用し、<code class="inline">campaign_id</code> と <code class="inline">event_date</code> でのリテラルフィルタリングと <code class="inline">user_id</code> での結合を許可しています。
+    </p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Clean Rooms のコラボレーションが作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>設定済みテーブル (Configured Table) が作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>アイデンティティ列が <code class="inline">string</code>、<code class="inline">varchar</code>、<code class="inline">char</code> 型であること</span></div>
+
+    <h3>📝 手順</h3>
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">カスタム分析ルールの設定を開始</div>
+        <span>AWS Clean Rooms コンソールの [Tables] で対象の設定済みテーブルを選択し、[Configure analysis rule] から分析ルールタイプで [Custom] を選択。[Review each new analysis] または [Allow any analysis by specific collaborators] を選択</span>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">最小集計しきい値を設定</div>
+        <span>[Enforce aggregation thresholds?] に [Yes] を選択し、アイデンティティ列と最小アイデンティティ数 (2〜100,000) を指定。[Allow nested expressions in aggregate functions?] はデフォルトの [No] を維持 (プライバシー強化構成)。オプションで [Add column override] により列ごとのしきい値上書きを追加</span>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">比較コントロールを設定 (推奨)</div>
+        <span>[Custom list] を選択して明示的に制限する構成が推奨。リテラル比較を許可する列と、列間比較 (結合) を許可する列をそれぞれ選択し、設定をレビュー後 [Configure analysis rule] を選択。設定済みテーブルをコラボレーションに関連付ける</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>⚖️ メリット・制約事項</h2>
+
+    <div class="before-after">
+      <div class="after-box">
+        <div class="ba-title">👍 メリット</div>
+        <div style="font-weight: 700; color: var(--aws-white); margin: 8px 0 4px;">ビジネス面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の削減</strong>: 分析テンプレートごとの手動コードレビューが不要になり、コラボレーションの立ち上げと運用が高速化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>パートナー体験の向上</strong>: 事前承認を待たずアドホック分析を実行でき、反復的な分析サイクルが短縮</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>プライバシーコンプライアンス強化</strong>: 少人数グループの情報が結果に含まれないことをサービス側で機械的に保証</span></div>
+        <div style="font-weight: 700; color: var(--aws-white); margin: 8px 0 4px;">技術面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>自動的な行レベル抑制</strong>: クエリ側での対策が不要</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>列単位のきめ細かな制御</strong>: 機密性レベルに応じた柔軟なポリシー設計</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>多層防御</strong>: しきい値 + 比較コントロール + 出力禁止列の組み合わせ</span></div>
+      </div>
+      <div class="before-box">
+        <div class="ba-title">⚠️ 制約事項・考慮点</div>
+        <div style="font-weight: 700; color: var(--aws-white); margin: 8px 0 4px;">制限事項</div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>差分プライバシー (Differential Privacy) とは併用不可</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>アイデンティティ列は <code class="inline">string</code> / <code class="inline">varchar</code> / <code class="inline">char</code> 型に限定</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span><code class="inline">minimumIdentityCount</code> は 2〜100,000 (列ごとの上書きでは <code class="inline">0</code> による除外も可能)</span></div>
+        <div style="font-weight: 700; color: var(--aws-white); margin: 8px 0 4px;">考慮すべき点</div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>しきい値単独では準識別子列 (郵便番号、年齢層など) による絞り込みを防げないため、比較コントロールとの併用を推奨</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span><code class="inline">ANY_EXPRESSION</code> の許可は少人数グループ分離のリスクがあり、プライバシー・法務・コンプライアンスチームへの確認が必要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>抑制された行の存在を考慮して分析結果を解釈する必要がある</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📰 ユースケース 1: パブリッシャーと広告主のメディアプランニング</div>
+      <p><span class="label">シナリオ</span>: パブリッシャー (データ提供者) が広告主とメディアプランニングのコラボレーションを実施。広告主にアドホッククエリを許可しつつ、共通ユーザーが 1,000 人未満の小規模な地方郵便番号の結果は自動的に除外したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">実装例</span>
+        </div>
+        <pre><code class="language-json">{
+  "aggregationThresholds": [
+    {
+      "identityColumns": ["user_id"],
+      "minimumIdentityCount": 1000,
+      "type": "COUNT_DISTINCT",
+      "allowedAggregateExpressionType": "COLUMNS_ONLY"
+    }
+  ],
+  "allowedAnalyses": ["ANY_QUERY"],
+  "allowedAnalysisProviders": ["444455556666"]
+}</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: 広告主は事前承認なしで自由にメディアプランニング分析を実行でき、パブリッシャーは小規模グループの情報漏洩リスクをサービス側の保証で排除できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📊 ユースケース 2: キャンペーンリーチ測定</div>
+      <p><span class="label">シナリオ</span>: パブリッシャーの <code class="inline">impressions</code> テーブル (<code class="inline">user_id</code>、<code class="inline">campaign_id</code>、<code class="inline">event_date</code>) に対し、広告主がキャンペーンの日次リーチ (異なるユーザー数) を測定する。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">日次リーチ測定クエリ</span>
+        </div>
+        <pre><code class="language-sql">SELECT event_date, COUNT(DISTINCT user_id) AS reach
+FROM impressions
+WHERE event_date >= '2026-01-01' AND campaign_id = 'Holiday Promotion'
+GROUP BY event_date;</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: 最小集計しきい値 100 の設定により、100 人以上の異なるユーザーに裏付けられた日付の行のみが返却され、閲覧者が少なかった日の行は自動的に抑制される。個人や少人数グループの情報を明かすことなく日次リーチを把握できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🎚️ ユースケース 3: 機密性レベルに応じた列ごとのしきい値設計</div>
+      <p><span class="label">シナリオ</span>: データ提供者のテーブルに、機密性の低い <code class="inline">campaign_id</code> と機密性の高い <code class="inline">postal_code</code> や <code class="inline">income_bracket</code> が混在。列ごとに適切な保護レベルを設定したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">列ごとのしきい値上書き</span>
+        </div>
+        <pre><code class="language-json">{
+  "aggregationThresholds": [
+    {
+      "identityColumns": ["user_id"],
+      "minimumIdentityCount": 100,
+      "type": "COUNT_DISTINCT",
+      "allowedAggregateExpressionType": "COLUMNS_ONLY",
+      "outputColumnThresholds": [
+        {
+          "outputColumnName": "campaign_id",
+          "minimumIdentityCount": 5
+        }
+      ]
+    }
+  ]
+}</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: デフォルトしきい値 100 で高機密列を保護しつつ、低機密の <code class="inline">campaign_id</code> はしきい値 5 に緩和することで、プライバシー保護と分析の有用性のバランスを列単位で最適化できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p style="margin: 4px 0;">最小集計しきい値の利用自体に追加料金の記載はなく、<strong>AWS Clean Rooms の標準料金体系</strong>が適用されます。AWS Clean Rooms はクエリ実行時のコンピューティング使用量に基づいて課金されます。詳細は <a class="aws-link" href="https://aws.amazon.com/clean-rooms/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a> を参照。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 利用可能リージョン</div>
+      <p style="margin: 4px 0;">AWS Clean Rooms が利用可能な<strong>すべての AWS リージョン</strong>で利用できます。最新のリージョン一覧は <a class="aws-link" href="https://docs.aws.amazon.com/general/latest/gr/clean-rooms.html#clean-rooms_region" target="_blank" rel="noopener noreferrer">AWS リージョン別サービス表</a> を参照。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">📋 AWS Clean Rooms 分析テンプレート</div>
+      <p style="margin: 4px 0;">従来の事前承認方式。特定のクエリのみを許可したい場合は引き続き有効な選択肢。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🧮 AWS Clean Rooms Differential Privacy</div>
+      <p style="margin: 4px 0;">数学的に厳密なプライバシー保護フレームワーク。ただし最小集計しきい値および比較コントロールとは併用不可。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 AWS Clean Rooms 集計分析ルール / リスト分析ルール</div>
+      <p style="margin: 4px 0;">構造化されたクエリのみを許可する既存の分析ルールタイプ。集計分析ルールにも同様の集計制約の概念があり、今回のアップデートでカスタム分析ルールでも同等の保護が利用可能に。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🆔 AWS Entity Resolution</div>
+      <p style="margin: 4px 0;">コラボレーション前の ID 解決に利用でき、アイデンティティ列の品質向上に寄与。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>💡 まとめ</h2>
+    <p>
+      AWS Clean Rooms のカスタム分析ルールに<span class="highlight">最小集計しきい値</span>が追加され、分析テンプレートの事前レビューなしで<strong>アドホッククエリを安全に許可</strong>できるようになりました。
+    </p>
+    <div class="check-item"><span class="check-icon">✓</span><span>データコラボレーション運用チームは、<strong>比較コントロールとの併用を推奨構成</strong>として、既存のカスタム分析ルールへのしきい値追加を検討</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>差分プライバシーとは併用できないため、どちらの保護方式が要件に適しているかを事前に評価</span></div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li>→ <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/08/aws-clean-rooms-minimum-aggregation-custom-analysis-rules" target="_blank" rel="noopener noreferrer">公式発表 (What's New): AWS Clean Rooms minimum aggregation for custom analysis rules</a></li>
+      <li>→ <a class="aws-link" href="https://docs.aws.amazon.com/clean-rooms/latest/userguide/analysis-rules-custom.html" target="_blank" rel="noopener noreferrer">ドキュメント: カスタム分析ルール</a></li>
+      <li>→ <a class="aws-link" href="https://docs.aws.amazon.com/clean-rooms/latest/userguide/custom-min-agg-thresholds.html" target="_blank" rel="noopener noreferrer">ドキュメント: 最小集計しきい値</a></li>
+      <li>→ <a class="aws-link" href="https://aws.amazon.com/clean-rooms/" target="_blank" rel="noopener noreferrer">AWS Clean Rooms 製品ページ</a></li>
+      <li>→ <a class="aws-link" href="https://aws.amazon.com/clean-rooms/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a></li>
+      <li>→ <a class="aws-link" href="https://awsapichanges.com/archive/changes/db5022-cleanrooms.html" target="_blank" rel="noopener noreferrer">API 変更履歴 (cleanrooms)</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-08-13) を基に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
