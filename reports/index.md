@@ -5,6 +5,11 @@
 
 ## 2026 年
 
+- [2026-08-17 - Amazon EC2 - R8i / R8i-flex インスタンスがカナダ西部 (カルガリー) リージョンで利用可能に](2026/2026-08-17-amazon-ec2-r8i-r8i-flex-calgary.md)
+- [2026-08-17 - AWS CloudShell - ビルトインビジュアルファイルエディタ](2026/2026-08-17-aws-cloudshell-visual-file-editor.md)
+- [2026-08-17 - Amazon EC2 Auto Scaling - バッチインスタンス終了のサポート](2026/2026-08-17-amazon-ec2-auto-scaling-batch-termination.md)
+- [2026-08-17 - Amazon OpenSearch Service - VPC ドメインでの自動セマンティックエンリッチメント対応](2026/2026-08-17-amazon-opensearch-service-vpc.md)
+- [2026-08-17 - Amazon Bedrock - OpenAI モデルの API サポート拡大とクロスリージョン推論の導入](2026/2026-08-17-amazon-bedrock-cross-region-openai-v2.md)
 - [2026-08-14 - Amazon SES - クリックトラッキングのカスタム URL パス対応 (モバイルアプリディープリンク)](2026/2026-08-14-amazon-ses-supports-customurl-deeplinking.md)
 - [2026-08-14 - Amazon RDS for Oracle - Oracle Application Express (APEX) バージョン 26.1 サポート](2026/2026-08-14-amazon-rds-oracle-apex-26-1.md)
 - [2026-08-14 - AWS Billing and Cost Management - Managed Dashboards](2026/2026-08-14-aws-billing-and-cost-management-managed-dashboards.md)
