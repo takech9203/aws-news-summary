@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IAM Policy Autopilot が Terraform plan ファイルをサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  margin-right: 8px;
+}
+
+.date-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--aws-light-gray);
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF6B4A; }
+.after-box h3 { color: #4CAF50; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 4px; list-style: none; }
+.before-box li, .after-box li {
+  margin: 8px 0;
+  padding-left: 24px;
+  position: relative;
+  font-size: 14px;
+}
+.before-box li::before { content: "✗"; color: #FF6B4A; position: absolute; left: 0; font-weight: 700; }
+.after-box li::before { content: "✓"; color: #4CAF50; position: absolute; left: 0; font-weight: 700; }
+
+/* checklist */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: var(--aws-green); font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: var(--aws-red); font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* flow diagram */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 18px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+td code, li code, p code {
+  background: rgba(255, 153, 0, 0.12);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+.table-wrap { overflow-x: auto; }
+
+/* code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* stats */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.3;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.label-tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+.label-scenario { background: rgba(0, 161, 201, 0.2); color: var(--aws-teal); }
+.label-effect { background: rgba(29, 129, 2, 0.25); color: #4CAF50; }
+
+/* steps */
+.step-item {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-content .step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+ul.plain { padding-left: 20px; margin: 8px 0; }
+ul.plain li { margin: 6px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { padding-left: 20px; margin: 8px 0; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS IAM</span>
+      <span class="service-badge">IAM Policy Autopilot</span>
+      <span class="date-badge">📅 2026 年 8 月 18 日</span>
+    </div>
+    <h1>🤖 IAM Policy Autopilot が Terraform plan ファイルをサポート</h1>
+    <div class="subtitle">Terraform plan から、インフラを「デプロイするための」IAM ポリシーを決定論的に自動生成</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      オープンソースツール <span class="highlight">IAM Policy Autopilot</span> が、<span class="highlight">Terraform plan ファイル (JSON 形式)</span> を入力として、インフラデプロイ用のベースライン IAM ポリシーを直接生成できるようになりました。plan に含まれるリソースの <span class="highlight">CRUD 操作にスコープ</span>されたポリシーが<span class="highlight">決定論的解析</span>によって生成され、可能な場合はワイルドカードではなく具体的なリソース ARN を参照します。
+    </p>
+    <p>
+      Terraform デプロイ用ポリシーの生成は、re:Invent 2025 のローンチ以来<strong style="color: var(--aws-white);">最も要望の多かった機能</strong>です。対象は Terraform で AWS インフラを管理する開発者、DevOps エンジニア、プラットフォームチーム、CI/CD パイプライン用デプロイロールを設計するセキュリティ担当者です。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>😰 Before: アップデート前の課題</h3>
+        <ul>
+          <li>アプリケーションソースコードの解析のみ対応。Terraform インフラを「デプロイするため」のポリシーは生成できなかった</li>
+          <li>デプロイロールのポリシーは手動作成が必要で、<code>AdministratorAccess</code> のような過剰な権限を付与しがちだった</li>
+          <li>デプロイ時の AccessDenied エラーを試行錯誤で解決し、権限の絞り込みに時間がかかっていた</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>🚀 After: アップデート後の改善</h3>
+        <ul>
+          <li>Terraform plan JSON を渡すだけで、plan 内リソースの CRUD 操作にスコープされたベースラインポリシーを生成</li>
+          <li>可能な場合はワイルドカードではなく具体的な ARN を参照し、最小権限の原則に近づけやすい</li>
+          <li>決定論的解析のため同じ plan から常に一貫した結果。生成 AI の推測に依存しない</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Local["💻 ローカル環境"]
+        subgraph TF["📦 Terraform ワークフロー"]
+            Code["📄 Terraform コード<br/>*.tf"]
+            Plan["🗂️ バイナリ plan<br/>terraform plan -out"]
+            Json["📋 plan JSON<br/>terraform show -json"]
+            Code --> Plan --> Json
+        end
+        subgraph Autopilot["🤖 IAM Policy Autopilot"]
+            Analyze["🔍 決定論的解析<br/>リソースの CRUD 操作を抽出"]
+            Arn["🏷️ ARN 解決<br/>可能な限り具体的な ARN を参照"]
+            Analyze --> Arn
+        end
+        Policy["📜 ベースライン IAM ポリシー<br/>JSON"]
+    end
+    Ref{{"☁️ AWS Service Reference<br/>最新のサービスメタデータ"}}
+    Review(["👤 レビューと改善"])
+    Deploy["🚀 デプロイロールへ適用<br/>CI/CD パイプライン等"]
+
+    Json --> Analyze
+    Ref -.-> Analyze
+    Arn --> Policy
+    Policy --> Review --> Deploy
+
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef external fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Code,Plan,Json input
+    class Analyze,Arn internal
+    class Policy,Deploy process
+    class Ref,Review external
+    class Local,TF,Autopilot layer
+      </pre>
+    </div>
+    <p class="diagram-caption">Terraform plan を JSON 形式に変換して IAM Policy Autopilot に渡すと、plan 内のリソースに対する CRUD 操作にスコープされたベースライン IAM ポリシーがローカルで生成される流れ</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ Terraform plan ファイルからのポリシー生成</div>
+      <ul class="plain">
+        <li><code>terraform show -json</code> で変換した plan ファイルを <code>generate-policies</code> コマンドの入力として指定可能</li>
+        <li>plan に含まれるリソースの作成・読み取り・更新・削除 (CRUD) 操作にスコープされたポリシーを生成</li>
+        <li>入力の種類 (ソースコードか Terraform plan か) は自動検出。ただし 1 回の実行で両者を混在させることはできない</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ 具体的な ARN を参照するポリシー</div>
+      <ul class="plain">
+        <li>可能な場合、ワイルドカード (<code>*</code>) ではなく具体的なリソース ARN を Resource 要素に指定</li>
+        <li><code>--region</code> と <code>--account</code> オプションで ARN 構築に使用するリージョンとアカウント ID を指定可能</li>
+        <li>最小権限の原則に沿ったベースラインを短時間で用意できる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 決定論的解析</div>
+      <ul class="plain">
+        <li>生成 AI の推測ではなく、静的かつ決定論的な解析によりポリシーを生成</li>
+        <li>同じ plan からは常に一貫した結果が得られ、再現性がある</li>
+        <li>AWS Service Reference エンドポイントから最新のサービスメタデータを取得し、新しいサービスやアクションにも追随</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ 既存の Terraform 対応解析との補完関係</div>
+      <ul class="plain">
+        <li><strong>既存機能</strong>: Terraform リソース定義とアプリケーションコード内の SDK 呼び出しを相互参照し、アプリケーション実行ロール用ポリシーの ARN を解決</li>
+        <li><strong>新機能</strong>: Terraform plan そのものを入力として、インフラを「デプロイするロール」用のポリシーを生成</li>
+        <li>アプリケーション実行時の権限とデプロイ時の権限の両方をカバー可能に</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📋 IAM Policy Autopilot の概要</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>提供形態</td><td>オープンソース (Apache 2.0 ライセンス)、awslabs GitHub リポジトリで公開</td></tr>
+        <tr><td>実行環境</td><td>ローカルマシン上で実行 (Rust 製 CLI / MCP サーバー、PyPI パッケージ <code>iam-policy-autopilot</code> としても配布)</td></tr>
+        <tr><td>入力 (既存)</td><td>アプリケーションソースコード (Python、Go、TypeScript、JavaScript、Java)</td></tr>
+        <tr><td>入力 (新規)</td><td>Terraform plan ファイル (JSON 形式、<code>terraform show -json</code> で生成)</td></tr>
+        <tr><td>出力</td><td>IAM アイデンティティベースポリシー (JSON)</td></tr>
+        <tr><td>ネットワーク要件</td><td><code>servicereference.us-east-1.amazonaws.com</code> への HTTPS アクセス (サービスメタデータ取得用)</td></tr>
+        <tr><td>利用方法</td><td>CLI (<code>generate-policies</code>、<code>fix-access-denied</code>)、MCP サーバー (AI コーディングアシスタント連携)、Kiro Power</td></tr>
+      </table>
+    </div>
+
+    <h3>🛠️ generate-policies コマンドの主なオプション</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>オプション</th><th>説明</th></tr>
+        <tr><td><code>--region &lt;REGION&gt;</code></td><td>リソース ARN に使用する AWS リージョン</td></tr>
+        <tr><td><code>--account &lt;ACCOUNT&gt;</code></td><td>リソース ARN に使用する AWS アカウント ID</td></tr>
+        <tr><td><code>--service-hints &lt;SERVICES&gt;</code></td><td>解析対象のサービスを限定し、不要な権限を削減 (ソースコード解析時)</td></tr>
+        <tr><td><code>--upload-policies &lt;PREFIX&gt;</code></td><td>生成したポリシーを指定プレフィックス付きで AWS IAM にアップロード</td></tr>
+        <tr><td><code>--explain &lt;PATTERN&gt;</code></td><td>特定のアクションが含まれた理由を表示 (例: <code>--explain 's3:*'</code>)</td></tr>
+        <tr><td><code>--pretty</code></td><td>JSON 出力を整形して表示</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>📝 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Terraform がインストールされ、対象の Terraform 構成が初期化済みであること (<code>terraform init</code>)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>IAM Policy Autopilot がインストールされていること (uv / pip / インストールスクリプトのいずれか)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>インターネット経由で AWS Service Reference エンドポイントにアクセスできること</span></div>
+
+    <div class="flow-diagram">
+      <div class="flow-step">📥 インストール</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🗂️ plan 作成<br/>JSON 変換</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📜 ポリシー生成</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">👤 レビューと適用</div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">IAM Policy Autopilot のインストール</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">インストール</span></div>
+          <pre><code class="language-bash"># pip でインストールする場合
+pip install iam-policy-autopilot
+
+# uv を利用する場合はインストール不要で直接実行可能
+# uvx iam-policy-autopilot --version</code></pre>
+        </div>
+        <p style="font-size: 14px;">uv を使用する場合は <code>uvx</code> コマンドで直接実行できるため、事前インストールは不要です。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">Terraform plan の作成と JSON への変換</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">plan の JSON 化</span></div>
+          <pre><code class="language-bash"># バイナリ形式の plan ファイルを出力
+terraform plan -out=plan.tfplan
+
+# plan を JSON 形式に変換
+terraform show -json plan.tfplan > plan.json</code></pre>
+        </div>
+        <p style="font-size: 14px;"><code>terraform show -json</code> で IAM Policy Autopilot が解析できる JSON 形式に変換します。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">plan ファイルからポリシーを生成</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ポリシー生成</span></div>
+          <pre><code class="language-bash">iam-policy-autopilot generate-policies plan.json --pretty</code></pre>
+        </div>
+        <p style="font-size: 14px;">入力の種類は自動検出されるため、専用のフラグ指定は不要です。<code>--region</code> や <code>--account</code> を指定すると ARN の構築に使用されます。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">生成されたポリシーのレビューと適用</div>
+        <p style="font-size: 14px;">生成されたポリシーは<span class="highlight">ベースライン</span>です。組織のセキュリティ要件に沿っているかレビューし、必要に応じて条件キーの追加や権限の絞り込みを行ったうえで、CI/CD パイプラインのデプロイロールなどに適用します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">オープンソースで追加コストなし。ローカル実行のため AWS 利用料金も不要</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">100% 決定論的</div>
+        <div class="stat-label">同じ plan から常に一貫した結果。生成 AI の推測に依存しない</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">要望 No.1</div>
+        <div class="stat-label">ローンチ以来最も要望の多かった機能が実現</div>
+      </div>
+    </div>
+    <div class="two-col">
+      <div>
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>デプロイロール作成の時間短縮</strong>: 手動でのポリシー書き起こしが不要になり、インフラ構築の立ち上げが加速</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>セキュリティリスクの低減</strong>: <code>AdministratorAccess</code> のような広すぎる権限の付与を減らし、最小権限の原則に近づける</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: オープンソースで無料。追加の AWS 利用料金も発生しない</span></div>
+      </div>
+      <div>
+        <h3>🔬 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>決定論的で再現性のある解析</strong>: 同じ plan から常に一貫したポリシーが得られる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>具体的な ARN の参照</strong>: スコープの絞り込みが容易</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>既存ワークフローとの親和性</strong>: 標準的な Terraform ワークフローの出力をそのまま利用でき、CI/CD への組み込みも容易</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Terraform plan は JSON 形式である必要があり、バイナリ形式の plan をそのまま入力することはできない (<code>terraform show -json</code> での変換が必要)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>1 回の実行でソースコードと Terraform plan を混在させて入力することはできない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>生成されるのはアイデンティティベースポリシーのみ。リソースベースポリシー (S3 バケットポリシー、KMS キーポリシーなど)、SCP、RCP、Permissions Boundary には非対応</span></div>
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>生成されるポリシーはあくまでベースライン。デプロイ前に必ずレビューして組織のセキュリティ要件に適合させる必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>実行時に AWS Service Reference エンドポイント (<code>servicereference.us-east-1.amazonaws.com</code>) への HTTPS アクセスが必要。プロキシ環境では <code>HTTPS_PROXY</code> の設定などが必要になる場合がある</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. CI/CD パイプライン用デプロイロールの権限設計</div>
+      <p><span class="label-tag label-scenario">シナリオ</span>GitHub Actions や AWS CodePipeline から Terraform を実行する際、デプロイロールに広すぎる権限を付与している。監査で指摘を受け、plan の内容に即した最小限の権限に絞り込みたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">terraform plan -out=plan.tfplan
+terraform show -json plan.tfplan > plan.json
+iam-policy-autopilot generate-policies plan.json \
+  --region ap-northeast-1 --account 123456789012 --pretty</code></pre>
+      </div>
+      <p><span class="label-tag label-effect">効果</span>plan に含まれるリソースの CRUD 操作に限定されたポリシーが得られ、デプロイロールの権限を大幅に絞り込める。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. 新規 Terraform プロジェクト立ち上げ時の初期ポリシー作成</div>
+      <p><span class="label-tag label-scenario">シナリオ</span>新しいワークロードを Terraform で構築する。デプロイに必要な権限が事前にわからず、AccessDenied エラーの試行錯誤に時間を取られたくない。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># plan を JSON 化してポリシーを生成し、ファイルに保存
+iam-policy-autopilot generate-policies plan.json --pretty > deploy-policy.json</code></pre>
+      </div>
+      <p><span class="label-tag label-effect">効果</span>デプロイ前に必要な権限の全体像を把握でき、AccessDenied エラーによる手戻りを削減できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. アプリケーション実行ロールとデプロイロールの一貫した管理</div>
+      <p><span class="label-tag label-scenario">シナリオ</span>アプリケーションコードと Terraform 定義が同じリポジトリにあり、アプリケーション実行時の権限とインフラデプロイ時の権限の両方を管理したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># アプリケーション実行ロール用 (ソースコード解析)
+iam-policy-autopilot generate-policies ./src/app.py \
+  --service-hints s3 dynamodb --pretty
+
+# デプロイロール用 (Terraform plan 解析)
+iam-policy-autopilot generate-policies plan.json --pretty</code></pre>
+      </div>
+      <p><span class="label-tag label-effect">効果</span>同一ツールで実行時権限とデプロイ時権限の両方をカバーでき、IAM ポリシー管理のワークフローを統一できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">💵 料金</div>
+        <p style="font-size: 14px; margin: 0;">IAM Policy Autopilot は<span class="highlight">オープンソースツール</span>であり、追加コストなしで利用できます。ユーザー自身のマシン上で動作するため、AWS 側の利用料金も発生しません。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🌏 利用可能リージョン</div>
+        <p style="font-size: 14px; margin: 0;">リージョンに依存しない<span class="highlight">ローカル実行型</span>のオープンソースツールです。GitHub リポジトリおよび PyPI から誰でも入手できます。実行時に AWS Service Reference エンドポイント (<code>servicereference.us-east-1.amazonaws.com</code>) へのアクセスが必要です。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🔐 AWS IAM</div>
+      <p style="font-size: 14px; margin: 0;">生成されたアイデンティティベースポリシーを適用する対象サービス。IAM Access Analyzer と組み合わせて未使用権限の検出・絞り込みも可能。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📦 Terraform</div>
+      <p style="font-size: 14px; margin: 0;">plan ファイル (<code>terraform plan</code> / <code>terraform show -json</code>) が今回の新しい入力ソース。デプロイロールの権限設計を自動化できる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🤖 AI コーディングアシスタント (Kiro、Claude Code など)</div>
+      <p style="font-size: 14px; margin: 0;">IAM Policy Autopilot は MCP サーバーとしても動作し、コーディングアシスタントからポリシー生成を呼び出せる。Kiro 向けには Kiro Power も提供。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>✨ まとめ</h2>
+    <p>
+      IAM Policy Autopilot が Terraform plan ファイルに対応したことで、アプリケーション実行時の権限に加えて、インフラを<span class="highlight">「デプロイするための」IAM ポリシー</span>も決定論的に生成できるようになりました。ローンチ以来最も要望の多かった機能であり、Terraform を利用するチームはデプロイロールの過剰な権限付与を減らす実用的な手段を得られます。
+    </p>
+    <div class="card">
+      <div class="card-title">🚀 まず試すこと</div>
+      <p style="font-size: 14px; margin: 0;">既存の Terraform プロジェクトで <code>terraform show -json</code> から plan を生成し、現在のデプロイロールの権限と生成されたベースラインポリシーを比較してみることをお勧めします。</p>
+    </div>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/08/iam-policy-autopilot-now-supports-terraform-plan-files" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (AWS What's New): IAM Policy Autopilot now supports Terraform plan files</a></li>
+      <li><a href="https://aws.amazon.com/blogs/security/iam-policy-autopilot-an-open-source-tool-that-brings-iam-policy-expertise-to-builders-and-ai-coding-assistants/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Security Blog: IAM Policy Autopilot ローンチ記事</a></li>
+      <li><a href="https://aws.amazon.com/blogs/aws/simplify-iam-policy-creation-with-iam-policy-autopilot-a-new-open-source-mcp-server-for-builders/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS News Blog: Simplify IAM policy creation with IAM Policy Autopilot</a></li>
+      <li><a href="https://github.com/awslabs/iam-policy-autopilot" target="_blank" rel="noopener noreferrer" class="aws-link">IAM Policy Autopilot GitHub リポジトリ</a></li>
+      <li><a href="https://pypi.org/project/iam-policy-autopilot/" target="_blank" rel="noopener noreferrer" class="aws-link">PyPI: iam-policy-autopilot</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-08-18) を基に作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

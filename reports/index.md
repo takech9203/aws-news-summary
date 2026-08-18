@@ -5,8 +5,19 @@
 
 ## 2026 年
 
+- [2026-08-18 - Amazon SageMaker Unified Studio - データプロファイリングと異常検出のサポート](2026/2026-08-18-smus-data-profiling.md)
+- [2026-08-18 - Amazon MWAA - MWAA Serverless での PythonOperator と BashOperator サポート](2026/2026-08-18-mwaa-serverless-pythonoperator-bashoperator.md)
+- [2026-08-18 - Amazon RDS for PostgreSQL - PostgreSQL 19 Beta 3 が RDS Database Preview Environment で利用可能に](2026/2026-08-18-postgresql-19-beta-3-amazon-rds-database-preview-environment.md)
+- [2026-08-18 - Amazon Bedrock AgentCore - AgentCore payments の一般提供開始](2026/2026-08-18-bedrock-agentcore-payments-ga.md)
+- [2026-08-18 - AWS IAM - IAM Policy Autopilot による Terraform plan ファイルのサポート](2026/2026-08-18-iam-policy-autopilot-now-supports-terraform-plan-files.md)
 - [2026-08-17 - Amazon EC2 - R8i / R8i-flex インスタンスがカナダ西部 (カルガリー) リージョンで利用可能に](2026/2026-08-17-amazon-ec2-r8i-r8i-flex-calgary.md)
+- [2026-08-17 - Amazon Quick - Microsoft 365 拡張機能の一般提供開始](2026/2026-08-17-amazon-quick-microsoft-365-extensions-generally-available.md)
+- [2026-08-17 - Amazon MSK - MSK Provisioned クラスターのカスタムドメイン名設定サポート](2026/2026-08-17-amazon-msk-custom-domain-names.md)
+- [2026-08-17 - Amazon ECR - レジストリあたりのレプリケーションルール上限を 25 件に拡大](2026/2026-08-17-amazon-ecr-increased-replication-rules-limit.md)
+- [2026-08-17 - Amazon Connect - Customer ダッシュボードがルーティングステップとエージェントプロフィシエンシーのレポートに対応](2026/2026-08-17-amazon-connect-routing-steps.md)
+- [2026-08-17 - AWS Console-to-Code - 26 サービス追加とクロスリージョン記録のサポート](2026/2026-08-17-console-to-code-adds-26-services.md)
 - [2026-08-17 - AWS CloudShell - ビルトインビジュアルファイルエディタ](2026/2026-08-17-aws-cloudshell-visual-file-editor.md)
+- [2026-08-17 - AWS Network Firewall - ステートフルルールヒットカウントのサポート](2026/2026-08-17-aws-network-firewall-stateful-rule-hit-counts.md)
 - [2026-08-17 - Amazon EC2 Auto Scaling - バッチインスタンス終了のサポート](2026/2026-08-17-amazon-ec2-auto-scaling-batch-termination.md)
 - [2026-08-17 - Amazon OpenSearch Service - VPC ドメインでの自動セマンティックエンリッチメント対応](2026/2026-08-17-amazon-opensearch-service-vpc.md)
 - [2026-08-17 - Amazon Bedrock - OpenAI モデルの API サポート拡大とクロスリージョン推論の導入](2026/2026-08-17-amazon-bedrock-cross-region-openai-v2.md)
