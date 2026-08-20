@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon EKS - 認証局 (CA) ローテーションの自動ライフサイクル管理サポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.45);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+
+.before-box .box-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .box-title { color: #6BCB4A; font-weight: 700; margin-bottom: 8px; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* Feature cards */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+
+.feature-card .feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+.feature-card p, .feature-card ul {
+  margin: 0;
+  font-size: 14px;
+}
+
+.feature-card ul { padding-left: 20px; }
+.feature-card li { margin: 4px 0; }
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.02); }
+
+code.inline {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--aws-smile-orange);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.92em;
+}
+
+/* Timeline */
+.timeline {
+  position: relative;
+  margin: 20px 0 8px 0;
+  padding-left: 26px;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  background: var(--aws-orange);
+  border-radius: 2px;
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 18px;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -25px;
+  top: 6px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--aws-squid-ink);
+  border: 3px solid var(--aws-orange);
+}
+
+.timeline-item.critical::before { border-color: var(--aws-red); }
+
+.timeline-when {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 14px;
+}
+
+.timeline-item.critical .timeline-when { color: #FF6B4A; }
+
+.timeline-what {
+  font-size: 14px;
+}
+
+/* Check / cross lists */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+
+.check-icon { color: #6BCB4A; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Steps */
+.step-label {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  margin-right: 8px;
+}
+
+/* Use case */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.usecase .usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.effect-box {
+  background: rgba(29, 129, 2, 0.12);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+/* Stats */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.14));
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* Links */
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.link-list { list-style: none; padding: 0; margin: 0; }
+.link-list li { margin: 8px 0; font-size: 14px; }
+
+/* Two column helper */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .before-after, .two-col { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer p { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="service-badge">☁️ Amazon EKS</div>
+    <h1>🔐 認証局 (CA) ローテーションの<br>自動ライフサイクル管理サポート</h1>
+    <div class="subtitle">
+      <span class="date">📅 リリース日: 2026 年 8 月 20 日</span> ｜
+      サービス: Amazon Elastic Kubernetes Service (Amazon EKS)
+    </div>
+  </div>
+
+  <!-- Overview -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon EKS が、クラスターの認証局 (CA) を<span class="highlight">マネージドなライフサイクルと自動セーフガード付き</span>でローテーションできる機能を発表しました。
+      各 EKS クラスターは作成時に固有の CA を持ち、この CA が API サーバーの証明書に署名することで、コントロールプレーン、ワーカーノード、クライアントが Kubernetes API サーバーと暗号化された接続を確立します。
+    </p>
+    <p>
+      2018 年のサービス開始以降に作成されたクラスターの CA は<span class="highlight">有効期間 10 年</span>であり、初期に作成されたクラスターはローテーションが必要な時期に近づいています。
+      後継 CA の追加、配布、アクティベーション、ロールバックまでの一連のプロセスが API・コンソール・通知でサポートされ、お客様が何も対応しない場合でも<span class="highlight">クラスターの可用性が維持される</span>よう設計されています。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">10 年</div>
+        <div class="stat-label">現行 CA の有効期間<br>(2018 年以降作成のクラスター)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">5 年</div>
+        <div class="stat-label">後継 CA の有効期間</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">2.5 年前</div>
+        <div class="stat-label">失効リマインダー通知の開始時期</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">追加料金なしで全商用リージョンで利用可能</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ Before (アップデート前)</div>
+        <ul>
+          <li>CA の有効期限を確認・管理するマネージドな仕組みがなく、期限切れに向けた計画的な対応が困難</li>
+          <li>後継 CA を段階的に配布し、既存の接続を維持しながら切り替えるセルフサービスの手段がない</li>
+          <li>切り替え後に問題が発生した場合に、以前の CA に戻すロールバック手段がない</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ After (アップデート後)</div>
+        <ul>
+          <li>AWS CLI、EKS API、CloudFormation、コンソールから後継 CA の追加とアクティベーションを自分のタイミングで実行可能</li>
+          <li>「デュアルトラスト期間」により、ワーカーノードやクライアントを段階的に更新可能</li>
+          <li>AWS Health、Cluster Insights、メール通知と自動追加・自動アクティベーションのセーフガードで停止リスクを低減</li>
+          <li>接続問題発生時は以前の CA に再アクティベートするロールバックが可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図: CA ローテーションのライフサイクル</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Lifecycle["🔄 CA ローテーションライフサイクル"]
+        direction TB
+        Append["1️⃣ 後継 CA の追加<br/>create-certificate-authority"]
+        Dist["2️⃣ マネージドコンポーネントへ配布<br/>distributionStatus: IN_PROGRESS → COMPLETE"]
+        Update["3️⃣ お客様側の更新<br/>ワーカーノード・kubeconfig・外部クライアント"]
+        Activate["4️⃣ アクティベーション<br/>activate-certificate-authority"]
+        Retire["5️⃣ 旧 CA の退役"]
+    end
+
+    subgraph AWSSide["☁️ AWS が自動更新"]
+        direction LR
+        CP["⚙️ コントロールプレーン"]
+        Auto["🤖 EKS Auto Mode"]
+        FG["📦 Fargate ノード"]
+        CP ~~~ Auto ~~~ FG
+    end
+
+    subgraph CustomerSide["👤 お客様が更新"]
+        direction LR
+        MNG["🖥️ マネージドノードグループ"]
+        KP["🌀 Karpenter ノード"]
+        Client["🔑 kubeconfig / CI/CD"]
+        MNG ~~~ KP ~~~ Client
+    end
+
+    Append --> Dist
+    Dist --> Update
+    Update --> Activate
+    Activate --> Retire
+    Dist -.-> AWSSide
+    Update -.-> CustomerSide
+    Activate -.->|問題発生時| Rollback["↩️ ロールバック<br/>旧 CA に再アクティベート"]
+    Rollback -.-> Activate
+
+    classDef phase fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef aws fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef customer fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef warn fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Append,Dist,Update,Activate,Retire phase
+    class CP,Auto,FG aws
+    class MNG,KP,Client customer
+    class Rollback warn
+    class Lifecycle,AWSSide,CustomerSide layer
+      </pre>
+    </div>
+    <p class="diagram-note">
+      💡 CA ローテーションは多段階のプロセスで、AWS がマネージドコンポーネントを自動更新し、お客様は自身が管理するワーカーノードと外部クライアントを更新する<span class="highlight">責任共有モデル</span>で進行します。
+    </p>
+  </div>
+
+  <!-- Key features -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">1️⃣ 後継 CA のセルフサービス追加と自動追加</div>
+      <ul>
+        <li>クラスターがアクティブであれば、AWS CLI、EKS API、コンソール、CloudFormation などの IaC からいつでも後継 CA を追加できる</li>
+        <li>お客様が追加しない場合、CA 失効の <span class="highlight">2 年前</span>に AWS が自動的に後継 CA を追加</li>
+        <li>後継 CA の有効期間は 5 年</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">2️⃣ マネージドコンポーネントへの自動配布</div>
+      <ul>
+        <li>AWS がコントロールプレーン、EKS Auto Mode インスタンス、AWS Fargate ノードを両方の CA を信頼するよう自動更新</li>
+        <li>EKS Capabilities のマネージドリソース (ACK、Argo CD、kro) も自動更新</li>
+        <li>進捗は <code class="inline">distributionStatus</code> で追跡でき、<code class="inline">COMPLETE</code> になるまでアクティベーション不可</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">3️⃣ デュアルトラスト期間による段階的移行</div>
+      <ul>
+        <li>現行 CA と後継 CA の両方が信頼される期間中、どちらの CA で署名された証明書も受け入れられる</li>
+        <li>自分のペースでワーカーノード、kubeconfig、CI/CD パイプライン、GitOps コントローラーを更新可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">4️⃣ アクティベーションとロールバック</div>
+      <ul>
+        <li><code class="inline">activate-certificate-authority</code> で切り替えると、以降の証明書は後継 CA で署名される</li>
+        <li>問題発生時は旧 CA の ID を指定して再アクティベートでロールバック (可否は <code class="inline">rollbackAvailable</code> で確認)</li>
+        <li>お客様がアクティベートしない場合、失効期限が近づくと AWS が自動的にアクティベート</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">5️⃣ 段階的な通知</div>
+      <ul>
+        <li>AWS Health、Cluster Insights、メールで各段階の通知が届く</li>
+        <li>Amazon EventBridge と統合して独自の監視・アラートワークフローを構成可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Technical specs -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>⏰ CA ローテーションの通知タイムライン</h3>
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-when">失効の 2.5 年前 — CA 失効リマインダー</div>
+        <div class="timeline-what">CA の失効日を通知し、ローテーション計画を促す</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-when">お客様または AWS による追加時 (自動追加は失効の 2 年前) — 後継 CA 追加</div>
+        <div class="timeline-what">ローテーション開始。マネージドコンポーネントへの配布中</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-when">自動アクティベーションの 60 日前 — アクティベーション警告</div>
+        <div class="timeline-what">未更新コンポーネントの更新を促す</div>
+      </div>
+      <div class="timeline-item critical">
+        <div class="timeline-when">失効の 45 日前 — 最終自動アクティベーション</div>
+        <div class="timeline-what">AWS が後継 CA をアクティベート。<span class="highlight">以降ロールバック不可</span></div>
+      </div>
+    </div>
+    <p style="font-size: 13px;">📝 注: 2018 年から 2019 年に作成されたクラスターは、調整されたスケジュールで通知が送信されます。</p>
+
+    <h3>📋 CA のステータスフィールド</h3>
+    <table>
+      <tr><th>フィールド</th><th>説明</th></tr>
+      <tr><td><code class="inline">signingStatus</code></td><td>CA が証明書に署名中かどうか (<code class="inline">IN_USE</code> / <code class="inline">NOT_USED</code>)</td></tr>
+      <tr><td><code class="inline">distributionStatus</code></td><td>マネージドコンポーネントへの配布状況 (<code class="inline">IN_PROGRESS</code> / <code class="inline">COMPLETE</code> / <code class="inline">FAILED</code>)</td></tr>
+      <tr><td><code class="inline">scheduledEvents</code></td><td>後継 CA に表示される <code class="inline">firstAutoActivation</code> と <code class="inline">finalAutoActivation</code> の予定日</td></tr>
+      <tr><td><code class="inline">rollbackAvailable</code></td><td>ロールバック可否</td></tr>
+      <tr><td><code class="inline">notBefore</code> / <code class="inline">notAfter</code></td><td>CA の有効期間</td></tr>
+    </table>
+
+    <h3>🤝 責任共有モデル</h3>
+    <table>
+      <tr><th>担当</th><th>対象</th></tr>
+      <tr>
+        <td>☁️ AWS</td>
+        <td>ローテーションライフサイクル管理、コントロールプレーン、EKS Auto Mode インスタンス、Fargate ノード、EKS Capabilities の自動更新</td>
+      </tr>
+      <tr>
+        <td>👤 お客様</td>
+        <td>マネージドノードグループ、Karpenter 管理ノード、セルフマネージドノード、ハイブリッドノードの置き換え、kubeconfig・CI/CD・GitOps コントローラーなど外部クライアントの信頼設定更新</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Setup -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>EKS クラスターがアクティブな状態であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS CLI が EKS の CA ローテーション API に対応したバージョンであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ワーカーノードの置き換えに備え、重要ワークロードに PodDisruptionBudget を設定しておくこと</span></div>
+
+    <h3><span class="step-label">STEP 1</span>後継 CA の追加</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">後継 CA を追加</span></div>
+      <pre><code class="language-bash">aws eks create-certificate-authority --cluster-name my-cluster</code></pre>
+    </div>
+    <p style="font-size: 14px;">追加後、AWS がコントロールプレーン、EKS Auto Mode インスタンス、Fargate ノードへの配布を自動的に開始します。</p>
+
+    <h3><span class="step-label">STEP 2</span>CA の状態確認</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">CA 一覧と詳細の確認</span></div>
+      <pre><code class="language-bash">aws eks list-certificate-authorities --cluster-name my-cluster
+
+aws eks describe-certificate-authority --certificate-authority-id &lt;後継 CA の ID&gt;</code></pre>
+    </div>
+    <p style="font-size: 14px;">現行 CA は <code class="inline">signingStatus: IN_USE</code>、後継 CA は <code class="inline">NOT_USED</code> と表示され、両方の <code class="inline">distributionStatus</code> が <code class="inline">COMPLETE</code> になるとデュアルトラスト期間に入ります。自動アクティベーション予定日や有効期限も確認できます。</p>
+
+    <h3><span class="step-label">STEP 3</span>クライアントとワーカーノードの更新</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">kubeconfig とノードグループの更新</span></div>
+      <pre><code class="language-bash"># kubeconfig の更新 (両方の CA を含むトラストバンドルを取得)
+aws eks update-kubeconfig --name my-cluster
+
+# マネージドノードグループのローリング置換
+aws eks update-nodegroup-version --cluster-name my-cluster --nodegroup-name my-nodegroup</code></pre>
+    </div>
+    <p style="font-size: 14px;">新しいノードは更新された CA 信頼設定で自動的に起動します。Karpenter 管理ノードはドリフト検知が有効であれば自動でサイクルされますが、中断バジェットの設定がアクティベーション期限に間に合うか事前に確認してください。</p>
+
+    <h3><span class="step-label">STEP 4</span>後継 CA のアクティベーション</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">後継 CA へ切り替え</span></div>
+      <pre><code class="language-bash">aws eks activate-certificate-authority --certificate-authority-id &lt;後継 CA の ID&gt;</code></pre>
+    </div>
+    <p style="font-size: 14px;">すべてのノードとクライアントの更新完了を確認したうえでアクティベートします。<code class="inline">kubectl get nodes</code> などで疎通を確認し、問題が見つかった場合は旧 CA の ID を指定して同じコマンドを実行することでロールバックできます。</p>
+  </div>
+
+  <!-- Merits -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">📈 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>可用性リスクの低減</strong>: CA 期限切れによるクラスター接続断という重大障害を、自動セーフガードと段階的な通知で未然に防止</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>計画的な運用</strong>: 失効の 2.5 年前からの通知により、変更管理プロセスに沿った計画的なローテーションが可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: すべての商用リージョンで追加料金なしで利用可能</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">⚙️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>デュアルトラストによる無停止移行</strong>: 両方の CA が同時に信頼される期間中に段階的な更新ができ、ダウンタイムを回避</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>セルフサービスのロールバック</strong>: 問題発生時に旧 CA へ戻せるため、切り替えのハードルが低い</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>IaC・自動化との統合</strong>: AWS CLI、EKS API、CloudFormation に対応し、フリート管理をスクリプト化できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>EventBridge 統合</strong>: CA ローテーションイベントを既存の監視・アラート基盤に組み込める</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Limitations -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3 style="margin-top: 0;">🚫 制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>後継 CA の配布が完了 (<code class="inline">distributionStatus: COMPLETE</code>) するまでアクティベーションは実行できない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>最終自動アクティベーション (CA 失効の 45 日前) 以降はロールバックできない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>お客様が追加した後継 CA は、CA 失効の 2 年前を過ぎると削除できなくなる (後継 CA の存在を保証するための保護)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>2018 年から 2019 年に作成されたクラスターは、通知タイムラインが調整されたスケジュールになる</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>マネージドノードグループ以外のワーカーノード (Karpenter、セルフマネージド、ハイブリッドノード) と外部クライアントの更新はお客様の責任であり、AWS は代行できない</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>デュアルトラスト期間中の CA バンドルは約 2.8 KB (gzip 圧縮で約 1.9 KB)。EC2 起動テンプレートのユーザーデータが 16 KB 上限に近い場合は圧縮を検討</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>Karpenter の中断バジェット設定によってはノード置き換えに長期間かかる場合がある (例: 週 10% の設定で 50 ノードなら約 10 週間) ため、アクティベーション期限との整合性を事前に確認</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>CA 作成が失敗した場合 (<code class="inline">distributionStatus: FAILED</code>) は <code class="inline">delete-certificate-authority</code> で削除して再作成が必要 (AWS 起点の自動ローテーションでは AWS が自動クリーンアップ)</span></div>
+  </div>
+
+  <!-- Use cases -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📅 ユースケース 1: 2018 年から 2019 年に作成した長期稼働クラスターの CA 更新</div>
+      <p><strong>シナリオ</strong>: サービス開始初期に作成した本番 EKS クラスターの CA (有効期間 10 年) が失効時期に近づいており、無停止で CA を更新したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">計画的なローテーション</span></div>
+        <pre><code class="language-bash"># 後継 CA を追加し、配布状況を確認
+aws eks create-certificate-authority --cluster-name prod-cluster
+aws eks list-certificate-authorities --cluster-name prod-cluster
+
+# デュアルトラスト期間中にノードとクライアントを更新
+aws eks update-kubeconfig --name prod-cluster
+aws eks update-nodegroup-version --cluster-name prod-cluster --nodegroup-name prod-ng
+
+# 更新完了後にアクティベート
+aws eks activate-certificate-authority --certificate-authority-id &lt;後継 CA の ID&gt;</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: 自動タイムラインを待たず、メンテナンスウィンドウに合わせた計画的な CA ローテーションを無停止で実施できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔄 ユースケース 2: GitOps 環境 (Argo CD) を含むクラスターの CA 更新</div>
+      <p><strong>シナリオ</strong>: セルフホストの Argo CD が外部クラスターとして EKS に接続しており、CA 切り替え後も GitOps の同期を継続させたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">外部クライアントの信頼設定更新</span></div>
+        <pre><code class="language-bash"># デュアルトラスト期間中に CA バンドルを取得
+aws eks describe-cluster --name prod-cluster \
+  --query "cluster.certificateAuthority.data" --output text
+
+# 取得した CA データで Argo CD のクラスターシークレットの caData を更新し、
+# 同期が成功することを確認してからアクティベート
+aws eks activate-certificate-authority --certificate-authority-id &lt;後継 CA の ID&gt;</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: 外部クライアントの信頼設定をデュアルトラスト期間中に更新することで、アクティベーション後も GitOps パイプラインの接続を維持できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🗂️ ユースケース 3: 複数クラスターのフリート全体でのローテーション管理</div>
+      <p><strong>シナリオ</strong>: 数十のクラスターを運用しており、各クラスターの CA 失効時期とローテーション進捗を一元的に把握して対応したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">フリート全体の CA 状態を収集</span></div>
+        <pre><code class="language-bash"># 全クラスターの CA 状態をスクリプトで収集
+for cluster in $(aws eks list-clusters --query "clusters[]" --output text); do
+  echo "=== ${cluster} ==="
+  aws eks list-certificate-authorities --cluster-name "${cluster}"
+done</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: フリート全体の CA 失効時期と <code class="inline">signingStatus</code> / <code class="inline">distributionStatus</code> を可視化し、優先度をつけた計画的なローテーションを実現。EventBridge と組み合わせれば通知の自動集約も可能。</div>
+    </div>
+  </div>
+
+  <!-- Pricing & Regions -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="feature-card">
+        <div class="feature-title">💵 料金</div>
+        <p>本機能は<span class="highlight">追加料金なし</span>で利用できます。CA ローテーションの API 操作自体に費用は発生しません。</p>
+        <p style="margin-top: 8px;">なお、ワーカーノードのローリング置換の過程で一時的にノード数が増える場合、その間の EC2 インスタンス費用は通常どおり発生します。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-title">🌍 利用可能リージョン</div>
+        <p><span class="highlight">すべての商用 AWS リージョン</span>で利用可能です。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Related services -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <table>
+      <tr><th>サービス・機能</th><th>関連</th></tr>
+      <tr><td>🤖 EKS Auto Mode / AWS Fargate</td><td>これらが管理するノードは AWS が後継 CA を自動的に信頼するよう更新するため、お客様の対応は不要</td></tr>
+      <tr><td>🩺 AWS Health / Cluster Insights</td><td>CA ローテーションの各段階の通知が配信され、対応状況を確認できる</td></tr>
+      <tr><td>📨 Amazon EventBridge</td><td>CA ローテーションイベントを取り込み、既存の監視・アラートワークフローと統合できる</td></tr>
+      <tr><td>🌀 Karpenter</td><td>ドリフト検知が有効な場合、ノードが自動的にサイクルされて後継 CA を信頼する構成で再作成される</td></tr>
+      <tr><td>📄 AWS CloudFormation</td><td>IaC として後継 CA の追加を管理できる</td></tr>
+    </table>
+  </div>
+
+  <!-- Summary -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      Amazon EKS の CA ローテーション機能は、2018 年から 2019 年に作成された初期クラスターの CA 失効が近づくなか、<span class="highlight">すべての EKS 利用者にとって重要なアップデート</span>です。
+      自動セーフガードによりクラスターの可用性は維持されますが、ワーカーノードと外部クライアントの更新はお客様の責任です。
+    </p>
+    <div class="check-item"><span class="check-icon">→</span><span>自動タイムラインを待たず、<code class="inline">list-certificate-authorities</code> で自クラスターの CA 失効時期を確認する</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span>デュアルトラスト期間を活用し、計画的なローテーションの準備を始めることを推奨</span></div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul class="link-list">
+      <li>📰 <a href="https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-eks-certificate-authority-ca-rotation-automated-lifecycle-management" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon EKS certificate authority (CA) rotation with automated lifecycle management</a></li>
+      <li>📚 <a href="https://aws.amazon.com/blogs/containers/deep-dive-into-amazon-eks-certificate-authority-rotation/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: Deep dive into Amazon EKS certificate authority rotation</a></li>
+      <li>📖 <a href="https://docs.aws.amazon.com/eks/latest/userguide/certificate-authority-rotation.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Rotate the EKS cluster certificate authority (CA)</a></li>
+    </ul>
+    <p>🗓️ リリース日: 2026 年 8 月 20 日 ｜ 生成日: 2026 年 8 月 20 日 ｜ AWS News Summary</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon EC2 - Outposts 上のインスタンスからローカルスナップショットで AMI 作成</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.badge-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.service-badge {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 16px;
+}
+
+.date-badge {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--aws-light-gray);
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .box-title { color: #FF7B5C; font-weight: 700; margin-bottom: 8px; }
+.after-box .box-title { color: #6FCF4F; font-weight: 700; margin-bottom: 8px; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #6FCF4F; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF7B5C; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: var(--aws-smile-orange);
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid { display: flex; justify-content: center; }
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+}
+
+.effect-box {
+  background: rgba(29, 129, 2, 0.12);
+  border-left: 4px solid var(--aws-green);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+/* Benefits grid */
+.benefit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 760px) {
+  .benefit-grid { grid-template-columns: 1fr; }
+}
+
+ul { margin: 8px 0; padding-left: 22px; }
+li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="badge-row">
+      <span class="service-badge">Amazon EC2</span>
+      <span class="service-badge">AWS Outposts</span>
+      <span class="service-badge">Amazon EBS</span>
+      <span class="date-badge">📅 リリース日: 2026 年 8 月 19 日</span>
+    </div>
+    <h1>🖥️ Outposts 上のインスタンスからローカルスナップショットで AMI 作成</h1>
+    <div class="subtitle">create-image がローカルスナップショットに対応。データレジデンシー要件を満たしながら単一コマンドで AMI を作成</div>
+  </div>
+
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>Amazon EC2 は、AWS Outposts 上で稼働するインスタンスから、<span class="highlight">ローカルスナップショットを使用した AMI の作成</span>をサポートしました。AMI のバックアップとなるスナップショットを <span class="highlight">Outpost 自体に直接保存</span>できるようになり、データレジデンシー要件を満たしながら AMI を作成することが容易になります。</p>
+    <p>保存先は <code class="inline">--snapshot-location</code> パラメータで Outpost 自体 (<code class="inline">local</code>) または親 AWS リージョン (<code class="inline">regional</code>) から選択できます。ローカル保存時は EC2 が対象の Outpost を<span class="highlight">自動判別</span>するため、Outpost ARN の手動指定は不要です。データ主権・データレジデンシー要件が厳しい国や地域で Outposts を利用するユーザー、オンプレミスのバックアップワークフローを標準化したいユーザーに特に有用です。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ Before: アップデート前の課題</div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>インスタンスから直接 AMI を作成する際に、ローカルスナップショットを保存先として選択できなかった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ローカルスナップショット構成の AMI には、ボリュームごとにスナップショットを個別作成し <code class="inline">register-image</code> で登録する多段の手順が必要だった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>スナップショットデータが親リージョンに保存されるため、データレジデンシー要件を満たすことが困難だった</span></div>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ After: アップデート後の改善</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><code class="inline">create-image</code> 実行時に <code class="inline">--snapshot-location</code> を指定するだけで、Outposts 上のインスタンスから直接 AMI を作成可能に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>ローカル保存時は EC2 が対象 Outpost を自動判別し、Outpost ARN の手動指定が不要に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>既存のバックアップ・ライフサイクルワークフローに AMI 作成を統合しつつ、スナップショットデータを Outpost 内に保持可能に</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 管理者"]) -->|create-image 実行| API["🔌 Amazon EC2 API"]
+
+    API --> Choice{"📍 snapshot-location&lt;br/&gt;の指定"}
+
+    subgraph Outpost["🏢 AWS Outposts オンプレミス"]
+        direction LR
+        Instance["🖥️ EC2 インスタンス"]
+        LocalS3[("🪣 S3 on Outposts&lt;br/&gt;ローカルスナップショット")]
+        LocalAMI["📀 AMI&lt;br/&gt;ローカルスナップショット構成"]
+        Instance ~~~ LocalS3 ~~~ LocalAMI
+    end
+
+    subgraph Region["☁️ 親 AWS リージョン"]
+        direction LR
+        RegionalS3[("🪣 Amazon S3&lt;br/&gt;リージョンスナップショット")]
+        RegionalAMI["📀 AMI&lt;br/&gt;リージョンスナップショット構成"]
+        RegionalS3 ~~~ RegionalAMI
+    end
+
+    Choice -->|local| LocalS3
+    Choice -->|regional| RegionalS3
+    LocalS3 --> LocalAMI
+    RegionalS3 --> RegionalAMI
+    LocalAMI -.->|同一 Outpost 上でのみ&lt;br/&gt;インスタンス起動可能| Instance
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class User user
+    class API process
+    class Choice decision
+    class LocalS3,RegionalS3 storage
+    class Instance,LocalAMI,RegionalAMI compute
+    class Outpost,Region boundary
+      </pre>
+    </div>
+    <p>Outposts 上のインスタンスから <code class="inline">create-image</code> を実行する際、<code class="inline">--snapshot-location</code> パラメータでスナップショットの保存先を Outpost ローカルまたは親リージョンから選択できます。ローカルを選択した場合、スナップショットデータは S3 on Outposts に保存され、<span class="highlight">オンプレミスから外に出ません</span>。</p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">1️⃣ インスタンスからの直接 AMI 作成におけるローカルスナップショット対応</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ローカルスナップショットをサポートする Outpost 上のインスタンスから、直接 AMI を作成できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>バックアップスナップショットを、インスタンスと同じ Outpost 上または親リージョンのいずれかに保存できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>従来のようにボリュームごとにスナップショットを作成して <code class="inline">register-image</code> で登録する手順が不要になる</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">2️⃣ --snapshot-location パラメータによる保存先制御</div>
+      <div class="check-item"><span class="check-icon">✓</span><span><code class="inline">local</code>: インスタンスと同じ Outpost 上にスナップショットを保存</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><code class="inline">regional</code>: Outpost の親リージョンにスナップショットを保存</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>ローカルスナップショット対応 Outpost 上のインスタンスではこのパラメータは<strong>必須</strong> (省略すると <code class="inline">InvalidParameterValue</code> エラー)</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">3️⃣ 対象 Outpost の自動判別</div>
+      <div class="check-item"><span class="check-icon">✓</span><span><code class="inline">local</code> 指定時、EC2 がインスタンスの配置場所から対象の Outpost を自動的に判別</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>Outpost ARN の手動指定が不要で、運用の自動化やスクリプト化が容易に</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+    <h3>📦 ローカルスナップショットの主な仕様</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>保存先</td><td>S3 on Outposts (Outpost に S3 on Outposts のプロビジョニングが必要)</td></tr>
+      <tr><td>スナップショット方式</td><td>増分バックアップ (前回スナップショット以降に変更されたブロックのみ保存)</td></tr>
+      <tr><td>暗号化</td><td>デフォルトで暗号化 (暗号化されていないローカルスナップショットは非サポート)</td></tr>
+      <tr><td>メタデータ</td><td>スナップショットのメタデータは親リージョンに保存 (スナップショットデータ自体は含まない)</td></tr>
+      <tr><td>リージョン接続</td><td>ローカルスナップショットの作成・使用・削除には Outpost と親リージョン間の接続が必要</td></tr>
+      <tr><td>容量解放</td><td>スナップショット削除後、S3 ストレージ容量は 72 時間以内に解放</td></tr>
+      <tr><td>AMI の利用範囲</td><td>ローカルスナップショットで構成された AMI は、同一 Outpost 上でのみインスタンス起動が可能</td></tr>
+    </table>
+
+    <h3>🎛️ --snapshot-location パラメータ</h3>
+    <table>
+      <tr><th>値</th><th>動作</th></tr>
+      <tr><td><code class="inline">local</code></td><td>インスタンスと同じ Outpost 上にバックアップスナップショットを保存</td></tr>
+      <tr><td><code class="inline">regional</code></td><td>Outpost の親リージョンにバックアップスナップショットを保存</td></tr>
+    </table>
+
+    <h3>🔒 データレジデンシー強制のための IAM ポリシー例</h3>
+    <p>以下のポリシーは、指定した Outpost 上のボリュームおよびインスタンスからリージョンへのスナップショット作成を拒否し、ローカルスナップショットのみを許可します。</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">ローカルスナップショットのみ許可する IAM ポリシー</span>
+      </div>
+      <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Deny",
+            "Action": [
+                "ec2:CreateSnapshot",
+                "ec2:CreateSnapshots"
+            ],
+            "Resource": "arn:aws:ec2:us-east-1::snapshot/*",
+            "Condition": {
+                "StringEquals": {
+                    "ec2:SourceOutpostArn": "arn:aws:outposts:us-east-1:123456789012:outpost/op-1234567890abcdef0"
+                },
+                "Null": {
+                    "ec2:OutpostArn": "true"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateSnapshot",
+                "ec2:CreateSnapshots"
+            ],
+            "Resource": "*"
+        }
+    ]
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Outposts が導入済みで、親リージョンとの接続が確立されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Outpost に S3 on Outposts がプロビジョニングされていること (ローカルスナップショットの保存に必要)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>対象の EC2 インスタンスが、ローカルスナップショットをサポートする Outpost 上で稼働していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>AMI 作成に必要な IAM 権限 (<code class="inline">ec2:CreateImage</code> など) が付与されていること</span></div>
+
+    <h3>ステップ 1: ローカルスナップショットを使用した AMI の作成</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">スナップショットを Outpost ローカルに保存</span>
+      </div>
+      <pre><code class="language-bash">aws ec2 create-image \
+    --instance-id i-1234567890abcdef0 \
+    --name "My Outpost image" \
+    --snapshot-location local</code></pre>
+    </div>
+    <p>バックアップスナップショットをインスタンスと同じ Outpost 上に保存します。対象の Outpost は EC2 が自動判別するため、Outpost ARN の指定は不要です。</p>
+
+    <h3>ステップ 2: 親リージョンにスナップショットを保存する AMI の作成</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">スナップショットを親リージョンに保存</span>
+      </div>
+      <pre><code class="language-bash">aws ec2 create-image \
+    --instance-id i-1234567890abcdef0 \
+    --name "My Regional image" \
+    --snapshot-location regional</code></pre>
+    </div>
+    <p>バックアップスナップショットを Outpost の親リージョンに保存します。リージョン側の AMI として管理したい場合に使用します。</p>
+
+    <h3>ステップ 3: 作成した AMI の確認</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">AMI の詳細確認</span>
+      </div>
+      <pre><code class="language-bash">aws ec2 describe-images \
+    --owners self \
+    --filters "Name=name,Values=My Outpost image"</code></pre>
+    </div>
+    <p>ローカルスナップショットで構成された AMI は、<span class="highlight">同一 Outpost 上でのみ</span>インスタンスの起動に使用できる点に注意してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="benefit-grid">
+      <div class="card">
+        <div class="card-title">💼 ビジネス面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>データレジデンシー要件への対応</strong>: スナップショットが Outpost (オンプレミス) 内に保持され、規制業種でも AMI ベースのバックアップ運用が可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: 複数ステップの手作業が単一コマンドに集約され、運用負荷とヒューマンエラーのリスクが低減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>帯域の有効活用</strong>: データがリージョンへ転送されず、サービスリンクの帯域消費を抑制</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🔧 技術面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ワークフロー統合の容易さ</strong>: 既存のバックアップ・ライフサイクルワークフローに AMI 作成を組み込み、インスタンス単位の一貫したイメージ管理を実現</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>Outpost の自動判別</strong>: ARN 手動指定が不要で、複数 Outposts 環境でもスクリプトの汎用性が向上</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>IAM によるレジデンシー強制</strong>: 条件キー (<code class="inline">ec2:SourceOutpostArn</code>、<code class="inline">ec2:OutpostArn</code>) でリージョン保存を組織的に防止</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Outpost に S3 on Outposts がプロビジョニングされている必要がある</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ローカルスナップショット構成の AMI は同一 Outpost 上でのみ起動可能 (リージョンや他の Outpost では使用不可)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ローカルスナップショットや AMI を Outpost からリージョンへコピー、Outpost 間でコピーすることはできない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>スポットインスタンスおよびスポットフリートの起動には使用できない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>複数の Outposts にまたがるバックアップスナップショットを含む AMI は作成できない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>高速スナップショット復元 (Fast Snapshot Restore)、EBS ダイレクト API、スナップショット共有は非サポート</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>ローカルスナップショット対応 Outpost では <code class="inline">--snapshot-location</code> が必須。省略すると <code class="inline">InvalidParameterValue</code> エラーが発生するため、既存の自動化スクリプトの改修が必要になる場合がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>Outpost と親リージョン間の接続が失われている間は、ローカルスナップショットの作成・使用・削除ができない</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>削除したスナップショットの S3 容量解放には最大 72 時間かかるため、CloudWatch アラームによる容量監視が推奨される</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>最新のスナップショットが Outpost 上にある場合、以降のスナップショットも同じ Outpost に保存する必要がある (保存先の混在ルールに注意)</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🏦 ユースケース 1: 規制業種におけるデータレジデンシー準拠のイメージ管理</div>
+      <p><strong>シナリオ</strong>: 金融機関や公共機関が、データを自社データセンター内に保持する規制要件のもとで、Outposts 上の業務システムのゴールデンイメージを管理する。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">パッチ適用済みインスタンスからローカル AMI を作成</span>
+        </div>
+        <pre><code class="language-bash">aws ec2 create-image \
+    --instance-id i-0abc123def456789a \
+    --name "golden-image-$(date +%Y%m%d)" \
+    --snapshot-location local \
+    --tag-specifications 'ResourceType=image,Tags=[{Key=Environment,Value=Production}]'</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: スナップショットデータがオンプレミスから外に出ることなく、パッチ適用済みゴールデンイメージを定期的に作成・管理でき、監査要件にも対応しやすくなる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">💾 ユースケース 2: Outposts 上のインスタンスの定期バックアップ</div>
+      <p><strong>シナリオ</strong>: 帯域が制約された遠隔拠点の Outposts 上で稼働するアプリケーションサーバーについて、インスタンス全体の復旧ポイントを定期的に取得する。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">再起動なしで AMI を作成し、ローカルに保存</span>
+        </div>
+        <pre><code class="language-bash">aws ec2 create-image \
+    --instance-id i-0abc123def456789a \
+    --name "backup-app-server-$(date +%Y%m%d-%H%M)" \
+    --snapshot-location local \
+    --no-reboot</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: リージョンへのデータ転送なしにインスタンス単位のバックアップを取得でき、サービスリンクの帯域を他のワークロードのために温存できる。障害時は同一 Outpost 上で AMI から迅速に復旧可能。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📈 ユースケース 3: Auto Scaling と組み合わせたローカル AMI の活用</div>
+      <p><strong>シナリオ</strong>: Outposts 上で稼働する Web アプリケーションについて、ローカルスナップショットで構成された AMI を使用して、同一 Outpost 内の Auto Scaling グループを構成する。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">ローカル AMI を使用した起動テンプレートを作成</span>
+        </div>
+        <pre><code class="language-bash">aws ec2 create-launch-template \
+    --launch-template-name outpost-web-app \
+    --launch-template-data '{
+        "ImageId": "ami-0abc123def456789a",
+        "InstanceType": "m5.xlarge"
+    }'</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: ローカル AMI から同一 Outpost 上のサブネットで Auto Scaling グループを起動できる。Auto Scaling グループのサービスリンクロールに、スナップショット暗号化に使用した KMS キーへのアクセス権限が必要な点に注意。</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p><span class="highlight">この機能自体に追加料金はありません</span>。関連するコスト要素は以下のとおりです。</p>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ローカルスナップショットのストレージ</strong>: Outpost 上の S3 on Outposts の容量を消費。S3 on Outposts の容量は Outpost の構成として事前にプロビジョニングされ、Outposts の料金に含まれる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>リージョン保存のスナップショット</strong>: <code class="inline">regional</code> 指定時は、親リージョンの Amazon EBS スナップショット料金 (Amazon S3 への保存) が適用される</span></div>
+    <p style="font-size: 14px;">詳細は <a href="https://aws.amazon.com/outposts/rack/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Outposts の料金ページ</a> および <a href="https://aws.amazon.com/ebs/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon EBS の料金ページ</a> を参照してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>AWS Outposts が<span class="highlight">ローカルスナップショットストレージをサポートするすべての AWS リージョン</span>で利用可能です。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🏢 AWS Outposts</div>
+      <p style="margin: 0;">AWS のインフラストラクチャとサービスをオンプレミスで利用できるフルマネージドサービス。本機能の前提となる実行環境。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📀 Amazon EBS ローカルスナップショット</div>
+      <p style="margin: 0;">Outpost 上のボリュームのスナップショットを S3 on Outposts にローカル保存する機能。本アップデートにより AMI 作成 (<code class="inline">create-image</code>) からも利用可能になった。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🪣 Amazon S3 on Outposts</div>
+      <p style="margin: 0;">Outpost 上でオブジェクトストレージを提供するサービス。ローカルスナップショットの保存先として必須。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔄 Amazon Data Lifecycle Manager</div>
+      <p style="margin: 0;">Outpost 上のボリュームやインスタンスのスナップショット作成・保持・削除を自動化するサービス。ローカルスナップショットのライフサイクル管理に利用可能。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔐 AWS Identity and Access Management (IAM)</div>
+      <p style="margin: 0;">条件キーを使用したポリシーにより、スナップショットのデータレジデンシーを強制できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>このアップデートにより、AWS Outposts 上のインスタンスから<span class="highlight">単一の操作</span>で、スナップショットを Outpost 内に保持した AMI を作成できるようになりました。データレジデンシー要件のある環境で Outposts を運用しているユーザーは、<code class="inline">create-image</code> の <code class="inline">--snapshot-location</code> パラメータを既存のバックアップワークフローに組み込むことを推奨します。あわせて、ローカルスナップショット対応の Outpost では本パラメータが<strong>必須</strong>となるため、既存の自動化スクリプトへの影響を確認してください。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul style="margin: 4px 0; padding-left: 24px;">
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/08/ec2-create-image-local-snapshot-outpost" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): EC2 create-image local snapshot on Outposts</a></li>
+      <li><a href="https://docs.aws.amazon.com/ebs/latest/userguide/snapshots-outposts.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Amazon EBS local snapshots on Outposts</a></li>
+      <li><a href="https://docs.aws.amazon.com/cli/latest/reference/ec2/create-image.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: create-image (AWS CLI)</a></li>
+      <li><a href="https://aws.amazon.com/outposts/rack/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ: AWS Outposts</a></li>
+    </ul>
+    <p>本レポート: reports/2026/2026-08-19-ec2-create-image-local-snapshot-outpost.md | 生成日: 2026-08-20</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

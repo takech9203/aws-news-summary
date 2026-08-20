@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon DynamoDB Streams - 属性ベースアクセス制御 (ABAC) のサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 700px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .ba-title { color: #FF6B4A; }
+.after-box .ba-title { color: #4CAF50; }
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+
+/* Stat cards */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 16px 0;
+}
+@media (max-width: 700px) {
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px 10px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 12px;
+  color: var(--aws-light-gray);
+  margin-top: 4px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  vertical-align: top;
+}
+td code, li code, p code {
+  background: rgba(0, 161, 201, 0.15);
+  color: #6FD5EC;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: 'Courier New', monospace;
+  word-break: break-all;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Steps */
+.step-list { counter-reset: step; }
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+.step-number {
+  counter-increment: step;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+}
+.step-content { flex: 1; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+
+/* Use cases */
+.usecase {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(255, 173, 51, 0.05));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+.usecase .label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* Benefit / caution grid */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 700px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+ul { padding-left: 22px; margin: 8px 0; }
+li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+footer ul { list-style: none; padding-left: 0; }
+footer li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="service-badge">☁️ Amazon DynamoDB Streams</div>
+    <h1>🔐 DynamoDB Streams が属性ベースアクセス制御 ABAC をサポート</h1>
+    <div class="subtitle">📅 リリース日: <span class="date">2026 年 8 月 19 日</span> | タグベースの IAM 条件でストリームへのアクセスをスケーラブルに制御</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon DynamoDB Streams が <span class="highlight">属性ベースアクセス制御 (ABAC)</span> をサポートしました。
+      ストリームリソースに直接タグを付与し、IAM ポリシーの条件として使用することで、
+      <span class="highlight">GetRecords</span> などのストリーム操作へのアクセスをタグベースで許可/拒否できます。
+      ストリームのタグは親テーブルのタグとは独立して管理され、環境分離・チーム分離・コンプライアンス統制を、
+      大量の個別 IAM ポリシーを作らずに実現できます。
+    </p>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">50 個</div>
+        <div class="stat-label">ストリームあたりの最大タグ数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">10 KB</div>
+        <div class="stat-label">タグの最大合計サイズ</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">7 日</div>
+        <div class="stat-label">有効化後のオプトアウト期限</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">追加料金なし</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ストリームにタグを付与して IAM 条件に利用できなかった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>環境/チームごとの分離にはストリーム ARN を個別指定したポリシーを多数作成・管理する必要があった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>テーブルは ABAC 対応でもストリームには適用できず、アクセス制御の一貫性が欠けていた</span></div>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <div class="check-item"><span class="check-icon">✓</span><span>最大 50 個のタグを付与し、<code>aws:ResourceTag</code>、<code>aws:RequestTag</code>、<code>aws:TagKeys</code> で制御可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>タグベースの共通ポリシー 1 つで新規ストリームにも自動適用、ポリシー数と管理負荷を削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>環境分離 (本番/開発)、チーム分離、コンプライアンス統制をスケーラブルに実装</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <p>IAM ポリシーのタグ条件により、<code>environment: production</code> タグ付きストリームへの GetRecords のみが許可され、タグが一致しないストリームへのアクセスは拒否されます。</p>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph IAM["🔐 IAM ポリシー"]
+        Policy["📜 タグ条件付きポリシー<br/>aws:ResourceTag/environment = production"]
+    end
+
+    subgraph DDB["☁️ Amazon DynamoDB"]
+        Table["📋 DynamoDB テーブル"]
+        subgraph Streams["🌊 DynamoDB Streams"]
+            ProdStream["🟢 ストリーム A<br/>タグ environment: production"]
+            DevStream["🟡 ストリーム B<br/>タグ environment: development"]
+        end
+        Table --> ProdStream
+    end
+
+    App(["👤 アプリケーション / 開発者"]) -->|GetRecords| Policy
+    Policy -->|"✅ 許可: タグ一致"| ProdStream
+    Policy -.->|"❌ 拒否: タグ不一致"| DevStream
+
+    classDef allow fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef deny fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef policy fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef table fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class ProdStream allow
+    class DevStream deny
+    class Policy policy
+    class Table table
+    class App user
+      </pre>
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🏷️ 1. ストリームへの独立したタグ付与</div>
+      <ul>
+        <li>ストリーム 1 つあたり最大 50 個のタグ、合計最大 10 KB</li>
+        <li>親テーブルのタグを継承せず、<span class="highlight">独立して管理</span></li>
+        <li><code>tag-resource</code>、<code>untag-resource</code>、<code>list-tags-of-resource</code> の CLI/SDK 操作をストリーム ARN に対して実行可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔑 2. タグベースの IAM 条件キーによるアクセス制御</div>
+      <ul>
+        <li><code>aws:ResourceTag/tag-key</code>: ストリームのタグに基づいて許可/拒否</li>
+        <li><code>aws:RequestTag/tag-key</code>: タグ付与リクエスト時のタグ値を制御</li>
+        <li><code>aws:TagKeys</code>: 使用できるタグキーを制限</li>
+        <li>GetRecords などの読み取り API、TagResource / UntagResource などのタグ操作 API に適用</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🌍 3. アカウント単位・リージョン単位の有効化</div>
+      <ul>
+        <li>新規アカウントの多くではデフォルトで有効、既存アカウントではデフォルト無効 (監査後に有効化)</li>
+        <li>DynamoDB コンソールの Settings ページから現在のリージョンに対して有効化</li>
+        <li>有効化には <code>dynamodb:UpdateAbacStatus</code>、状態確認には <code>dynamodb:GetAbacStatus</code> 権限が必要</li>
+        <li>有効化後 <span class="highlight">7 日以内</span> であればオプトアウト可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>📋 技術仕様</h2>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>ストリームあたりの最大タグ数</td><td>50 個</td></tr>
+      <tr><td>タグの最大合計サイズ</td><td>10 KB</td></tr>
+      <tr><td>タグの継承</td><td>親テーブルからの継承なし (独立管理)</td></tr>
+      <tr><td>対応条件キー</td><td><code>aws:ResourceTag/tag-key</code>、<code>aws:RequestTag/tag-key</code>、<code>aws:TagKeys</code></td></tr>
+      <tr><td>対象 API</td><td>GetRecords などの読み取り API、TagResource、UntagResource、ListTagsOfResource</td></tr>
+      <tr><td>有効化の単位</td><td>アカウント x リージョン単位</td></tr>
+      <tr><td>テーブル ABAC との関係</td><td>別設定 (テーブル ABAC を有効にしてもストリーム ABAC は自動で有効にならない)</td></tr>
+      <tr><td>オプトアウト</td><td>有効化後 7 日以内は無効化可能</td></tr>
+      <tr><td>追加料金</td><td>なし</td></tr>
+    </table>
+
+    <h3>📜 IAM ポリシー例</h3>
+    <p><code>environment</code> タグの値が <code>production</code> のストリームに対してのみ <code>GetRecords</code> を許可する例です。</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">タグ条件付き IAM ポリシー</span>
+      </div>
+      <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetRecords"
+      ],
+      "Resource": "arn:aws:dynamodb:*:*:table/*/stream/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/environment": "production"
+        }
+      }
+    }
+  ]
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <ul>
+      <li>DynamoDB Streams が有効なテーブルが存在すること</li>
+      <li><code>dynamodb:UpdateAbacStatus</code> および <code>dynamodb:GetAbacStatus</code> 権限を持つこと</li>
+      <li>既存アカウントの場合、有効化前に既存の IAM ポリシーを監査すること</li>
+    </ul>
+
+    <div class="step-list">
+      <div class="step-item">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <div class="step-title">🔍 既存ポリシーの監査</div>
+          <p>ストリーム ARN への <code>aws:ResourceTag</code> 条件、タグ操作アクションへの <code>aws:RequestTag</code> / <code>aws:TagKeys</code> 条件、ワイルドカード ARN とタグ条件の組み合わせを確認します。ABAC が無効な間はタグがないものとして評価されるため、有効化で認可の挙動が変わる可能性があります。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <div class="step-title">🚀 Streams ABAC の有効化</div>
+          <p>DynamoDB コンソールで対象リージョンを選択し、[Settings] ページの [Attribute-based access control for Streams] カードで [Enable] を選択します。ステータス更新は非同期・結果整合性で反映されます。有効化後 7 日以内であれば [Disable] から無効化できます。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <div class="step-title">🏷️ ストリームへのタグ付与</div>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">AWS CLI でストリームにタグを付与</span>
+            </div>
+            <pre><code class="language-bash">aws dynamodb tag-resource \
+  --resource-arn arn:aws:dynamodb:ap-northeast-1:123456789012:table/MyTable/stream/2026-08-19T00:00:00.000 \
+  --tags Key=environment,Value=production</code></pre>
+          </div>
+          <p>タグの確認は <code>list-tags-of-resource</code>、削除は <code>untag-resource</code> を使用します。親テーブル削除後もストリームは 24 時間存続し、その間は CLI/SDK でタグ操作が可能です (コンソールと CloudFormation からは不可)。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <div class="step-title">📜 タグ条件付き IAM ポリシーの適用</div>
+          <p><code>aws:ResourceTag</code> 条件を含む IAM ポリシーを作成し、対象のユーザーやロールにアタッチします。タグが一致するストリームに対してのみ操作が許可されます。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3>💼 ビジネス面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>管理コストの削減</strong>: タグベースの共通ポリシーで大規模環境のアクセス管理を効率化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス強化</strong>: タグでアクセス境界を明確化し、監査要件への対応が容易に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加費用なし</strong>: ABAC の利用に追加料金は発生しない</span></div>
+        <h3>🔧 技術面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>スケーラブルな認可</strong>: 新規ストリームもタグ付与だけで既存ポリシーが自動適用</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>テーブルと独立した制御</strong>: 書き込み権限と読み取り権限を別々のきめ細かさで設計可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>一貫した ABAC 戦略</strong>: テーブル ABAC や他の AWS サービスと同じ条件キーで統一</span></div>
+      </div>
+      <div>
+        <h3>⚠️ 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">•</span><span>タグは最大 50 個 / 合計 10 KB まで</span></div>
+        <div class="check-item"><span class="cross-icon">•</span><span>テーブル ABAC とストリーム ABAC は別設定で、それぞれ有効化が必要</span></div>
+        <div class="check-item"><span class="cross-icon">•</span><span>既存アカウントはデフォルト無効 (オプトイン必須)</span></div>
+        <div class="check-item"><span class="cross-icon">•</span><span>オプトアウトは有効化後 7 日以内のみ</span></div>
+        <div class="check-item"><span class="cross-icon">•</span><span>親テーブル削除後のタグ操作は CLI/SDK のみ</span></div>
+        <h3>🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="cross-icon">•</span><span>有効化により既存ポリシーの認可結果が変化する可能性があり、事前監査を強く推奨</span></div>
+        <div class="check-item"><span class="cross-icon">•</span><span>ストリームはテーブルのタグを継承しないため、明示的なタグ付与が必要</span></div>
+        <div class="check-item"><span class="cross-icon">•</span><span>CloudFormation 管理時はサービスロールにストリームへのタグ操作権限が必要</span></div>
+        <div class="check-item"><span class="cross-icon">•</span><span>ABAC ステータス更新とタグ評価は結果整合性 (反映に数分かかる場合あり)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🏭 ユースケース 1: 本番環境と開発環境のアクセス分離</div>
+      <p><span class="label">シナリオ</span>: 同一アカウント内に本番用と開発用のテーブル/ストリームが混在。開発者には開発環境のストリームのみ読み取りを許可したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">開発環境ストリームのみ許可</span>
+        </div>
+        <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:DescribeStream"
+      ],
+      "Resource": "arn:aws:dynamodb:*:*:table/*/stream/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/environment": "development"
+        }
+      }
+    }
+  ]
+}</code></pre>
+      </div>
+      <p><span class="label">効果</span>: ARN の列挙なしにタグだけで環境分離を実現。新しい開発用ストリームが追加されてもポリシー変更は不要。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">👥 ユースケース 2: チーム単位のストリームアクセス分離</div>
+      <p><span class="label">シナリオ</span>: 複数チームが共有するアカウントで、各チームが所有するストリームのみ、そのチームの Lambda 実行ロールから消費できるようにしたい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">プリンシパルタグとリソースタグの一致条件</span>
+        </div>
+        <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetRecords"
+      ],
+      "Resource": "arn:aws:dynamodb:*:*:table/*/stream/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/team": "${aws:PrincipalTag/team}"
+        }
+      }
+    }
+  ]
+}</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 1 つの共通ポリシーで全チームのアクセス分離を実現。チーム追加時のポリシー作成が不要。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🛡️ ユースケース 3: タグ改ざんの防止によるガバナンス強化</div>
+      <p><span class="label">シナリオ</span>: アクセス制御に使用する <code>environment</code> タグが、権限のないユーザーによって変更・削除されることを防ぎたい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">重要タグキーの変更を拒否</span>
+        </div>
+        <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Deny",
+      "Action": [
+        "dynamodb:TagResource",
+        "dynamodb:UntagResource"
+      ],
+      "Resource": "arn:aws:dynamodb:*:*:table/*/stream/*",
+      "Condition": {
+        "ForAnyValue:StringEquals": {
+          "aws:TagKeys": "environment"
+        }
+      }
+    }
+  ]
+}</code></pre>
+      </div>
+      <p><span class="label">効果</span>: <code>aws:TagKeys</code> 条件により、アクセス制御用の重要なタグキーの変更を管理者以外に禁止し、ABAC の信頼性を担保。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">💵 料金</div>
+        <p>DynamoDB Streams の ABAC 利用に <span class="highlight">追加料金は発生しません</span>。DynamoDB Streams 自体の料金 (読み取りリクエスト単位) は従来どおり適用されます。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🌏 利用可能リージョン</div>
+        <p>DynamoDB Streams が提供されている <span class="highlight">すべての AWS 商用リージョン</span> および AWS GovCloud (US) リージョンで利用可能。東京リージョン、大阪リージョンを含みます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🔐 AWS IAM</div>
+      <p>ABAC の条件キー (<code>aws:ResourceTag</code>、<code>aws:RequestTag</code>、<code>aws:TagKeys</code>) を IAM ポリシーで評価し、タグベースの認可を実現。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📋 Amazon DynamoDB (テーブルの ABAC)</div>
+      <p>テーブルは先行して ABAC をサポート済み。今回のアップデートでストリームにも同じ認可戦略を拡張可能に。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">⚡ AWS Lambda</div>
+      <p>DynamoDB Streams の代表的なコンシューマー。Lambda 実行ロールにタグ条件付きポリシーを適用してイベントソースへのアクセスを制御。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🧱 AWS CloudFormation</div>
+      <p>ストリームのタグを IaC で管理する場合、サービスロールにストリームへのタグ操作権限 (<code>TagResource</code> / <code>UntagResource</code> / <code>ListTagsOfResource</code>) が必要。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>🎯 まとめ</h2>
+    <div class="flow-diagram" style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 20px 0;">
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">🔍 既存ポリシー<br/>の監査</div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">🚀 リージョンごと<br/>に有効化</div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">🏷️ ストリームに<br/>タグ付与</div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">📜 タグ条件付き<br/>ポリシー適用</div>
+    </div>
+    <p>
+      DynamoDB Streams の ABAC サポートにより、タグベースのスケーラブルなアクセス制御をストリームにも適用でき、
+      マルチ環境・マルチチーム構成での IAM ポリシー管理が大幅に簡素化されます。
+      既存アカウントではデフォルト無効のため、<span class="highlight">まず既存ポリシーのタグ条件を監査</span> し、
+      影響を確認した上でリージョンごとに有効化することを推奨します。
+      追加料金は不要であり、環境分離やコンプライアンス要件を持つ組織は早期の導入検討が有効です。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li>・<a href="https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-dynamodb-streams-abac/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon DynamoDB Streams ABAC</a></li>
+      <li>・<a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/abac-streams.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Using attribute-based access control with DynamoDB Streams</a></li>
+      <li>・<a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/abac-enable-streams.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Enabling ABAC for DynamoDB Streams</a></li>
+      <li>・<a href="https://aws.amazon.com/dynamodb/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon DynamoDB 製品ページ</a></li>
+      <li>・<a href="https://aws.amazon.com/dynamodb/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-08-19) を基に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
