@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Deadline Cloud - DCM での自動ダウンロードステータス追跡</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B6B; font-size: 18px; flex-shrink: 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 20px 0;
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(255, 107, 107, 0.45);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.15);
+  border: 1px solid rgba(76, 175, 80, 0.5);
+}
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF8A80; }
+.after-box h3 { color: #81C784; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 110px;
+  font-size: 14px;
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 12px;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+th, td {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 16px 0;
+}
+.usecase h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+}
+.usecase .effect {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 153, 0, 0.35);
+  font-size: 14px;
+}
+.usecase .effect strong { color: #81C784; }
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.step-body h4 { margin: 4px 0 6px 0; color: var(--aws-white); font-size: 16px; }
+.step-body p { margin: 0; font-size: 14px; }
+
+/* 2 カラムグリッド */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0 0 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .before-after, .grid-2 { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="service-badge">AWS Deadline Cloud</div>
+    <h1>🖥️ Deadline Cloud Monitor での<br>自動ダウンロードステータス追跡</h1>
+    <div class="subtitle">📅 リリース日: <span class="date">2026 年 8 月 21 日</span> | 機能: 自動ファイルダウンロードの進行状況・完了・健全性の可視化</div>
+  </div>
+
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>Deadline Cloud Monitor (DCM) デスクトップアプリが、クラウドで実行されたジョブからの<span class="highlight">自動ファイルダウンロードの進行状況・ステータス・健全性</span>を表示できるようになりました。ジョブレベルとタスクレベルの両方に新しい <span class="highlight">「Download status」列</span>が追加され、すべての出力ファイルが宛先ドライブで利用可能になったことを DCM 上で確認できます。</p>
+    <p>ステータス情報の<span class="highlight">鮮度を示すインジケーター</span>も表示され、ファイルが利用できない場合には次に取るべきアクションの明確なガイダンスがアプリ上に表示されます。手動でのファイル確認が現実的でない<span class="highlight">大規模レンダーパイプライン</span>で特に価値の高いアップデートです。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>出力ファイルが揃っているかをドライブを直接開いて手動確認する必要があった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ダウンロードの進行状況や失敗の有無を DCM 上で把握できなかった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ファイル到着を確認できないまま後続タスク (コンポジット、レビューなど) を開始し、手戻りが発生するリスクがあった</span></div>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span>ジョブ / タスクレベルの「Download status」列で進行状況と完了を確認できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>鮮度インジケーターで表示内容がどの時点の情報かを判断できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>ファイルが利用できない場合、次のステップの明確なガイダンスを表示</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>手動でのドライブ確認が不要になり、出力の可用性を確実に確認できる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Cloud["☁️ AWS クラウド"]
+        Queue["📋 Deadline Cloud キュー"]
+        Fleet["⚙️ フリート ワーカー"]
+        S3[("🪣 ジョブアタッチメント S3 バケット")]
+    end
+
+    subgraph Workstation["💻 ローカルワークステーション"]
+        DCM["🖥️ Deadline Cloud Monitor"]
+        Status["📊 Download status 列<br/>ジョブ / タスクレベル"]
+        Drive[("📁 宛先ドライブ")]
+    end
+
+    User(["👤 アーティスト"]) --> DCM
+    DCM --> Queue
+    Queue --> Fleet
+    Fleet -->|出力ファイルをアップロード| S3
+    S3 -.->|自動ダウンロード| Drive
+    DCM --> Status
+    Status -.->|進行状況・完了・鮮度を表示| Drive
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Cloud,Workstation cloud
+    class Queue,Fleet compute
+    class S3,Drive storage
+    class User user
+    class DCM process
+    class Status internal
+      </pre>
+    </div>
+    <p class="diagram-note">クラウド上のフリートワーカーが生成した出力ファイルは、ジョブアタッチメント用の S3 バケットを経由してローカルの宛先ドライブへ自動ダウンロードされます。今回のアップデートにより、このダウンロードの進行状況と完了状態を DCM の「Download status」列で確認できるようになりました。</p>
+  </div>
+
+  <div class="section">
+    <h2>⭐ 主要機能</h2>
+    <div class="card">
+      <h4>📊 Download status 列の追加</h4>
+      <p style="margin:0; font-size:14px;">ジョブレベルとタスクレベルの両方に新しい列が追加され、自動ダウンロードの進行状況と、すべての出力ファイルが宛先ドライブ上で利用可能になったことを確認できます。</p>
+    </div>
+    <div class="card">
+      <h4>🕒 ステータス鮮度インジケーター</h4>
+      <p style="margin:0; font-size:14px;">表示されているダウンロードステータスがどの程度新しい情報かを示すインジケーターを表示し、表示内容がどの時点の状態を反映しているかを判断できます。</p>
+    </div>
+    <div class="card">
+      <h4>🧭 問題発生時のガイダンス表示</h4>
+      <p style="margin:0; font-size:14px;">何らかの理由でファイルが利用できない場合、次に取るべきステップの明確なガイダンスをアプリ上に表示。トラブルシューティングの起点を DCM に集約できます。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3 style="margin-top:0;">機能の位置付け</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対象アプリ</td><td>Deadline Cloud Monitor (DCM) デスクトップアプリ</td></tr>
+      <tr><td>対象機能</td><td>自動ファイルダウンロードのステータス追跡</td></tr>
+      <tr><td>表示レベル</td><td>ジョブレベルおよびタスクレベル</td></tr>
+      <tr><td>表示内容</td><td>ダウンロード進行状況、完了確認、ステータス鮮度、エラー時のガイダンス</td></tr>
+      <tr><td>対象ワークロード</td><td>VFX、アニメーション、プロダクトデザイン、シミュレーション、ゲーミングなどのレンダリング / 計算ワークロード</td></tr>
+    </table>
+    <h3>API 変更履歴</h3>
+    <p style="font-size:14px;">本アップデートは DCM デスクトップアプリの機能追加であり、発表日前後の期間において AWS API Changes 上で関連する Deadline Cloud の API 変更は確認されていません。</p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+    <h3 style="margin-top:0;">前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Deadline Cloud のファーム、キュー、フリートが設定済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>DCM デスクトップアプリがインストール済みであること (最新バージョンへの更新を推奨)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ジョブ出力の自動ダウンロードが設定されていること</span></div>
+
+    <h3>手順</h3>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h4>Deadline Cloud Monitor を起動してサインイン</h4>
+        <p>ファームの URL とユーザー認証情報でサインインすると、ファーム内のキューとジョブの一覧が表示されます。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h4>ジョブ一覧で Download status 列を確認</h4>
+        <p>ジョブ一覧またはタスク一覧で新しい「Download status」列を確認します。進行状況・完了状態と併せて、鮮度インジケーターも表示されます。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h4>ダウンロード完了を確認して後続作業を開始</h4>
+        <p>すべての出力ファイルが宛先ドライブで利用可能になったことを確認してから、コンポジットやレビューなどの後続タスクを開始します。ファイルが利用できない場合は、アプリに表示されるガイダンスに従って対処します。</p>
+      </div>
+    </div>
+
+    <div class="flow-diagram">
+      <div class="flow-step">🖥️ DCM に<br>サインイン</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📊 Download status<br>列を確認</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">✅ 完了を<br>確認</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🎬 後続タスク<br>開始</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="grid-2">
+      <div>
+        <h3 style="margin-top:0;">💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#fff;">手戻りの削減</strong>: 出力ファイルの到着確認後に後続作業を開始でき、やり直しを防止</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#fff;">生産性の向上</strong>: 手作業のドライブ確認が不要になり、アーティストや TD が制作に集中できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#fff;">大規模パイプラインでの信頼性向上</strong>: 大量のジョブ / タスクでも出力の可用性を確実に把握</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top:0;">🔬 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#fff;">可視性の向上</strong>: 進行状況・完了・健全性を DCM 上で一元的に把握</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#fff;">情報鮮度の明示</strong>: 古い情報に基づく誤った判断を防止</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#fff;">トラブルシューティングの効率化</strong>: 次のステップが表示され、原因調査の起点が明確に</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3 style="margin-top:0;">制限事項</h3>
+    <div class="check-item"><span class="cross-icon">•</span><span>DCM デスクトップアプリの機能であり、AWS マネジメントコンソールの機能ではない</span></div>
+    <div class="check-item"><span class="cross-icon">•</span><span>自動ダウンロードが設定されているジョブ出力が対象</span></div>
+    <div class="check-item"><span class="cross-icon">•</span><span>新機能を利用するには DCM を新機能対応バージョンへ更新する必要がある</span></div>
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="check-icon">→</span><span>最新状態の確認が必要な場合は、鮮度インジケーターを併せて確認する運用が望ましい</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span>出力ファイルは S3 に無期限に保存されるため、ストレージコスト削減にはキューの S3 バケットへの S3 ライフサイクル設定の検討が引き続き有効</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+    <div class="usecase">
+      <h4>🎬 ユースケース 1: 大規模レンダーファームでの出力確認の自動化</h4>
+      <p style="margin:0; font-size:14px;"><strong>シナリオ</strong>: 数百ショットのアニメーション作品を制作するスタジオで、毎晩数千タスクのレンダリングジョブを実行。従来は朝一番にファイルサーバーを手動チェックしていた。夜間バッチでジョブを投入し、翌朝 DCM のジョブ一覧で Download status 列を確認、すべて完了状態であることを確認してからコンポジット工程を開始する。</p>
+      <p class="effect"><strong>効果</strong>: ファイルサーバーの手動チェック作業が不要になり、出力欠落による手戻りを防ぎながらパイプライン全体の稼働開始を早められる。</p>
+    </div>
+    <div class="usecase">
+      <h4>🧩 ユースケース 2: タスク単位での部分的な作業開始</h4>
+      <p style="margin:0; font-size:14px;"><strong>シナリオ</strong>: 長時間かかるシミュレーションジョブのうち、完了したタスクの出力から順次後続処理を進めたい。DCM でジョブを選択し、タスクレベルの Download status 列でダウンロード完了済みタスクを特定して、完了分のみで後続処理を先行開始する。</p>
+      <p class="effect"><strong>効果</strong>: ジョブ全体の完了を待たずにタスク単位で作業を開始でき、パイプライン全体のリードタイムを短縮できる。</p>
+    </div>
+    <div class="usecase">
+      <h4>🚨 ユースケース 3: ダウンロード障害の迅速な検知と対処</h4>
+      <p style="margin:0; font-size:14px;"><strong>シナリオ</strong>: ネットワーク障害やディスク容量不足などにより、一部の出力ファイルがローカルドライブにダウンロードされていない。Download status 列で異常のあるジョブ / タスクを特定し、アプリに表示される次のステップのガイダンスに従って原因を解消し、出力を取得する。</p>
+      <p class="effect"><strong>効果</strong>: ファイル不足に気付かないまま後続作業を進めてしまう事故を防ぎ、障害発生時の対処時間を短縮できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h4>💵 料金</h4>
+        <p style="margin:0; font-size:14px;">本機能に関する追加料金の記載はありません。DCM デスクトップアプリ自体は<span class="highlight">無料</span>で利用でき、Deadline Cloud の利用料金 (ワーカーのコンピューティング使用量、ライセンス使用量など) が通常どおり適用されます。</p>
+      </div>
+      <div class="card">
+        <h4>🌍 利用可能リージョン</h4>
+        <p style="margin:0; font-size:14px;">今回の発表ではリージョンの明記はありません。DCM デスクトップアプリの機能であり、Deadline Cloud を利用しているすべての環境で DCM の更新により利用できると考えられます。最新の対応状況は公式ドキュメントを確認してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="check-item"><span class="check-icon">→</span><span><strong style="color:#fff;">Deadline Cloud Monitor (DCM)</strong>: レンダリング環境、ジョブ、リソース、コストを可視化するデスクトップアプリ。今回のアップデートの対象</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong style="color:#fff;">ジョブアタッチメント (Job Attachments)</strong>: ジョブの入出力ファイルを Amazon S3 経由で転送する仕組み。自動ダウンロードの基盤</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong style="color:#fff;">Amazon S3</strong>: ジョブ出力の保存先。出力は無期限に保存されるため、コスト最適化には S3 ライフサイクル設定が有効</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong style="color:#fff;">Usage Explorer</strong>: DCM 内でコストを可視化する機能。2026 年 8 月には EBS 永続ボリュームのコスト追跡にも対応</span></div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>今回のアップデートにより、DCM 上でジョブ出力の自動ダウンロードの進行状況と完了状態を<span class="highlight">ジョブ / タスクレベル</span>で確認できるようになり、手動でのドライブ確認が不要になりました。大規模レンダーパイプラインを運用するチームは、<span class="highlight">DCM を最新バージョンへ更新</span>し、後続タスク開始前の出力確認フローに「Download status」列の確認を組み込むことを推奨します。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/08/aws-deadline-cloud-auto-download-status-tracking/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li><a href="https://aws.amazon.com/deadline-cloud/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Deadline Cloud 製品ページ</a></li>
+      <li><a href="https://docs.aws.amazon.com/deadline-cloud/latest/userguide/download-finished-output.html" target="_blank" rel="noopener noreferrer" class="aws-link">Deadline Cloud での完了した出力のダウンロード (ユーザーガイド)</a></li>
+      <li><a href="https://aws.amazon.com/deadline-cloud/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+    </ul>
+    <p style="margin-top:12px;">生成日: 2026-08-21 | AWS News Summary</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Security Agent - 予算コントロールと Finding 再検証</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.title .accent { color: var(--aws-orange); }
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.meta-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.meta-item {
+  background: var(--aws-dark-squid);
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+
+.meta-item strong { color: var(--aws-orange); }
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.card p { margin: 0; font-size: 14px; }
+.card ul { margin: 8px 0 0 0; padding-left: 20px; font-size: 14px; }
+.card li { margin: 4px 0; }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h4 { color: #FF6B4A; margin: 0 0 10px 0; font-size: 16px; }
+.after-box h4 { color: #4CAF50; margin: 0 0 10px 0; font-size: 16px; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* 統計カード */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px 14px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  margin-top: 6px;
+  color: var(--aws-light-gray);
+}
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 12px 0;
+}
+
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+.spec-table td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 10px 16px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 22px;
+  font-weight: bold;
+}
+
+/* ステップリスト */
+.step-list { counter-reset: step; list-style: none; padding: 0; margin: 12px 0; }
+
+.step-list li {
+  counter-increment: step;
+  position: relative;
+  padding: 8px 0 8px 44px;
+  font-size: 14px;
+}
+
+.step-list li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 28px;
+  height: 28px;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase h4 { margin: 0 0 8px 0; color: var(--aws-smile-orange); font-size: 16px; }
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .effect {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid #4CAF50;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* ステータスバッジ */
+.status-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.status-active { background: rgba(209, 50, 18, 0.25); color: #FF6B4A; border: 1px solid #FF6B4A; }
+.status-resolved { background: rgba(29, 129, 2, 0.25); color: #4CAF50; border: 1px solid #4CAF50; }
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .before-after, .two-col { grid-template-columns: 1fr; }
+  h1, .title { font-size: 26px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">🛡️ AWS Security Agent (AWS Continuum)</span>
+    <h1 class="title">予算コントロールと <span class="accent">Finding 再検証</span> のサポート</h1>
+    <div class="subtitle">AI ペネトレーションテストに「コスト上限」と「修正確認の高速化」が登場</div>
+    <div class="meta-row">
+      <div class="meta-item">📅 <strong>リリース日</strong>: 2026 年 8 月 19 日</div>
+      <div class="meta-item">⚙️ <strong>機能</strong>: 最大タスク時間制限 / Finding 再検証</div>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      AWS Security Agent は、AI エージェントが Web アプリケーションの脆弱性を自律的にテストするオンデマンドのペネトレーションテストサービスです。課金は並列タスク全体の<span class="highlight">累積タスク時間</span>に基づきます。今回のアップデートで 2 つの新機能が追加されました。
+    </p>
+    <div class="two-col">
+      <div class="card">
+        <h4>💰 予算コントロール (最大タスク時間制限)</h4>
+        <p>テストごとに最大タスク時間の上限を設定。プリセット (20 / 30 時間)、カスタム、無制限から選択でき、上限がそのまま<strong>コスト上限</strong>として機能します。上限到達時もテストは正常に停止し、発見済み Finding はすべて保持されます。</p>
+      </div>
+      <div class="card">
+        <h4>🔁 Finding 再検証 (Revalidation)</h4>
+        <p>修正デプロイ後、フルテストを再実行せずに<strong>選択した Finding だけ</strong>を再テスト。結果は <span class="status-badge status-active">Active</span> または <span class="status-badge status-resolved">Resolved</span> で返され、元の Finding にリンクされた履歴で追跡できます。</p>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">20 時間〜</div>
+        <div class="stat-label">設定可能な最大タスク時間の最小値</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">2 種類</div>
+        <div class="stat-label">再検証結果 Active / Resolved</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">実使用分のみ</div>
+        <div class="stat-label">課金対象 上限を高くしてもコスト増なし</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h4>❌ アップデート前の課題</h4>
+        <ul>
+          <li>テストコストに上限を設定する組み込みの方法がなく、大規模アプリではタスク時間の消費 (= コスト) を事前に制御できなかった</li>
+          <li>修正の有効性確認にはペネトレーションテスト全体の再実行が必要だった</li>
+          <li>フルテスト再実行は時間とコストを余分に消費し、修復サイクルの高速化を妨げていた</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h4>✅ アップデート後の改善</h4>
+        <ul>
+          <li>最大タスク時間制限でテストごとのコスト上限を設定可能 (最小 20 時間)</li>
+          <li>上限到達時も正常停止し、Finding は全保持のまま Completed で完了</li>
+          <li>特定 Finding のみの再検証でフルテスト再実行が不要に</li>
+          <li>Active / Resolved のステータスと再検証履歴で修復状況を時系列で追跡</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ ワークフロー全体像</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Test["🧪 ペネトレーションテスト実行"]
+        direction LR
+        Config["⚙️ テスト設定<br/>最大タスク時間制限<br/>20h / 30h / カスタム / 無制限"]
+        Agent["🤖 AI エージェント<br/>並列タスクで自律テスト"]
+        Limit{"⏱️ タスク時間<br/>上限到達?"}
+        Config --> Agent --> Limit
+    end
+
+    Findings["📋 Finding 一覧<br/>すべて保持・Completed で完了"]
+    Fix["🔧 修正のデプロイ"]
+    Reval["🔁 Finding 再検証<br/>選択した Finding のみ再テスト"]
+    Active["🔴 Active<br/>依然として悪用可能"]
+    Resolved["🟢 Resolved<br/>修正確認済み"]
+    History["📜 再検証履歴<br/>元の Finding にリンク"]
+
+    User(["👤 セキュリティチーム"]) --> Config
+    Limit -->|到達| Findings
+    Limit -->|完了| Findings
+    Findings --> Fix --> Reval
+    Reval --> Active
+    Reval --> Resolved
+    Active -.->|再修正後に再検証| Fix
+    Active --> History
+    Resolved --> History
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef error fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+    classDef ok fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class Test layer
+    class Config,Agent,Findings,Reval,History process
+    class Fix internal
+    class Limit decision
+    class User user
+    class Active error
+    class Resolved ok
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      最大タスク時間制限付きのペネトレーションテストから Finding の修正・再検証までのワークフロー。再検証は独立したジョブとして実行され、選択した Finding のみを対象に Active / Resolved を判定します。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="card">
+      <h4>1️⃣ 予算コントロール (最大タスク時間制限)</h4>
+      <ul>
+        <li>テスト作成時に <strong>Max task hours</strong> セクションで上限を設定可能</li>
+        <li>プリセット値 (20 / 30 時間など)、カスタム値 (最小 20 時間)、または No limit から選択</li>
+        <li>タスク時間は並列タスクを含む累積作業時間で、実際の経過時間 (wall-clock time) とは異なる</li>
+        <li>タスク時間 = 課金単位のため、上限設定がそのまま<span class="highlight">コスト上限</span>として機能</li>
+        <li>上限到達時は正常停止し、発見済み Finding を全保持したまま Completed で完了</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>2️⃣ Finding 再検証 (Revalidation)</h4>
+      <ul>
+        <li>完了したテスト実行から 1 つ以上の Finding を選択して再検証を実行</li>
+        <li>選択された Finding の<strong>検証ステップのみ</strong>を再実行 (新規脆弱性の探索は行わない)</li>
+        <li>結果は <span class="status-badge status-active">Active</span> (再現できた = 悪用可能) / <span class="status-badge status-resolved">Resolved</span> (再現不可 = 修正確認) の 2 種類</li>
+        <li>独立ジョブとして実行され、元の Finding は変更されない</li>
+        <li>実行履歴に「Revalidation」タイプとして表示され、フルテストと区別可能</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>3️⃣ 再検証履歴のトレーサビリティ</h4>
+      <ul>
+        <li>再検証ジョブから「Original finding」で元の Finding を参照可能</li>
+        <li>Finding 側から「Revalidation jobs」で過去の再検証履歴と結果を一覧可能</li>
+        <li>修復の試行から解決までの経緯を時系列で追跡できる</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>⏱️ 最大タスク時間制限の仕様</h3>
+    <table class="spec-table">
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>設定対象</td><td>任意のペネトレーションテスト</td></tr>
+      <tr><td>選択肢</td><td>プリセット値 (例: 20 / 30 時間)、カスタム値、無制限</td></tr>
+      <tr><td>最小値</td><td>20 時間</td></tr>
+      <tr><td>タスク時間の定義</td><td>並列タスクを含むエージェントの累積作業時間 (経過時間とは異なる)</td></tr>
+      <tr><td>上限到達時の動作</td><td>テストを正常に停止し、発見済み Finding を保持。ステータスは Completed</td></tr>
+      <tr><td>課金</td><td>実際に使用したタスク時間のみに課金。上限を高くしてもコストは増えない</td></tr>
+    </table>
+
+    <h3>🔁 Finding 再検証の仕様</h3>
+    <table class="spec-table">
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>前提条件</td><td>少なくとも 1 つの Finding を持つ完了済みペネトレーションテスト、対象 Agent Space へのアクセス、現在の認証設定で到達可能なターゲットアプリケーション</td></tr>
+      <tr><td>対象</td><td>完了したテスト実行から選択した 1 つ以上の Finding</td></tr>
+      <tr><td>テスト範囲</td><td>選択した Finding の検証ステップのみ (新規脆弱性の探索は行わない)</td></tr>
+      <tr><td>結果ステータス</td><td>Active (再現可能 = 未解決) / Resolved (再現不可 = 修正確認)</td></tr>
+      <tr><td>実行タイプ</td><td>Revalidation として実行履歴に記録され、フルテストと区別される</td></tr>
+      <tr><td>履歴</td><td>元の Finding と再検証ジョブが相互にリンクされる</td></tr>
+    </table>
+
+    <h3>📡 API 変更履歴</h3>
+    <table class="spec-table">
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/08/13</td>
+        <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/db5022-securityagent.html" target="_blank" rel="noopener noreferrer">securityagent</a></td>
+        <td>11 updated api methods - ペネトレーションテストとコードレビューへの最大タスク時間の予算上限設定、および新しい REVALIDATION ジョブタイプによる報告済み Finding の再検証のサポートを追加</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>📋 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Security Agent Web アプリケーションへのアクセス権があること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>検証済みドメインが少なくとも 1 つ存在すること (テスト対象は検証済みドメインのみ)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Security Agent 用の適切な権限を持つ IAM ロールが設定されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>(再検証の場合) 少なくとも 1 つの Finding を持つ完了済みテストと、対象 Agent Space へのアクセス権</span></div>
+
+    <h3>ステップ 1: 最大タスク時間制限を設定してテストを作成</h3>
+    <ol class="step-list">
+      <li>AWS Security Agent Web アプリケーションにログイン</li>
+      <li><strong>Penetration tests</strong> セクションから <strong>Create a penetration test</strong> を選択</li>
+      <li>テスト名、対象ドメイン、スコープ、IAM ロールなどを設定</li>
+      <li><strong>Max task hours</strong> セクションで上限を選択 — プリセット (20 / 30 時間など)、<strong>No limit</strong>、または <strong>Custom</strong> (最小 20 時間)</li>
+      <li><strong>Create and execute</strong> を選択してテストを開始</li>
+    </ol>
+    <p style="font-size: 14px;">💡 大規模アプリや網羅的な結果を得たい場合は、30 時間以上などの<span class="highlight">高めの上限</span>が推奨されています。課金は実使用分のみのため、高い上限を設定してもテストが追加時間を必要としない限りコストは増加しません。</p>
+
+    <h3>ステップ 2: 修正デプロイ後に Finding を再検証</h3>
+    <ol class="step-list">
+      <li>修正を元のテスト対象と同じ環境にデプロイ (修正の反映が正確な結果の前提)</li>
+      <li>対象の Finding を含むペネトレーションテスト実行を開く</li>
+      <li>Finding パネルで <strong>Multiselect findings for revalidation</strong> を選択</li>
+      <li>再検証したい Finding のチェックボックスを選択</li>
+      <li><strong>Revalidate findings</strong> を選択して再検証を実行</li>
+    </ol>
+
+    <h3>ステップ 3: 結果の確認と履歴の追跡</h3>
+    <ol class="step-list">
+      <li>再検証ジョブの結果で各 Finding のステータス (Active / Resolved) を確認</li>
+      <li>Active の場合は追加の修復を行い、Resolved になるまで再検証を繰り返す</li>
+      <li>再検証ジョブから <strong>Original finding</strong>、Finding から <strong>Revalidation jobs</strong> をたどり修復経緯を確認</li>
+    </ol>
+    <p style="font-size: 14px;">⚠️ アプリケーションに広範な変更を加えた場合は、個別再検証ではなくフルのペネトレーションテストの実行が推奨されています。</p>
+
+    <div class="flow-diagram">
+      <div class="flow-step">🔧 修正を<br/>デプロイ</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">☑️ Finding を<br/>選択</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔁 再検証を<br/>実行</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🟢 Resolved で<br/>修復完了</div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div class="card">
+        <h4>📈 ビジネス面</h4>
+        <ul>
+          <li><strong>コストの予見性向上</strong>: タスク時間 = 課金単位に上限を設定でき、予算超過のリスクを排除</li>
+          <li><strong>修復サイクルの高速化</strong>: フルテスト再実行を待たずに修正の有効性を確認でき、修復からクローズまでのリードタイムが短縮</li>
+          <li><strong>監査対応の強化</strong>: 再検証履歴により、発見から解決までの証跡を提示できる</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>⚙️ 技術面</h4>
+        <ul>
+          <li><strong>Graceful な停止動作</strong>: 上限到達時も Finding が失われず Completed で完了。部分的な結果でも有効活用可能</li>
+          <li><strong>フォーカスした再テスト</strong>: 選択した Finding の検証ステップのみを再実行するため、フルテストより高速かつ低コスト</li>
+          <li><strong>元の Finding の不変性</strong>: 再検証は独立ジョブとして実行され、テスト結果の履歴が保全される</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 制限事項・考慮点 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>最大タスク時間制限の最小値は 20 時間。それより小さい上限は設定不可</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>再検証は選択した Finding のみを再テストし、新しい脆弱性の発見や他の箇所のテストは行わない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>再検証には、完了済みテストの認証設定で到達可能なターゲットアプリケーションが必要</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>What's New では利用可能リージョンが明記されていない</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>タスク時間は並列タスクを含む累積作業時間であり、実際の経過時間とは異なる点を理解して上限を設定する</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>上限を低くしすぎるとテストが途中停止しカバレッジが不完全になる可能性 (課金は実使用分のみのため高めの上限が推奨)</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>正確な再検証結果には、修正が元のテスト対象と同じ環境にデプロイ済みであることが必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>広範な変更を加えた場合は、個別再検証ではなくフルテストの再実行が適切</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>1. 予算上限付きの定期ペネトレーションテスト</h4>
+      <p><strong>シナリオ</strong>: セキュリティチームが四半期ごとに本番 Web アプリのテストを実施。部門予算の制約からテストごとのコスト上限を保証する必要がある。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">手順</span><span class="code-title">予算上限付きテスト</span></div>
+        <pre><code class="language-plaintext">1. テスト作成時に Max task hours でプリセットの 30 時間を選択
+2. Create and execute でテストを開始
+3. 上限到達時は Completed となり、発見済み Finding をレビュー
+4. カバレッジが不足していれば、次回のテストで上限を引き上げて再実行</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: テストあたりのコスト上限が保証され、予算計画が立てやすくなる。上限到達時も Finding は保持されるため、部分的な結果からでも修復作業を開始できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>2. 修正デプロイ後の迅速な修復確認</h4>
+      <p><strong>シナリオ</strong>: DevSecOps エンジニアが SQL インジェクションの Finding を修正しデプロイ。フルテストを再実行せずに修正の有効性を確認したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">手順</span><span class="code-title">Finding 再検証</span></div>
+        <pre><code class="language-plaintext">1. 修正をテスト対象環境にデプロイ
+2. 完了済みテスト実行を開き、Multiselect findings for revalidation を選択
+3. 該当する Finding を選択して Revalidate findings を実行
+4. 結果が Resolved であれば修復完了、Active であれば追加修正して再検証</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: フルテスト再実行に比べて大幅に短い時間とコストで修正を検証でき、修復サイクルが高速化する。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>3. 修復状況の継続的なトラッキングと報告</h4>
+      <p><strong>シナリオ</strong>: セキュリティ管理者が、複数の脆弱性の修復進捗を経営層や監査人に報告する必要がある。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">手順</span><span class="code-title">修復トラッキング</span></div>
+        <pre><code class="language-plaintext">1. 各修復試行の後に該当 Finding の再検証を実行
+2. Finding の Revalidation jobs で再検証の履歴と結果を確認
+3. Active から Resolved への遷移を修復完了のエビデンスとして報告資料に反映</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: 元の Finding にリンクされた再検証履歴により、脆弱性ごとの修復経緯を客観的なエビデンスとして提示できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card">
+        <h4>💵 料金</h4>
+        <ul>
+          <li>並列テストタスク全体で消費された<strong>累積タスク時間</strong>に基づいて課金</li>
+          <li>課金は実際に使用されたタスク時間のみに基づく</li>
+          <li>上限を高く設定しても、追加時間を必要としない限りコストは増加しない</li>
+          <li>具体的な単価は AWS Security Agent の料金ページを参照</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>🌍 利用可能リージョン</h4>
+        <p>What's New では利用可能リージョンは明記されていません。最新のリージョン情報は AWS Security Agent の公式ドキュメントおよびコンソールで確認してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>AWS Continuum</strong>: AWS Security Agent が属する AI エージェントサービス群</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>AWS IAM</strong>: テスト実行時のリソースアクセスに Agent Space ベースの権限モデルと IAM ロールを使用</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>Amazon CloudWatch Logs</strong>: テスト実行の詳細ログを保存。未指定の場合は /aws/securityagent プレフィックスのロググループが自動作成</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>AWS Secrets Manager / Systems Manager Parameter Store</strong>: テスト対象アプリの認証情報を安全に参照するための推奨オプション</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>Amazon VPC</strong>: 非公開アプリをテストする場合に、VPC、サブネット、セキュリティグループを設定可能</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      予算コントロールと Finding 再検証は、AI エージェントによるペネトレーションテストを本番運用に組み込むうえで重要な<span class="highlight">「コストの予見性」</span>と<span class="highlight">「修復確認の効率化」</span>という 2 つの課題を解決するアップデートです。タスク時間の上限設定により予算超過のリスクなくテストを実行でき、再検証により修復サイクルを大幅に短縮できます。
+    </p>
+    <p>
+      AWS Security Agent を利用中、または導入を検討しているチームは、まず<strong>既存テストへの最大タスク時間制限の設定</strong>と、<strong>修正デプロイ後の再検証ワークフローの組み込み</strong>から始めることが推奨されます。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/08/aws-security-agent/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/08/aws-security-agent/</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/securityagent/latest/userguide/revalidate-findings.html" target="_blank" rel="noopener noreferrer">ドキュメント: Revalidate penetration test findings</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/securityagent/latest/userguide/perform-penetration-test.html#_set_a_maximum_task_hours_limit" target="_blank" rel="noopener noreferrer">ドキュメント: Create a penetration test (Set a maximum task-hours limit)</a></li>
+      <li><a class="aws-link" href="https://awsapichanges.com/archive/changes/db5022-securityagent.html" target="_blank" rel="noopener noreferrer">API 変更履歴 (awsapichanges.com)</a></li>
+    </ul>
+    <p>ベース: reports/2026/2026-08-19-aws-security-agent.md | 生成日: 2026-08-21</p>
+  </footer>
+
+</div>
+
+<!-- Mermaid.js -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

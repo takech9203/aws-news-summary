@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiro 継続的プロンプト評価 - LLM ジャッジとライブシグナルによるエージェント品質改善</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.35;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+    }
+
+    .subtitle .date {
+      color: var(--aws-smile-orange);
+      font-weight: 600;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card h4 {
+      margin: 0 0 6px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .card p { margin: 0; font-size: 14px; }
+
+    /* Before / After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 { margin-top: 0; }
+    .before-box h3 { color: #FF8A75; }
+    .after-box h3 { color: #7DD87D; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .before-box li, .after-box li {
+      margin: 8px 0;
+      font-size: 14px;
+      padding-left: 22px;
+      position: relative;
+    }
+
+    .before-box li::before {
+      content: "✗";
+      position: absolute;
+      left: 0;
+      color: #FF8A75;
+      font-weight: bold;
+    }
+
+    .after-box li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #7DD87D;
+      font-weight: bold;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-note {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* ステージカード */
+    .stage-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .stage-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-top: 4px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .stage-num {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 28px;
+      height: 28px;
+      line-height: 28px;
+      text-align: center;
+      border-radius: 50%;
+      margin-bottom: 8px;
+    }
+
+    .stage-card h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .stage-card p { margin: 0; font-size: 13px; }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 9px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--aws-light-gray);
+    }
+
+    tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+    .metric-down {
+      color: #7DD87D;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    /* 統計カード */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 34px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-white);
+      margin-top: 6px;
+    }
+
+    .stat-target {
+      display: inline-block;
+      font-size: 11px;
+      background: rgba(0, 161, 201, 0.25);
+      color: #7FD6EA;
+      border-radius: 10px;
+      padding: 1px 10px;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon { color: #7DD87D; font-size: 16px; flex-shrink: 0; margin-top: 3px; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; margin-top: 3px; }
+    .cross-icon { color: #FF8A75; font-size: 16px; flex-shrink: 0; margin-top: 3px; }
+
+    /* 2 カラムメリット */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .merit-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .merit-box h3 { margin-top: 0; font-size: 16px; }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    .note-box {
+      background: rgba(255, 173, 51, 0.1);
+      border: 1px solid rgba(255, 173, 51, 0.45);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+
+    .note-box strong { color: var(--aws-smile-orange); }
+
+    .usecase-box {
+      background: rgba(255, 153, 0, 0.1);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 12px 0;
+    }
+
+    .usecase-box h4 {
+      margin: 0 0 6px 0;
+      color: var(--aws-smile-orange);
+      font-size: 15px;
+    }
+
+    .usecase-box p { margin: 0; font-size: 14px; }
+
+    ul.plain {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    ul.plain li { margin: 6px 0; font-size: 14px; }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { margin: 6px 0; padding-left: 20px; }
+    footer li { margin: 4px 0; }
+
+    @media (max-width: 700px) {
+      .before-after, .merit-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div class="service-badge">Kiro</div>
+      <h1>🔄 継続的プロンプト評価</h1>
+      <div class="subtitle">
+        LLM ジャッジとライブシグナルによるエージェント品質改善 | <span class="date">📅 2026 年 8 月 21 日</span> 公開 (Kiro Blog)
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        Kiro チームが、システムプロンプトと設定変更の品質を継続的に評価する社内の仕組み
+        <span class="highlight">継続的プロンプト評価 (Continuous Prompt Evaluation)</span> を解説するブログ記事を公開しました。
+        <span class="highlight">LLM-as-judge (LLM ジャッジ)</span> と実利用データ (ライブシグナル) を組み合わせ、
+        ベンチマーク結果と社内開発者による数千件の Kiro 会話の LLM ベース分析から、タスク完了、検証、ツール使用における改善機会を特定します。
+      </p>
+      <p>
+        背景には、システムプロンプトの挙動はモデル、ツール、コードベース、タスク、ユーザーの組み合わせが膨大でテストスイートでは網羅できないという課題があります。
+        新しいモデルが指示をより厳密に従うことで既存の指示が有害になる<span class="highlight">「プロンプトの陳腐化」</span>も発生します。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>😰 Before: アップデート前の課題</h3>
+          <ul>
+            <li>モデル × ツール × コードベース × タスク × ユーザーの組み合わせが膨大で、テストスイートで網羅的に検証できない</li>
+            <li>新モデルが指示を厳密に解釈することで既存指示が有害になる「プロンプトの陳腐化」を検出しにくい</li>
+            <li>ベンチマークだけでは、ワークスペース固有のコンテキスト、実サービス連携、セッションをまたぐ会話などの挙動を捉えられない</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>😊 After: 継続的プロンプト評価で実現</h3>
+          <ul>
+            <li>実際のワークフロー上で問題を検出し、繰り返しパターンを分類してプロンプト指示までトレース可能に</li>
+            <li>15 の行動品質ディメンションに基づく LLM ジャッジで、コホート間の一貫した比較が可能に</li>
+            <li>モデルアップグレード時の再検証プロセスを確立し、プロンプト効果のモデル依存性を踏まえた運用が可能に</li>
+            <li>Kiro CLI で行動品質の問題 32% 減、Kiro IDE でスタイル不一致 54% 減などの成果</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ 評価サイクルのアーキテクチャ</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Cycle["🔄 4 ステージのプロンプト評価サイクル"]
+        direction LR
+        D1["🔍 1. Diagnose<br/>不満カテゴリを特定し<br/>プロンプト指示にトレース"]
+        D2["✏️ 2. Design<br/>対象を絞った<br/>プロンプト変更案を作成"]
+        D3["🧪 3. Test<br/>社内トラフィックの<br/>コホートで比較検証"]
+        D4["📊 4. Evaluate<br/>LLM ジャッジで<br/>不満率と品質を評価"]
+        D1 --> D2 --> D3 --> D4
+    end
+
+    subgraph Judge["⚖️ LLM ジャッジパイプライン"]
+        Conv[("💬 社内開発者の<br/>会話データ")]
+        Bucket["🗂️ コホート別バケット<br/>決定論的ハッシュで割り当て"]
+        LLMJ["🤖 LLM ジャッジ<br/>15 の行動品質ディメンション"]
+        Out["📈 コホート別の<br/>不満率と行動品質問題数"]
+        Conv --> Bucket --> LLMJ --> Out
+    end
+
+    D4 -.->|出荷 / 修正 / 却下| D1
+    D3 --> Conv
+    Out --> D4
+
+    classDef stage fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef judge fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef data fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef result fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class D1,D2,D3,D4 stage
+    class Bucket,LLMJ judge
+    class Conv data
+    class Out result
+    class Cycle,Judge layer
+        </pre>
+      </div>
+      <p class="diagram-note">
+        プロンプト変更は 4 ステージのサイクル (診断、設計、テスト、評価) で検証され、社内トラフィックの会話データがコホート別に LLM ジャッジで採点されます。
+        このサイクルは、プロンプト、ユーザー行動、モデル能力の変化に合わせて繰り返されます。
+      </p>
+    </div>
+
+    <!-- 4 ステージ詳細 -->
+    <div class="section">
+      <h2>🔁 4 ステージのプロンプト評価サイクル</h2>
+      <div class="stage-grid">
+        <div class="stage-card">
+          <div class="stage-num">1</div>
+          <h4>🔍 Diagnose (診断)</h4>
+          <p>LLM ジャッジを現在の社内トラフィックに対して実行し、繰り返し発生する不満パターンを特定・分類。高頻度クラスタごとに原因となるプロンプト指示 (または欠落している指示) にトレース。例: 「タスクが未完了」の多発は、実行よりも計画の説明を促していたガイダンスが原因と判明。</p>
+        </div>
+        <div class="stage-card">
+          <div class="stage-num">2</div>
+          <h4>✏️ Design (設計)</h4>
+          <p>診断された問題に対して、対象を絞った変更候補を作成。候補は主に安全性 (safety)、検証 (verification)、トーン (tone)、挙動 (behavior) の 4 カテゴリに対応。各候補はテスト前に意図する挙動と退行リスクを明記。</p>
+        </div>
+        <div class="stage-card">
+          <div class="stage-num">3</div>
+          <h4>🧪 Test (テスト)</h4>
+          <p>候補をコントロール (対照群) と分離されたコホートで比較。必要に応じて候補を組み合わせたコホートで相互作用も検証。実験設計とサンプルサイズにより、結果が方向性の示唆にとどまるか、より広い結論を支持するかが決まる。</p>
+        </div>
+        <div class="stage-card">
+          <div class="stage-num">4</div>
+          <h4>📊 Evaluate (評価)</h4>
+          <p>同一の LLM ジャッジのルーブリックを各コホートに適用し、不満率と行動品質問題の発生率を比較。得られた証拠に基づき、各候補を<strong style="color:#FFAD33;">出荷、修正、却下</strong>のいずれかに振り分け。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- LLM ジャッジ -->
+    <div class="section">
+      <h2>⚖️ LLM-as-judge: 15 の行動品質ディメンション</h2>
+      <p>評価フレームワークは、社内の会話を <span class="highlight">15 の行動ディメンション</span>で採点します。記事で例示されているディメンションは以下のとおりです。</p>
+      <table>
+        <thead>
+          <tr><th>ディメンション</th><th>内容</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>✅ タスク完全性</td><td>タスクを最後まで完了したか</td></tr>
+          <tr><td>🔎 主張の正確性</td><td>断定する前にエージェントが検証したか</td></tr>
+          <tr><td>🎨 コードスタイル遵守</td><td>プロジェクトの既存パターンに従ったか</td></tr>
+          <tr><td>🔁 失敗アプローチの認識</td><td>同じ失敗アプローチの繰り返しを認識したか</td></tr>
+          <tr><td>⚠️ 破壊的アクションのフラグ</td><td>リスクのある操作の前に確認したか</td></tr>
+          <tr><td>🔧 ツール使用の適切性</td><td>適切なツールを選択したか</td></tr>
+          <tr><td>🧪 検証行動</td><td>テスト実行やコンパイル確認を行ったか</td></tr>
+        </tbody>
+      </table>
+      <div class="note-box">
+        <strong>保守的な判定</strong>: ジャッジは会話からの明示的な証拠 (修正、不満の表明、タスクの放棄、確認) を必須とします。
+        曖昧な会話はどちらのバリアントに対してもカウントされず、過剰な偽陽性判定を避ける保守的で一貫した比較が維持されます。
+      </div>
+      <h3>📡 ジャッジが測定する 2 つの主要シグナル</h3>
+      <div class="card">
+        <h4>😠 明示的な不満 (Explicit dissatisfaction)</h4>
+        <p>ユーザーが明示的に不満を表明したか、会話を放棄したか、エージェントの作業をやり直したか。会話内の明示的なフィードバックからのみ推定され、ツールの実行結果やアンケートスコアからは推定しない。</p>
+      </div>
+      <div class="card">
+        <h4>📉 行動品質の問題 (Behavioral quality issues)</h4>
+        <p>エージェントが 15 の品質基準のいずれかを満たさなかったか。例: コードを読まずに主張する、タスク完了前に停止する、プロジェクトの既存パターンを無視する。</p>
+      </div>
+    </div>
+
+    <!-- A/B 実験インフラ -->
+    <div class="section">
+      <h2>🧪 A/B 実験インフラストラクチャ</h2>
+      <div class="check-item"><span class="check-icon">✓</span><span>プロンプト変更の出荷前に、社内トラフィック上の<strong style="color:#FFF;">分離されたコホート</strong>で構成を比較</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>社内開発者はユーザー ID の<strong style="color:#FFF;">決定論的ハッシュ</strong>により安定したユーザーバケットに割り当てられ、会話の結果とは独立</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>各バケットは実験ごとに 1 つのプロンプトバリアントに対応</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ジャッジパイプラインは記録された実験割り当てに基づいて会話を分析し、<strong style="color:#FFF;">すべてのコホートに同一のルーブリック</strong>を適用</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>小規模な分離コホートは、本番影響の正確な推定ではなく<strong style="color:#FFF;">退行箇所を特定するための方向性の診断</strong>として扱う</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ある集中的な社内デプロイでは、安全性・検証・トーン・挙動の 4 カテゴリにわたり <span class="highlight">27 件のプロンプト変更候補</span>をスクリーニング。劣化を示した候補は修正または削除され、組み合わせコホートと大規模フォローアップ比較で広い結論を裏付け</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ユーザーが目にする設定の比較にも利用。デフォルトの<strong style="color:#FFF;">推論努力レベル (reasoning effort level)</strong> の評価では、コード修正やデバッグなどの一般的なタスクで高い努力レベルによる改善を確認</span></div>
+    </div>
+
+    <!-- 結果 -->
+    <div class="section">
+      <h2>📊 直近のサイクルの結果</h2>
+      <div class="note-box">
+        <strong>注意</strong>: 以下の数値は社内の実験レベルの比較で観測された差分であり、普遍的な本番環境への効果の推定値ではありません。
+      </div>
+
+      <h3>🚀 初回のモデルとプロンプトの実験</h3>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-target">Kiro CLI</div>
+          <div class="stat-value">-32%</div>
+          <div class="stat-label">行動品質の問題</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-target">Kiro IDE</div>
+          <div class="stat-value">-54%</div>
+          <div class="stat-label">スタイル不一致</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-target">Kiro IDE</div>
+          <div class="stat-value">-36%</div>
+          <div class="stat-label">失敗アプローチの繰り返し</div>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr><th>対象</th><th>指標</th><th>変化</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Kiro CLI</td><td>明示的な不満シグナル</td><td class="metric-down">▼ 5% 減少</td></tr>
+          <tr><td>Kiro CLI</td><td>行動品質の問題</td><td class="metric-down">▼ 32% 減少</td></tr>
+          <tr><td>Kiro CLI</td><td>タスク完全性の問題</td><td class="metric-down">▼ 10.6% 減少</td></tr>
+          <tr><td>Kiro IDE</td><td>行動品質の問題</td><td class="metric-down">▼ 20% 減少</td></tr>
+          <tr><td>Kiro IDE</td><td>未完了タスクの納品</td><td class="metric-down">▼ 21% 減少</td></tr>
+          <tr><td>Kiro IDE</td><td>失敗アプローチの繰り返し</td><td class="metric-down">▼ 36% 減少</td></tr>
+          <tr><td>Kiro IDE</td><td>スタイル不一致</td><td class="metric-down">▼ 54% 減少</td></tr>
+        </tbody>
+      </table>
+
+      <h3>🔄 新モデルでの再検証</h3>
+      <ul class="plain">
+        <li>再検証は初回実験とは異なる問いに答えるもので、<strong style="color:#FFF;">同じプロンプト変更がモデルアップグレード後も有効か</strong>をテスト</li>
+        <li>新しいモデルとプロンプトのベースラインは、同じルーブリックの下ですでに行動品質の問題が少なく、改善余地 (ヘッドルーム) が小さいため、初回サイクルより小さい効果は<strong style="color:#FFF;">設計上の想定であり退行ではない</strong></li>
+        <li>より厳しいベースラインに対しても、同じプロンプト変更は行動品質の問題をさらに <span class="highlight">4% 削減</span>し、明示的な不満を <span class="highlight">2.6 ポイント改善</span></li>
+        <li>新しいモデルは一部の指示をより文字どおりに従う傾向があり (特に低い努力レベルで)、旧モデル向けに調整されたガイダンスがそのまま移行できないケースがあった</li>
+        <li>各モデルアップグレードを新しい「モデルとプロンプトの構成」として扱い、既知の不満ケースをリプレイし、過去の成功ケースを回帰チェックとして使用。行動品質・不満・退行・効率を測定してからロールアウト前に再調整</li>
+      </ul>
+    </div>
+
+    <!-- 示唆 -->
+    <div class="section">
+      <h2>💡 エージェント型システムを評価するチームへの示唆</h2>
+      <div class="card">
+        <h4>📏 ライブ利用の評価はベンチマークを補完する</h4>
+        <p>標準ベンチマークは引き続き有用だが、実ユーザーセッションからの社内フィードバックは、ユーザー固有のワークスペースコンテキスト、実際の本番サービスとの連携、セッションをまたいで再開される会話など、標準ベンチマークが同時に捉えられないディメンションを明らかにする。</p>
+      </div>
+      <div class="card">
+        <h4>🧭 分離コホートは方向性のスクリーニングに使う</h4>
+        <p>小規模な候補コホートは退行箇所の特定に役立つが、より広い結論を導く前には、組み合わせた比較と十分な検定力を持つフォローアップ比較が必要。</p>
+      </div>
+      <div class="card">
+        <h4>🔀 プロンプトの効果はモデル依存</h4>
+        <p>同じ変更が、あるモデルバージョンでは行動品質の問題を 32% 削減し、別のバージョンでは 4% の削減にとどまった。モデルアップグレードのたびに再検証が必要。</p>
+      </div>
+      <div class="card">
+        <h4>🧹 不要になったガイダンスは廃止する</h4>
+        <p>最大級の改善の一部は、行数制限や非推奨ツールの回避策など、時代遅れの制約の削除から得られた。シンプルなプロンプトほどモデルの挙動との整合を保ちやすい。</p>
+      </div>
+    </div>
+
+    <!-- ユーザーへの影響 -->
+    <div class="section">
+      <h2>👥 Kiro ユーザーへの影響</h2>
+      <p>これらの改善により、Kiro は以下の点でより信頼性の高い挙動を示すようになります。</p>
+      <div class="check-item"><span class="check-icon">✓</span><span>タスク全体を完遂する可能性が高まる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>うまくいかないアプローチに固執せず、方針転換しやすくなる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>プロジェクトの既存のコードスタイルに従いやすくなる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>次に進む前に、変更がコンパイルできるか、テストが通るかを検証するようになる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>リスクのある操作の前には確認を求め、安全な作業は直接進めるようになる</span></div>
+      <p style="font-size:14px; margin-top:12px;">Kiro チームは、プロンプトとモデルの変化に合わせてこのプロンプト評価を繰り返し、デプロイ前にアップデートを検証しています。</p>
+    </div>
+
+    <!-- メリット・デメリット -->
+    <div class="section">
+      <h2>⚖️ メリット / デメリット・制約事項</h2>
+      <div class="merit-grid">
+        <div class="merit-box">
+          <h3 style="color:#7DD87D;">👍 ビジネス面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFF;">透明性の向上</strong>: 品質改善プロセスの公開により、エージェント挙動改善の検証方法を理解できる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFF;">品質の継続的改善</strong>: モデルアップグレードごとの再検証により品質退行リスクを低減</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFF;">他チームへの知見提供</strong>: 独自のエージェント型システムを構築・運用する組織の評価手法のリファレンスに</span></div>
+          <h3 style="color:#7DD87D;">🔧 技術面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFF;">証拠ベースの評価</strong>: 明示的な証拠を必須とすることで偽陽性を抑えた保守的で一貫性のある品質測定</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFF;">決定論的なコホート割り当て</strong>: 会話結果に依存しないバイアスの少ない実験が可能</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFF;">プロンプトの簡素化</strong>: 不要な制約の削除が整合性を高めるという知見はプロンプトエンジニアリング全般に適用可能</span></div>
+        </div>
+        <div class="merit-box">
+          <h3 style="color:#FF8A75;">📌 制限事項</h3>
+          <div class="check-item"><span class="cross-icon">✗</span><span>示された数値は社内の実験レベルの比較の差分であり、本番環境における普遍的な効果の推定値ではない</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>小規模な分離コホートの結果は方向性の診断にとどまり、個別に統計的検定力を持つ推定値ではない</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>記事の範囲は人手で作成されたシステムプロンプトと設定変更の評価。自動トラジェクトリマイニング、変更の自動生成、ハーネスの自己改善は対象外</span></div>
+          <h3 style="color:#FFAD33;">⚠️ 考慮すべき点</h3>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>安定したコホート割り当てはプロンプト実験内の選択バイアスを制御するが、ライブトラフィックのすべてのバイアスや相互作用を排除するわけではない</span></div>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>プロンプト変更の効果はモデル依存のため、同様の手法を採用する場合はモデルアップグレードごとの再検証が必須</span></div>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>明示的なフィードバックのみを不満シグナルとするため、暗黙的な不満 (無言での利用停止など) は捕捉されない可能性</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- リージョン・関連サービス -->
+    <div class="section">
+      <h2>🌏 利用可能リージョン / 関連サービス・機能</h2>
+      <p><strong style="color:#FFF;">利用可能リージョン</strong>: グローバル (Kiro はグローバルに提供されるサービスです)</p>
+      <div class="usecase-box">
+        <h4>🖥️ Kiro IDE</h4>
+        <p>本記事の評価対象の 1 つ。スペック駆動開発を支援するエージェント型 IDE。</p>
+      </div>
+      <div class="usecase-box">
+        <h4>⌨️ Kiro CLI</h4>
+        <p>本記事の評価対象の 1 つ。コマンドラインから Kiro エージェントを利用するツール。</p>
+      </div>
+      <div class="usecase-box">
+        <h4>🧠 推論努力レベル (Reasoning Effort)</h4>
+        <p>ジャッジパイプラインで評価されたユーザー設定。コード修正やデバッグなどのタスクで高い努力レベルによる改善が確認された。</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        Kiro チームは、システムプロンプトの品質を <span class="highlight">LLM ジャッジと実利用データに基づく 4 ステージのサイクル</span>で継続的に評価・改善する仕組みを公開しました。
+        プロンプトの効果が<span class="highlight">モデル依存</span>であること、<span class="highlight">不要なガイダンスの削除</span>が大きな改善につながることなど、
+        エージェント型システムを運用するすべてのチームに有益な知見が含まれています。
+      </p>
+      <p>
+        独自の AI エージェントを構築・運用している場合は、ベンチマークに加えて<strong style="color:#FFF;">ライブシグナルによる評価</strong>と、
+        <strong style="color:#FFF;">モデルアップグレードごとの再検証プロセス</strong>の導入を検討することを推奨します。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典・参考リンク:</p>
+      <ul>
+        <li><a href="https://kiro.dev/blog/continuous-prompt-evaluation/" target="_blank" rel="noopener noreferrer" class="aws-link">公式ブログ記事 (Kiro Blog): https://kiro.dev/blog/continuous-prompt-evaluation/</a></li>
+        <li><a href="https://kiro.dev/docs/" target="_blank" rel="noopener noreferrer" class="aws-link">Kiro ドキュメント: https://kiro.dev/docs/</a></li>
+        <li><a href="https://kiro.dev/changelog/" target="_blank" rel="noopener noreferrer" class="aws-link">Kiro Changelog: https://kiro.dev/changelog/</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News Summary レポート (2026-08-21) を基に生成されています。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+</body>
+</html>

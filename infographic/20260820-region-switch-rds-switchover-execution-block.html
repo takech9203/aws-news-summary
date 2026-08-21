@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARC Region Switch - Amazon RDS Switchover Read Replica 実行ブロック</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.card ul { margin: 0; padding-left: 20px; }
+.card li { margin: 4px 0; font-size: 14px; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+.before-box h4 { color: #FF8A70; margin: 0 0 8px 0; }
+.after-box h4 { color: #7ED957; margin: 0 0 8px 0; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 6px 0; font-size: 14px; }
+
+/* tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th, td {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-white);
+  font-weight: 600;
+}
+td code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+/* checklist */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+.check-icon { color: #7ED957; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A70; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* steps */
+.step-list { counter-reset: step; list-style: none; padding: 0; margin: 0; }
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.step-body h4 { margin: 2px 0 6px 0; color: var(--aws-white); font-size: 16px; }
+.step-body p { margin: 0; font-size: 14px; }
+
+/* use case */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.usecase h4 { margin: 0 0 8px 0; color: var(--aws-smile-orange); font-size: 16px; }
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .effect {
+  border-top: 1px dashed rgba(255, 153, 0, 0.4);
+  margin-top: 10px;
+  padding-top: 8px;
+}
+.usecase .effect strong { color: #7ED957; }
+
+/* mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+/* code block */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* two column grid */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* mode comparison */
+.mode-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.mode-graceful {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+.mode-ungraceful {
+  background: rgba(255, 153, 0, 0.1);
+  border: 1px solid rgba(255, 153, 0, 0.5);
+}
+.mode-box h4 { margin: 0 0 8px 0; color: var(--aws-white); }
+.mode-box .mode-tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin-bottom: 8px;
+}
+.mode-graceful .mode-tag { background: rgba(29, 129, 2, 0.4); color: #7ED957; }
+.mode-ungraceful .mode-tag { background: rgba(255, 153, 0, 0.3); color: var(--aws-smile-orange); }
+.mode-box ul { margin: 0; padding-left: 20px; }
+.mode-box li { font-size: 14px; margin: 4px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0 0 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">Amazon Application Recovery Controller</span>
+    <h1>🔄 ARC Region Switch に<br>Amazon RDS Switchover Read Replica 実行ブロックが登場</h1>
+    <div class="subtitle">
+      <span class="release-date">📅 リリース日: 2026 年 8 月 20 日</span> ｜
+      Oracle Data Guard 構成の RDS for Oracle リージョンフェイルオーバーを自動化
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      ARC Region Switch に <span class="highlight">RDS Switchover Read Replica 実行ブロック</span>が追加され、
+      Oracle Data Guard を使用してクロスリージョンリードレプリカを構成した
+      <span class="highlight">Amazon RDS for Oracle</span> のリージョン間フェイルオーバーを、
+      Region Switch プランのステップとして自動化できるようになった。
+    </p>
+    <p>
+      計画的なフェイルオーバーでは<span class="highlight">データ損失ゼロのスイッチオーバー</span>を、
+      緊急時には<span class="highlight">速度優先のリードレプリカ昇格</span>を自動実行する。
+      ネイティブなクロスアカウントサポートにより、別アカウントの RDS インスタンスの復旧も一元管理できる。
+    </p>
+    <div class="before-after">
+      <div class="before-box">
+        <h4>😰 Before (アップデート前)</h4>
+        <ul>
+          <li>Oracle Data Guard 構成のロール入れ替えやレプリカ昇格を<strong>手動で実施</strong>する必要があった</li>
+          <li>レプリケーション状態やバックアップ設定の確認など多くのチェック作業を伴い、<strong>復旧時間が長引く</strong>要因に</li>
+          <li>複数アカウントにまたがる RDS インスタンスの復旧を単一プランで一元管理することが困難</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h4>😊 After (アップデート後)</h4>
+        <ul>
+          <li>Region Switch プランに実行ブロックを組み込み、ロール切り替えを<strong>自動化</strong></li>
+          <li>Graceful パスはデータ同期を確認して<strong>データ損失ゼロ</strong>を実現</li>
+          <li>Ungraceful パスはレプリカを直接昇格し<strong>復旧速度を優先</strong></li>
+          <li>エンジン互換性・レプリケーション状態などを<strong>プラン評価時に自動検証</strong></li>
+          <li>クロスアカウントサポートで組織全体を<strong>単一プランで一元管理</strong></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ (実行シーケンス)</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+sequenceDiagram
+    participant Op as 👤 オペレーター
+    participant ARC as 🔄 ARC Region Switch
+    participant Primary as 🗄️ RDS Oracle Primary&lt;br/&gt;Region A
+    participant Replica as 🗄️ RDS Oracle Read Replica&lt;br/&gt;Region B
+
+    Note over Primary,Replica: Oracle Data Guard による&lt;br/&gt;クロスリージョンレプリケーション
+
+    Op->>ARC: プラン実行
+
+    rect rgb(232,245,233)
+    Note over ARC,Replica: Graceful スイッチオーバー データ損失ゼロ
+    ARC->>Replica: 状態検証 available / standby モード
+    ARC->>Primary: レプリケーション状態と保留メンテナンスを確認
+    ARC->>Replica: SwitchoverReadReplica 実行
+    Replica-->>ARC: 新プライマリとして available
+    ARC->>Replica: 必要に応じて Multi-AZ を有効化
+    end
+
+    rect rgb(255,243,224)
+    Note over ARC,Replica: Ungraceful 実行 promoteReadReplica
+    ARC->>Replica: PromoteReadReplica 実行
+    Replica-->>ARC: 昇格完了
+    ARC->>Replica: バックアップ保持期間や Multi-AZ 設定を復元
+    end
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      Graceful パスでは検証後にスイッチオーバーを実行してデータ損失ゼロを保証し、
+      Ungraceful パスではリードレプリカを直接昇格して復旧速度を優先する。
+    </p>
+    <div class="grid-2" style="margin-top: 16px;">
+      <div class="mode-box mode-graceful">
+        <span class="mode-tag">GRACEFUL (デフォルト)</span>
+        <h4>🛡️ データ損失ゼロ</h4>
+        <ul>
+          <li><code style="color:#7ED957;">SwitchoverReadReplica</code> でロールを入れ替え</li>
+          <li>同期・バックアップ・保留メンテナンスを事前確認</li>
+          <li>計画フェイルオーバー / DR 訓練向け</li>
+        </ul>
+      </div>
+      <div class="mode-box mode-ungraceful">
+        <span class="mode-tag">UNGRACEFUL</span>
+        <h4>⚡ 復旧速度を優先</h4>
+        <ul>
+          <li><code style="color:#FFAD33;">PromoteReadReplica</code> でレプリカを直接昇格</li>
+          <li>同期未完了時はデータ損失の可能性あり</li>
+          <li>リージョン障害時の緊急フェイルオーバー向け</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="card">
+      <h4>1️⃣ Graceful スイッチオーバー (デフォルト)</h4>
+      <ul>
+        <li>ターゲットレプリカが available になるまで待機し、Oracle 19c 以降のレプリカが有効なスタンバイモード (mounted または open-read-only) であることを検証</li>
+        <li>レプリケーションがアクティブであること、スタンバイで自動バックアップが有効であることを確認</li>
+        <li>ブロッキングとなる保留中メンテナンスを確認した上で <code>SwitchoverReadReplica</code> を呼び出しスタンバイを昇格</li>
+        <li>元のプライマリで Multi-AZ が有効だった場合、新プライマリでも Multi-AZ を有効化して構成を一致させる</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>2️⃣ Ungraceful 実行 (リードレプリカ昇格)</h4>
+      <ul>
+        <li><code>promoteReadReplica</code> 動作を指定すると <code>PromoteReadReplica</code> でレプリカを直接昇格</li>
+        <li>同期が未完了の場合はデータ損失の可能性があるが、復旧速度を優先できる</li>
+        <li>昇格後、バックアップ保持期間・優先バックアップウィンドウ・Multi-AZ 設定を復元</li>
+        <li>動作を指定しない Ungraceful 実行は Graceful スイッチオーバーパスにフォールバック</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>3️⃣ プラン評価時の自動検証</h4>
+      <ul>
+        <li>DB インスタンス ARN の有効性と各リージョンでのインスタンス存在を確認</li>
+        <li>リードレプリカ関係の有効性、Oracle 19c 以降であること (Aurora やカスタムエンジンは対象外)、エンジンバージョン一致を検証</li>
+        <li>オプショングループが無関係なインスタンスと共有されていないことを確認 (スイッチオーバー時の問題を防止)</li>
+        <li>検証失敗時は警告メッセージを返し、コンソールまたは API で確認可能</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>4️⃣ ネイティブクロスアカウントサポート</h4>
+      <ul>
+        <li>Region Switch プランとは別アカウントの RDS インスタンスの復旧を管理可能</li>
+        <li>組織全体の復旧管理を単一プランに集約できる</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>実行ブロックの仕様</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>カテゴリ</td><td>Database switchover</td></tr>
+      <tr><td>対象エンジン</td><td>Amazon RDS for Oracle 19c 以降 (Aurora、RDS Custom は対象外)</td></tr>
+      <tr><td>前提構成</td><td>Oracle Data Guard によるクロスリージョンリードレプリカ</td></tr>
+      <tr><td>Graceful 実行</td><td><code>SwitchoverReadReplica</code> によるロール切り替え (データ損失ゼロ)</td></tr>
+      <tr><td>Ungraceful 実行</td><td><code>PromoteReadReplica</code> によるレプリカ昇格 (速度優先)</td></tr>
+      <tr><td>スタンバイの要件</td><td>mounted または open-read-only モード、自動バックアップ有効 (保持期間 1 以上)</td></tr>
+      <tr><td>設定項目</td><td>ステップ名、説明 (任意)、各リージョンの DB インスタンス ARN、タイムアウト</td></tr>
+    </table>
+    <h3>API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/08/20</td>
+        <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/648ecf-arc-region-switch.html" target="_blank" rel="noopener noreferrer">ARC - Region switch</a></td>
+        <td>6 updated api methods - Region Switch プランでの Oracle データベース向け RDS Switchover Read Replica サポートを追加</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>ARC Region Switch プランが作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>RDS for Oracle 19c 以降で、クロスリージョンリードレプリカ (Oracle Data Guard) が構成されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>スタンバイが mounted または open-read-only モードで、自動バックアップが有効であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>プランの実行ロールに RDS スイッチオーバー操作に必要な IAM ポリシーが設定されていること</span></div>
+
+    <h3>手順</h3>
+    <div class="step-list">
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h4>実行ロールへの IAM ポリシー設定</h4>
+          <p>プランの実行ロールに RDS スイッチオーバーに必要な権限を付与する。詳細は
+            <a class="aws-link" href="https://docs.aws.amazon.com/r53recovery/latest/dg/security_iam_region_switch_rds_switchover_read_replica.html" target="_blank" rel="noopener noreferrer">サンプルポリシーのドキュメント</a>を参照。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h4>実行ブロックの設定</h4>
+          <p>ARC コンソールで Region Switch プランに実行ブロックを追加し、<strong>Step name</strong>、<strong>Step description (任意)</strong>、
+             <strong>各リージョンの DB Instance ARN (すべてのリージョン分が必須)</strong>、<strong>Timeout</strong> を入力して <strong>Save step</strong> を選択。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h4>プランの評価と検証警告の確認</h4>
+          <p>保存するとプラン評価として設定を自動検証。エンジンバージョン、レプリケーション状態、バックアップ設定、保留中メンテナンスなどのチェックに失敗した場合は警告が返されるため、コンソールまたは API で確認して構成を修正する。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💪 メリット</h2>
+    <div class="grid-2">
+      <div>
+        <h3>📈 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>RTO の短縮と予測可能性</strong>: ロール切り替えの自動化により復旧時間を予測可能な範囲に収められる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の軽減</strong>: 手動のスイッチオーバー手順やチェック作業が不要になり、障害対応時の負担が減少</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>組織全体の一元管理</strong>: クロスアカウントサポートで複数アカウントの復旧を単一プランで管理</span></div>
+      </div>
+      <div>
+        <h3>🔬 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>データ損失ゼロの切り替え</strong>: Graceful パスは同期確認後に昇格し、計画フェイルオーバーでのデータ損失を防止</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>自動検証による安全性</strong>: 互換性・レプリケーション・バックアップ・メンテナンスを事前検証し失敗リスクを低減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な障害対応</strong>: 緊急時は <code>promoteReadReplica</code> で速度優先の復旧が可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>構成の自動復元</strong>: 切り替え後に Multi-AZ やバックアップ設定を元の構成に合わせて復元</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>対象は RDS for Oracle 19c 以降のみ (Aurora は Aurora Global Databases 実行ブロックを使用)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>RDS Custom は対象外</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>スタンバイは mounted または open-read-only モードかつ自動バックアップ有効 (保持期間 1 以上) が必須</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>プラン内の各リージョンに対して DB インスタンス ARN の指定が必須</span></div>
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>Ungraceful 実行では、レプリケーションが完全に同期していない場合にデータ損失が発生する可能性がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>Ungraceful 実行後は元のレプリケーション関係が解消されるため、フェイルバックにはレプリカの再構築が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>オプショングループを無関係なインスタンスと共有していると問題が発生する可能性があるため、プラン評価の警告を確認する</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>クロスアカウント構成では IAM ロールの信頼関係と権限を適切に管理する必要がある</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>1. 基幹系 Oracle データベースの計画的リージョン切り替え</h4>
+      <p><strong>シナリオ</strong>: Oracle Data Guard でセカンダリリージョンにリードレプリカを構成した基幹系システム。DR 訓練やリージョンメンテナンスに合わせて、データ損失なしで計画的にリージョンを切り替えたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-text">Region Switch プランのアクティブ化ワークフローに
+RDS Switchover Read Replica 実行ブロックを追加
+
+- Step name: switchover-oracle-primary
+- DB Instance ARN for us-east-1: arn:aws:rds:us-east-1:123456789012:db:oracle-primary
+- DB Instance ARN for us-west-2: arn:aws:rds:us-west-2:123456789012:db:oracle-replica
+- Timeout: 60</code></pre>
+      </div>
+      <p class="effect"><strong>効果</strong>: Graceful スイッチオーバーによりデータ損失ゼロでロールが入れ替わり、DR 訓練を安全かつ再現性のある手順で実施できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>2. リージョン障害時の緊急フェイルオーバー</h4>
+      <p><strong>シナリオ</strong>: プライマリリージョンで障害が発生し、プライマリデータベースへのアクセスが不安定。多少のデータ損失リスクを許容してでも、可能な限り早くセカンダリリージョンでサービスを再開したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-text">Region Switch プランを Ungraceful モードで実行し、
+実行ブロックの動作として promoteReadReplica を指定
+
+- Region Switch が PromoteReadReplica を呼び出しレプリカを直接昇格
+- 昇格後、バックアップ保持期間・バックアップウィンドウ・Multi-AZ 設定を
+  元のプライマリの構成に合わせて自動復元</code></pre>
+      </div>
+      <p class="effect"><strong>効果</strong>: プライマリと通信できない状況でも復旧速度を優先してレプリカを昇格でき、RTO を最小化できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>3. マルチアカウント環境での復旧一元管理</h4>
+      <p><strong>シナリオ</strong>: 復旧管理用の共有アカウントで Region Switch プランを運用し、ワークロードアカウントに RDS for Oracle インスタンスが存在するマルチアカウント構成。組織全体のフェイルオーバーを単一プランで管理したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-text">共有アカウントの Region Switch プランに、
+ワークロードアカウントの DB インスタンス ARN を指定した
+RDS Switchover Read Replica 実行ブロックを追加
+
+- クロスアカウントアクセス用の IAM ロールと権限を事前に設定
+- Route 53、EKS、Lambda ESM など他の実行ブロックと組み合わせて
+  アプリケーション全体のフェイルオーバーをオーケストレーション</code></pre>
+      </div>
+      <p class="effect"><strong>効果</strong>: ネイティブなクロスアカウントサポートにより、複数アカウントにまたがる RDS インスタンスの復旧を単一の Region Switch プランで一元管理できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>ARC Region Switch の利用料金に含まれる。RDS Switchover Read Replica 実行ブロックの追加による<span class="highlight">追加料金は発生しない</span>。</p>
+    <table>
+      <tr><th>項目</th><th>料金</th></tr>
+      <tr><td>Region Switch プラン</td><td>ARC Region Switch の標準料金に準拠</td></tr>
+      <tr><td>RDS Switchover Read Replica 実行ブロック</td><td>追加料金なし</td></tr>
+      <tr><td>RDS インスタンスとクロスリージョンレプリケーション</td><td>標準の Amazon RDS 料金が適用</td></tr>
+    </table>
+  </div>
+
+  <!-- リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>
+      ARC Region Switch が利用可能な<span class="highlight">すべての商用リージョンおよび AWS GovCloud (US) リージョン</span>で使用可能。
+      詳細は <a class="aws-link" href="https://docs.aws.amazon.com/r53recovery/latest/dg/aws-regions-rs.html" target="_blank" rel="noopener noreferrer">Region availability for Region switch</a> を参照。
+    </p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>Amazon Application Recovery Controller (ARC)</strong>: マルチリージョンアプリケーションの復旧制御を提供するサービス</span></div>
+    <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>ARC Region Switch</strong>: リージョン間フェイルオーバーを自動化するプラン機能。Route 53、Aurora Global Databases、DocumentDB、EKS、Lambda ESM などの実行ブロックも提供</span></div>
+    <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>Amazon RDS for Oracle</strong>: Oracle Data Guard を利用したクロスリージョンリードレプリカにより、マルチリージョンの DR 構成を実現</span></div>
+    <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>Aurora Global Databases 実行ブロック</strong>: Aurora データベースのリージョン切り替えには本ブロックではなくこちらを使用</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>✅ まとめ</h2>
+    <p>
+      ARC Region Switch への Amazon RDS Switchover Read Replica 実行ブロックの追加により、
+      Oracle Data Guard を使用する RDS for Oracle のリージョンフェイルオーバーが自動化され、
+      <span class="highlight">計画フェイルオーバーではデータ損失ゼロ</span>、
+      <span class="highlight">緊急時には速度優先の復旧</span>を単一プランで実現できるようになった。
+    </p>
+    <p>
+      RDS for Oracle をマルチリージョンで運用しているユーザーは、既存の Region Switch プランに本実行ブロックを追加し、
+      プラン評価の検証結果を確認した上で DR 訓練に組み込むことを推奨する。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典 / 参考リンク:</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/08/region-switch-rds-switchover-execution-block/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/r53recovery/latest/dg/rds-switchover-read-replica-block.html" target="_blank" rel="noopener noreferrer">Amazon RDS Switchover Read Replica execution block ドキュメント</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/application-recovery-controller/multi-region-recovery/" target="_blank" rel="noopener noreferrer">ARC multi-Region recovery</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/oracle-read-replicas.html" target="_blank" rel="noopener noreferrer">Working with Oracle replicas for Amazon RDS</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/r53recovery/latest/dg/aws-regions-rs.html" target="_blank" rel="noopener noreferrer">Region availability for Region switch</a></li>
+      <li><a class="aws-link" href="https://awsapichanges.com/archive/changes/648ecf-arc-region-switch.html" target="_blank" rel="noopener noreferrer">AWS API Changes - ARC Region switch</a></li>
+    </ul>
+    <p style="margin-top: 12px;">本レポート: reports/2026/2026-08-20-region-switch-rds-switchover-execution-block.md</p>
+  </footer>
+
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+</body>
+</html>
