@@ -5,6 +5,12 @@
 
 ## 2026 年
 
+- [2026-08-24 - Amazon Connect Customer - エージェントの音声・チャット会話からの情報抽出](2026/2026-08-24-amazon-connect-customer-information.md)
+- [2026-08-24 - Amazon Aurora - PostgreSQL 18.4, 17.10, 16.14, 15.18, 14.23 のサポート](2026/2026-08-24-amazon-aurora-postgresql-18-4-17-10-16-14-15-18-14-23.md)
+- [2026-08-24 - Amazon SageMaker HyperPod - Ray サポートの強化](2026/2026-08-24-amazon-sagemaker-hyperpod-ray.md)
+- [2026-08-24 - AWS ParallelCluster - バージョン 3.16 とノード上診断ツール pcluster-diag](2026/2026-08-24-aws-parallelcluster.md)
+- [2026-08-24 - Amazon SageMaker MLflow - カスタマーマネージドキー (CMK) による暗号化サポート](2026/2026-08-24-sagemaker-mlflow-custom-keys.md)
+- [2026-08-24 - Amazon RDS for MySQL - マイナーバージョン 8.4.11 サポート](2026/2026-08-24-amazon-rds-mysql-8411-available.md)
 - [2026-08-21 - Kiro - スペックレビューのマウス操作対応とストリーム自動リカバリ](2026/2026-08-21-kiro-changelog-2026-08-21.md)
 - [2026-08-21 - Amazon Connect Customer - Manager assistant (データと対話できる生成 AI アシスタント)](2026/2026-08-21-amazon-connect-customer-ai-data-analytics.md)
 - [2026-08-21 - Kiro - 継続的プロンプト評価: LLM ジャッジとライブシグナルによるエージェント品質改善](2026/2026-08-21-kiro-continuous-prompt-evaluation.md)
