@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon ECS - エージェント接続障害の自動検出・修復</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #F08770; }
+.after-box h3 { color: #7DC97A; }
+.ba-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+.ba-item .mark { flex-shrink: 0; font-weight: bold; }
+.before-box .mark { color: var(--aws-red); }
+.after-box .mark { color: #7DC97A; }
+
+/* Feature cards */
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+.feature-card .feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+.feature-card p { margin: 4px 0; font-size: 14px; }
+
+/* Flow diagram */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 18px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th, td {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  font-weight: 600;
+  white-space: nowrap;
+}
+td code, li code, p code {
+  background: rgba(255, 153, 0, 0.12);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+}
+
+/* Check lists */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+.check-icon { color: #7DC97A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: var(--aws-red); font-size: 16px; flex-shrink: 0; }
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.usecase .usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* Stat cards */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.2));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px 14px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-white);
+  line-height: 1.3;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Step boxes */
+.step-box {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+  align-items: flex-start;
+}
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-content .step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+/* Two-column grid */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+ul { padding-left: 20px; margin: 8px 0; }
+li { margin: 6px 0; font-size: 14px; }
+p { margin: 10px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer a { word-break: break-all; }
+
+@media (max-width: 700px) {
+  .before-after, .two-col { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <span class="service-badge">Amazon ECS</span>
+    <h1>🩺 エージェント接続障害のあるコンテナインスタンスの自動検出・修復</h1>
+    <div class="subtitle">
+      <span class="date">📅 2026 年 8 月 24 日リリース</span> ｜ 新ヘルスチェックタイプ <span class="highlight">AGENT_CONNECTIVITY</span> と障害インスタンスの自動修復
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      Amazon ECS が、<span class="highlight">ECS エージェントとコントロールプレーン間の接続状態を継続監視</span>し、接続障害 (impaired) 状態のコンテナインスタンスを<span class="highlight">自動検出・自動修復</span>する機能を発表。EBS ボリューム劣化、ホストの熱イベント、ネットワーク障害などインフラ起因の「サイレント障害」を、手動介入なしで検知・復旧できるようになりました。
+    </p>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">AGENT_CONNECTIVITY</div>
+        <div class="stat-label">新しいヘルスチェックタイプが追加</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">3 つの環境対応</div>
+        <div class="stat-label">Fargate / Managed Instances / EC2</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">ECS 標準機能として提供</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ Before: アップデート前の課題</h3>
+        <div class="ba-item"><span class="mark">✗</span><span>インフライベントによる接続断を標準機能では即座に検知できず、ワークロード障害が見過ごされる可能性</span></div>
+        <div class="ba-item"><span class="mark">✗</span><span>切断検知には <code>agentConnected</code> のポーリングなどカスタム監視の構築が必要</span></div>
+        <div class="ba-item"><span class="mark">✗</span><span>タスクドレイン、代替キャパシティ確保、登録解除を手動または自作の自動化で実施</span></div>
+      </div>
+      <div class="after-box">
+        <h3>✅ After: アップデート後の改善</h3>
+        <div class="ba-item"><span class="mark">✓</span><span>接続を継続監視し、しきい値を超えた切断でインスタンスを自動的に impaired としてマーク</span></div>
+        <div class="ba-item"><span class="mark">✓</span><span>AGENT_CONNECTIVITY イベントが EventBridge 経由で全コンピューティングオプションに配信</span></div>
+        <div class="ba-item"><span class="mark">✓</span><span>Managed Instances / Fargate ではドレイン → 代替起動 → 登録解除が完全自動化</span></div>
+        <div class="ba-item"><span class="mark">✓</span><span>ECS on EC2 ではヘルスイベントをトリガーに独自の置き換えワークフローを構築可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph ECS["☁️ Amazon ECS コントロールプレーン"]
+        Monitor["🔍 エージェント接続監視"]
+        Health["🩺 ヘルス判定&lt;br/&gt;AGENT_CONNECTIVITY"]
+    end
+
+    subgraph Instance["🖥️ コンテナインスタンス"]
+        Agent["🤖 ECS エージェント"]
+        Task["📦 実行中タスク"]
+    end
+
+    subgraph Repair["⚙️ 自動修復&lt;br/&gt;Managed Instances / Fargate"]
+        Drain["🚰 タスクの自動ドレイン"]
+        Launch["🚀 代替キャパシティの起動"]
+        Dereg["🗑️ 障害インスタンスの登録解除"]
+    end
+
+    subgraph Custom["🛠️ カスタム対応 ECS on EC2"]
+        EB["📢 EventBridge"]
+        Workflow["🔧 独自の置き換えワークフロー"]
+    end
+
+    Agent -.->|接続断| Monitor
+    Monitor --> Health
+    Health -->|impaired 検知| Drain
+    Drain --> Launch
+    Launch --> Dereg
+    Health -->|ヘルス変更イベント| EB
+    EB --> Workflow
+    Task -.-> Agent
+
+    classDef control fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef instance fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef repair fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+    classDef custom fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Monitor,Health control
+    class Agent,Task instance
+    class Drain,Launch,Dereg repair
+    class EB,Workflow custom
+    class ECS,Instance,Repair,Custom boundary
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      ECS コントロールプレーンがエージェント接続を継続監視し、切断を検知すると、Managed Instances / Fargate では自動修復フロー (ドレイン → 代替起動 → 登録解除) を実行。ECS on EC2 では EventBridge イベントを通じて独自ワークフローを起動できます。
+    </p>
+    <div class="flow-diagram">
+      <div class="flow-step">🔍 切断検知<br/>しきい値超過</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🚨 IMPAIRED<br/>マーク</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🚰 タスク<br/>自動ドレイン</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🚀 代替キャパ<br/>シティ起動</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🗑️ 登録解除<br/>完了</div>
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">1. 🔍 エージェント接続の継続監視</div>
+      <p>ECS がエージェントとコントロールプレーン間の接続状態を継続監視。切断がしきい値を超えるとインスタンスを <span class="highlight">impaired</span> 状態としてマーク。EBS ボリューム劣化、熱イベント、ネットワーク障害などインフラ起因の切断を検知可能。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">2. 🩺 新ヘルスチェックタイプ AGENT_CONNECTIVITY</div>
+      <p>AWS Fargate、Amazon ECS Managed Instances、Amazon ECS on EC2 のすべてのコンピューティングオプションで利用可能。<code>describe-container-instances</code> の <code>CONTAINER_INSTANCE_HEALTH</code> オプションや EventBridge の「ECS Container Instance Health Change」イベントで確認できる。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">3. 🔧 障害インスタンスの自動修復 (Managed Instances / Fargate)</div>
+      <p>障害検知後、実行中タスクの自動ドレイン → 代替キャパシティの起動 → 障害インスタンスの登録解除までを<span class="highlight">手動介入なし</span>で完了し、アプリケーションの可用性を自動的に維持。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">4. 🛠️ ECS on EC2 でのカスタムワークフロー構築</div>
+      <p>AGENT_CONNECTIVITY ヘルスイベントを利用して独自のインスタンス置き換えワークフローを構築可能。EventBridge ルールと Lambda や Systems Manager Automation を組み合わせた自動復旧を実装できる。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>ヘルスチェックタイプ</td><td><code>AGENT_CONNECTIVITY</code> (今回追加)</td></tr>
+      <tr><td>既存のヘルスチェックタイプ</td><td><code>CONTAINER_RUNTIME</code> (EC2)、<code>ACCELERATED_COMPUTE</code> (Managed Instances)、<code>DAEMON</code> (Managed Instances)</td></tr>
+      <tr><td><code>overallStatus</code> の値</td><td><code>OK</code>、<code>IMPAIRED</code>、<code>INSUFFICIENT_DATA</code>、<code>INITIALIZING</code></td></tr>
+      <tr><td>ステータス優先順位</td><td><code>IMPAIRED</code> &gt; <code>INSUFFICIENT_DATA</code> &gt; <code>INITIALIZING</code> &gt; <code>OK</code> (最も深刻なステータスが優先)</td></tr>
+      <tr><td>対象コンピューティング</td><td>AWS Fargate、Amazon ECS Managed Instances、Amazon ECS on EC2</td></tr>
+      <tr><td>自動修復の対象</td><td>Amazon ECS Managed Instances、AWS Fargate</td></tr>
+      <tr><td>イベント配信</td><td>EventBridge (<code>detail-type</code>: <code>ECS Container Instance Health Change</code>)</td></tr>
+      <tr><td>必要なエージェントバージョン</td><td>ヘルス監視には ECS エージェント 1.57.0 以降 (EC2 の場合)</td></tr>
+      <tr><td>必要な AWS CLI バージョン</td><td>v1.22.3 以降または v2.3.6 以降</td></tr>
+    </table>
+
+    <h3>📨 AGENT_CONNECTIVITY ヘルスイベントの例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">EventBridge に配信されるヘルスイベント</span>
+      </div>
+      <pre><code class="language-json">{
+    "version": "0",
+    "id": "EXAMPLE-7d2a-9f1c-4b6e-EXAMPLE9c8d1",
+    "detail-type": "ECS Container Instance Health Change",
+    "source": "aws.ecs",
+    "account": "123456789012",
+    "time": "2026-07-29T22:34:13Z",
+    "region": "us-west-2",
+    "resources": [
+        "arn:aws:ecs:us-west-2:123456789012:container-instance/my-cluster/a1b2c3d4EXAMPLE"
+    ],
+    "detail": {
+        "clusterArn": "arn:aws:ecs:us-west-2:123456789012:cluster/my-cluster",
+        "containerInstanceArn": "arn:aws:ecs:us-west-2:123456789012:container-instance/my-cluster/a1b2c3d4EXAMPLE",
+        "capacityProviderName": "my-capacity-provider",
+        "ec2InstanceId": "i-0abcdef1234567890",
+        "overallStatus": "IMPAIRED",
+        "healthChecks": [
+            {
+                "type": "AGENT_CONNECTIVITY",
+                "status": "IMPAIRED",
+                "lastStatusChange": "2026-07-29T22:34:13Z",
+                "lastUpdated": "2026-07-29T22:34:09Z",
+                "statusReason": "Agent disconnected since 2026-07-29T22:34:13Z"
+            }
+        ]
+    }
+}</code></pre>
+    </div>
+    <p style="font-size: 14px;"><code>statusReason</code> には、エージェントがいつから切断されているかが記録されます。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>📌 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon ECS クラスターが作成済み (Fargate、ECS Managed Instances、または ECS on EC2)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ECS on EC2 の場合、ECS コンテナエージェントのバージョンが 1.57.0 以降</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS CLI バージョン 1.22.3 以降または 2.3.6 以降がインストール済み</span></div>
+
+    <div class="step-box">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">コンテナインスタンスのヘルスステータスを確認する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ヘルスステータスの確認</span></div>
+          <pre><code class="language-bash">aws ecs describe-container-instances \
+    --cluster my-cluster \
+    --container-instances 47279cd2cadb41cbaef2dcEXAMPLE \
+    --include CONTAINER_INSTANCE_HEALTH</code></pre>
+        </div>
+        <p><code>CONTAINER_INSTANCE_HEALTH</code> オプションを付与すると、<code>healthStatus</code> 内の <code>overallStatus</code> と <code>AGENT_CONNECTIVITY</code> を含む個別ヘルスチェックの <code>details</code> 配列を確認できます。</p>
+      </div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">EventBridge ルールでヘルス変更イベントを受信する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">EventBridge ルールの作成</span></div>
+          <pre><code class="language-bash">aws events put-rule \
+    --name ecs-agent-connectivity-health \
+    --event-pattern '{
+        "source": ["aws.ecs"],
+        "detail-type": ["ECS Container Instance Health Change"],
+        "detail": {
+            "healthChecks": {
+                "type": ["AGENT_CONNECTIVITY"],
+                "status": ["IMPAIRED"]
+            }
+        }
+    }'</code></pre>
+        </div>
+        <p>AGENT_CONNECTIVITY タイプのヘルスチェックが IMPAIRED になったイベントのみをフィルタリングし、通知や自動化のトリガーにできます。</p>
+      </div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">ターゲットを設定して通知または自動復旧を実行する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ターゲットの設定</span></div>
+          <pre><code class="language-bash">aws events put-targets \
+    --rule ecs-agent-connectivity-health \
+    --targets "Id"="1","Arn"="arn:aws:sns:ap-northeast-1:123456789012:ecs-health-alerts"</code></pre>
+        </div>
+        <p>SNS トピックや Lambda 関数をターゲットとして設定。Managed Instances / Fargate では修復は ECS が自動実行するため通知用途が中心となり、ECS on EC2 では Lambda などで独自の置き換えワークフローを起動できます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div class="card">
+        <h3 style="margin-top: 0;">💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>可用性の向上</strong>: サイレントなワークロード障害が自動検知・自動修復され、サービス停止時間を最小化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: 独自ツール開発やオンコール対応による手動復旧作業が不要に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加料金なし</strong>: 既存の ECS ワークロードにそのまま適用可能</span></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top: 0;">⚙️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>全コンピューティングオプション対応</strong>: Fargate / Managed Instances / EC2 すべてで利用可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>完全自動の修復フロー</strong>: ドレイン、代替起動、登録解除までを自動化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>既存ヘルス監視との統合</strong>: CONTAINER_RUNTIME などと同じ仕組みで統一的に監視</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚧 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>自動修復が提供されるのは <strong>ECS Managed Instances と AWS Fargate のみ</strong>。ECS on EC2 では独自ワークフローの構築が必要</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>切断から impaired 判定までには<strong>しきい値 (一定時間の切断継続)</strong> があり、瞬時には検知されない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>EC2 起動タイプでの利用には <strong>ECS エージェント 1.57.0 以降</strong>が必要</span></div>
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>ECS on EC2 での自動置き換えには、EventBridge + Lambda / Auto Scaling / SSM Automation を組み合わせたワークフローの設計・テストが必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>自動ドレインによるタスク再配置が発生するため、graceful shutdown (<code>stopTimeout</code> や SIGTERM ハンドリング) の実装確認を推奨</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>単一タスク稼働のワークロードでは、ドレイン中の可用性確保のため desired count やデプロイ設定の見直しを検討</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. 🌐 本番 Web サービスの可用性自動維持 (ECS Managed Instances)</div>
+      <p><span class="label">シナリオ</span>: ホストの熱イベントでエージェント接続が失われた本番 Web サービス。従来はアラート受領後にオンコール担当者が手動でインスタンスを入れ替えていた。</p>
+      <div class="flow-diagram">
+        <div class="flow-step">🚨 IMPAIRED<br/>マーク</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🚰 自動ドレイン<br/>代替起動</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🗑️ 自動<br/>登録解除</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📢 SNS 通知<br/>事後確認のみ</div>
+      </div>
+      <p><span class="label">効果</span>: 手動介入なしでサービスが自動復旧し、MTTR (平均復旧時間) とオンコール負荷を大幅に削減。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. 🔄 ECS on EC2 での独自インスタンス置き換えワークフロー</div>
+      <p><span class="label">シナリオ</span>: Auto Scaling グループで運用する ECS on EC2 クラスターで、接続障害インスタンスを自動的に入れ替えたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装フロー</span></div>
+        <pre><code class="language-text">1. EventBridge ルールで AGENT_CONNECTIVITY / IMPAIRED イベントを捕捉
+2. Lambda 関数で該当インスタンスを DRAINING 状態に変更
+   (aws ecs update-container-instances-state --status DRAINING)
+3. タスクのドレイン完了後、Auto Scaling グループの
+   terminate-instance-in-auto-scaling-group で該当インスタンスを終了
+4. Auto Scaling グループが代替インスタンスを自動起動</code></pre>
+      </div>
+      <p><span class="label">効果</span>: EC2 起動タイプでも Managed Instances に近い自動復旧を実現し、障害インスタンスの滞留を防止。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. 📊 サイレント障害の可視化と監査</div>
+      <p><span class="label">シナリオ</span>: 複数クラスターを運用する組織で、インフラ起因のエージェント切断の発生状況を把握し、傾向分析に活用したい。</p>
+      <div class="flow-diagram">
+        <div class="flow-step">📢 全ヘルス変更<br/>イベントを捕捉</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📝 CloudWatch<br/>Logs に記録</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🔍 Logs Insights<br/>で遷移を集計</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📊 クラスター別<br/>AZ 別ダッシュボード</div>
+      </div>
+      <p><span class="label">効果</span>: 検知が難しかったエージェント切断の発生状況を定量的に把握し、キャパシティ戦略や AZ 配置の改善判断に活用。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card">
+        <h3 style="margin-top: 0;">💵 料金</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加料金なし</strong>。エージェント接続の監視と自動修復は Amazon ECS の標準機能として提供</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>EventBridge の配信先として Lambda や SNS を利用する場合は、各サービスの標準料金が適用</span></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top: 0;">🌍 利用可能リージョン</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span>すべての <strong>AWS 商用リージョン</strong>で利用可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>AWS GovCloud (US)</strong> リージョンでも利用可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">📢 Amazon EventBridge</div>
+      <p>ECS Container Instance Health Change イベントの受信と、通知・自動化ワークフローへのルーティングに使用。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🖥️ Amazon ECS Managed Instances / AWS Fargate</div>
+      <p>自動修復 (ドレイン、代替起動、登録解除) が完全自動で提供されるコンピューティングオプション。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">📈 Amazon EC2 Auto Scaling / Amazon CloudWatch</div>
+      <p>ECS on EC2 での代替インスタンス起動や、ヘルスイベントのログ記録・メトリクス監視・ダッシュボード化に活用。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      Amazon ECS のエージェント接続監視と自動修復により、インフラ障害による<span class="highlight">サイレントなワークロード障害を追加料金なしで自動検知・自動復旧</span>できるようになりました。
+    </p>
+    <div class="check-item"><span class="check-icon">✓</span><span>ECS Managed Instances と Fargate のユーザーは<strong>特別な設定なし</strong>で恩恵を受けられる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ECS on EC2 のユーザーは AGENT_CONNECTIVITY ヘルスイベントを活用した<strong>自動置き換えワークフローの構築</strong>を推奨</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>まずは <strong>EventBridge ルールを設定</strong>し、自環境でのヘルスイベントの可視化から始めるのがおすすめ</span></div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul style="font-size: 12px;">
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-ecs-agent-connectivity-health/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon ECS agent connectivity health</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/container-instance-health.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Monitor Amazon ECS container instance health</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs_container_instance_health_events.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Amazon ECS container instance health change events</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/Welcome.html" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon ECS 開発者ガイド</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-08-24) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
