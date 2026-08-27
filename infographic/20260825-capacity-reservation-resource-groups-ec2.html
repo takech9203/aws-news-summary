@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon EC2 - Capacity Reservation Resource Groups が Capacity Blocks と中断可能な予約をサポート</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul { margin: 0; padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.ba-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.55);
+}
+.ba-title {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+.ba-before .ba-title { color: #FF8A73; }
+.ba-after .ba-title { color: #7ED47A; }
+.ba-box ul { margin: 0; padding-left: 18px; }
+.ba-box li { margin: 6px 0; font-size: 14px; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+td .new-badge {
+  display: inline-block;
+  background: var(--aws-green);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 10px;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+/* Check / caution lists */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #7ED47A; font-size: 16px; flex-shrink: 0; }
+.caution-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Use case */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase-label {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 13px;
+  margin-top: 10px;
+}
+.usecase p { margin: 4px 0; font-size: 14px; }
+.usecase ol { margin: 4px 0; padding-left: 20px; font-size: 14px; }
+.usecase li { margin: 3px 0; }
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+/* Steps */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.step-body { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 6px; }
+.step-body p { margin: 6px 0; font-size: 14px; }
+
+/* Merit grid */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+
+/* Reservation type pills */
+.pill-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+  justify-content: center;
+}
+.pill {
+  border-radius: 8px;
+  padding: 12px 18px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 180px;
+}
+.pill-odcr { background: rgba(0, 161, 201, 0.15); border: 2px solid var(--aws-teal); color: #7FD6EA; }
+.pill-cb { background: rgba(29, 129, 2, 0.15); border: 2px solid var(--aws-green); color: #7ED47A; }
+.pill-icr { background: rgba(255, 173, 51, 0.12); border: 2px solid var(--aws-smile-orange); color: var(--aws-smile-orange); }
+.pill small { display: block; font-weight: 400; font-size: 12px; margin-top: 4px; color: var(--aws-light-gray); }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0 0 0; padding-left: 18px; }
+footer li { margin: 4px 0; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">☁️ Amazon EC2</span>
+    <h1>Capacity Reservation Resource Groups が<br>Capacity Blocks と中断可能な予約をサポート</h1>
+    <div class="subtitle">
+      <span class="date">📅 リリース日: 2026 年 8 月 25 日</span> ｜
+      すべてのキャパシティ予約タイプを 1 つのグループで一元管理
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon EC2 の <span class="highlight">Capacity Reservation Resource Groups</span> が、
+      <span class="highlight">EC2 Capacity Blocks for ML</span> と
+      <span class="highlight">中断可能なキャパシティ予約</span> をサポートしました。
+      これまでオンデマンドキャパシティ予約 (ODCR) のみをグループ化できましたが、
+      今回のアップデートで<strong style="color: var(--aws-white);">すべての予約タイプを任意の組み合わせで 1 つのグループ</strong>に含められます。
+    </p>
+    <p>
+      単一のグループ ARN を指定するだけで、予約済みキャパシティのポートフォリオ全体を対象にインスタンスを起動可能。
+      EC2 Fleet / Auto Scaling グループでは、予約タイプ間の<span class="highlight">優先順位付け</span>と、
+      枯渇時の<span class="highlight">オンデマンドへの自動フォールバック</span>も設定できます。
+    </p>
+
+    <div class="pill-row">
+      <div class="pill pill-odcr">🟦 ODCR<small>オンデマンドキャパシティ予約 (従来から対応)</small></div>
+      <div class="pill pill-cb">🟩 Capacity Blocks for ML<small>今回新たにサポート</small></div>
+      <div class="pill pill-icr">🟨 中断可能な予約<small>今回新たにサポート</small></div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>グループ化できるのは ODCR のみで、Capacity Blocks や中断可能な予約は対象外</li>
+          <li>予約タイプごとに起動ターゲットを個別指定する必要があり、運用が複雑</li>
+          <li>Capacity Blocks と ODCR の併用時に、キャパシティ消費順序を制御する統一的な仕組みがなかった</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>ODCR、Capacity Blocks for ML、中断可能な予約を任意の組み合わせで 1 グループに追加可能</li>
+          <li>単一のグループ ARN 指定でポートフォリオ全体からインスタンスを起動</li>
+          <li>EC2 Fleet / Auto Scaling で優先順位付けとオンデマンドへの自動フォールバックを設定可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 ユーザー"]) --> Launch["🚀 インスタンス起動リクエスト<br/>EC2 Fleet / Auto Scaling / RunInstances"]
+    Launch -->|グループ ARN を指定| CRG
+
+    subgraph CRG["📦 Capacity Reservation Resource Group"]
+        direction LR
+        ODCR["🟦 オンデマンド<br/>キャパシティ予約"]
+        CB["🟩 Capacity Blocks<br/>for ML"]
+        ICR["🟨 中断可能な<br/>キャパシティ予約"]
+        ODCR ~~~ CB ~~~ ICR
+    end
+
+    CRG --> Match{"🔍 属性が一致し<br/>空きがある予約は?"}
+    Match -->|優先順位に従い割り当て| Reserved["✅ 予約済みキャパシティで起動"]
+    Match -.->|予約キャパシティ枯渇時| Fallback["🔄 オンデマンドへ<br/>自動フォールバック"]
+
+    classDef group fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef reservation fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef success fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class CRG group
+    class ODCR,CB,ICR reservation
+    class Launch process
+    class Match decision
+    class Reserved success
+    class Fallback warning
+    class User user
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      複数タイプのキャパシティ予約を 1 つのリソースグループにまとめ、単一の ARN をターゲットとしてインスタンスを起動するフローです。
+      EC2 Fleet や Auto Scaling グループでは、優先順位付けとオンデマンドへの自動フォールバックを設定できます。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ 全予約タイプのグループ化</div>
+      <ul>
+        <li>ODCR に加えて、EC2 Capacity Blocks for ML と中断可能なキャパシティ予約をグループに追加可能</li>
+        <li>任意の組み合わせで複数の予約タイプを 1 つのグループに混在可能</li>
+        <li>自アカウント所有の予約と、他アカウントから共有された予約を同一グループに含めることも可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ 単一 ARN によるポートフォリオ全体への起動</div>
+      <ul>
+        <li>グループ ARN の指定だけで、属性が一致し空きキャパシティのある予約に自動マッチング</li>
+        <li>インスタンスタイプ、プラットフォーム、AZ、テナンシー、プレイスメントグループが異なる予約も同一グループに追加可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ EC2 Fleet / Auto Scaling での優先順位付けとフォールバック</div>
+      <ul>
+        <li><code style="color: var(--aws-smile-orange);">ReservedCapacityOptions</code> により割り当て戦略 (<code style="color: var(--aws-smile-orange);">prioritized</code>) を設定可能</li>
+        <li>予約タイプとして <code style="color: var(--aws-smile-orange);">capacity-block</code> と <code style="color: var(--aws-smile-orange);">on-demand-capacity-reservation</code> を指定可能</li>
+        <li>予約枯渇時のオンデマンド自動フォールバック (<code style="color: var(--aws-smile-orange);">ReservedCapacityFallbackOptions</code>) を設定可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>サポートされる予約タイプ</h3>
+    <table>
+      <tr><th style="width: 40%;">予約タイプ</th><th>説明</th></tr>
+      <tr>
+        <td>オンデマンドキャパシティ予約 (ODCR)</td>
+        <td>特定の AZ で任意の期間キャパシティを予約。従来からグループ化をサポート</td>
+      </tr>
+      <tr>
+        <td>EC2 Capacity Blocks for ML <span class="new-badge">NEW</span></td>
+        <td>GPU インスタンスなどを将来の日時に対して期間指定で予約</td>
+      </tr>
+      <tr>
+        <td>中断可能なキャパシティ予約 <span class="new-badge">NEW</span></td>
+        <td>中断を許容することで柔軟に利用できるキャパシティ予約</td>
+      </tr>
+    </table>
+
+    <h3>API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/08/25</td>
+        <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/f60d73-ec2.html" target="_blank" rel="noopener noreferrer">ec2</a></td>
+        <td>7 updated api methods - EC2 Fleet の Capacity Reservation Resource Groups 対応。<code>CreateFleet</code> / <code>DescribeFleets</code> に <code>ReservedCapacityOptions</code> (AllocationStrategy、ReservationTypes、ReservedCapacityFallbackOptions) が追加。<code>RunInstances</code> や Launch Template 関連 API の <code>InstanceMarketOptions.MarketType</code> に <code>on-demand</code> が追加</td>
+      </tr>
+    </table>
+
+    <h3>CreateFleet の新しいオプション例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">ReservedCapacityOptions の設定例</span>
+      </div>
+      <pre><code class="language-json">{
+  "ReservedCapacityOptions": {
+    "AllocationStrategy": "prioritized",
+    "CapacityReservationTarget": {
+      "CapacityReservationResourceGroupArns": [
+        "arn:aws:resource-groups:us-east-1:123456789012:group/my-cr-group"
+      ]
+    },
+    "ReservationTypes": [
+      "capacity-block",
+      "on-demand-capacity-reservation"
+    ],
+    "ReservedCapacityFallbackOptions": {
+      "MarketTypes": ["on-demand"]
+    }
+  }
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>利用するリージョンで Capacity Blocks for ML および中断可能な ODCR がサポートされていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Resource Groups でグループを作成・管理する IAM 権限があること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>グループに追加するキャパシティ予約 (ODCR、Capacity Blocks、中断可能な予約) が作成済みであること</span></div>
+
+    <h3>手順</h3>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">Capacity Reservation Resource Group を作成する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash">aws resource-groups create-group \
+  --name my-cr-group \
+  --configuration '[{"Type":"AWS::EC2::CapacityReservationPool"}]'</code></pre>
+        </div>
+        <p><code>AWS::EC2::CapacityReservationPool</code> タイプの設定により、キャパシティ予約専用のグループとして構成されます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">キャパシティ予約をグループに追加する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash">aws resource-groups group-resources \
+  --group my-cr-group \
+  --resource-arns \
+    "arn:aws:ec2:us-east-1:123456789012:capacity-reservation/cr-1234567890abcdef0" \
+    "arn:aws:ec2:us-east-1:123456789012:capacity-reservation/cr-0987654321fedcba0"</code></pre>
+        </div>
+        <p>ODCR、Capacity Blocks、中断可能なキャパシティ予約の ARN を指定して、任意の組み合わせでグループに追加します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">グループをターゲットにインスタンスを起動する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash">aws ec2 run-instances \
+  --image-id ami-0123456789abcdef0 \
+  --instance-type p5.48xlarge \
+  --count 1 \
+  --capacity-reservation-specification \
+    'CapacityReservationTarget={CapacityReservationResourceGroupArn=arn:aws:resource-groups:us-east-1:123456789012:group/my-cr-group}'</code></pre>
+        </div>
+        <p>グループ内で属性が一致し空きキャパシティのある予約にインスタンスがマッチングされます。EC2 Fleet や Auto Scaling グループでは <code>ReservedCapacityOptions</code> で優先順位付けとフォールバックを設定できます。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="card">
+        <div class="card-title">💼 ビジネス面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>予約キャパシティの利用率向上</strong>: ポートフォリオ全体を単一ターゲットとして扱え、遊休キャパシティの発生を抑制</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: この機能の利用に追加料金は不要</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ML ワークロードの計画的な実行</strong>: Capacity Blocks と ODCR を組み合わせ、優先順位に基づいてコスト効率よく消費</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🔧 技術面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用のシンプル化</strong>: 予約タイプごとの起動ターゲット分けが不要になり、単一のグループ ARN で管理</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟なキャパシティ戦略</strong>: EC2 Fleet / Auto Scaling の優先順位付けで予約タイプ間の消費順序を制御</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>可用性の向上</strong>: 予約枯渇時のオンデマンド自動フォールバックで起動失敗を回避</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="merit-grid">
+      <div class="card" style="border-left-color: var(--aws-red);">
+        <div class="card-title">🚫 制限事項</div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>AWS GovCloud (US) および中国リージョンでは利用不可</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>Capacity Blocks for ML と中断可能な ODCR をサポートするリージョンでのみ利用可能</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>優先順位付けとオンデマンドフォールバックは EC2 Fleet / EC2 Auto Scaling グループ使用時に設定可能</span></div>
+      </div>
+      <div class="card" style="border-left-color: var(--aws-smile-orange);">
+        <div class="card-title">🤔 考慮すべき点</div>
+        <div class="check-item"><span class="caution-icon">⚠</span><span>中断可能な予約で起動したインスタンスは中断される可能性があり、耐障害性を考慮した設計が必要</span></div>
+        <div class="check-item"><span class="caution-icon">⚠</span><span>Capacity Blocks は予約期間が決まっているため、期間終了時のインスタンスの扱いを運用として計画する必要がある</span></div>
+        <div class="check-item"><span class="caution-icon">⚠</span><span>オンデマンドフォールバック有効時、予約枠を超えた分は通常のオンデマンド料金が発生</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. ML トレーニングにおける Capacity Blocks と ODCR の併用</div>
+      <p><strong>シナリオ</strong>: ML トレーニング用に GPU インスタンスの Capacity Blocks を予約しつつ、常時稼働分は ODCR で確保。両方の予約を一元的に利用したい。</p>
+      <div class="usecase-label">実装例</div>
+      <ol>
+        <li>Capacity Blocks と ODCR を 1 つのリソースグループに追加</li>
+        <li>EC2 Fleet の ReservedCapacityOptions で AllocationStrategy=prioritized を設定</li>
+        <li>ReservationTypes に capacity-block と on-demand-capacity-reservation を指定</li>
+      </ol>
+      <div class="effect">✅ <strong>効果</strong>: 予約タイプを意識せずに単一ターゲットでトレーニングジョブを起動でき、予約済みキャパシティの利用率が向上。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. 予約キャパシティ枯渇時のオンデマンドフォールバック</div>
+      <p><strong>シナリオ</strong>: Auto Scaling グループでスケールアウトする際、まず予約済みキャパシティを消費し、不足分はオンデマンドで補いたい。</p>
+      <div class="usecase-label">実装例</div>
+      <ol>
+        <li>Auto Scaling グループの起動設定でグループ ARN をターゲットに指定</li>
+        <li>ReservedCapacityFallbackOptions で MarketTypes=on-demand を設定</li>
+      </ol>
+      <div class="effect">✅ <strong>効果</strong>: 予約分を優先的に使い切った上で、キャパシティ不足による起動失敗を防ぎ、スケールアウトの信頼性を確保。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. マルチアカウント環境での共有予約の一元管理</div>
+      <p><strong>シナリオ</strong>: 組織内の複数アカウントで共有されたキャパシティ予約と自アカウントの予約を組み合わせて利用したい。</p>
+      <div class="usecase-label">実装例</div>
+      <ol>
+        <li>自アカウント所有の予約と、他アカウントから共有された予約を同一グループに追加</li>
+        <li>属性 (インスタンスタイプ、AZ など) が異なる予約も同一グループで管理</li>
+        <li>アプリケーションは単一のグループ ARN のみを参照して起動</li>
+      </ol>
+      <div class="effect">✅ <strong>効果</strong>: 組織全体の予約済みキャパシティを論理的に集約し、アカウントをまたいだキャパシティの有効活用が可能。</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      この機能の利用に<span class="highlight">追加料金は発生しません</span>。
+      各キャパシティ予約 (ODCR、Capacity Blocks for ML、中断可能なキャパシティ予約) 自体の料金は、それぞれの料金体系に従って課金されます。
+      オンデマンドフォールバックで起動したインスタンスには通常のオンデマンド料金が適用されます。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>
+      Capacity Blocks for ML および中断可能な ODCR をサポートする<strong style="color: var(--aws-white);">すべての AWS リージョン</strong>で利用可能です。
+      ただし、<strong style="color: #FF8A73;">AWS GovCloud (US) および中国リージョンは除きます</strong>。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🟩 EC2 Capacity Blocks for ML</div>
+      <p style="margin: 0; font-size: 14px;">GPU インスタンスなどの ML 向けキャパシティを将来の日時に対して期間指定で予約する機能。今回グループへの追加が可能になった</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🟦 EC2 オンデマンドキャパシティ予約 (ODCR)</div>
+      <p style="margin: 0; font-size: 14px;">特定の AZ でキャパシティを任意の期間予約する機能。従来からグループ化をサポート</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🚀 EC2 Fleet / EC2 Auto Scaling</div>
+      <p style="margin: 0; font-size: 14px;">グループをターゲットにした起動で、予約タイプ間の優先順位付けとオンデマンドフォールバックを設定可能</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📦 AWS Resource Groups</div>
+      <p style="margin: 0; font-size: 14px;">キャパシティ予約を論理的なコレクションとしてグループ化する基盤サービス</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      Capacity Reservation Resource Groups がすべての予約タイプに対応したことで、
+      ODCR、Capacity Blocks for ML、中断可能なキャパシティ予約を<span class="highlight">単一のグループ ARN で一元管理</span>し、
+      ポートフォリオ全体からインスタンスを起動できるようになりました。
+      特に ML ワークロードで複数の予約タイプを併用している場合は、
+      EC2 Fleet や Auto Scaling グループの<span class="highlight">優先順位付けとオンデマンドフォールバック</span>の設定を検討し、
+      予約済みキャパシティの利用率向上と起動の信頼性確保につなげることを推奨します。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/08/capacity-reservation-resource-groups-ec2/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/08/capacity-reservation-resource-groups-ec2/</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/cr-groups.html" target="_blank" rel="noopener noreferrer">ドキュメント: Capacity Reservation Resource Groups</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-capacity-reservations.html" target="_blank" rel="noopener noreferrer">ドキュメント: Capacity Reservations ユーザーガイド</a></li>
+      <li><a class="aws-link" href="https://awsapichanges.com/archive/changes/f60d73-ec2.html" target="_blank" rel="noopener noreferrer">API 変更履歴 (awsapichanges.com)</a></li>
+    </ul>
+    <p style="margin-top: 12px;">本インフォグラフィックは AWS News レポート (2026-08-25) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

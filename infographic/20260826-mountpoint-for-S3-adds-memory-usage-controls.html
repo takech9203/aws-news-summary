@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mountpoint for Amazon S3 - メモリ使用量コントロール</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.version-badge {
+  display: inline-block;
+  background: rgba(140, 79, 255, 0.25);
+  color: #C4A8FF;
+  border: 1px solid var(--aws-purple);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 3px 12px;
+  border-radius: 16px;
+  margin-left: 8px;
+}
+
+h1, .title {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+}
+
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 12px 0;
+}
+
+.feature-card .feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 8px;
+  font-size: 17px;
+}
+
+.feature-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.feature-card li { margin: 4px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .ba-title { color: #FF8A70; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #6FCF4F; font-weight: 700; margin-bottom: 8px; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 6px 0; font-size: 14.5px; }
+
+/* Stats */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(255, 153, 0, 0.05));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14.5px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td code, li code, p code {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13.5px;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Check / cross lists */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #6FCF4F; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF8A70; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 14px 0;
+}
+.usecase .uc-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16.5px;
+}
+.usecase p { margin: 6px 0; font-size: 14.5px; }
+
+/* Steps */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-content .step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+/* Two-column grid for benefits */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 760px) {
+  .grid-2 { grid-template-columns: 1fr; }
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+footer a { word-break: break-all; }
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <span class="service-badge">Amazon S3</span>
+      <span class="version-badge">Mountpoint v1.24.0</span>
+    </div>
+    <h1>🪣 Mountpoint for Amazon S3<br>メモリ使用量コントロール</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 8 月 26 日 | 機能: Memory Usage Controls (<code>--memory-target</code>)</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Mountpoint for Amazon S3 が<span class="highlight">メモリ使用量の上限を制御する機能</span>をサポートしました。
+      <code>--memory-target</code> で明示的にターゲットを指定する方法と、実行環境 (cgroup のメモリ制限) に基づいて
+      <span class="highlight">自動的に安全なデフォルト値を決定</span>する方法の 2 種類が利用できます。
+      Amazon EKS 上ではコンテナに割り当てられたメモリ量を自動検出し、その範囲内で動作します。
+    </p>
+    <p>
+      メモリ逼迫時には、I/O の減速、不要バッファの解放、プリフェッチの縮小により、ターゲット内に収まるように動作します。
+      これにより ML トレーニングや分析ジョブなど、メモリ集約型アプリケーションとの安全な同居が可能になります。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>メモリ使用量が使用パターンに応じて増加し、上限を設定する手段がなかった</li>
+          <li>メモリ集約型アプリと同居させると、メモリ競合によるパフォーマンス低下や OOM のリスクがあった</li>
+          <li>メモリ制限が厳しいコンテナ環境 (Kubernetes / EKS の Pod など) では、Pod の強制終了を考慮した運用が必要だった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li><code>--memory-target</code> 引数で総メモリ使用量のターゲットを明示的に設定可能に</li>
+          <li>cgroup のメモリ制限に基づく自動検出で、コンテナのメモリバジェット内で安全に動作</li>
+          <li>逼迫時は I/O 減速・バッファ解放・プリフェッチ縮小でターゲット内に収まり、他アプリのメモリを確保できる</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">512 MiB</div>
+        <div class="stat-label">メモリターゲットの最小値</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">95%</div>
+        <div class="stat-label">デフォルトターゲット<br>(総メモリまたは cgroup 制限値に対して)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">v1.24.0</div>
+        <div class="stat-label">導入バージョン<br>(2026 年 8 月 24 日リリース)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Host["🖥️ ホスト / コンテナ環境"]
+        subgraph MP["📦 Mountpoint for Amazon S3 v1.24.0"]
+            Target{"🎯 メモリターゲット決定"}
+            Manual["✍️ 明示的指定&lt;br/&gt;--memory-target"]
+            Auto["🤖 自動検出&lt;br/&gt;cgroup 制限の 95%"]
+            Budget["📊 データバッファ予算&lt;br/&gt;読み取りプリフェッチ + 書き込みパート"]
+            Overhead["⚙️ オーバーヘッド予約&lt;br/&gt;メタデータ・ファイルハンドル"]
+        end
+        App["🧠 ML トレーニング / 分析ジョブ&lt;br/&gt;メモリ集約型アプリケーション"]
+    end
+    S3[("🪣 Amazon S3")]
+
+    Target --> Manual
+    Target --> Auto
+    Manual --> Budget
+    Auto --> Budget
+    Budget --> Overhead
+    MP <-->|"読み取り / 書き込み"| S3
+    App -.->|"メモリを確保して同居可能"| Host
+
+    classDef container fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+
+    class Host,MP container
+    class Manual,Auto input
+    class Budget,Overhead internal
+    class Target decision
+    class App process
+    class S3 storage
+      </pre>
+    </div>
+    <p>
+      Mountpoint は明示的な指定または cgroup 制限の自動検出によりメモリターゲットを決定し、その予算内で読み取りプリフェッチと書き込みバッファを管理します。
+      これにより、同一ホスト上のメモリ集約型アプリケーションとの安全な同居が可能になります。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">1️⃣ 明示的なメモリターゲット設定 (<code>--memory-target</code>)</div>
+      <ul>
+        <li>総メモリ使用量のターゲットを <span class="highlight">MiB 単位</span>で指定できる (最小 512 MiB)</li>
+        <li>読み取り時のプリフェッチバッファと、書き込み時のアップロードパート保持の両方をカバー</li>
+        <li>ターゲットは保証されたハードリミットではなく、バッファ管理により収まるように動作する<span class="highlight">目標値</span></li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">2️⃣ 実行環境に基づく自動検出</div>
+      <ul>
+        <li>未指定時は総メモリ量 (cgroup 制限がある場合はその制限値) の <span class="highlight">95% がデフォルト</span>のターゲット</li>
+        <li>Amazon EKS などのコンテナ環境では、コンテナに割り当てられたメモリバジェットを自動検出</li>
+        <li>v1.24.0 では、親スライスから継承された cgroup メモリ制限の検出も修正</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">3️⃣ メモリ逼迫時の適応動作</div>
+      <ul>
+        <li>逼迫時には <span class="highlight">I/O 減速・不要バッファの解放・プリフェッチウィンドウの縮小</span>を実施</li>
+        <li>オーバーヘッド (メタデータやファイルハンドル) 用に <code>max(128 MiB, memory_target / 8)</code> を予約し、残りをデータバッファ予算として使用</li>
+        <li>同時に書き込みオープンできるファイル数がターゲットから導出される上限に制限される (v1.24.0 の<span class="highlight">破壊的変更</span>)</li>
+      </ul>
+    </div>
+
+    <div class="flow-diagram" style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:24px 0;">
+      <div class="card" style="text-align:center;min-width:120px;margin:0;">⚠️ メモリ逼迫<br>を検知</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div class="card" style="text-align:center;min-width:120px;margin:0;">🐢 I/O を減速</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div class="card" style="text-align:center;min-width:120px;margin:0;">🧹 不要バッファ<br>を解放</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div class="card" style="text-align:center;min-width:120px;margin:0;">📉 プリフェッチ<br>を縮小</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div class="card" style="text-align:center;min-width:120px;margin:0;border-color:var(--aws-green);">🎯 ターゲット内<br>に収束</div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>🎯 メモリターゲットの仕様</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>設定方法</td><td><code>--memory-target</code> CLI 引数 (MiB 単位)</td></tr>
+      <tr><td>最小値</td><td>512 MiB</td></tr>
+      <tr><td>デフォルト</td><td>総メモリ (または cgroup 制限値) の 95%</td></tr>
+      <tr><td>オーバーヘッド予約</td><td><code>max(128 MiB, memory_target / 8)</code></td></tr>
+      <tr><td>対象バッファ</td><td>読み取りプリフェッチ、書き込みアップロードパート</td></tr>
+      <tr><td>逼迫時の動作</td><td>I/O 減速、バッファ解放、プリフェッチ縮小</td></tr>
+      <tr><td>導入バージョン</td><td>Mountpoint for Amazon S3 v1.24.0 (2026 年 8 月 24 日リリース)</td></tr>
+    </table>
+
+    <h3>✍️ 書き込みオープン可能ファイル数の上限</h3>
+    <p>
+      メモリターゲットと書き込みパートサイズから、同時に書き込みオープンできるファイル数の上限が決まります。
+      上限に達すると、書き込み用の <code>open()</code> は <code>ENOMEM</code> で失敗します。
+    </p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">数式</span>
+        <span class="code-title">書き込みオープン上限の計算</span>
+      </div>
+      <pre><code class="language-plaintext">上限 = (memory_target - オーバーヘッド - read_part_size) / write_part_size</code></pre>
+    </div>
+    <table>
+      <tr><th>メモリターゲット</th><th>パートサイズ</th><th>書き込みオープン可能ファイル数</th></tr>
+      <tr><td>512 MiB</td><td>8 MiB (デフォルト)</td><td>47</td></tr>
+      <tr><td>4 GiB</td><td>8 MiB (デフォルト)</td><td>447</td></tr>
+    </table>
+    <p>
+      上限を引き上げるには、<code>--memory-target</code> を増やすか <code>--write-part-size</code> を減らします。
+      Mountpoint は起動時にこの上限をログに出力します。
+    </p>
+
+    <h3>⌨️ 関連する CLI 引数</h3>
+    <table>
+      <tr><th>引数</th><th>説明</th></tr>
+      <tr><td><code>--memory-target</code></td><td>総メモリ使用量のターゲット (MiB 単位、最小 512 MiB)</td></tr>
+      <tr><td><code>--read-part-size</code></td><td>並列読み取りのパートサイズ (デフォルト 8 MiB)</td></tr>
+      <tr><td><code>--write-part-size</code></td><td>並列書き込みのパートサイズ (デフォルト 8 MiB)</td></tr>
+    </table>
+    <p>
+      <code>--read-part-size</code> はデータバッファ予算内に収まる必要があります。<code>--memory-target</code> を明示的に指定した場合、
+      大きすぎるパートサイズは起動時に拒否されます。デフォルトターゲット使用時は、警告とともに自動的に縮小されます。
+    </p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>📋 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Mountpoint for Amazon S3 v1.24.0 以降がインストールされていること (GitHub の最新リリースにアップグレード)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>マウント対象の S3 バケットへの適切な IAM 権限があること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>コンテナ環境で自動検出を利用する場合、cgroup によるメモリ制限が設定されていること</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">最新バージョンへのアップグレード</div>
+        <p style="margin:4px 0;font-size:14.5px;">現在のバージョンを確認し、v1.24.0 以降でない場合は最新リリースをインストールします。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">バージョン確認とインストール (x86_64 Linux の例)</span>
+          </div>
+          <pre><code class="language-bash"># 現在のバージョンを確認
+mount-s3 --version
+
+# 最新版をダウンロードしてインストール
+wget https://s3.amazonaws.com/mountpoint-s3-release/latest/x86_64/mount-s3.rpm
+sudo yum install -y ./mount-s3.rpm</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">メモリターゲットを指定してマウント</div>
+        <p style="margin:4px 0;font-size:14.5px;">総メモリ使用量のターゲットを 1024 MiB に設定してマウントします。読み取りプリフェッチと書き込みバッファがこの予算内で管理されます。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">明示的なメモリターゲット指定</span>
+          </div>
+          <pre><code class="language-bash"># メモリ使用量のターゲットを 1024 MiB に設定してマウント
+mount-s3 --memory-target 1024 amzn-s3-demo-bucket /mnt/s3</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">自動検出に任せる場合</div>
+        <p style="margin:4px 0;font-size:14.5px;">未指定の場合、総メモリ量 (コンテナでは cgroup のメモリ制限値) の 95% を自動的にターゲットとして使用します。EKS の Pod など、メモリ制限が設定されたコンテナ内ではその制限値が自動検出されます。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">自動検出によるマウント</span>
+          </div>
+          <pre><code class="language-bash"># 引数を指定せずにマウント (環境の 95% を自動的にターゲットに設定)
+mount-s3 amzn-s3-demo-bucket /mnt/s3</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0;">💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>インフラコストの最適化</strong>: メモリ集約型ワークロードと同一ホストに安全に同居でき、インスタンスの集約度を高めてコスト削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>安定性の向上</strong>: OOM による強制終了リスクが低減し、ML トレーニングなど長時間処理の中断を防止</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の軽減</strong>: 自動検出により環境ごとのチューニングが不要になり、運用がシンプルに</span></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">⚙️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>予測可能なメモリフットプリント</strong>: 予算内に収まるため、キャパシティプランニングが容易</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンテナネイティブな動作</strong>: cgroup 制限の自動検出により Kubernetes / EKS の <code>limits.memory</code> と自然に整合</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>グレースフルな縮退</strong>: 逼迫時にはクラッシュではなく、I/O 減速とプリフェッチ縮小で動作を継続</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0;">🚫 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>メモリターゲットの最小値は 512 MiB であり、それ未満には設定できない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ターゲットは保証されたハードリミットではなく、瞬間的に超える可能性がある</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>v1.24.0 以降、同時書き込みオープン数が上限に制限され、超過時は <code>open()</code> が <code>ENOMEM</code> で失敗する (破壊的変更)</span></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>ターゲットを小さくしすぎると、プリフェッチ縮小や I/O 減速によりスループットが低下する可能性</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>多数ファイルの同時書き込みでは、<code>--memory-target</code> の引き上げや <code>--write-part-size</code> の縮小が必要になる場合がある</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span><code>--read-part-size</code> を大きく設定する場合、データバッファ予算内に収まるかを確認する必要がある</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="uc-title">🧠 ユースケース 1: EKS 上の ML トレーニングジョブとの同居</div>
+      <p><strong>シナリオ</strong>: Amazon EKS 上で S3 のトレーニングデータを Mountpoint 経由で読み込む ML トレーニング Pod を実行。Pod にはメモリ制限があり、トレーニングプロセス自体が大量のメモリを消費する。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">YAML</span>
+          <span class="code-title">Pod のメモリ制限 (Mountpoint はこの制限を自動検出)</span>
+        </div>
+        <pre><code class="language-yaml">resources:
+  limits:
+    memory: "16Gi"</code></pre>
+      </div>
+      <p><strong>効果</strong>: コンテナのメモリバジェットを自動検出して予算内で動作するため、OOM による Pod の強制終了を防ぎながらトレーニングを継続できます。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">📊 ユースケース 2: 分析ジョブ実行ホストでの明示的なメモリ割り当て</div>
+      <p><strong>シナリオ</strong>: EC2 インスタンス上で Spark などの分析ジョブと Mountpoint を同居させる。分析ジョブに大部分のメモリを割り当てたい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Mountpoint に 2 GiB のみ割り当て</span>
+        </div>
+        <pre><code class="language-bash">mount-s3 --memory-target 2048 amzn-s3-demo-bucket /mnt/data</code></pre>
+      </div>
+      <p><strong>効果</strong>: Mountpoint のメモリ使用量が 2 GiB 程度に抑えられ、分析ジョブが必要とするメモリを確実に確保できます。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">📝 ユースケース 3: 多数ファイルの同時書き込みワークロード</div>
+      <p><strong>シナリオ</strong>: ログ集約やバッチ出力など、多数のファイルを同時に S3 へ書き込むワークロードで、書き込みオープン数の上限を確保したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">メモリターゲット 4 GiB (デフォルトの 8 MiB パートで約 447 ファイルまで同時書き込み可能)</span>
+        </div>
+        <pre><code class="language-bash">mount-s3 --memory-target 4096 amzn-s3-demo-bucket /mnt/output</code></pre>
+      </div>
+      <p><strong>効果</strong>: メモリターゲットに応じた書き込みオープン上限を把握した上で運用でき、<code>ENOMEM</code> エラーを回避しながら安定した書き込みが可能になります。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金 / 🌍 利用可能リージョン</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0;">💰 料金</h3>
+        <p style="font-size:14.5px;">
+          Mountpoint for Amazon S3 は<span class="highlight">オープンソースのファイルクライアント</span>であり、追加料金なしで利用できます。
+          S3 の通常の API リクエスト料金 (GET、PUT、LIST など)、ストレージ料金、データ転送料金が適用されます。
+        </p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">🌍 利用可能リージョン</h3>
+        <p style="font-size:14.5px;">
+          <span class="highlight">すべての AWS リージョン</span>で利用可能です。
+          メモリ使用量コントロール機能を利用するには、GitHub から最新リリース (v1.24.0 以降) にアップグレードしてください。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">🪣 Amazon S3</div>
+      <p style="margin:0;font-size:14.5px;">Mountpoint がマウント対象とするオブジェクトストレージサービス</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">☸️ Amazon EKS</div>
+      <p style="margin:0;font-size:14.5px;">Mountpoint for Amazon S3 CSI ドライバー経由で Pod から S3 をマウント可能。コンテナのメモリ制限の自動検出が特に有効</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🖥️ Amazon EC2</div>
+      <p style="margin:0;font-size:14.5px;">ML トレーニングや分析ワークロードの実行基盤。Mountpoint とアプリケーションのメモリ配分を制御可能</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🤖 Amazon SageMaker AI</div>
+      <p style="margin:0;font-size:14.5px;">S3 上のトレーニングデータへの高スループットアクセスに Mountpoint を活用可能</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>✅ まとめ</h2>
+    <p>
+      Mountpoint for Amazon S3 のメモリ使用量コントロールにより、ML トレーニングや分析ジョブなど
+      <span class="highlight">メモリ集約型ワークロードとの安全な同居</span>が可能になりました。
+      特にメモリ制限が厳格なコンテナ環境 (EKS など) では自動検出が有効に働くため、
+      Mountpoint を利用しているワークロードは <span class="highlight">v1.24.0 以降へのアップグレードを推奨</span>します。
+      多数ファイルの同時書き込みを行う場合は、書き込みオープン数の上限に関する破壊的変更を事前に確認してください。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/08/mountpoint-for-S3-adds-memory-usage-controls/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (AWS What's New)</a></li>
+      <li><a href="https://aws.amazon.com/s3/features/mountpoint/" target="_blank" rel="noopener noreferrer" class="aws-link">Mountpoint for Amazon S3 製品ページ</a></li>
+      <li><a href="https://github.com/awslabs/mountpoint-s3" target="_blank" rel="noopener noreferrer" class="aws-link">Mountpoint for Amazon S3 GitHub リポジトリ</a></li>
+      <li><a href="https://github.com/awslabs/mountpoint-s3/blob/main/doc/CONFIGURATION.md" target="_blank" rel="noopener noreferrer" class="aws-link">設定ガイド (CONFIGURATION.md)</a></li>
+      <li><a href="https://github.com/awslabs/mountpoint-s3/releases" target="_blank" rel="noopener noreferrer" class="aws-link">リリースノート (v1.24.0)</a></li>
+      <li><a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon S3 料金ページ</a></li>
+    </ul>
+    <p>生成日: 2026-08-27 | AWS News Summary Infographic</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#FF9900',
+      primaryTextColor: '#232F3E',
+      primaryBorderColor: '#FF9900',
+      lineColor: '#FF9900',
+      secondaryColor: '#F5F5F5',
+      tertiaryColor: '#FAFAFA',
+      background: '#FFFFFF',
+      mainBkg: '#FFF3E0',
+      nodeBorder: '#FF9900',
+      clusterBkg: '#FFF8E1',
+      clusterBorder: '#FF9900',
+      edgeLabelBackground: '#FFFFFF',
+      textColor: '#232F3E'
+    }
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

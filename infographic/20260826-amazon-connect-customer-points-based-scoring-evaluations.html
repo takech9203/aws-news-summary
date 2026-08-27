@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Connect Customer - パフォーマンス評価におけるポイントベーススコアリング</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.ba-card {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-card.before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-card.after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.55);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-card.before .ba-title { color: #FF6F59; }
+.ba-card.after .ba-title { color: #4CAF50; }
+
+.ba-card ul {
+  margin: 0;
+  padding-left: 2px;
+  list-style: none;
+  font-size: 14px;
+}
+
+.ba-card li {
+  margin: 8px 0;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.ba-card.before li::before { content: "✗"; color: var(--aws-red); font-weight: 700; }
+.ba-card.after li::before { content: "✓"; color: #4CAF50; font-weight: 700; }
+
+/* 数式ハイライト */
+.formula-box {
+  background: rgba(140, 79, 255, 0.12);
+  border: 1px solid rgba(140, 79, 255, 0.5);
+  border-radius: 8px;
+  padding: 16px 20px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 16px 0;
+}
+
+.formula-box .frac {
+  color: var(--aws-smile-orange);
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+
+.feature-card .feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.feature-card ul {
+  margin: 6px 0 0 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.feature-card li { margin: 4px 0; }
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.spec-table td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+
+.spec-table tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.spec-table .num { text-align: center; }
+.spec-table .bonus { color: var(--aws-smile-orange); font-weight: 600; }
+.spec-table .excluded { color: #9AA5B1; }
+
+.calc-result {
+  background: rgba(255, 153, 0, 0.1);
+  border: 1px dashed var(--aws-orange);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin: 14px 0;
+  font-size: 15px;
+}
+
+.calc-result .big {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-orange);
+}
+
+/* ステップ */
+.step-list { counter-reset: step; }
+
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+
+.step-num {
+  counter-increment: step;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.step-body .step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+.step-body .step-desc {
+  font-size: 14px;
+}
+
+.step-body ul {
+  margin: 6px 0 0 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+/* メリット・デメリット */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.merit-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.merit-card .merit-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 8px;
+}
+
+.merit-card ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.merit-card li { margin: 6px 0; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+
+.usecase .uc-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase .uc-label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 10px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 6px 14px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 14px !important;
+  display: block;
+}
+
+/* リンク */
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.link-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+  font-size: 14px;
+}
+
+.link-list li { margin: 8px 0; }
+
+/* 関連サービス */
+.related-card {
+  background: rgba(0, 161, 201, 0.08);
+  border: 1px solid rgba(0, 161, 201, 0.35);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.related-card .rel-title {
+  font-weight: 700;
+  color: var(--aws-teal);
+}
+
+/* まとめ */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px 20px;
+  font-size: 15px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+@media (max-width: 700px) {
+  .before-after, .merit-grid { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">Amazon Connect Customer</span>
+    <h1>📊 パフォーマンス評価における<br>ポイントベーススコアリング</h1>
+    <div class="subtitle">
+      <span class="date">📅 リリース日: 2026 年 8 月 26 日</span> ｜
+      機能: パフォーマンス評価のポイントベーススコアリング (Points-based Scoring)
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>💡 概要</h2>
+    <p>
+      Amazon Connect Customer が、<span class="highlight">人間エージェントと AI エージェント</span>のパフォーマンス評価において、<span class="highlight">ポイントベースのスコアリング</span>をサポートしました。マネージャーは各評価基準にビジネス上の重要度に応じたポイントを割り当て、獲得ポイントの合計として評価スコアを算出できます。
+    </p>
+    <p>
+      従来のパーセンテージベースでは、質問ごとのウェイト合計を 100% に調整する必要がありました。ポイントベースなら「問題解決に 40 ポイント、コンプライアンス遵守に 20 ポイント、挨拶に 10 ポイント」のように<span class="highlight">合計 100 の制約なし</span>で自由に設計でき、ビジネスが重視する価値をスコアに反映できます。
+    </p>
+    <div class="before-after">
+      <div class="ba-card before">
+        <div class="ba-title">😣 Before: アップデート前の課題</div>
+        <ul>
+          <li>ウェイト合計を必ず 100% に調整する必要があり、質問の追加・削除のたびに全体の再配分が必要</li>
+          <li>ボーナス加点 (満点を超える加点) を反映する仕組みがなく、優れた対応を評価しにくい</li>
+          <li>特定の質問をスコア計算から除外しつつフォームに残す柔軟な設計が困難</li>
+        </ul>
+      </div>
+      <div class="ba-card after">
+        <div class="ba-title">😊 After: アップデート後の改善</div>
+        <ul>
+          <li>各評価基準に任意のポイントを割り当て、合計 100 の制約なしにフォームを設計可能</li>
+          <li>ボーナスオプション・ボーナス質問により 100% を超えるスコアで優秀な対応を評価可能</li>
+          <li>複数のコンプライアンス基準を 1 つの複数選択式質問に統合、スコア除外質問も設定可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ スコアリングの仕組み</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Contact(["👤 コンタクト<br/>人間エージェント / AI エージェント"]) --> Form["📋 評価フォーム<br/>ポイントベーススコアリング"]
+
+    subgraph Questions["📝 質問タイプごとのポイント集計"]
+        direction LR
+        Q1["✅ 通常質問<br/>獲得 20 / 満点 20"]
+        Q2["⭐ ボーナス質問<br/>獲得 20 / 満点 0"]
+        Q3["🚫 スコア除外質問<br/>計算対象外"]
+        Q1 ~~~ Q2 ~~~ Q3
+    end
+
+    Form --> Questions
+    Questions --> Calc{"🧮 スコア計算<br/>獲得ポイント合計 ÷ 最大基礎ポイント合計 × 100"}
+    Calc --> Score["📊 評価スコア<br/>ボーナスにより 100% 超も可能"]
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+
+    class Contact user
+    class Form process
+    class Questions layer
+    class Q1,Q2,Q3 input
+    class Calc decision
+    class Score warning
+      </pre>
+    </div>
+    <p class="diagram-note">
+      質問タイプごとに獲得ポイントと最大基礎ポイントが集計され、その比率から評価スコアが算出されます。ボーナス質問は分子のみに加算されるため、スコアが 100% を超えることがあります。
+    </p>
+    <div class="formula-box">
+      評価スコア = <span class="frac">( 獲得ポイント合計 ÷ 最大基礎ポイント合計 )</span> × 100
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">🎯 1. ポイントベースのスコア設定</div>
+      <ul>
+        <li>各評価基準 (質問) にビジネス上の重要度に応じた任意のポイントを割り当て可能</li>
+        <li>合計を 100% にする必要がなく、質問の追加・削除時にウェイトの再配分が不要</li>
+        <li>評価スコアは「獲得ポイント合計 ÷ 最大基礎ポイント合計 × 100」で算出</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">⭐ 2. ボーナスオプションとボーナス質問</div>
+      <ul>
+        <li><strong>ボーナスオプション</strong>: 質問の通常の満点を超えるポイントを持つ選択肢を設定可能</li>
+        <li><strong>ボーナス質問</strong>: 獲得ポイントは分子に加算されるが分母には加算されず、全体スコアが 100% を超えることが可能</li>
+        <li>優れた顧客対応 (強いラポール形成など) への追加加点を実現</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🧩 3. 柔軟な質問設計</div>
+      <ul>
+        <li><strong>スコア除外質問</strong>: スコア計算から完全に除外 (例: 問い合わせ理由の記録)</li>
+        <li><strong>複数選択式質問</strong>: 選択された全オプションのポイントを合算、上限 (キャップ) 設定も可能。複数のコンプライアンス基準を 1 問に統合可能</li>
+        <li><strong>数値質問</strong>: 回答が該当する数値範囲に応じてポイントを付与</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🤖 4. 人間エージェントと AI エージェントの両方に対応</div>
+      <ul>
+        <li>人間のエージェントに加え、AI エージェントのパフォーマンス評価にも同じポイントベーススコアリングを利用可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様: スコア計算方法</h2>
+    <table class="spec-table">
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>スコア計算式</td><td>スコア = (獲得ポイント合計 ÷ 最大基礎ポイント合計) × 100</td></tr>
+      <tr><td>獲得ポイント</td><td>全スコア対象質問で選択された回答のポイント値の合計</td></tr>
+      <tr><td>最大基礎ポイント</td><td>ボーナス以外の各質問で達成可能な最高ポイント値の合計</td></tr>
+      <tr><td>ボーナスオプション</td><td>獲得ポイントに加算、最大基礎ポイントは変化なし</td></tr>
+      <tr><td>ボーナス質問</td><td>獲得ポイントに加算、最大基礎ポイントは 0 として扱う</td></tr>
+      <tr><td>スコア除外質問</td><td>獲得ポイント・最大基礎ポイントの両方から除外</td></tr>
+      <tr><td>自動失格 (Automatic fail)</td><td>選択されると対象範囲 (セクションまたはフォーム全体) の獲得ポイントが 0 になる。最大基礎ポイントは変化なし</td></tr>
+      <tr><td>複数選択で「該当なし」を選択</td><td>獲得ポイントは 0。最大基礎ポイントは分母に計上される</td></tr>
+    </table>
+
+    <h3>🧮 スコア計算の例 (公式ドキュメントの 6 問構成フォーム)</h3>
+    <table class="spec-table">
+      <tr><th>質問</th><th>タイプ</th><th class="num">獲得ポイント</th><th class="num">最大基礎ポイント</th></tr>
+      <tr><td class="num">1.1</td><td>単一選択 (通常)</td><td class="num">20</td><td class="num">20</td></tr>
+      <tr><td class="num">1.2</td><td class="bonus">単一選択 + ボーナスオプション</td><td class="num bonus">30</td><td class="num">20</td></tr>
+      <tr><td class="num">1.3</td><td class="bonus">ボーナス質問</td><td class="num bonus">20</td><td class="num bonus">0</td></tr>
+      <tr><td class="num">1.4</td><td class="excluded">スコア除外</td><td class="num excluded">対象外</td><td class="num excluded">対象外</td></tr>
+      <tr><td class="num">1.5</td><td>数値 (通常)</td><td class="num">20</td><td class="num">20</td></tr>
+      <tr><td class="num">1.6</td><td>複数選択</td><td class="num">60</td><td class="num">60</td></tr>
+    </table>
+    <div class="calc-result">
+      獲得ポイント合計: 20 + 30 + 20 + 20 + 60 = <strong>150</strong><br>
+      最大基礎ポイント合計: 20 + 20 + 0 + 20 + 60 = <strong>120</strong><br>
+      スコア: (150 ÷ 120) × 100 = <span class="big">125%</span><br>
+      <span style="font-size: 13px;">→ ボーナスオプションとボーナス質問により、スコアが 100% を超えています</span>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon Connect Customer インスタンスが作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>会話分析 (Conversational Analytics) およびパフォーマンス評価機能が有効であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>評価フォームの作成・編集権限を持つセキュリティプロファイルが割り当てられていること</span></div>
+
+    <h3>📋 手順</h3>
+    <div class="step-list">
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">評価フォームの作成または編集</div>
+          <div class="step-desc">Amazon Connect 管理コンソールから評価フォームの作成画面を開き、新規フォームを作成するか既存フォームを編集します。</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">スコアリングモードの選択</div>
+          <div class="step-desc">フォームのスコアリング設定で、従来のパーセンテージベース (ウェイト方式) に代えてポイントベーススコアリングを選択します。</div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">質問ごとのポイント設定</div>
+          <div class="step-desc">各質問の選択肢にポイント値を割り当てます。必要に応じて以下を設定します。</div>
+          <ul>
+            <li>ボーナスオプションまたはボーナス質問の追加</li>
+            <li>スコア計算から除外する質問の指定</li>
+            <li>複数選択式質問のポイント上限 (キャップ) の設定</li>
+            <li>自動失格オプションの設定</li>
+          </ul>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">フォームの公開と評価の実施</div>
+          <div class="step-desc">フォームを公開し、コンタクトの評価に使用します。評価結果はポイントの合計に基づくスコアとして記録されます。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>👍 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-card">
+        <div class="merit-title">💼 ビジネス面</div>
+        <ul>
+          <li><strong>評価ポリシーの柔軟な反映</strong>: 「何を評価するか」「どの程度重視するか」「何に追加加点するか」をビジネス価値に基づいて自由に設計</li>
+          <li><strong>優秀な対応の可視化</strong>: ボーナス加点により優れた顧客対応を定量的に評価し、エージェントのモチベーション向上に貢献</li>
+          <li><strong>評価フォームの短縮</strong>: 複数のコンプライアンス基準を 1 つの複数選択式質問に統合し、評価者の作業負荷を軽減</li>
+        </ul>
+      </div>
+      <div class="merit-card">
+        <div class="merit-title">🔧 技術面</div>
+        <ul>
+          <li><strong>メンテナンス性の向上</strong>: 質問の追加・削除時にウェイト合計 100% の再調整が不要</li>
+          <li><strong>人間と AI エージェントの統一評価</strong>: 同一のスコアリング方式で両方を評価可能</li>
+          <li><strong>既存方式との併用</strong>: 従来のパーセンテージベースも引き続き利用可能で、フォームごとに選択できる</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚧 制限事項</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>ボーナス質問やボーナスオプションを使用すると、スコアが 100% を超える場合があり、既存のレポートやしきい値ベースのルールとの整合性確認が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>複数選択式質問で「該当なし」を選択した場合、獲得ポイントは 0 だが最大基礎ポイントは分母に計上される点に注意が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>自動失格オプションが選択されると、対象範囲 (セクションまたはフォーム全体) の獲得ポイントが 0 になる</span></div>
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">💭</span><span>既存のパーセンテージベースのフォームから移行する場合、過去の評価スコアとの比較方法を事前に検討する必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">💭</span><span>ポイント配分の設計はスコアの意味に直結するため、QA チーム内で採点基準の合意形成を行うことが望ましい</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="uc-title">🏦 ユースケース 1: コンプライアンス重視の評価フォーム設計</div>
+      <p><span class="uc-label">シナリオ</span>: 金融機関のコンタクトセンターで、コンプライアンス遵守を最重要項目として評価したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">実装例</span><span class="code-title">ポイント配分</span></div>
+        <pre><code class="language-yaml">- 問題解決: 40 ポイント
+- コンプライアンス要件の遵守: 20 ポイント (自動失格オプション付き)
+- 適切な挨拶: 10 ポイント</code></pre>
+      </div>
+      <p><span class="uc-label">効果</span>: 合計 100 の制約なしに、ビジネス上の優先度をそのままポイント配分に反映できます。重大なコンプライアンス違反は自動失格によりスコア 0 として扱えます。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">🌟 ユースケース 2: ボーナス加点による優秀対応の評価</div>
+      <p><span class="uc-label">シナリオ</span>: 顧客との強いラポール形成など、基準を超えた優れた対応を評価に反映し、エージェントの成長を促したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">実装例</span><span class="code-title">ボーナス設定</span></div>
+        <pre><code class="language-yaml">- 通常質問: 標準対応で満点 20 ポイント
+- ボーナスオプション: 特に優れた対応に 30 ポイント (満点 20 を超える加点)
+- ボーナス質問: 追加の加点項目として設定 (分母に影響しない)</code></pre>
+      </div>
+      <p><span class="uc-label">効果</span>: スコアが 100% を超えることを許容する設計により、「合格」と「卓越」を区別した評価が可能になります。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">📝 ユースケース 3: 評価フォームの簡素化</div>
+      <p><span class="uc-label">シナリオ</span>: 評価項目が多く、評価者 1 人あたりの評価作業に時間がかかっている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">実装例</span><span class="code-title">フォーム統合</span></div>
+        <pre><code class="language-yaml">- 複数のコンプライアンス基準 (本人確認、録音告知、免責説明) を
+  1 つの複数選択式質問に統合し、各選択肢にポイントを割り当てる
+- 問い合わせ理由の記録はスコア除外質問として設定する</code></pre>
+      </div>
+      <p><span class="uc-label">効果</span>: フォームの質問数を削減して評価作業を効率化しつつ、必要な記録項目はスコアに影響させずに残せます。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="check-item"><span class="check-icon">💵</span><span><strong>料金</strong>: ポイントベーススコアリング自体に追加料金はなく、Amazon Connect Customer の会話分析 (パフォーマンス評価) の既存の料金体系に従います。詳細は Amazon Connect の料金ページを参照してください。</span></div>
+    <div class="check-item"><span class="check-icon">🌍</span><span><strong>利用可能リージョン</strong>: Amazon Connect Customer が提供されているすべてのリージョンで利用可能です。</span></div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-card">
+      <span class="rel-title">Amazon Connect Customer 会話分析 (Conversational Analytics)</span><br>
+      パフォーマンス評価の基盤となる機能。通話やチャットの分析結果を評価に活用できる
+    </div>
+    <div class="related-card">
+      <span class="rel-title">パフォーマンス評価 (Performance Evaluations)</span><br>
+      評価フォームによるエージェント評価機能。今回のアップデートでスコアリング方式の選択肢が拡大
+    </div>
+    <div class="related-card">
+      <span class="rel-title">Amazon Connect AI エージェント</span><br>
+      人間エージェントと同様に、AI エージェントの対応品質もポイントベースで評価可能
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      Amazon Connect Customer のパフォーマンス評価に<span class="highlight">ポイントベーススコアリング</span>が追加され、ウェイト合計 100% の制約なしに、ビジネス価値に基づいた柔軟な評価フォーム設計が可能になりました。ボーナス加点やスコア除外質問により、優秀な対応の評価やフォームの簡素化も実現できます。コンタクトセンターの品質管理を行っているチームは、既存のパーセンテージベースのフォームを見直し、ポイントベースへの移行を検討することを推奨します。
+    </div>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul class="link-list">
+      <li>📰 <a href="https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-connect-customer-points-based-scoring-evaluations/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon Connect Customer points-based scoring for evaluations</a></li>
+      <li>📚 <a href="https://docs.aws.amazon.com/connect/latest/adminguide/about-pointbased-scoring.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: How point-based scoring is calculated in Connect Customer</a></li>
+      <li>🔍 <a href="https://aws.amazon.com/products/connect/customer/conversational-analytics/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon Connect Customer 会話分析</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-08-26) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
