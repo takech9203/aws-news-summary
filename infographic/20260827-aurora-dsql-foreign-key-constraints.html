@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Aurora DSQL - 外部キー制約のサポート</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 12px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    .release-date {
+      background: var(--aws-dark-squid);
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 14px;
+      color: var(--aws-white);
+      white-space: nowrap;
+    }
+
+    .lead-text {
+      font-size: 15px;
+      margin-bottom: 24px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.5);
+    }
+
+    .before-box h3, .after-box h3 {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 { color: #FF6B4A; }
+    .after-box h3 { color: #4CAF50; }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: var(--aws-green); font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: var(--aws-red); font-size: 16px; flex-shrink: 0; }
+    .arrow { color: var(--aws-orange); font-size: 18px; flex-shrink: 0; }
+
+    /* 参照アクションバッジ */
+    .action-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin: 16px 0;
+    }
+
+    .action-badge {
+      background: rgba(255, 153, 0, 0.12);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 10px 16px;
+      text-align: center;
+      min-width: 120px;
+    }
+
+    .action-badge .name {
+      font-weight: 700;
+      color: var(--aws-orange);
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .action-badge .desc {
+      font-size: 12px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      font-weight: 600;
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--aws-light-gray);
+    }
+
+    td code, li code, p code {
+      background: rgba(255, 153, 0, 0.12);
+      color: var(--aws-smile-orange);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: 'Courier New', monospace;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* ステップ */
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 14px;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    .step-title {
+      display: flex;
+      align-items: center;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 20px 0 8px 0;
+      font-size: 16px;
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 18px;
+      margin: 14px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-orange);
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .usecase p { margin: 6px 0; font-size: 14px; }
+
+    .effect-label {
+      color: #4CAF50;
+      font-weight: 700;
+    }
+
+    /* 2 カラムグリッド */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    ul { margin: 8px 0; padding-left: 22px; }
+    li { margin: 6px 0; font-size: 14px; }
+
+    .note-box {
+      background: rgba(255, 153, 0, 0.08);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 4px;
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { list-style: none; padding-left: 0; }
+    footer li { margin: 6px 0; }
+
+    @media (max-width: 700px) {
+      .before-after, .two-col { grid-template-columns: 1fr; }
+      h1, .title { font-size: 24px; }
+      table { font-size: 12px; }
+      td, th { padding: 6px 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- タイトルエリア -->
+    <div class="header">
+      <div>
+        <div class="service-badge">☁️ Amazon Aurora DSQL</div>
+        <h1>🔗 外部キー制約のサポート</h1>
+        <div class="subtitle">Foreign Key Constraints - 参照整合性をデータベース側で保証</div>
+      </div>
+      <div class="release-date">📅 リリース日: 2026 年 8 月 27 日</div>
+    </div>
+
+    <p class="lead-text" style="margin-top: 16px;">
+      PostgreSQL 互換のサーバーレス分散 SQL データベース <span class="highlight">Aurora DSQL</span> が、ついに<span class="highlight">外部キー制約</span>をサポート。PostgreSQL 互換性における最大級のギャップの 1 つが解消され、移行の再評価に値する大きなマイルストーンです。
+    </p>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📝 概要</h2>
+      <p style="font-size: 14px;">
+        新規テーブルと既存テーブルの両方に外部キー制約を定義でき、テーブル間の<span class="highlight">参照整合性</span>をデータベース側で保証できるようになりました。参照を壊す書き込み操作は Aurora DSQL がブロックします。参照アクション 5 種類に加え、MATCH FULL / MATCH SIMPLE のマッチタイプや遅延可能制約 (DEFERRABLE) もサポートし、PostgreSQL の標準的な外部キー機能に近い形で利用できます。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before: アップデート前の課題</h3>
+          <div class="check-item"><span class="cross-icon">✗</span><span>外部キー制約を定義できず、参照整合性の検証ロジックを<strong>アプリケーション側で実装</strong>する必要があった</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>実装漏れや競合状態により<strong>孤児レコード</strong> (参照先が存在しない行) が発生するリスク</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>既存 PostgreSQL アプリケーションの移行時に<strong>スキーマとロジックの書き換え</strong>が必要だった</span></div>
+        </div>
+        <div class="after-box">
+          <h3>✅ After: アップデート後の改善</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span>CREATE TABLE および既存テーブルへの追加で、外部キー制約を<strong>データベース側で定義・強制</strong></span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>5 つの参照アクション</strong>で参照先の削除・更新時の挙動を柔軟に制御</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>MATCH FULL / SIMPLE、DEFERRABLE をサポートし、<strong>移行時の書き換えが不要</strong>に</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ 参照整合性の保証メカニズム (OCC ベース)</h2>
+      <p style="font-size: 14px;">
+        Aurora DSQL は<span class="highlight">楽観的並行性制御 (OCC)</span> に基づき、トランザクション開始時の<strong>スナップショット検証</strong>とコミット時の<strong>競合解決</strong>の 2 段階で参照整合性を保証します。ロック待機は発生せず、競合はコミット時にシリアライゼーションエラーとして返されます。
+      </p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+sequenceDiagram
+    participant A as 🅰️ セッション A
+    participant D as 🗄️ Aurora DSQL
+    participant B as 🅱️ セッション B
+
+    Note over D: products の行 product_id = 1 が存在
+
+    A->>D: BEGIN
+    A->>D: DELETE FROM products WHERE product_id = 1
+    Note over A,D: スナップショット検証&lt;br/&gt;開始時点の参照行を読み取り
+
+    B->>D: BEGIN
+    B->>D: INSERT INTO orders VALUES 100, 1, 5
+    Note over D,B: スナップショット検証&lt;br/&gt;参照先キーの存在を確認
+
+    A->>D: COMMIT
+    D-->>A: 成功
+
+    B->>D: COMMIT
+    Note over D: コミット時の競合解決&lt;br/&gt;KEY SHARE により競合を検出
+    D-->>B: シリアライゼーションエラー OC000
+    Note over B: リトライロジックで再実行
+        </pre>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">1️⃣ スナップショット検証</div>
+          <p>各トランザクションは開始時点の一貫したスナップショットに対して実行。参照する行の挿入・更新時は参照先テーブルを、参照先キーの削除・更新時は参照元テーブルを読み取って検証。ロックを取得しないため、他のトランザクションは並行して両テーブルを変更可能。</p>
+        </div>
+        <div class="card">
+          <div class="card-title">2️⃣ コミット時の競合解決</div>
+          <p>開始からコミットまでの並行変更を検出するため、参照先の行に暗黙的に KEY SHARE 句を適用。競合が検出された場合、トランザクションはシリアライゼーションエラー (SQLSTATE 40001、OC000) で失敗する。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚙️ 主要機能</h2>
+
+      <div class="card">
+        <div class="card-title">🔗 外部キー制約の定義</div>
+        <p>列制約 (REFERENCES) として単一列、テーブル制約 (FOREIGN KEY ... REFERENCES ...) として単一列または複数列の複合外部キーを定義可能。参照先の列リストを省略すると主キーが使用されます。自己参照外部キー (ツリー構造など) や、1 つのテーブルへの複数の外部キー制約 (多対多関係) もサポート。新規・既存テーブルの両方に定義できます。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎛️ 参照アクション: 削除・更新時の挙動を 5 種類から選択</div>
+        <div class="action-badges">
+          <div class="action-badge">
+            <div class="name">NO ACTION</div>
+            <div class="desc">デフォルト。違反時エラー<br>遅延制約は判定を遅延可</div>
+          </div>
+          <div class="action-badge">
+            <div class="name">RESTRICT</div>
+            <div class="desc">参照行があればエラー<br>遅延不可</div>
+          </div>
+          <div class="action-badge">
+            <div class="name">CASCADE</div>
+            <div class="desc">連動して参照行を<br>削除・更新</div>
+          </div>
+          <div class="action-badge">
+            <div class="name">SET NULL</div>
+            <div class="desc">参照列を<br>NULL に設定</div>
+          </div>
+          <div class="action-badge">
+            <div class="name">SET DEFAULT</div>
+            <div class="desc">参照列を<br>デフォルト値に設定</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🧩 マッチタイプと遅延可能制約</div>
+        <ul>
+          <li><strong>MATCH SIMPLE</strong> (デフォルト): 外部キー列のいずれかが NULL の場合、参照先との一致を要求しない</li>
+          <li><strong>MATCH FULL</strong>: 複合外部キーにおいて、全列が NULL または全列が非 NULL であることを要求</li>
+          <li><strong>DEFERRABLE / INITIALLY DEFERRED</strong>: 制約チェックをコミット時まで遅延可能。相互参照する行を順序を気にせず同一トランザクション内で挿入できる</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>📐 技術仕様</h2>
+
+      <h3>外部キー制約の仕様</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>参照アクション</td><td>NO ACTION (デフォルト)、RESTRICT、CASCADE、SET NULL、SET DEFAULT</td></tr>
+        <tr><td>マッチタイプ</td><td>MATCH SIMPLE (デフォルト)、MATCH FULL</td></tr>
+        <tr><td>遅延可能性</td><td>NOT DEFERRABLE (デフォルト)、DEFERRABLE INITIALLY IMMEDIATE、DEFERRABLE INITIALLY DEFERRED</td></tr>
+        <tr><td>定義方法</td><td>列制約 (REFERENCES)、テーブル制約 (FOREIGN KEY)</td></tr>
+        <tr><td>複合キー</td><td>サポート (テーブル制約形式で定義)</td></tr>
+        <tr><td>参照先の要件</td><td>遅延不可の UNIQUE 制約または主キー制約の列</td></tr>
+        <tr><td>整合性保証方式</td><td>スナップショット検証 + コミット時の競合解決 (OCC ベース)</td></tr>
+        <tr><td>競合時の挙動</td><td>シリアライゼーションエラー (SQLSTATE 40001)</td></tr>
+      </table>
+
+      <h3>PostgreSQL との互換性における位置づけ</h3>
+      <table>
+        <tr><th>観点</th><th>PostgreSQL</th><th>Aurora DSQL</th></tr>
+        <tr><td>外部キー構文</td><td>FOREIGN KEY / REFERENCES</td><td>同等の構文をサポート</td></tr>
+        <tr><td>参照アクション</td><td>5 種類</td><td>同じ 5 種類をサポート</td></tr>
+        <tr><td>マッチタイプ</td><td>MATCH SIMPLE / FULL / PARTIAL</td><td>MATCH SIMPLE / FULL をサポート</td></tr>
+        <tr><td>DEFERRABLE</td><td>各種制約に適用可能</td><td>外部キー制約のみに適用可能</td></tr>
+        <tr><td>整合性の強制方式</td><td>行ロックによる待機</td><td>OCC による競合検出 (待機なし、エラーで通知)</td></tr>
+        <tr><td>競合時のアプリ対応</td><td>ロック待機・デッドロック対策</td><td>シリアライゼーションエラーのリトライが必要</td></tr>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>Aurora DSQL クラスターが作成済みであること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>PostgreSQL 互換クライアント (psql など) で接続できること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>参照先の列が遅延不可の UNIQUE 制約または主キー制約を持つこと</span></div>
+
+      <div class="step-title"><span class="step-number">1</span> 参照先テーブルの作成</div>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">参照先となる商品テーブル</span>
+        </div>
+        <pre><code class="language-sql">CREATE TABLE products (
+    product_no integer PRIMARY KEY,
+    name text,
+    price numeric
+);</code></pre>
+      </div>
+      <p style="font-size: 14px;">外部キーの参照先となる列は主キーまたは UNIQUE 制約を持つ必要があります。</p>
+
+      <div class="step-title"><span class="step-number">2</span> 外部キー制約付きテーブルの作成</div>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">REFERENCES 句で外部キーを定義</span>
+        </div>
+        <pre><code class="language-sql">CREATE TABLE orders (
+    order_id integer PRIMARY KEY,
+    product_no integer REFERENCES products ON DELETE RESTRICT,
+    quantity integer
+);</code></pre>
+      </div>
+      <p style="font-size: 14px;">参照先の列リストを省略すると主キーが使用されます。<code>ON DELETE RESTRICT</code> により、注文から参照されている商品の削除はエラーになります。</p>
+
+      <div class="step-title"><span class="step-number">3</span> 複合外部キーや遅延制約の定義</div>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">複合外部キーと遅延可能制約</span>
+        </div>
+        <pre><code class="language-sql">-- 複合外部キー (テーブル制約形式)
+CREATE TABLE shipments (
+    shipment_id integer PRIMARY KEY,
+    warehouse_id integer,
+    product_no integer,
+    FOREIGN KEY (warehouse_id, product_no)
+        REFERENCES inventory (warehouse_id, product_no) MATCH FULL
+);
+
+-- コミット時まで制約チェックを遅延
+CREATE TABLE orders_deferred (
+    order_id integer PRIMARY KEY,
+    product_no integer REFERENCES products DEFERRABLE INITIALLY DEFERRED,
+    quantity integer
+);</code></pre>
+      </div>
+      <p style="font-size: 14px;"><code>DEFERRABLE INITIALLY DEFERRED</code> を指定すると制約チェックがコミット時まで遅延され、参照先の行より先に参照元の行を挿入できます。</p>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <div class="two-col">
+        <div>
+          <h3 style="margin-top: 0;">💼 ビジネス面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>データ品質の向上</strong>: 孤児レコードによるデータ不整合や業務障害を防止</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>移行障壁の低減</strong>: 既存 PostgreSQL アプリをスキーマの書き換えなしに移行しやすく</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>開発コストの削減</strong>: アプリ側の整合性チェック実装・維持が不要になり工数を削減</span></div>
+        </div>
+        <div>
+          <h3 style="margin-top: 0;">🔧 技術面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>ロックフリーの整合性保証</strong>: ロック待機なしで並行トランザクションのスループットを阻害しない</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な参照アクション</strong>: CASCADE や SET NULL で親子関係のライフサイクル管理を DB に委譲</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>遅延可能制約</strong>: 相互参照する行を同一トランザクション内で任意の順序で挿入可能</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <div class="two-col">
+        <div>
+          <h3 style="margin-top: 0;">🚧 制限事項</h3>
+          <div class="check-item"><span class="cross-icon">•</span><span>参照先・参照元テーブルへのすべての DML 操作で<strong>追加読み取り</strong>が発生</span></div>
+          <div class="check-item"><span class="cross-icon">•</span><span>CASCADE / SET NULL / SET DEFAULT の自動変更は<strong>トランザクション行数制限</strong>にカウントされ、子行が多いと予期しない失敗の可能性</span></div>
+          <div class="check-item"><span class="cross-icon">•</span><span>RESTRICT のチェックは遅延不可 (NO ACTION は遅延可能)</span></div>
+          <div class="check-item"><span class="cross-icon">•</span><span>DEFERRABLE は外部キー制約のみに適用可能</span></div>
+          <div class="check-item"><span class="cross-icon">•</span><span>MATCH PARTIAL は非サポート (PostgreSQL 本体でも未実装)</span></div>
+        </div>
+        <div>
+          <h3 style="margin-top: 0;">🤔 考慮すべき点</h3>
+          <div class="check-item"><span class="arrow">→</span><span>競合はシリアライゼーションエラー (SQLSTATE 40001) で返されるため、<strong>リトライロジックの実装が必要</strong></span></div>
+          <div class="check-item"><span class="arrow">→</span><span>多数の行から参照されるキー列が頻繁に変わるスキーマは競合が多発。頻繁に変更される値は非キー列へ移動を推奨</span></div>
+          <div class="check-item"><span class="arrow">→</span><span>子行数が無制限・予測不能な関係では CASCADE より NO ACTION / RESTRICT を推奨</span></div>
+          <div class="check-item"><span class="arrow">→</span><span>導入前にワークロードの<strong>ベンチマーク</strong>でパフォーマンス特性を検証</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">🛒 ユースケース 1: EC サイトの注文管理</div>
+        <p><strong>シナリオ</strong>: 注文テーブルが商品テーブルを参照する EC サイトで、販売中の商品が誤って削除されて注文データが不整合になることを防ぎたい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SQL</span></div>
+          <pre><code class="language-sql">CREATE TABLE orders (
+    order_id integer PRIMARY KEY,
+    product_no integer REFERENCES products ON DELETE RESTRICT,
+    quantity integer
+);</code></pre>
+        </div>
+        <p><span class="effect-label">✅ 効果</span>: 注文から参照されている商品の削除は DB がエラーでブロック。アプリ側のチェック漏れがあっても孤児レコードが発生しない。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🚚 ユースケース 2: PostgreSQL アプリケーションの Aurora DSQL への移行</div>
+        <p><strong>シナリオ</strong>: 外部キー制約を多用する既存の PostgreSQL アプリケーションを、サーバーレスでマルチリージョン対応の Aurora DSQL へ移行したい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SQL</span></div>
+          <pre><code class="language-sql">-- 既存の PostgreSQL スキーマをほぼそのまま利用可能
+CREATE TABLE order_items (
+    product_no integer REFERENCES products,
+    order_id integer REFERENCES orders,
+    quantity integer,
+    PRIMARY KEY (product_no, order_id)
+);</code></pre>
+        </div>
+        <p><span class="effect-label">✅ 効果</span>: 外部キー制約が移行の障壁だったワークロードで、スキーマの書き換えなしに移行を検討可能。競合時のリトライ対応のみ追加すればよい。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">📦 ユースケース 3: 相互参照データの一括登録</div>
+        <p><strong>シナリオ</strong>: マスターデータの一括登録において、参照先と参照元の行を順序を気にせず同一トランザクションで挿入したい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SQL</span></div>
+          <pre><code class="language-sql">CREATE TABLE orders (
+    order_id integer PRIMARY KEY,
+    product_no integer REFERENCES products DEFERRABLE INITIALLY DEFERRED,
+    quantity integer
+);
+
+BEGIN;
+INSERT INTO orders VALUES (1, 100, 2);   -- 参照先より先に挿入可能
+INSERT INTO products VALUES (100, 'Widget', 9.99);
+COMMIT;  -- コミット時点で制約を検証</code></pre>
+        </div>
+        <p><span class="effect-label">✅ 効果</span>: 制約チェックがコミット時まで遅延されるため、挿入順序の制御ロジックが不要になり、バッチ処理やデータロードの実装が簡素化される。</p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金・利用可能リージョン</h2>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">💵 料金</div>
+          <p>外部キー制約の利用自体に<strong>追加料金は発表されていません</strong>。Aurora DSQL の標準料金 (DPU ベースのコンピューティング課金とストレージ課金) が適用されます。</p>
+          <p style="margin-top: 8px;">⚠️ ただし、参照整合性保証のための追加読み取りにより、外部キー制約を持つテーブルへの書き込みでは <strong>DPU 消費が増加する可能性</strong>があります。導入前のベンチマーク確認を推奨。</p>
+        </div>
+        <div class="card">
+          <div class="card-title">🌍 利用可能リージョン</div>
+          <p>Aurora DSQL が利用可能な<strong>すべての AWS リージョン</strong>で利用できます。</p>
+          <p style="margin-top: 8px;">最新のリージョン一覧は <a href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS リージョン別サービス一覧</a> を参照してください。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔄 関連サービス・機能</h2>
+      <div class="card">
+        <div class="card-title">🐘 Amazon Aurora PostgreSQL</div>
+        <p>フル機能の PostgreSQL 互換データベース。外部キーを行ロックで強制する従来型の方式であり、Aurora DSQL の OCC ベースの方式との違いを理解して使い分ける。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">⚡ Aurora DSQL の並行性制御 (OCC)</div>
+        <p>外部キー制約の競合解決は Aurora DSQL の楽観的並行性制御の仕組みに基づく。KEY SHARE 句の挙動やリトライ設計の理解が重要。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">📏 Aurora DSQL のデータベース制限</div>
+        <p>CASCADE などの自動変更はトランザクション行数制限の対象となるため、クォータの確認が必要。</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>🎓 まとめ</h2>
+      <div class="note-box">
+        <p style="margin: 0 0 8px 0;">外部キー制約は Aurora DSQL の PostgreSQL 互換性における<span class="highlight">最大級のギャップの 1 つ</span>であり、本アップデートによりリレーショナルデータベースの中核機能である参照整合性をデータベース側で保証できるようになりました。</p>
+        <div class="check-item"><span class="check-icon">✓</span><span>外部キー制約が理由で Aurora DSQL の採用を見送っていた場合は、<strong>移行の再評価を推奨</strong></span></div>
+        <div class="check-item"><span class="arrow">→</span><span>導入時は、OCC 特有のシリアライゼーションエラーに対する<strong>リトライ実装</strong>を準備</span></div>
+        <div class="check-item"><span class="arrow">→</span><span>追加読み取りによる<strong>パフォーマンス影響のベンチマーク</strong>を事前に実施</span></div>
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典・参考リンク:</p>
+      <ul>
+        <li>📰 <a href="https://aws.amazon.com/about-aws/whats-new/2026/08/aurora-dsql-foreign-key-constraints/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon Aurora DSQL now supports foreign key constraints</a></li>
+        <li>📖 <a href="https://docs.aws.amazon.com/aurora-dsql/latest/userguide/working-with-foreign-key-constraints.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Working with foreign key constraints in Aurora DSQL</a></li>
+        <li>📖 <a href="https://docs.aws.amazon.com/aurora-dsql/latest/userguide/create-table-syntax-support.html#create-table-foreign-keys" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: CREATE TABLE の外部キー構文</a></li>
+        <li>🌐 <a href="https://aws.amazon.com/rds/aurora/dsql/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon Aurora DSQL 製品ページ</a></li>
+      </ul>
+      <p style="margin-top: 12px;">本インフォグラフィックは AWS News レポート (2026-08-27) を基に生成されています。</p>
+    </footer>
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Elastic Disaster Recovery - Recovery Plans によるアプリケーション復旧のオーケストレーション</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.release-date {
+  display: inline-block;
+  color: var(--aws-light-gray);
+  font-size: 14px;
+  margin-left: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 12px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .ba-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+.ba-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+.ba-item .mark { flex-shrink: 0; }
+
+/* Stat cards */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(255, 153, 0, 0.05));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px 12px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+/* Checklists */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase p { margin: 8px 0; font-size: 14px; }
+.usecase .label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Steps */
+.step-list { counter-reset: step; }
+.step-item {
+  display: flex;
+  gap: 12px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+.step-body { flex: 1; }
+.step-title { font-weight: 700; color: var(--aws-white); }
+
+/* Merit grid */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+.merit-box {
+  background: rgba(0, 161, 201, 0.08);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+}
+.merit-box .merit-title {
+  font-weight: 700;
+  color: var(--aws-teal);
+  margin-bottom: 8px;
+}
+.merit-box .ba-item { font-size: 14px; }
+
+ul { margin: 8px 0; padding-left: 22px; }
+li { margin: 6px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { list-style: none; padding-left: 0; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS Elastic Disaster Recovery</span>
+      <span class="release-date">📅 リリース日: 2026 年 8 月 27 日</span>
+    </div>
+    <h1>🔄 Recovery Plans によるアプリケーション復旧のオーケストレーション</h1>
+    <div class="subtitle">複数サーバーで構成されるアプリケーションを、依存関係に従った順序でワンアクション復旧</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>AWS Elastic Disaster Recovery (AWS DRS) に、複数サーバーで構成されるアプリケーションの復旧を順序立てて自動実行する <span class="highlight">Recovery Plans (リカバリプラン)</span> が追加されました。ソースサーバーを順序付きのステップにグループ化して復旧順序を一度定義しておけば、災害時やドリル (訓練) 時に<span class="highlight">ワンアクション</span>でプラン全体を実行できます。</p>
+    <p>多層アプリケーションでは、データベース層 → アプリケーション層 → Web 層という順序で復旧する必要があります。Recovery Plans はこの依存関係を事前にプランとして定義し、各ステップを順番に実行、ステップ内のサーバーは並列に復旧します。ドリルモードによる非破壊的な検証、リアルタイムのモニタリングにも対応し、高ストレス下での手動オペレーションによるミスを排除して復旧時間の短縮に貢献します。</p>
+    <p>本機能は<span class="highlight">追加料金なし</span>で、AWS DRS が利用可能なすべてのリージョンで提供されます。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <div class="ba-item"><span class="mark cross-icon">✗</span><span>依存関係のある多層アプリケーションでは、サーバーを 1 台ずつ手動で正しい順序に起動する必要があり、時間がかかりミスも発生しやすかった</span></div>
+        <div class="ba-item"><span class="mark cross-icon">✗</span><span>依存関係や起動順序を手順書などで管理し、災害時の高ストレス環境下で人手により実行する必要があった</span></div>
+        <div class="ba-item"><span class="mark cross-icon">✗</span><span>複数サーバーの復旧進捗を横断的に追跡する仕組みがなく、個別のリカバリジョブを個別に監視する必要があった</span></div>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <div class="ba-item"><span class="mark check-icon">✓</span><span>ソースサーバーを順序付きステップにグループ化し、ワンアクションでプラン全体を実行できるようになった</span></div>
+        <div class="ba-item"><span class="mark check-icon">✓</span><span>ステップ間に待機時間 (ウェイトステップ) を挿入でき、アプリケーションの初期化時間を考慮した復旧が可能になった</span></div>
+        <div class="ba-item"><span class="mark check-icon">✓</span><span>同じプランをドリルモードで実行し、ソースサーバーやレプリケーションに影響を与えずに DR 準備状況を検証できるようになった</span></div>
+        <div class="ba-item"><span class="mark check-icon">✓</span><span>実行中のプランの進捗をリアルタイムでモニタリングし、失敗時のリトライ、スキップ、キャンセルなどの介入が可能になった</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 運用担当者"]) -->|"ワンアクションで実行<br/>Drill または Recovery"| Exec["▶️ リカバリプラン実行"]
+
+    subgraph Plan["📋 リカバリプラン実行フロー"]
+        direction TB
+        Validate{"✅ 事前検証<br/>全サーバーをチェック"}
+        subgraph Step1["ステップ 1: データベース層"]
+            direction LR
+            DB1["🗄️ DB サーバー 1"]
+            DB2["🗄️ DB サーバー 2"]
+            DB1 ~~~ DB2
+        end
+        Wait["⏱️ ウェイトステップ<br/>1〜120 分待機"]
+        subgraph Step2["ステップ 2: アプリケーション層"]
+            direction LR
+            App1["⚙️ App サーバー 1"]
+            App2["⚙️ App サーバー 2"]
+            App1 ~~~ App2
+        end
+        subgraph Step3["ステップ 3: Web 層"]
+            direction LR
+            Web1["🌐 Web サーバー 1"]
+            Web2["🌐 Web サーバー 2"]
+            Web1 ~~~ Web2
+        end
+        Done(["🎉 実行完了 COMPLETED"])
+    end
+
+    Exec --> Validate
+    Validate -->|検証成功| Step1
+    Validate -.->|検証失敗| Failed["❌ 実行失敗<br/>サーバーは復旧されない"]
+    Step1 -->|"ステップ内は並列復旧<br/>全サーバー完了を待機"| Wait
+    Wait --> Step2
+    Step2 --> Step3
+    Step3 --> Done
+
+    Monitor["📊 リアルタイム<br/>モニタリング"] -.-> Plan
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef error fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+
+    class User user
+    class Exec,Monitor process
+    class Validate decision
+    class Plan,Step1,Step2,Step3 layer
+    class DB1,DB2 database
+    class App1,App2 compute
+    class Web1,Web2 input
+    class Wait warning
+    class Failed error
+    class Done input
+      </pre>
+    </div>
+    <p style="font-size: 14px;">リカバリプランは各ステップを順番に実行し、ステップ内のサーバーは並列に復旧します。すべてのサーバーが終了状態に達してから次のステップに進み、ウェイトステップでアプリケーションの初期化時間を確保できます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ 順序付きステップによる復旧オーケストレーション</div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>ソースサーバーをサーバーステップにグループ化し、プラン内で順序を定義</span></div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>ステップは 1 つずつ順番に実行され、ステップ内のすべてのサーバーは同時に並列で復旧が開始される</span></div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>各サーバーが終了状態に達するまで待機してから次のステップに進むため、依存関係を確実に担保できる</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ ウェイトステップ</div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>ステップ間に 1〜120 分の固定待機時間を挿入可能</span></div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>インスタンス起動後のアプリケーション初期化時間 (データベースの起動完了など) を考慮した復旧シーケンスを構成できる</span></div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>ウェイトステップをプランの最初のステップにすることはできない</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ ドリルモードとリカバリモード</div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>同一のプランをドリル (訓練) と実際のリカバリの両方のモードで実行可能</span></div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>ドリルはソースサーバーや進行中のレプリケーションに影響を与えずに DR 準備状況を検証できる</span></div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>実行モードはプラン内のすべてのサーバーステップに適用される</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ 影響レベル (Impact Level) による失敗制御</div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>サーバーごとに Critical (デフォルト) または Optional を設定可能</span></div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>Critical サーバーの失敗はステップと実行全体を失敗させるが、Optional サーバーの失敗はプランを停止させない</span></div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>重要度に応じた柔軟な失敗ハンドリングが可能</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">5️⃣ 事前検証と再検証</div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>実行開始時にプラン内の全サーバーを検証し、1 台でも検証に失敗すると実行は即座に失敗し、サーバーは一切復旧されない (フェイルファスト)</span></div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>各サーバーステップの開始時点でも再検証が行われ、レプリケーションの停滞やリカバリポイントの削除などの状態変化を検出</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">6️⃣ リアルタイムモニタリングと介入操作</div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>実行中のプランの進捗をリアルタイムで追跡可能</span></div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>失敗したステップのリトライ、スキップ、実行のキャンセルが可能</span></div>
+      <div class="ba-item"><span class="mark arrow" style="color: var(--aws-orange);">→</span><span>プランが起動したリカバリインスタンスは Recovery instances ページに表示され、各リカバリジョブはジョブ履歴に記録される</span></div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📏 クォータ (数字で見る Recovery Plans)</h3>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">1,000</div>
+        <div class="stat-label">アカウント / リージョンあたりのプラン数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">20</div>
+        <div class="stat-label">プランあたりのステップ数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">100</div>
+        <div class="stat-label">プランあたりのソースサーバー数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">1〜120 分</div>
+        <div class="stat-label">ウェイトステップの待機時間</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">24 時間</div>
+        <div class="stat-label">単一実行の最大継続時間</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">1</div>
+        <div class="stat-label">プランあたりの同時実行数</div>
+      </div>
+    </div>
+    <p style="font-size: 13px;">💡 同時リカバリジョブ数やアカウントあたりのソースサーバー数など、個々のリカバリに適用される AWS DRS のサービスクォータは、プランが開始するリカバリにも同様に適用されます。</p>
+
+    <h3>⚙️ 実行の仕組み</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>実行のスコープ</td><td>プランとソースサーバーは同一の AWS アカウント・リージョン内である必要がある</td></tr>
+      <tr><td>実行のスナップショット</td><td>実行はプランのポイントインタイムコピーであり、実行開始後のプラン編集は進行中の実行に影響しない</td></tr>
+      <tr><td>実行モード</td><td>DRILL または RECOVERY</td></tr>
+      <tr><td>リカバリポイント</td><td>サーバーごとに特定のリカバリポイント (pit- プレフィックスの ID) を指定可能。省略時は最新データから復旧</td></tr>
+      <tr><td>タイムアウト</td><td>実行が 24 時間以内に完了しない場合、実行中のステップは TIMED_OUT となり以降のステップは実行されない (進行中のリカバリジョブは完了まで実行される)</td></tr>
+      <tr><td>起動設定</td><td>個別リカバリと同じ復旧プロセス、起動設定、起動テンプレート、ポストローンチアクションが適用される</td></tr>
+    </table>
+
+    <h3>💻 CLI コマンド例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">ドリルモードでリカバリプランを実行</span>
+      </div>
+      <pre><code class="language-bash">aws drs start-recovery-plan-execution \
+    --recovery-plan-arn &lt;PLAN_ARN&gt; \
+    --mode DRILL</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">特定のリカバリポイントを指定して復旧</span>
+      </div>
+      <pre><code class="language-bash">aws drs start-recovery-plan-execution \
+    --recovery-plan-arn &lt;PLAN_ARN&gt; \
+    --mode RECOVERY \
+    --source-servers '[
+        {"sourceServerID": "s-1234567890abcdef1", "recoverySnapshotID": "pit-1234567890abcdef1"}
+    ]'</code></pre>
+    </div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span><code>recoverySnapshotID</code> は AWS DRS のリカバリポイント ID (pit- プレフィックス、21 文字) であり、Amazon EBS スナップショット ID (snap- プレフィックス) とは異なる点に注意が必要です。</span></div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS DRS のアカウント初期化が完了していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>対象のソースサーバーが AWS DRS でレプリケーションされていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>プランに含めるすべてのソースサーバーが、プランと同一の AWS アカウント・リージョンにあること</span></div>
+
+    <h3>📝 手順</h3>
+    <div class="step-list">
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">リカバリプランの作成</div>
+          <p style="font-size: 14px; margin: 4px 0;">AWS DRS コンソールのナビゲーションペインで [Recovery plans] を選択し、新しいプランを作成します。プラン名はアカウント・リージョン内で一意である必要があります。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">ステップの追加と順序付け</div>
+          <p style="font-size: 14px; margin: 4px 0;">復旧順序に従ってサーバーステップを追加し、各ステップにソースサーバーを割り当てます。必要に応じてステップ間にウェイトステップ (1〜120 分) を挿入し、サーバーごとに影響レベル (Critical / Optional) を設定します。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">ドリルの実行</div>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">リカバリポイント確認とドリル実行</span>
+            </div>
+            <pre><code class="language-bash"># 利用可能なリカバリポイントを確認
+aws drs describe-recovery-snapshots \
+    --source-server-id s-1234567890abcdef1 \
+    --order DESC \
+    --max-results 5
+
+# ドリルモードでプランを実行
+aws drs start-recovery-plan-execution \
+    --recovery-plan-arn &lt;PLAN_ARN&gt; \
+    --mode DRILL</code></pre>
+          </div>
+          <p style="font-size: 14px; margin: 4px 0;">コンソールの場合は対象プランを選択し、[Execute recovery plan] から [Drill] を選択します。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">実行のモニタリングとクリーンアップ</div>
+          <p style="font-size: 14px; margin: 4px 0;">実行の進捗をリアルタイムで監視し、必要に応じてリトライ、スキップ、キャンセルを行います。ドリル完了後は、起動されたドリルインスタンスを Recovery instances ページから必ず終了 (ターミネート) します。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💪 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <div class="merit-title">💼 ビジネス面</div>
+        <div class="ba-item"><span class="mark check-icon">✓</span><span><strong>復旧時間 (RTO) の短縮</strong>: 手動での順次起動が不要になり、依存関係を守りながら最大限の並列化で復旧できるため、アプリケーション全体の復旧時間が短縮される</span></div>
+        <div class="ba-item"><span class="mark check-icon">✓</span><span><strong>オペレーションミスの排除</strong>: 災害時の高ストレス環境下での手動オペレーションによる起動順序の誤りなど、人為的ミスを排除できる</span></div>
+        <div class="ba-item"><span class="mark check-icon">✓</span><span><strong>DR 訓練の定期実施が容易に</strong>: ワンアクションでドリルを実行できるため、DR 準備状況の定期的な検証が容易になり、コンプライアンス要件への対応も効率化される</span></div>
+      </div>
+      <div class="merit-box">
+        <div class="merit-title">🔬 技術面</div>
+        <div class="ba-item"><span class="mark check-icon">✓</span><span><strong>依存関係の担保</strong>: 各ステップの全サーバーの完了を待ってから次のステップに進むため、データベース → アプリケーション → Web という起動順序を確実に守れる</span></div>
+        <div class="ba-item"><span class="mark check-icon">✓</span><span><strong>事前検証によるフェイルファスト</strong>: 実行開始時に全サーバーを検証し、問題があれば 1 台も復旧せずに即座に失敗するため、中途半端な復旧状態を回避できる</span></div>
+        <div class="ba-item"><span class="mark check-icon">✓</span><span><strong>既存設定との一貫性</strong>: プランによるリカバリは個別リカバリと同じ起動設定、起動テンプレート、ポストローンチアクションを使用するため、既存の DRS 設定をそのまま活用できる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>🚧 制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>プラン内のすべてのソースサーバーは、プランと同一の AWS アカウント・リージョンに存在する必要がある (クロスアカウント / クロスリージョンのオーケストレーションは不可)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>プランあたり最大 20 ステップ、100 ソースサーバー、同時実行は 1 つまで</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>実行は開始から 24 時間以内に完了する必要があり、タイムアウトした実行は再開できない (新しい実行を開始するか、残りのサーバーを個別に復旧する)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>ウェイトステップをプランの最初のステップにすることはできない</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>プランが起動したインスタンス (ドリルインスタンスを含む) は自動では終了・クリーンアップされず、終了するまで Amazon EC2 や Amazon EBS などの料金が発生し続ける。プランは一度に最大 100 インスタンスを起動できるため、ドリル後のクリーンアップを徹底する必要がある</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>特定のリカバリポイントを指定 (ピン留め) した場合、そのポイントはステップ開始時点で再検証される。長いプランでは実行開始から数時間後にステップが実行されることがあり、その間にリカバリポイントが保持期間を過ぎて削除されるとステップが失敗する</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>ステップの所要時間は最も遅いサーバーに依存するため、サーバーステップとウェイトステップの合計が 24 時間の上限に収まるようにプランを設計する必要がある</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>あるソースサーバーが複数のプランに属している場合、他のプランの実行がそのサーバーを使用中だと新しい実行を開始できない</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🏢 ユースケース 1: 3 層 Web アプリケーションの DR 復旧自動化</div>
+      <p><span class="label">シナリオ</span>: オンプレミスで稼働するデータベース、アプリケーションサーバー、Web サーバーで構成される基幹システムを AWS DRS で保護している。災害時にはデータベース → アプリケーション → Web の順で復旧する必要がある。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Plan</span>
+          <span class="code-title">実装例: プラン構成</span>
+        </div>
+        <pre><code class="language-plaintext">ステップ 1: DB サーバー x 2 (Critical)
+ステップ 2: ウェイトステップ 10 分 (DB 初期化待ち)
+ステップ 3: アプリケーションサーバー x 4 (Critical)
+ステップ 4: ウェイトステップ 5 分
+ステップ 5: Web サーバー x 4 (Critical)、監視エージェントサーバー x 1 (Optional)</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 災害時にワンアクションで正しい順序の復旧が実行され、手順書ベースの手動オペレーションと比較して復旧時間を大幅に短縮し、順序ミスによる復旧失敗を防止できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🏦 ユースケース 2: 定期的な DR ドリルによる復旧手順の検証</div>
+      <p><span class="label">シナリオ</span>: 金融機関のコンプライアンス要件として、四半期ごとに DR 訓練を実施し、復旧手順の有効性を証明する必要がある。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">四半期ごとのドリル実行</span>
+        </div>
+        <pre><code class="language-bash"># 四半期ごとのドリル実行
+aws drs start-recovery-plan-execution \
+    --recovery-plan-arn arn:aws:drs:ap-northeast-1:123456789012:recovery-plan/plan-example \
+    --mode DRILL
+
+# ドリル完了後、リカバリインスタンスを確認・検証してからターミネート</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 本番のソースサーバーやレプリケーションに影響を与えずに、実際の復旧と同じプランを検証できる。訓練の実行がワンアクションになるため訓練の頻度を上げやすく、実行履歴が監査証跡としても活用できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🛡️ ユースケース 3: 特定時点のリカバリポイントを使用したランサムウェア対策復旧</div>
+      <p><span class="label">シナリオ</span>: ランサムウェア感染が判明し、感染前の特定時点のデータからアプリケーション全体を正しい順序で復旧したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">感染前のリカバリポイントから復旧</span>
+        </div>
+        <pre><code class="language-bash"># 感染前のリカバリポイントを特定
+aws drs describe-recovery-snapshots \
+    --source-server-id s-1234567890abcdef1 \
+    --order DESC
+
+# 特定のリカバリポイントを指定してプランを実行
+aws drs start-recovery-plan-execution \
+    --recovery-plan-arn &lt;PLAN_ARN&gt; \
+    --mode RECOVERY \
+    --source-servers '[
+        {"sourceServerID": "s-1234567890abcdef1", "recoverySnapshotID": "pit-1234567890abcdef1"}
+    ]'</code></pre>
+      </div>
+      <p><span class="label">効果</span>: サーバーごとに感染前のクリーンなリカバリポイントを指定しつつ、アプリケーション全体を依存関係に従った順序で一括復旧できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>Recovery Plans 機能自体は<span class="highlight">追加料金なし</span>で利用できます。AWS DRS の標準料金 (ソースサーバーごとの時間課金) に加え、以下の点に注意が必要です。</p>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>プランが起動したリカバリインスタンスおよびドリルインスタンスには、Amazon EC2、Amazon EBS などの関連料金が発生する</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>起動されたインスタンスは実行の完了・キャンセル・タイムアウト後も自動では終了されないため、手動で終了するまで課金が継続する</span></div>
+    <p style="font-size: 14px;">詳細は <a href="https://aws.amazon.com/disaster-recovery/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Elastic Disaster Recovery 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>🗺️ AWS Elastic Disaster Recovery が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。</p>
+  </div>
+
+  <!-- 関連サービス・機能 -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🚀 AWS DRS ポストローンチアクション</div>
+      <p style="font-size: 14px; margin: 4px 0;">プランによるリカバリでも、ソースサーバーに設定済みのポストローンチアクションが個別リカバリと同様に実行される。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📄 AWS DRS 起動設定・起動テンプレート</div>
+      <p style="font-size: 14px; margin: 4px 0;">プランは個別リカバリと同じ起動設定と EC2 起動テンプレートを使用するため、既存の設定がそのまま適用される。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌐 ARC Region switch</div>
+      <p style="font-size: 14px; margin: 4px 0;">マルチリージョンのフェイルオーバーオーケストレーションを提供するサービス。Recovery Plans は単一アカウント・リージョン内の DRS サーバー復旧の順序制御に特化している点で補完関係にある。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🧪 AWS Elastic Disaster Recovery のドリル機能</div>
+      <p style="font-size: 14px; margin: 4px 0;">従来からの個別サーバー単位のドリルに加え、プラン単位でのドリル実行が可能になった。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>Recovery Plans により、AWS DRS を利用した多層アプリケーションの復旧が、手動の順次オペレーションから<span class="highlight">ワンアクションの自動オーケストレーション</span>へと進化しました。追加料金なしで利用できるため、AWS DRS を利用中のすべてのユーザーにとって導入価値の高いアップデートです。</p>
+    <div class="check-item"><span class="check-icon">✓</span><span>まずは既存のソースサーバーで復旧順序をプラン化する</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ドリルモードで定期的に検証するワークフローを確立する</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ドリル後のインスタンスのクリーンアップは忘れずに実施する</span></div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li>📰 <a href="https://aws.amazon.com/about-aws/whats-new/2026/08/elastic-disaster-recovery-plans/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): AWS Elastic Disaster Recovery - Recovery Plans</a></li>
+      <li>📖 <a href="https://docs.aws.amazon.com/drs/latest/userguide/recovery-plans.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Orchestrating recovery with recovery plans</a></li>
+      <li>📖 <a href="https://docs.aws.amazon.com/drs/latest/userguide/recovery-plans-executing.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Running a recovery plan</a></li>
+      <li>📖 <a href="https://docs.aws.amazon.com/drs/latest/userguide/recovery-plans-quotas.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Recovery plan quotas</a></li>
+      <li>💰 <a href="https://aws.amazon.com/disaster-recovery/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Elastic Disaster Recovery 料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-08-27-elastic-disaster-recovery-plans.md) を基に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
