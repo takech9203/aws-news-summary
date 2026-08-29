@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon CloudWatch エージェントが journald ログの収集をサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  background: linear-gradient(135deg, var(--aws-dark-squid) 0%, #2d3f52 100%);
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 153, 0, 0.4);
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+}
+
+.header-meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: var(--aws-light-gray);
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 12px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.ba-card {
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-title { color: #FF8A65; }
+.ba-after .ba-title { color: #81C784; }
+
+.ba-card ul { margin: 0; padding-left: 4px; list-style: none; }
+.ba-card li {
+  margin: 8px 0;
+  padding-left: 22px;
+  position: relative;
+  font-size: 14px;
+}
+.ba-before li::before { content: "✗"; position: absolute; left: 0; color: #FF8A65; font-weight: 700; }
+.ba-after li::before { content: "✓"; position: absolute; left: 0; color: #81C784; font-weight: 700; }
+
+/* Feature cards */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 16px 20px;
+  margin: 14px 0;
+}
+
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.feature-card ul { margin: 0; padding-left: 20px; font-size: 14px; }
+.feature-card li { margin: 4px 0; }
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+
+.table-wrap { overflow-x: auto; }
+
+code.inline {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.badge-required {
+  display: inline-block;
+  background: rgba(209, 50, 18, 0.25);
+  color: #FF8A65;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+.badge-optional {
+  display: inline-block;
+  background: rgba(0, 161, 201, 0.2);
+  color: #4FC3F7;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid { display: flex; justify-content: center; }
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.25);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Steps */
+.step {
+  display: flex;
+  gap: 16px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+/* Benefit / merit grid */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+
+.merit-col {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.merit-col h3 { margin-top: 0; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.check-icon { color: #81C784; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A65; font-size: 16px; flex-shrink: 0; }
+
+/* Use cases */
+.usecase {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.1) 0%, rgba(255, 153, 0, 0.04) 100%);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px 22px;
+  margin: 16px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label { font-weight: 700; color: var(--aws-white); }
+
+/* Priority levels */
+.priority-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 16px 0;
+}
+
+.priority-level {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  text-align: center;
+  flex: 1;
+  min-width: 70px;
+}
+
+.p-critical { background: rgba(209, 50, 18, 0.35); color: #FFAB91; border: 1px solid rgba(209, 50, 18, 0.7); }
+.p-warn { background: rgba(255, 153, 0, 0.25); color: var(--aws-smile-orange); border: 1px solid rgba(255, 153, 0, 0.6); }
+.p-info { background: rgba(0, 161, 201, 0.2); color: #4FC3F7; border: 1px solid rgba(0, 161, 201, 0.6); }
+.p-debug { background: rgba(140, 79, 255, 0.2); color: #B39DDB; border: 1px solid rgba(140, 79, 255, 0.6); }
+
+/* Related services */
+.related-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 720px) {
+  .related-grid { grid-template-columns: 1fr; }
+}
+
+.related-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 14px 18px;
+  font-size: 14px;
+}
+
+.related-card .rc-title { font-weight: 700; color: var(--aws-teal); margin-bottom: 6px; }
+
+/* Region banner */
+.region-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.region-banner .globe { font-size: 32px; }
+
+/* Summary box */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15) 0%, rgba(255, 153, 0, 0.05) 100%);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 20px 24px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="service-badge">Amazon CloudWatch</div>
+    <h1>📓 CloudWatch エージェントが journald ログの収集をサポート</h1>
+    <div class="header-meta">
+      <span>📅 リリース日: 2026 年 8 月 28 日</span>
+      <span>🔧 機能: systemd journal (journald) ログのネイティブ収集</span>
+    </div>
+  </div>
+
+  <!-- Overview -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Amazon CloudWatch エージェントが、Linux インスタンス上の <span class="highlight">systemd journal (journald)</span> からログエントリを直接読み取り、CloudWatch Logs に送信できるようになりました。これまで必要だった<span class="highlight">ディスク上のファイルへの書き出しが不要</span>になります。</p>
+    <p>Amazon Linux 2023 をはじめとする最近の Linux ディストリビューションでは journald が主要なロギングシステムであり、<code class="inline">/var/log/messages</code> などの従来型ログファイルは既定では作成されません。今回のアップデートにより、systemd unit、priority、プロセス情報といった<span class="highlight">構造化メタデータを保持したまま</span>ログを収集でき、正規表現フィルタによるノイズ削減とコスト制御も可能になります。</p>
+
+    <div class="before-after">
+      <div class="ba-card ba-before">
+        <div class="ba-title">😣 アップデート前の課題</div>
+        <ul>
+          <li>Amazon Linux 2023 などでは <code class="inline">/var/log/messages</code> が既定で作成されず、<code class="inline">files</code> 収集で直接扱えなかった</li>
+          <li>rsyslog の導入や <code class="inline">journalctl</code> によるファイルエクスポートなどの追加設定・運用が必要だった</li>
+          <li>ファイル経由の収集では systemd unit 名や priority などの構造化メタデータが失われやすかった</li>
+          <li>中間ファイルの書き出しによるディスク I/O やログローテーション管理の負担が発生していた</li>
+        </ul>
+      </div>
+      <div class="ba-card ba-after">
+        <div class="ba-title">😊 アップデート後の改善</div>
+        <ul>
+          <li>エージェントが systemd journal を直接読み取り、ファイル書き出しなしで CloudWatch Logs に送信</li>
+          <li>systemd unit、priority、プロセス情報などの構造化メタデータを保持したまま収集</li>
+          <li>systemd unit、priority レベル、journal フィールドマッチによる柔軟なフィルタリング</li>
+          <li>発行前の正規表現フィルタ (include / exclude) でノイズ削減と取り込みコストを最適化</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ: 従来との比較</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Before["従来: ファイルエクスポート経由"]
+        direction LR
+        J1[("📓 systemd journal")] --> E1["🔧 rsyslog や journalctl<br/>エクスポート設定"]
+        E1 --> F1["📄 /var/log 配下の<br/>ログファイル"]
+        F1 --> A1["⚙️ CloudWatch エージェント<br/>files 収集"]
+        A1 --> C1[("☁️ CloudWatch Logs")]
+    end
+
+    subgraph After["今回: journald ネイティブ読み取り"]
+        direction LR
+        J2[("📓 systemd journal")] --> A2["⚙️ CloudWatch エージェント<br/>journald セクション"]
+        A2 --> FL["🔍 フィルタリング<br/>units / priority / matches / 正規表現"]
+        FL --> C2[("☁️ CloudWatch Logs<br/>メタデータ保持")]
+    end
+
+    Before ~~~ After
+
+    classDef journal fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef legacy fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef agent fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef filter fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef logs fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class J1,J2 journal
+    class E1,F1 legacy
+    class A1,A2 agent
+    class FL filter
+    class C1,C2 logs
+    class Before,After boundary
+      </pre>
+    </div>
+    <p style="font-size: 14px;">従来はファイルへのエクスポートを挟む必要がありましたが、今回のアップデートによりエージェントが journald を直接読み取り、フィルタリングを適用した上でメタデータを保持したまま CloudWatch Logs に送信できます。</p>
+  </div>
+
+  <!-- Key features -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">📓 1. journald ログのネイティブ収集</div>
+      <ul>
+        <li>Linux インスタンス上の systemd journal からログエントリを直接読み取り、CloudWatch Logs に送信</li>
+        <li>ディスク上のファイルへの中間書き出しが不要</li>
+        <li>エージェント設定ファイルに <code class="inline">journald</code> セクションを追加するだけで有効化可能</li>
+        <li>エージェント再起動時は、最後に収集した journal エントリから収集を再開 (過去のログは遡って収集しない)</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🏷️ 2. 構造化メタデータの保持</div>
+      <ul>
+        <li>journald が記録する systemd unit、priority、プロセス情報などの構造化メタデータを保持</li>
+        <li><code class="inline">_UID</code>、<code class="inline">_PID</code>、<code class="inline">_SYSTEMD_UNIT</code> などの trusted フィールドを活用したフィルタリングが可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🔍 3. 柔軟なフィルタリング機能</div>
+      <ul>
+        <li><code class="inline">units</code>: systemd unit 名の配列で対象を絞り込み。ワイルドカード対応 (例: <code class="inline">sshd*</code> は <code class="inline">sshd.service</code> と <code class="inline">sshd@1.service</code> にマッチ)</li>
+        <li><code class="inline">priority</code>: 収集する最小の priority レベルを指定 (指定レベル以上の重要度を収集)。既定は <code class="inline">info</code></li>
+        <li><code class="inline">matches</code>: journal フィールドのマッチ条件で絞り込み。同一オブジェクト内は AND 条件、複数オブジェクト間は OR 条件</li>
+        <li><code class="inline">filters</code>: 発行前に RE2 構文の正規表現で include / exclude フィルタを適用</li>
+        <li><code class="inline">units</code>、<code class="inline">priority</code>、<code class="inline">matches</code> を同一エントリで併用した場合はすべての条件を満たすエントリのみ収集</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Technical spec -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📋 journald セクションの設定項目</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>必須</th><th>詳細</th></tr>
+        <tr>
+          <td><code class="inline">collect_list</code></td>
+          <td><span class="badge-required">必須</span></td>
+          <td>収集対象の journal ログエントリの定義の配列</td>
+        </tr>
+        <tr>
+          <td><code class="inline">log_group_name</code></td>
+          <td><span class="badge-required">必須</span></td>
+          <td>送信先ロググループ名。<code class="inline">{instance_id}</code>、<code class="inline">{hostname}</code>、<code class="inline">{local_hostname}</code>、<code class="inline">{ip_address}</code> の変数を利用可能</td>
+        </tr>
+        <tr>
+          <td><code class="inline">log_stream_name</code></td>
+          <td><span class="badge-optional">任意</span></td>
+          <td>ログストリーム名。省略時はグローバル <code class="inline">logs</code> セクションの値、さらに既定値 <code class="inline">{instance_id}</code> にフォールバック</td>
+        </tr>
+        <tr>
+          <td><code class="inline">units</code></td>
+          <td><span class="badge-optional">任意</span></td>
+          <td>収集対象の systemd unit 名の配列。ワイルドカード対応。省略時は全 unit を収集</td>
+        </tr>
+        <tr>
+          <td><code class="inline">priority</code></td>
+          <td><span class="badge-optional">任意</span></td>
+          <td>収集する最小 priority レベル。有効値: <code class="inline">emerg</code>、<code class="inline">alert</code>、<code class="inline">crit</code>、<code class="inline">err</code>、<code class="inline">warning</code>、<code class="inline">notice</code>、<code class="inline">info</code>、<code class="inline">debug</code>。既定は <code class="inline">info</code></td>
+        </tr>
+        <tr>
+          <td><code class="inline">matches</code></td>
+          <td><span class="badge-optional">任意</span></td>
+          <td>journal フィールドのマッチオブジェクトの配列。フィールド名は大文字・小文字を区別</td>
+        </tr>
+        <tr>
+          <td><code class="inline">filters</code></td>
+          <td><span class="badge-optional">任意</span></td>
+          <td><code class="inline">type</code> (<code class="inline">include</code> / <code class="inline">exclude</code>) と <code class="inline">expression</code> (RE2 構文の正規表現) による発行前フィルタ</td>
+        </tr>
+        <tr>
+          <td><code class="inline">retention_in_days</code></td>
+          <td><span class="badge-optional">任意</span></td>
+          <td>ロググループの保持期間。1〜3653 の定義済みの値から選択。<code class="inline">logs:PutRetentionPolicy</code> 権限が必要</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>📶 priority レベルの対応</h3>
+    <div class="priority-bar">
+      <div class="priority-level p-critical">emerg 0</div>
+      <div class="priority-level p-critical">alert 1</div>
+      <div class="priority-level p-critical">crit 2</div>
+      <div class="priority-level p-critical">err 3</div>
+      <div class="priority-level p-warn">warning 4</div>
+      <div class="priority-level p-warn">notice 5</div>
+      <div class="priority-level p-info">info 6</div>
+      <div class="priority-level p-debug">debug 7</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <tr><th>priority 指定</th><th>収集されるレベル</th></tr>
+        <tr><td><code class="inline">err</code></td><td><code class="inline">emerg</code> (0)、<code class="inline">alert</code> (1)、<code class="inline">crit</code> (2)、<code class="inline">err</code> (3)</td></tr>
+        <tr><td><code class="inline">info</code> (既定)</td><td><code class="inline">info</code> 以上 (<code class="inline">debug</code> を除くすべて)</td></tr>
+        <tr><td><code class="inline">debug</code></td><td>すべてのレベル</td></tr>
+      </table>
+    </div>
+
+    <h3>📝 設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">amazon-cloudwatch-agent.json の journald 設定</span>
+      </div>
+      <pre><code class="language-json">{
+  "logs": {
+    "logs_collected": {
+      "journald": {
+        "collect_list": [
+          {
+            "log_group_name": "journald-all-logs",
+            "log_stream_name": "{instance_id}",
+            "retention_in_days": 7
+          },
+          {
+            "log_group_name": "journald-errors",
+            "log_stream_name": "{instance_id}",
+            "priority": "err",
+            "retention_in_days": 7
+          },
+          {
+            "log_group_name": "journald-sshd",
+            "log_stream_name": "{instance_id}",
+            "units": ["sshd"],
+            "filters": [
+              { "type": "include", "expression": ".*user.*" },
+              { "type": "exclude", "expression": ".*successful.*" }
+            ],
+            "retention_in_days": 7
+          }
+        ]
+      }
+    }
+  }
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- Setup -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>最新バージョンの CloudWatch エージェントに更新済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>インスタンスに CloudWatch Logs への書き込み権限 (<code class="inline">CloudWatchAgentServerPolicy</code> など) を持つ IAM ロールがアタッチされていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>エージェントを root 以外のユーザーで実行する場合、そのユーザーが <code class="inline">systemd-journal</code> グループに所属していること (journal の読み取りに必要)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>SELinux 環境では amazon-cloudwatch-agent-selinux ポリシーのバージョン 1.1.0 以降が必要</span></div>
+
+    <h3>📋 手順</h3>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">CloudWatch エージェントを最新バージョンに更新</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">sudo yum update amazon-cloudwatch-agent</code></pre>
+        </div>
+        <p>journald サポートを利用するには最新のエージェントバージョンが必要です。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">エージェント設定ファイルに journald セクションを追加</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">sudo vi /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json</code></pre>
+        </div>
+        <p><code class="inline">logs.logs_collected</code> 配下に <code class="inline">journald</code> セクションを追加し、<code class="inline">collect_list</code> に送信先ロググループやフィルタ条件を定義します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">エージェントを再起動して設定を反映</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json</code></pre>
+        </div>
+        <p>新しい設定ファイルを読み込んで再起動すると、journald のログエントリが CloudWatch Logs に送信され始めます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">CloudWatch Logs でログを確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">aws logs tail journald-all-logs --follow</code></pre>
+        </div>
+        <p>AWS CLI の <code class="inline">logs tail</code> コマンドで、指定したロググループにログが到着していることを確認します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Merits -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-col">
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: journal のファイルエクスポート設定や rsyslog の導入・維持が不要になり、ロギング基盤の構築・運用工数を削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ログコストの最適化</strong>: priority や正規表現によるフィルタリングで不要なログの取り込みを抑制し、取り込み・保存コストを制御</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス対応の強化</strong>: sshd や systemd-logind などのセキュリティ関連 unit のログを確実に一元収集でき、監査要件への対応が容易に</span></div>
+      </div>
+      <div class="merit-col">
+        <h3>⚙️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>メタデータの保持</strong>: systemd unit、priority、プロセス情報が失われず、CloudWatch Logs Insights などでの分析精度が向上</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ディスク I/O の削減</strong>: 中間ファイルへの書き出しが不要になり、ディスク使用量とログローテーション管理の負担が軽減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>モダンディストリビューションとの親和性</strong>: Amazon Linux 2023 など journald 中心の環境で、追加設定なしにシステムログを収集</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Constraints -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="merit-grid">
+      <div class="merit-col">
+        <h3>🚫 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>Linux インスタンス専用の機能であり、Windows では利用できない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>エージェントは再起動時に最後に収集したエントリから再開するため、過去 (履歴) の journal エントリは収集されない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>正規表現フィルタの構文はエージェントによって検証されないため、非効率な正規表現による性能低下 (ReDoS) に注意が必要</span></div>
+      </div>
+      <div class="merit-col">
+        <h3>🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>root 以外のユーザーでエージェントを実行する場合、<code class="inline">systemd-journal</code> グループへの追加が必要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span><code class="inline">retention_in_days</code> を既存ロググループに設定すると、保持期間より古いログが削除されるため注意</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>journal フィールド名は大文字・小文字が区別され、trusted フィールドは <code class="inline">_UID</code> のようにアンダースコア始まりの大文字表記が一般的</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>複数のフィルタを使用する場合、除外率の高いフィルタを先に配置すると処理効率が向上</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Use cases -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🐧 ユースケース 1: Amazon Linux 2023 のシステムログ一元管理</div>
+      <p><span class="label">シナリオ</span>: Amazon Linux 2023 に移行したところ <code class="inline">/var/log/messages</code> が存在せず、これまでのファイルベースのログ収集設定が機能しなくなった。追加のエクスポート設定なしでシステムログを CloudWatch Logs に集約したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-json">"journald": {
+  "collect_list": [
+    {
+      "log_group_name": "/ec2/al2023/system",
+      "log_stream_name": "{instance_id}",
+      "retention_in_days": 30
+    }
+  ]
+}</code></pre>
+      </div>
+      <p><span class="label">効果</span>: rsyslog の導入や journal のエクスポート設定なしで、すべての systemd journal ログを CloudWatch Logs に集約でき、移行後の運用がシンプルになる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">💰 ユースケース 2: エラーログのみの選別収集によるコスト最適化</div>
+      <p><span class="label">シナリオ</span>: 大規模なフリートで全ログを取り込むとコストが増大するため、障害調査に必要なエラーレベル以上のログのみを収集したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-json">"journald": {
+  "collect_list": [
+    {
+      "log_group_name": "/ec2/fleet/errors",
+      "log_stream_name": "{instance_id}",
+      "priority": "err",
+      "retention_in_days": 90
+    }
+  ]
+}</code></pre>
+      </div>
+      <p><span class="label">効果</span>: <code class="inline">emerg</code> から <code class="inline">err</code> までの重要度の高いログのみが取り込まれ、CloudWatch Logs の取り込みコストを抑えつつ障害検知・調査に必要な情報を確保できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔒 ユースケース 3: SSH アクセス監査ログの選別収集</div>
+      <p><span class="label">シナリオ</span>: セキュリティ監査のために sshd のログを収集したいが、成功ログなどのノイズを除外して監査対象のイベントに絞り込みたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-json">"journald": {
+  "collect_list": [
+    {
+      "log_group_name": "/security/sshd-audit",
+      "log_stream_name": "{instance_id}",
+      "units": ["sshd"],
+      "filters": [
+        { "type": "include", "expression": ".*user.*" },
+        { "type": "exclude", "expression": ".*successful.*" }
+      ],
+      "retention_in_days": 365
+    }
+  ]
+}</code></pre>
+      </div>
+      <p><span class="label">効果</span>: sshd の unit に限定した上で正規表現フィルタによりノイズを除外し、監査に必要なログのみを長期保存できる。</p>
+    </div>
+  </div>
+
+  <!-- Pricing & regions -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>CloudWatch エージェントの journald サポート自体に<span class="highlight">追加料金はありません</span>。取り込まれたログに対して、標準の Amazon CloudWatch Logs の料金 (取り込み、保存、分析) が適用されます。</p>
+    <p style="font-size: 14px;">フィルタリング機能を活用して取り込むログ量を絞り込むことで、コストを制御できます。詳細は <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon CloudWatch 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <div class="region-banner">
+      <span class="globe">🌐</span>
+      <span>すべての <strong style="color: var(--aws-white);">AWS 商用リージョン</strong>および <strong style="color: var(--aws-white);">AWS GovCloud (US)</strong> リージョンで利用可能です。</span>
+    </div>
+  </div>
+
+  <!-- Related services -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="related-card">
+        <div class="rc-title">☁️ Amazon CloudWatch Logs</div>
+        journald ログの送信先。Logs Insights によるクエリ分析、メトリクスフィルタ、サブスクリプションフィルタと組み合わせて活用できる
+      </div>
+      <div class="related-card">
+        <div class="rc-title">🛠️ AWS Systems Manager</div>
+        エージェント設定ファイルを SSM パラメータストアで管理し、Run Command でフリート全体に設定を配布できる
+      </div>
+      <div class="related-card">
+        <div class="rc-title">🖥️ Amazon EC2 / Amazon Linux 2023</div>
+        journald を主要ロギングシステムとして採用しており、本機能の主な対象環境
+      </div>
+      <div class="related-card">
+        <div class="rc-title">🔍 Amazon CloudWatch Logs Insights</div>
+        収集したログの検索・分析に利用でき、保持されたメタデータを活用した調査が可能
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin-top: 0;">CloudWatch エージェントが journald をネイティブにサポートしたことで、Amazon Linux 2023 などのモダンな Linux ディストリビューションにおける<span class="highlight">ログ収集の追加設定が不要</span>になり、<span class="highlight">構造化メタデータを保持したまま</span>システムログを CloudWatch Logs に集約できるようになりました。</p>
+      <p>unit、priority、フィールドマッチ、正規表現による多層的なフィルタリングは<span class="highlight">ログ量とコストの制御</span>にも有効です。Amazon Linux 2023 を利用中でファイルエクスポート経由のログ収集を行っている場合は、エージェントを最新バージョンに更新し、<code class="inline">journald</code> セクションへの移行を検討することを推奨します。</p>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-cloudwatch-agent-journald/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-cloudwatch-agent-journald/</a></li>
+      <li>ドキュメント: CloudWatch エージェント設定ファイルの手動作成・編集: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Agent-Configuration-File-Details.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Agent-Configuration-File-Details.html</a></li>
+      <li>料金ページ: Amazon CloudWatch Pricing: <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/cloudwatch/pricing/</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-08-28) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

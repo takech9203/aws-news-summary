@@ -5,6 +5,13 @@
 
 ## 2026 年
 
+- [2026-08-28 - Amazon EC2 - C8gn インスタンスが欧州 (パリ) リージョンで利用可能に](2026/2026-08-28-amazon-ec2-c8gn-europe-paris.md)
+- [2026-08-28 - Amazon EC2 P6-B300 インスタンス - Asia Pacific (Hyderabad) および South America (Sao Paulo) リージョンでの提供開始](2026/2026-08-28-amazon-ec2-p6-b300-instances-available-additional-regions.md)
+- [2026-08-28 - Amazon Bedrock AgentCore Memory - 柔軟な namespace 変数のサポート](2026/2026-08-28-agentcorememory-flexible-namespaces.md)
+- [2026-08-28 - AWS Transform - FedRAMP Class C 対象範囲に追加](2026/2026-08-28-aws-transform-fedramp-class-c.md)
+- [2026-08-28 - Amazon Aurora MySQL 3.13 - MySQL 8.0.45 互換の一般提供開始](2026/2026-08-28-amazon-aurora-mysql-313-available.md)
+- [2026-08-28 - Amazon Bedrock AgentCore Memory - きめ細かなアクセス制御 (FGAC) のサポート](2026/2026-08-28-agentcorememory-fine-grained-access-control.md)
+- [2026-08-28 - Amazon CloudWatch - CloudWatch エージェントが journald ログの収集をサポート](2026/2026-08-28-amazon-cloudwatch-agent-journald.md)
 - [2026-08-27 - Amazon Bedrock AgentCore - 提供リージョン拡大 (米国西部 北カリフォルニア、アジアパシフィック ハイデラバード)](2026/2026-08-27-bedrock-agentcore-two-new-regions.md)
 - [2026-08-27 - Kiro - サードパーティ拡張機能の互換性向上と MCP サインインの信頼性向上 (v1.0.395)](2026/2026-08-27-kiro-changelog-2026-08-27-ide.md)
 - [2026-08-27 - Amazon EC2 - X8i インスタンスの提供リージョン拡大 (欧州ミラノ、欧州スペイン)](2026/2026-08-27-amazon-ec2-x8i-europe-milan-spain.md)
