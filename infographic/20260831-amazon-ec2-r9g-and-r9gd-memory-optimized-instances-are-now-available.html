@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon EC2 R9g / R9gd メモリ最適化インスタンスの一般提供開始</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    .date-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-left: 8px;
+    }
+
+    h1 {
+      font-size: 34px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* 統計カード */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 20px 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    @media (max-width: 720px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 18px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 { color: #FF8A73; }
+    .after-box h3 { color: #7DCE6A; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li { margin: 6px 0; }
+
+    /* 機能カード */
+    .feature-card {
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .feature-card h3 {
+      margin: 0 0 8px 0;
+      font-size: 17px;
+      color: var(--aws-white);
+    }
+
+    .feature-card p, .feature-card ul {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .feature-card ul { padding-left: 20px; }
+    .feature-card li { margin: 4px 0; }
+
+    /* テーブル */
+    .table-wrapper { overflow-x: auto; margin: 16px 0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      min-width: 620px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.2);
+      color: var(--aws-orange);
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 2px solid var(--aws-orange);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 7px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      white-space: nowrap;
+    }
+
+    tr:hover td { background: rgba(255, 153, 0, 0.06); }
+
+    .table-note { font-size: 13px; color: var(--aws-light-gray); margin-top: 8px; }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 15px;
+    }
+
+    .check-icon { color: #7DCE6A; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+    /* ユースケース */
+    .usecase-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 18px;
+      margin: 14px 0;
+    }
+
+    .usecase-card h3 {
+      margin: 0 0 8px 0;
+      font-size: 17px;
+      color: var(--aws-orange);
+    }
+
+    .usecase-card p { margin: 6px 0; font-size: 14px; }
+
+    .usecase-label {
+      display: inline-block;
+      font-weight: 600;
+      color: var(--aws-white);
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid { display: flex; justify-content: center; }
+
+    .diagram-caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* リージョン */
+    .region-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .region-card {
+      background: rgba(0, 161, 201, 0.1);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    /* リンク */
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    .link-list { list-style: none; padding: 0; margin: 0; }
+    .link-list li { margin: 8px 0; font-size: 14px; }
+
+    /* 関連サービス */
+    .related-card {
+      background: rgba(140, 79, 255, 0.08);
+      border: 1px solid rgba(140, 79, 255, 0.35);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    .related-card strong { color: var(--aws-white); }
+
+    /* まとめ */
+    .summary-box {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 20px;
+      font-size: 15px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer p { margin: 6px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <span class="service-badge">Amazon EC2</span><span class="date-badge">📅 2026 年 8 月 31 日</span>
+      <h1>🚀 R9g / R9gd メモリ最適化インスタンスの一般提供開始</h1>
+      <div class="subtitle">AWS Graviton5 搭載 — 前世代比最大 25% の性能向上と Nitro Isolation Engine を初搭載</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        AWS は、最新世代のカスタム設計 CPU である <span class="highlight">AWS Graviton5</span> プロセッサを搭載したメモリ最適化インスタンス
+        <span class="highlight">Amazon EC2 R9g / R9gd</span> の一般提供を開始しました。
+        R9g は EBS ストレージのみ、R9gd はローカル NVMe SSD ストレージを備えたバリアントです。
+        第 6 世代 AWS Nitro System 上に構築され、形式検証によってワークロード分離を数学的に保証する
+        <span class="highlight">Nitro Isolation Engine</span> を初めて搭載したインスタンスです。
+      </p>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">+25%</div>
+          <div class="stat-label">コンピューティング性能<br>(R8g / R8gd 比)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">+30%</div>
+          <div class="stat-label">データベースの高速化</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">+35%</div>
+          <div class="stat-label">Web アプリ / 機械学習の高速化</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">5 倍</div>
+          <div class="stat-label">キャッシュ容量<br>(前世代比)</div>
+        </div>
+      </div>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before: R8g / R8gd (Graviton4) 世代の課題</h3>
+          <ul>
+            <li>高い性能が必要なワークロードはスケールアウトや上位サイズへの変更で対応する必要があった</li>
+            <li>キャッシュ容量やメモリ性能がボトルネックになるインメモリ DB / 分析では性能向上の選択肢が限られていた</li>
+            <li>ワークロード分離は従来の Nitro System に依存し、形式検証に基づく数学的な分離保証はなかった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ After: Graviton5 搭載 R9g / R9gd で実現</h3>
+          <ul>
+            <li>最大 25% 高い性能、DB で最大 30%、Web / ML で最大 35% の高速化</li>
+            <li>5 倍のキャッシュ容量と高速メモリで、メモリ集約型ワークロードの価格性能比が向上</li>
+            <li>Nitro Isolation Engine により形式検証でワークロード分離を数学的に保証</li>
+            <li>R9gd ではローカル NVMe SSD による低レイテンシーなブロックレベルストレージを利用可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph R9["🖥️ Amazon EC2 R9g / R9gd インスタンス"]
+        direction TB
+        subgraph CPU["⚙️ プロセッサ"]
+            G5["🚀 AWS Graviton5<br/>第 5 世代カスタム CPU<br/>5 倍のキャッシュ容量"]
+        end
+        subgraph Nitro["🛡️ 第 6 世代 AWS Nitro System"]
+            NIE["🔒 Nitro Isolation Engine<br/>形式検証による<br/>ワークロード分離保証"]
+        end
+        subgraph Storage["🗄️ ストレージ構成"]
+            direction LR
+            R9g["📦 R9g<br/>EBS のみ"]
+            R9gd["💾 R9gd<br/>ローカル NVMe SSD<br/>最大 3 x 3800 GB"]
+            R9g ~~~ R9gd
+        end
+    end
+
+    Workload(["👤 メモリ集約型ワークロード<br/>データベース / インメモリキャッシュ<br/>リアルタイム分析"]) --> R9
+    R9g --> EBS[("🪣 Amazon EBS<br/>最大 72 Gbps")]
+
+    classDef container fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef security fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class R9,CPU,Nitro,Storage container
+    class G5 compute
+    class NIE security
+    class R9g,R9gd storage
+    class EBS database
+    class Workload user
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        R9g / R9gd インスタンスの主要コンポーネント構成です。Graviton5 プロセッサと第 6 世代 Nitro System を基盤とし、R9g は EBS のみ、R9gd はローカル NVMe SSD を追加で備えています。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <h3>🧠 AWS Graviton5 プロセッサ</h3>
+        <ul>
+          <li>AWS が設計した第 5 世代のカスタム Arm ベース CPU</li>
+          <li>Graviton4 比で最大 25% 高いコンピューティング性能</li>
+          <li>前世代比 5 倍のキャッシュ容量と、クラウドのプロセッサインスタンスの中で最速クラスのメモリ性能</li>
+          <li>vCPU ごとの専用キャッシュ、常時有効なメモリ暗号化、ポインタ認証などのセキュリティ機能</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>📈 ワークロード別の性能向上</h3>
+        <ul>
+          <li>データベース: 最大 30% 高速化</li>
+          <li>Web アプリケーション: 最大 35% 高速化</li>
+          <li>機械学習 (推論): 最大 35% 高速化</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>🛡️ 第 6 世代 AWS Nitro System と Nitro Isolation Engine</h3>
+        <ul>
+          <li>Nitro Isolation Engine を初めて搭載したインスタンスファミリー</li>
+          <li>形式検証を用いて、他の顧客や AWS オペレーターからのワークロード分離を数学的に保証</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>💾 2 つのストレージバリアント</h3>
+        <ul>
+          <li><strong>R9g</strong>: EBS ストレージのみのモデル</li>
+          <li><strong>R9gd</strong>: ローカル NVMe SSD ブロックレベルストレージを搭載し、低レイテンシーなローカルストレージを必要とするワークロードに対応</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>📦 R9g インスタンス仕様 (EBS のみ)</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>インスタンスサイズ</th>
+              <th>vCPU</th>
+              <th>メモリ (GiB)</th>
+              <th>ネットワーク帯域 (Gbps)</th>
+              <th>EBS 帯域 (Gbps)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>r9g.medium</td><td>1</td><td>8</td><td>最大 15</td><td>最大 12</td></tr>
+            <tr><td>r9g.large</td><td>2</td><td>16</td><td>最大 15</td><td>最大 12</td></tr>
+            <tr><td>r9g.xlarge</td><td>4</td><td>32</td><td>最大 15</td><td>最大 12</td></tr>
+            <tr><td>r9g.2xlarge</td><td>8</td><td>64</td><td>最大 17</td><td>最大 12</td></tr>
+            <tr><td>r9g.4xlarge</td><td>16</td><td>128</td><td>最大 17</td><td>最大 12</td></tr>
+            <tr><td>r9g.8xlarge</td><td>32</td><td>256</td><td>17</td><td>12</td></tr>
+            <tr><td>r9g.12xlarge</td><td>48</td><td>384</td><td>25</td><td>18</td></tr>
+            <tr><td>r9g.16xlarge</td><td>64</td><td>512</td><td>34</td><td>24</td></tr>
+            <tr><td>r9g.24xlarge</td><td>96</td><td>768</td><td>50</td><td>36</td></tr>
+            <tr><td>r9g.48xlarge</td><td>192</td><td>1,536</td><td>100</td><td>72</td></tr>
+            <tr><td>r9g.metal-48xl</td><td>192</td><td>1,536</td><td>100</td><td>72</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>💾 R9gd インスタンス仕様 (ローカル NVMe SSD 搭載)</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>インスタンスサイズ</th>
+              <th>vCPU</th>
+              <th>メモリ (GiB)</th>
+              <th>NVMe SSD ストレージ</th>
+              <th>ネットワーク帯域 (Gbps)</th>
+              <th>EBS 帯域 (Gbps)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>r9gd.medium</td><td>1</td><td>8</td><td>1 x 59 GB</td><td>最大 15</td><td>最大 12</td></tr>
+            <tr><td>r9gd.large</td><td>2</td><td>16</td><td>1 x 118 GB</td><td>最大 15</td><td>最大 12</td></tr>
+            <tr><td>r9gd.xlarge</td><td>4</td><td>32</td><td>1 x 237 GB</td><td>最大 15</td><td>最大 12</td></tr>
+            <tr><td>r9gd.2xlarge</td><td>8</td><td>64</td><td>1 x 474 GB</td><td>最大 17</td><td>最大 12</td></tr>
+            <tr><td>r9gd.4xlarge</td><td>16</td><td>128</td><td>1 x 950 GB</td><td>最大 17</td><td>最大 12</td></tr>
+            <tr><td>r9gd.8xlarge</td><td>32</td><td>256</td><td>1 x 1,900 GB</td><td>17</td><td>12</td></tr>
+            <tr><td>r9gd.12xlarge</td><td>48</td><td>384</td><td>3 x 950 GB</td><td>25</td><td>18</td></tr>
+            <tr><td>r9gd.16xlarge</td><td>64</td><td>512</td><td>1 x 3,800 GB</td><td>34</td><td>24</td></tr>
+            <tr><td>r9gd.24xlarge</td><td>96</td><td>768</td><td>3 x 1,900 GB</td><td>50</td><td>36</td></tr>
+            <tr><td>r9gd.48xlarge</td><td>192</td><td>1,536</td><td>3 x 3,800 GB</td><td>100</td><td>72</td></tr>
+            <tr><td>r9gd.metal-48xl</td><td>192</td><td>1,536</td><td>3 x 3,800 GB</td><td>100</td><td>72</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="table-note">💡 メモリと vCPU の比率は R ファミリー標準の 8:1 (GiB / vCPU) です。</p>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>✅ 前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>AWS アカウントと EC2 インスタンスを起動するための IAM 権限があること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>対応リージョン (米国東部バージニア北部 / オハイオ、米国西部オレゴン、欧州フランクフルト) を使用すること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>Arm64 (aarch64) アーキテクチャに対応した AMI とアプリケーションを用意すること</span></div>
+
+      <div class="flow-diagram" style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 24px 0;">
+        <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">🔍 インスタンス<br>タイプ確認</div>
+        <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">📀 Arm64 AMI<br>取得</div>
+        <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">🚀 インスタンス<br>起動</div>
+      </div>
+
+      <h3>ステップ 1: 利用可能なインスタンスタイプの確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">利用可能な R9g / R9gd インスタンスタイプの一覧を取得</span>
+        </div>
+        <pre><code class="language-bash">aws ec2 describe-instance-type-offerings \
+  --region us-east-1 \
+  --filters "Name=instance-type,Values=r9g.*,r9gd.*" \
+  --query "InstanceTypeOfferings[].InstanceType" \
+  --output table</code></pre>
+      </div>
+
+      <h3>ステップ 2: Arm64 対応 AMI の確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">最新の Amazon Linux 2023 Arm64 AMI の ID を取得</span>
+        </div>
+        <pre><code class="language-bash">aws ssm get-parameters \
+  --names /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64 \
+  --region us-east-1 \
+  --query "Parameters[].Value" \
+  --output text</code></pre>
+      </div>
+
+      <h3>ステップ 3: インスタンスの起動</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">r9g.xlarge インスタンスを起動</span>
+        </div>
+        <pre><code class="language-bash">aws ec2 run-instances \
+  --region us-east-1 \
+  --instance-type r9g.xlarge \
+  --image-id ami-xxxxxxxxxxxxxxxxx \
+  --key-name my-key-pair \
+  --subnet-id subnet-xxxxxxxx \
+  --security-group-ids sg-xxxxxxxx</code></pre>
+      </div>
+      <p style="font-size: 14px;">💡 ローカル NVMe SSD が必要な場合は <span class="highlight">--instance-type r9gd.xlarge</span> のように R9gd を指定します。</p>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💪 メリット</h2>
+
+      <h3>💼 ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>価格性能比の向上</strong>: 前世代比で最大 25% 高い性能により、同等のワークロードをより少ないインスタンス数や小さいサイズで実行でき、コスト最適化につながる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な購入オプション</strong>: Savings Plans、オンデマンド、スポット、Dedicated Instances、Dedicated Hosts に対応し、ワークロード特性に応じたコスト戦略を選択可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>持続可能性</strong>: Graviton ベースのインスタンスはエネルギー効率に優れ、サステナビリティ目標への貢献が期待できる</span></div>
+
+      <h3>⚙️ 技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>メモリ性能の大幅向上</strong>: 5 倍のキャッシュ容量と高速なメモリにより、インメモリデータベースやキャッシュのレイテンシーとスループットが改善</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>強化された分離保証</strong>: Nitro Isolation Engine の形式検証により、マルチテナント環境におけるワークロード分離が数学的に保証される</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>幅広いソフトウェア対応</strong>: C/C++、Rust、Go、Java、Python、.NET Core、Node.js、Ruby、PHP などの主要言語と、EKS / ECS などのコンテナ環境で利用可能</span></div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>🚫 制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>提供リージョンは現時点で米国東部 (バージニア北部、オハイオ)、米国西部 (オレゴン)、欧州 (フランクフルト) の 4 リージョンに限定され、東京リージョンでは未提供</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>Arm64 アーキテクチャのため、x86 専用のバイナリやライブラリに依存するワークロードはそのまま移行できない</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>R9gd のローカル NVMe SSD はインスタンスの停止や終了でデータが失われるエフェメラルストレージである</span></div>
+
+      <h3>🤔 考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>既存の R8g / R7g からの移行時は、性能向上と料金差を比較して費用対効果を検証することを推奨</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>サードパーティ製の商用ソフトウェアを使用している場合、Arm64 対応状況とライセンス条件を事前に確認する必要がある</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase-card">
+        <h3>1️⃣ 大規模インメモリデータベースの高速化</h3>
+        <p><span class="usecase-label">シナリオ</span>: Redis や Valkey、Memcached などのインメモリキャッシュ、または SAP HANA 以外のオープンソースインメモリデータベースを R7g / R8g で運用しており、キャッシュヒット時のレイテンシーとスループットをさらに改善したい。</p>
+        <p><span class="usecase-label">実装例</span>: r9g.16xlarge (64 vCPU / 512 GiB) 上で Valkey クラスターを構成し、既存の r8g.16xlarge クラスターから順次切り替え。</p>
+        <p><span class="usecase-label">効果</span>: 5 倍のキャッシュ容量と高速メモリにより、データベースワークロードで最大 30% の性能向上が期待でき、同一性能要件であればノード数削減によるコスト最適化も可能。</p>
+      </div>
+
+      <div class="usecase-card">
+        <h3>2️⃣ ローカル NVMe を活用したリアルタイム分析</h3>
+        <p><span class="usecase-label">シナリオ</span>: Apache Spark や ClickHouse などの分散リアルタイム分析基盤で、シャッフルデータや中間データの書き込みに低レイテンシーなローカルストレージが必要。</p>
+        <p><span class="usecase-label">実装例</span>: r9gd.12xlarge (48 vCPU / 384 GiB / 3 x 950 GB NVMe) をワーカーノードとして使用し、NVMe SSD をシャッフル領域に割り当て。</p>
+        <p><span class="usecase-label">効果</span>: ローカル NVMe SSD により EBS を経由しない低レイテンシー I/O を実現し、分析ジョブの実行時間短縮が期待できる。</p>
+      </div>
+
+      <div class="usecase-card">
+        <h3>3️⃣ コンテナ化されたメモリ集約型マイクロサービス</h3>
+        <p><span class="usecase-label">シナリオ</span>: Amazon EKS 上で稼働するメモリ集約型のマイクロサービス群のコスト効率と性能を改善したい。</p>
+        <p><span class="usecase-label">実装例</span>: EKS マネージドノードグループに r9g.2xlarge の Arm64 ノードを追加し、マルチアーキテクチャイメージで段階的に移行。</p>
+        <p><span class="usecase-label">効果</span>: Web アプリケーションで最大 35% の性能向上により、Pod あたりの処理能力が向上し、ノード数の削減とコスト最適化が期待できる。</p>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>
+        R9g / R9gd インスタンスは、<span class="highlight">Savings Plans</span>、<span class="highlight">オンデマンド</span>、<span class="highlight">スポットインスタンス</span>、<span class="highlight">Dedicated Instances</span>、<span class="highlight">Dedicated Hosts</span> で購入できます。
+        料金はリージョンとサイズにより異なるため、最新の情報は <a href="https://aws.amazon.com/ec2/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon EC2 料金ページ</a> を参照してください。
+      </p>
+    </div>
+
+    <!-- 利用可能リージョン -->
+    <div class="section">
+      <h2>🌏 利用可能リージョン</h2>
+      <div class="region-grid">
+        <div class="region-card">🇺🇸 米国東部<br>(バージニア北部)</div>
+        <div class="region-card">🇺🇸 米国東部<br>(オハイオ)</div>
+        <div class="region-card">🇺🇸 米国西部<br>(オレゴン)</div>
+        <div class="region-card">🇩🇪 欧州<br>(フランクフルト)</div>
+      </div>
+      <p style="font-size: 14px;">⚠️ 東京リージョンでは現時点で未提供です。</p>
+    </div>
+
+    <!-- 関連サービス・機能 -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="related-card"><strong>🧠 AWS Graviton</strong>: AWS が設計する Arm ベースプロセッサファミリー。Graviton5 は C9g などの他ファミリーにも展開が見込まれる</div>
+      <div class="related-card"><strong>🛡️ AWS Nitro System</strong>: EC2 の仮想化基盤。第 6 世代では Nitro Isolation Engine による形式検証ベースの分離保証が追加</div>
+      <div class="related-card"><strong>🪣 Amazon EBS</strong>: R9g のプライマリストレージ。最大 72 Gbps の EBS 帯域に対応</div>
+      <div class="related-card"><strong>📦 Amazon EKS / ECS</strong>: R9g / R9gd を Arm64 ノードとして利用可能なコンテナオーケストレーションサービス</div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <div class="summary-box">
+        Graviton5 を搭載した R9g / R9gd インスタンスは、前世代比 <span class="highlight">最大 25% の性能向上</span> と <span class="highlight">5 倍のキャッシュ容量</span> により、メモリ集約型ワークロードの価格性能比を大きく引き上げるアップデートです。
+        <span class="highlight">Nitro Isolation Engine</span> による形式検証ベースの分離保証は、セキュリティ要件の厳しいワークロードにも有効です。
+        対象リージョンで R8g / R7g を利用中の場合は、ベンチマークを実施して移行効果を検証することを推奨します。
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul class="link-list" style="font-size: 12px;">
+        <li>→ <a href="https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-ec2-r9g-and-r9gd-memory-optimized-instances-are-now-available/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon EC2 R9g and R9gd memory optimized instances are now available</a></li>
+        <li>→ <a href="https://aws.amazon.com/ec2/instance-types/r9g/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon EC2 R9g インスタンス</a></li>
+        <li>→ <a href="https://aws.amazon.com/ec2/graviton/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Graviton プロセッサ</a></li>
+        <li>→ <a href="https://aws.amazon.com/ec2/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon EC2 料金ページ</a></li>
+      </ul>
+      <p>リリース日: 2026 年 8 月 31 日 | AWS News Summary レポートより生成</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

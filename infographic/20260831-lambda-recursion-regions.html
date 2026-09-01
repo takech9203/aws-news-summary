@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Lambda 再帰ループ検出機能の全商用リージョン対応</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.card li { margin: 4px 0; }
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 200px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: stretch;
+  margin: 16px 0;
+}
+
+.ba-box {
+  flex: 1;
+  min-width: 280px;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-box ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.ba-box li { margin: 6px 0; }
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+.spec-table td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+/* チェック / バツ */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase .label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.note {
+  font-size: 13px;
+  color: rgba(213, 219, 219, 0.7);
+  margin-top: 8px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0 0 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 640px) {
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">⚡ AWS Lambda</span>
+    <h1>🛡️ 再帰ループ検出機能が<br>すべての商用リージョンで利用可能に</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 8 月 31 日 | 機能: Recursive Loop Detection</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      AWS Lambda の<span class="highlight">再帰ループ検出機能</span>が、すべての商用 AWS リージョンで利用可能になりました。
+      Lambda 関数とサポート対象サービス (Amazon S3、Amazon SQS、Amazon SNS) の間で発生する再帰的な呼び出しを
+      <span class="highlight">自動的に検出して停止</span>するセーフティガードレールで、<span class="highlight">デフォルトで有効・無料</span>です。
+    </p>
+    <p>
+      設定ミスやコードのバグで、関数がイベントソースにイベントを書き戻すと無限ループが発生し、意図しない大量呼び出しと予期しないコストにつながります。
+      本機能はループを検出すると該当イベントの処理を自動停止し、AWS Health Dashboard にトラブルシューティングガイダンス付きの通知を送信します。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">全商用リージョン</div>
+        <div class="stat-label">地理的な制約なく一貫したコスト保護</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">約 16 回</div>
+        <div class="stat-label">同一リクエストチェーンでの検出しきい値</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">追加料金なし・デフォルト有効</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ Before (アップデート前)</div>
+        <ul>
+          <li>再帰ループ検出は一部リージョンに限定</li>
+          <li>未対応リージョンでは無限ループが検出されず、Lambda が自動スケールして意図しない大量呼び出しとコストが発生する可能性</li>
+          <li>CloudWatch アラームや請求アラームなど間接的な仕組みでの検知が必要</li>
+          <li>リージョンごとに保護レベルが異なり、統一的な運用ガードレールを設計しにくい</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ After (アップデート後)</div>
+        <ul>
+          <li>すべての商用リージョンで追加設定なし (デフォルト有効・無料) に再帰ループを自動検出・停止</li>
+          <li>どのリージョンでも AWS Health Dashboard 通知とメールアラートを受信可能</li>
+          <li>意図的な再帰パターンは <code>PutFunctionRecursionConfig</code> API で関数ごとに検出を無効化可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <p>Lambda 関数と SQS キューの間で再帰ループが発生した場合の検出と通知の流れです。同一リクエストチェーンで約 16 回の呼び出しが発生すると、Lambda は次の呼び出しを自動停止し、複数チャネルで通知します。</p>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Loop["🔁 再帰ループの例"]
+        direction LR
+        SQS[("📨 Amazon SQS キュー")]
+        Fn["⚡ Lambda 関数"]
+        SQS -->|1 イベントで関数を呼び出し| Fn
+        Fn -->|2 処理結果を同じキューに送信| SQS
+    end
+
+    Fn -->|約 16 回の呼び出しで検出| Detect{"🛡️ 再帰ループ検出"}
+    Detect -->|呼び出しを自動停止| Stop["🛑 RecursiveInvocationException"]
+    Detect -->|通知| Health["🩺 AWS Health Dashboard"]
+    Detect -->|メールアラート| Email["📧 アカウント連絡先"]
+    Detect -->|メトリクス発行| CW["📈 CloudWatch<br/>RecursiveInvocationsDropped"]
+    Stop -.->|設定済みの場合| DLQ[("📥 DLQ / 失敗時送信先")]
+
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef error fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Fn compute
+    class SQS,DLQ storage
+    class Detect decision
+    class Stop error
+    class Health,Email,CW process
+    class Loop layer
+      </pre>
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🚀 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🔍 1. 再帰ループの自動検出と停止</div>
+      <ul>
+        <li>AWS X-Ray のトレースヘッダーを利用してイベントを追跡し、同一リクエストチェーン内の呼び出し回数をカウント</li>
+        <li>同じトリガーイベントによる呼び出しが<strong>約 16 回</strong>に達すると、次の呼び出しを自動停止</li>
+        <li>X-Ray のアクティブトレース有効化は不要、追加料金なしでデフォルト有効</li>
+        <li>複数トリガーがある場合、他のトリガーからの呼び出しは影響を受けない</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔔 2. 検出時の通知とモニタリング</div>
+      <ul>
+        <li>AWS Health Dashboard の [Your account health] ページに通知を表示 (表示まで最大 3.5 時間かかる場合あり)</li>
+        <li>プライマリ連絡先と代替オペレーション連絡先にメールアラート送信 (関数ごとに 24 時間あたり最大 1 通)</li>
+        <li>CloudWatch メトリクス <code>RecursiveInvocationsDropped</code> で停止された呼び出し数を監視可能</li>
+        <li>失敗時送信先または DLQ が設定されている場合、停止されたイベントはそちらに送信</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔧 3. 意図的な再帰パターンのサポート</div>
+      <ul>
+        <li>意図的に再帰を使用するワークロードでは、関数ごとに検出を無効化可能</li>
+        <li>Lambda コンソール、AWS CLI (<code>put-function-recursion-config</code>)、AWS SAM、CloudFormation で設定可能</li>
+        <li>無効化した場合、<code>RecursiveInvocationsDropped</code> メトリクスは発行されない</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🌍 4. 全商用リージョンへの拡大</div>
+      <ul>
+        <li>今回のアップデートにより、すべての商用 AWS リージョンで利用可能に</li>
+        <li>リージョンを問わず一貫したコスト保護ガードレールを提供</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>⚙️ 技術仕様</h2>
+
+    <h3>検出対象と動作</h3>
+    <table class="spec-table">
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>検出対象サービス</td><td>Amazon SQS、Amazon S3、Amazon SNS、Lambda 関数間の同期・非同期呼び出し</td></tr>
+      <tr><td>検出のしきい値</td><td>同一リクエストチェーンで約 16 回の呼び出し</td></tr>
+      <tr><td>検出の仕組み</td><td>X-Ray トレースヘッダーのメタデータ (Lineage カウンター) によるイベント追跡</td></tr>
+      <tr><td>デフォルト設定</td><td>有効 (ループ検出時に呼び出しを停止)</td></tr>
+      <tr><td>料金</td><td>無料</td></tr>
+      <tr><td>通知手段</td><td>AWS Health Dashboard、メール、CloudWatch メトリクス <code>RecursiveInvocationsDropped</code></td></tr>
+      <tr><td>検出対象外</td><td>Amazon DynamoDB など上記以外のサービスを含むループは検出不可</td></tr>
+    </table>
+
+    <h3>サポートされる AWS SDK の最小バージョン</h3>
+    <p style="font-size: 14px;">再帰ループ検出には、関数が以下のバージョン以上の AWS SDK を使用している必要があります。</p>
+    <table class="spec-table">
+      <tr><th>ランタイム</th><th>最小 SDK バージョン</th></tr>
+      <tr><td>Node.js</td><td>2.1147.0 (v2) / 3.105.0 (v3)</td></tr>
+      <tr><td>Python</td><td>boto3 1.24.46 / botocore 1.27.46</td></tr>
+      <tr><td>Java 8 / 11</td><td>2.17.135</td></tr>
+      <tr><td>Java 17</td><td>2.20.81</td></tr>
+      <tr><td>Java 21</td><td>2.21.24</td></tr>
+      <tr><td>.NET</td><td>3.7.293.0</td></tr>
+      <tr><td>Ruby</td><td>3.134.0</td></tr>
+      <tr><td>PHP</td><td>3.232.0</td></tr>
+      <tr><td>Go</td><td>v2 SDK 1.57.0</td></tr>
+    </table>
+    <p class="note">💡 ランタイム同梱の SDK バージョンが要件を満たさない場合は、デプロイパッケージまたは Lambda レイヤーでサポート対象バージョンの SDK を追加できます。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Lambda 関数がサポート対象の AWS SDK バージョン以上を使用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ループの対象が Amazon SQS、Amazon S3、Amazon SNS、または Lambda 関数間の呼び出しであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>検出設定を変更する場合は <code>lambda:PutFunctionRecursionConfig</code> の IAM 権限があること</span></div>
+
+    <p style="margin-top: 16px;">本機能は<span class="highlight">デフォルトで有効</span>なため、通常は設定不要です。以下は意図的な再帰パターンを使用する場合の設定手順です。</p>
+
+    <h3>ステップ 1: 現在の再帰検出設定を確認する</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">現在の設定を取得</span></div>
+      <pre><code class="language-bash">aws lambda get-function-recursion-config --function-name my-function</code></pre>
+    </div>
+    <p class="note">デフォルトでは <code>RecursiveLoop</code> が <code>Terminate</code> (検出時に停止) に設定されています。</p>
+
+    <h3>ステップ 2: 意図的な再帰を許可する</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">検出を無効化して再帰を許可</span></div>
+      <pre><code class="language-bash">aws lambda put-function-recursion-config \
+  --function-name my-function \
+  --recursive-loop Allow</code></pre>
+    </div>
+    <p class="note">意図的に再帰パターンを使用する設計の場合のみ実行してください。</p>
+
+    <h3>ステップ 3: デフォルト設定に戻す</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">検出時に停止する動作に戻す</span></div>
+      <pre><code class="language-bash">aws lambda put-function-recursion-config \
+  --function-name my-function \
+  --recursive-loop Terminate</code></pre>
+    </div>
+
+    <h3>ステップ 4: ループ検出時の緊急対応</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">再発防止のための緊急対応</span></div>
+      <pre><code class="language-bash"># 関数の同時実行数を 0 にして呼び出しをスロットリング
+aws lambda put-function-concurrency \
+  --function-name my-function \
+  --reserved-concurrent-executions 0
+
+# イベントソースマッピングを無効化
+aws lambda update-event-source-mapping \
+  --function-name my-function \
+  --uuid a1b2c3d4-5678-90ab-cdef-EXAMPLE11111 --no-enabled</code></pre>
+    </div>
+    <p class="note">1 つ目のコマンドは予約済み同時実行数を 0 に設定してすべての呼び出しを停止し、2 つ目はループの原因となっているイベントソースマッピングを無効化します。その後、イベントソースとターゲットに同じリソースを指定しているなどのコード上の欠陥を修正します。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>予期しないコストの防止</strong>: 設定ミスによる無限ループを自動停止し、意図しない大量呼び出しによる予期しない請求を防止</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>グローバルで一貫した保護</strong>: すべての商用リージョンで同一のガードレールが提供され、リージョンごとの保護レベルの差異を考慮する必要がなくなる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストゼロ</strong>: 無料かつデフォルト有効のため、導入コストや運用負荷なしで保護を得られる</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>同時実行枠の保護</strong>: ループによる Lambda のスケールでアカウントの同時実行数を使い果たす事態を防止</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>迅速な検知と通知</strong>: Health Dashboard、メール、CloudWatch メトリクスの複数チャネルで検出を通知し、根本原因の調査を支援</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟なオプトアウト</strong>: 意図的な再帰パターンでは関数単位で検出を無効化可能</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>検出対象は Amazon SQS、Amazon S3、Amazon SNS、Lambda 関数間の呼び出しに限定。DynamoDB など他のサービスを含むループは検出されない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>サポート対象バージョン以上の AWS SDK を使用していない場合、検出は機能しない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Health Dashboard への通知表示とメールアラート送信には、ループ停止から最大 3.5 時間かかる場合がある</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>メールアラートは関数ごとに 24 時間あたり最大 1 通に制限</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>SQS がイベントソースの場合、ループ検出後も <code>maxReceiveCount</code> を超えるまで SQS はメッセージの再試行を続ける (Lambda は呼び出しをブロックし続け、最終的にメッセージはソースキューの DLQ に送信される)</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>関数の失敗時送信先や DLQ に、関数のトリガーと同じリソースを指定すると別の再帰ループが発生するため避ける</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>検出対象外のサービスを含むワークロードでは、CloudWatch アラーム、請求アラーム、AWS Cost Anomaly Detection の併用が引き続き推奨</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📨 ユースケース 1: SQS キュー処理での設定ミス保護</div>
+      <p><span class="label">シナリオ</span>: SQS キューからメッセージを受信して加工し、別のキューに送信する Lambda 関数で、環境変数の設定ミスにより送信先が入力元と同じキューになってしまった。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Python</span><span class="code-title">設定ミスの例</span></div>
+        <pre><code class="language-python">import os
+import boto3
+
+sqs = boto3.client("sqs")
+
+def handler(event, context):
+    for record in event["Records"]:
+        processed = transform(record["body"])
+        # 設定ミス: OUTPUT_QUEUE_URL に入力キューの URL が設定されていた
+        sqs.send_message(
+            QueueUrl=os.environ["OUTPUT_QUEUE_URL"],
+            MessageBody=processed,
+        )</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 約 16 回の呼び出し後に Lambda が自動的にループを停止し、Health Dashboard とメールで通知。無限ループによるコスト爆発と同時実行枠の枯渇を回避できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🪣 ユースケース 2: S3 イベント駆動処理での出力先誤設定の保護</div>
+      <p><span class="label">シナリオ</span>: S3 バケットへのオブジェクト作成をトリガーに画像をリサイズして保存する構成で、誤って入力と同じバケット・同じプレフィックスに出力してしまい、出力オブジェクトが再び関数をトリガーした。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">停止された呼び出し数の確認</span></div>
+        <pre><code class="language-bash"># ループ検出後、CloudWatch メトリクスで停止された呼び出し数を確認
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/Lambda \
+  --metric-name RecursiveInvocationsDropped \
+  --dimensions Name=FunctionName,Value=image-resizer \
+  --start-time 2026-08-31T00:00:00Z \
+  --end-time 2026-08-31T23:59:59Z \
+  --period 3600 --statistics Sum</code></pre>
+      </div>
+      <p><span class="label">効果</span>: ループが自動停止されるため被害が最小限に抑えられ、メトリクスから影響範囲を定量的に把握して修正 (出力先バケットの分離やプレフィックスフィルターの設定) につなげられる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔁 ユースケース 3: 意図的な再帰パターンの継続利用</div>
+      <p><span class="label">シナリオ</span>: 大規模データセットをバッチ分割して処理するため、Lambda 関数が自分自身を再帰的に呼び出す設計を意図的に採用している。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">対象関数のみ検出を無効化</span></div>
+        <pre><code class="language-bash"># 対象関数のみ再帰ループ検出を無効化
+aws lambda put-function-recursion-config \
+  --function-name batch-processor \
+  --recursive-loop Allow</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 意図的な再帰設計を維持したまま全リージョン展開できる。ただし、同時実行数の予約や CloudWatch アラームなどのガードレールを併せて実装することが推奨される。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>再帰ループ検出機能自体は<span class="highlight">無料</span>で、追加料金は発生しません。デフォルトで有効化されており、X-Ray のアクティブトレースを有効化する必要もありません。</p>
+    <p class="note">💡 ループが停止されるまでの約 16 回の呼び出しには、通常の Lambda 料金 (リクエスト数と実行時間に基づく課金) が適用されます。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p><span class="highlight">すべての商用 AWS リージョン</span>で利用可能です。</p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">📡 AWS X-Ray</div>
+      <p style="margin: 0; font-size: 14px;">トレースヘッダーのメタデータを利用してイベントのリクエストチェーンを追跡 (アクティブトレースの有効化は不要)</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🩺 AWS Health Dashboard</div>
+      <p style="margin: 0; font-size: 14px;">ループ検出時の通知とトラブルシューティングガイダンスを表示</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📈 Amazon CloudWatch</div>
+      <p style="margin: 0; font-size: 14px;"><code>RecursiveInvocationsDropped</code> メトリクスによる監視や、検出対象外サービスに対するアラーム設定に使用</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📨 Amazon SQS / Amazon SNS / Amazon S3</div>
+      <p style="margin: 0; font-size: 14px;">再帰ループ検出の対象となるイベントソース。DLQ や失敗時送信先の設定と組み合わせることで、停止されたイベントを保全可能</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      AWS Lambda の再帰ループ検出機能が<span class="highlight">すべての商用リージョン</span>に拡大され、設定ミスによる無限ループとそれに伴う予期しないコストからグローバルに保護されるようになりました。
+      機能は<span class="highlight">無料かつデフォルト有効</span>のため追加の対応は不要ですが、関数が使用する AWS SDK バージョンがサポート要件を満たしているかの確認と、検出対象外のサービスを含むワークロードに対する CloudWatch アラームの設定を推奨します。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/08/lambda-recursion-regions" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/08/lambda-recursion-regions</a></li>
+      <li><a href="https://aws.amazon.com/blogs/compute/detecting-and-stopping-recursive-loops-in-aws-lambda-functions/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: Detecting and stopping recursive loops in AWS Lambda functions</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-recursion.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Lambda 再帰ループ検出</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/api/API_PutFunctionRecursionConfig.html" target="_blank" rel="noopener noreferrer" class="aws-link">API リファレンス: PutFunctionRecursionConfig</a></li>
+      <li><a href="https://aws.amazon.com/lambda/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ: AWS Lambda</a></li>
+    </ul>
+    <p style="margin-top: 12px;">レポート: reports/2026/2026-08-31-lambda-recursion-regions.md (2026 年 8 月 31 日リリース)</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
