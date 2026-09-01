@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiro - 使用状況メトリクスの OpenTelemetry エクスポート</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.35;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+    }
+
+    .subtitle .date {
+      color: var(--aws-smile-orange);
+      font-weight: 600;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Before / After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    @media (max-width: 720px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+    .ba-card {
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .ba-before {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+    .ba-after {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+    .ba-title {
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    .ba-before .ba-title { color: #FF6F5E; }
+    .ba-after .ba-title { color: #4CAF50; }
+    .ba-card ul { margin: 0; padding-left: 4px; list-style: none; }
+    .ba-card li {
+      margin: 8px 0;
+      padding-left: 22px;
+      position: relative;
+      font-size: 14px;
+    }
+    .ba-before li::before { content: "✗"; position: absolute; left: 0; color: #FF6F5E; }
+    .ba-after li::before { content: "✓"; position: absolute; left: 0; color: #4CAF50; }
+
+    /* 統計カード */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+    @media (max-width: 720px) {
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.3;
+    }
+    .stat-label {
+      font-size: 13px;
+      margin-top: 6px;
+      color: var(--aws-light-gray);
+    }
+
+    /* 機能カード */
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 14px 0;
+    }
+    .feature-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    .feature-card ul { margin: 0; padding-left: 20px; }
+    .feature-card li { margin: 4px 0; font-size: 14px; }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      white-space: nowrap;
+    }
+
+    /* フロー図 */
+    .flow-diagram {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 20px 0 8px;
+    }
+    .flow-step {
+      background: var(--aws-squid-ink);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 18px;
+      text-align: center;
+      min-width: 120px;
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+      align-self: center;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+    .diagram-caption {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* メリット / デメリット */
+    .check-item, .cross-item, .warn-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+    .check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF6F5E; font-size: 16px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin: 16px 0;
+    }
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    .usecase p { margin: 8px 0; font-size: 14px; }
+    .usecase .label {
+      font-weight: 700;
+      color: var(--aws-white);
+    }
+    .usecase ol {
+      margin: 6px 0;
+      padding-left: 22px;
+      font-size: 14px;
+    }
+    .usecase ol li { margin: 4px 0; }
+    .usecase-effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 3px solid var(--aws-green);
+      padding: 8px 12px;
+      border-radius: 0 6px 6px 0;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    /* 関連サービス */
+    .related-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    @media (max-width: 720px) {
+      .related-grid { grid-template-columns: 1fr; }
+    }
+    .related-card {
+      background: var(--aws-squid-ink);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 14px;
+    }
+    .related-card .name {
+      font-weight: 700;
+      color: var(--aws-teal);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    .summary-box {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(0, 161, 201, 0.1));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 18px 20px;
+      font-size: 15px;
+    }
+
+    ul.link-list { margin: 8px 0 0; padding-left: 20px; font-size: 14px; }
+    ul.link-list li { margin: 6px 0; }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <span class="service-badge">Kiro</span>
+      <h1>📊 使用状況メトリクスの OpenTelemetry エクスポート</h1>
+      <div class="subtitle">
+        <span class="date">📅 リリース日: 2026 年 9 月 1 日</span> ｜ Export Kiro usage metrics to OpenTelemetry
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>💡 概要</h2>
+      <p>
+        Kiro は、アカウント管理者が<span class="highlight">ユーザー単位の使用状況メトリクス</span>を
+        <span class="highlight">OpenTelemetry 互換の可観測性プラットフォーム</span>へ送信できる機能を発表しました。
+        採用状況 (アダプション)、エンゲージメント、ユーザー別・モデル別のクレジット消費を、
+        個々の開発者環境に設定を加えることなくモニタリングできます。
+      </p>
+      <p>
+        エクスポートは OTLP (OpenTelemetry Protocol) を使用し、既存の日次 CSV レポートと併用可能です。
+        Amazon CloudWatch、Datadog、Dynatrace、Elastic、Honeycomb、OpenSearch などに OTLP レシーバー経由で接続できるほか、
+        OTLP/gRPC または HTTP/protobuf を使用して独自のコレクターにも接続できます。
+      </p>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">設定 1 つ</div>
+          <div class="stat-label">アカウントレベルの設定のみで有効化<br>開発者環境の変更は不要</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">毎日 02:00 UTC</div>
+          <div class="stat-label">サーバーサイドから自動配信</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">6+ 接続先</div>
+          <div class="stat-label">CloudWatch / Datadog / Dynatrace<br>Elastic / Honeycomb / OpenSearch など</div>
+        </div>
+      </div>
+
+      <div class="before-after">
+        <div class="ba-card ba-before">
+          <div class="ba-title">😣 Before: アップデート前の課題</div>
+          <ul>
+            <li>使用状況の確認は日次 CSV レポートが中心で、可観測性プラットフォームへの取り込みには CSV の取得・変換・ロードを行う独自の仕組みが必要</li>
+            <li>Datadog や Amazon CloudWatch の既存ダッシュボードで、他のメトリクスと並べた継続的な可視化が困難</li>
+            <li>ユーザー別・モデル別のクレジット消費をモニタリングワークフローに組み込めない</li>
+          </ul>
+        </div>
+        <div class="ba-card ba-after">
+          <div class="ba-title">😊 After: アップデート後の改善</div>
+          <ul>
+            <li>ユーザー単位の使用状況メトリクス (採用状況、エンゲージメント、モデル別クレジット消費) を OpenTelemetry 互換プラットフォームへ直接送信</li>
+            <li>Kiro コンソールでアカウントレベルの設定を 1 つ作成するだけ。開発者環境の設定変更は不要</li>
+            <li>毎日 02:00 UTC にサーバーサイドから配信され、日次 CSV レポートと併用しながらダッシュボードやアラートに統合可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph KiroCloud["☁️ Kiro サービス"]
+        Metrics["📊 使用状況メトリクス<br/>採用状況・エンゲージメント<br/>モデル別クレジット消費"]
+        Exporter["⚡ サーバーサイドエクスポート<br/>毎日 02:00 UTC"]
+        CSV["📄 日次 CSV レポート<br/>従来通り利用可能"]
+    end
+
+    subgraph Config["⚙️ 管理者による設定"]
+        Console["🖥️ Kiro コンソール<br/>アカウントレベル設定 1 つ"]
+        Secret[("🔑 AWS Secrets Manager<br/>認証情報")]
+    end
+
+    subgraph Dest["📈 可観測性プラットフォーム"]
+        direction LR
+        OTLP["🔌 OTLP レシーバー<br/>CloudWatch / Datadog / Dynatrace<br/>Elastic / Honeycomb / OpenSearch"]
+        Collector["🔧 独自コレクター<br/>OTLP/gRPC・HTTP/protobuf"]
+        OTLP ~~~ Collector
+    end
+
+    Console --> Exporter
+    Secret -.-> Exporter
+    Metrics --> Exporter
+    Metrics -.-> CSV
+    Exporter -->|OTLP| OTLP
+    Exporter -->|OTLP| Collector
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+
+    class KiroCloud,Config,Dest cloud
+    class Metrics,Exporter internal
+    class CSV,OTLP,Collector process
+    class Console input
+    class Secret database
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        Kiro のサーバーサイドが毎日 02:00 UTC に使用状況メトリクスを集約し、OTLP 経由で各種可観測性プラットフォームまたは独自コレクターへ配信するフローを示しています。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>🚀 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="feature-title">1️⃣ ユーザー単位の使用状況メトリクスのエクスポート</div>
+        <ul>
+          <li>採用状況 (アダプション)、エンゲージメント、クレジット消費をユーザー別・モデル別に送信</li>
+          <li>個々の開発者環境に設定を加える必要がなく、管理者側の設定のみで完結</li>
+          <li>既存の日次 CSV レポートと併用可能で、段階的な移行や使い分けができる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">2️⃣ 幅広い可観測性プラットフォームとの接続</div>
+        <ul>
+          <li>Amazon CloudWatch、Datadog、Dynatrace、Elastic、Honeycomb、OpenSearch などに OTLP レシーバー経由で接続</li>
+          <li>独自のコレクターには OTLP/gRPC または HTTP/protobuf で接続可能</li>
+          <li>OpenTelemetry 互換であれば、上記以外のプラットフォームにも柔軟に対応</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">3️⃣ シンプルなアカウントレベル設定</div>
+        <ul>
+          <li>Kiro コンソールでアカウントレベルのエクスポート設定を 1 つ作成するだけで有効化</li>
+          <li>認証情報は AWS Secrets Manager のシークレットとして管理</li>
+          <li>メトリクスは毎日 02:00 UTC にサーバーサイドから自動配信</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様 (エクスポート仕様)</h2>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>プロトコル</td><td>OTLP (OTLP/gRPC または HTTP/protobuf)</td></tr>
+        <tr><td>対象メトリクス</td><td>採用状況、エンゲージメント、ユーザー別・モデル別クレジット消費</td></tr>
+        <tr><td>配信方式</td><td>サーバーサイドからのプッシュ配信 (開発者環境の設定不要)</td></tr>
+        <tr><td>配信頻度</td><td>毎日 02:00 UTC</td></tr>
+        <tr><td>設定単位</td><td>アカウントレベルで 1 つ</td></tr>
+        <tr><td>認証情報の管理</td><td>AWS Secrets Manager のシークレット</td></tr>
+        <tr><td>エンドポイント要件</td><td>パブリックに到達可能な OTLP エンドポイント</td></tr>
+        <tr><td>接続先の例</td><td>Amazon CloudWatch、Datadog、Dynatrace、Elastic、Honeycomb、OpenSearch、独自コレクター</td></tr>
+        <tr><td>既存機能との関係</td><td>日次 CSV レポートと併用可能</td></tr>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+
+      <h3>📋 前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>Kiro のアカウント管理者権限を持っていること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>OpenTelemetry 互換の可観測性プラットフォームまたは OTLP コレクターの、パブリックに到達可能な OTLP エンドポイントを用意していること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>接続先の認証情報を AWS Secrets Manager のシークレットとして作成できること</span></div>
+
+      <h3>🪜 設定の流れ</h3>
+      <div class="flow-diagram">
+        <div class="flow-step">🔌 ステップ 1<br>OTLP エンドポイント<br>を準備</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🔑 ステップ 2<br>Secrets Manager に<br>シークレットを作成</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🖥️ ステップ 3<br>Kiro コンソールで<br>エクスポートを設定</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📈 毎日 02:00 UTC<br>自動配信開始</div>
+      </div>
+
+      <h3>ステップ 1: 接続先の OTLP エンドポイントを準備する</h3>
+      <p style="font-size: 14px;">
+        利用する可観測性プラットフォーム (Amazon CloudWatch、Datadog など) の OTLP レシーバー、または独自の OpenTelemetry コレクターのエンドポイントを用意します。
+        エンドポイントは Kiro のサーバーサイドから到達できるよう、<span class="highlight">パブリックにアクセス可能</span>である必要があります。
+      </p>
+
+      <h3>ステップ 2: AWS Secrets Manager にシークレットを作成する</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">認証情報をシークレットとして保存する例</span>
+        </div>
+        <pre><code class="language-bash"># 接続先プラットフォームの認証情報をシークレットとして保存する例
+aws secretsmanager create-secret \
+  --name kiro-otel-export-credentials \
+  --secret-string '{"api-key":"&lt;接続先の API キーなど&gt;"}'</code></pre>
+      </div>
+      <p style="font-size: 14px;">
+        OTLP エンドポイントへの認証に使用する情報を AWS Secrets Manager のシークレットとして保存します。
+        実際に必要なキー名や値は、接続先プラットフォームの認証方式に合わせて設定します。
+      </p>
+
+      <h3>ステップ 3: Kiro コンソールでエクスポートを設定する</h3>
+      <p style="font-size: 14px;">
+        Kiro コンソールで、アカウントレベルの OpenTelemetry エクスポート設定を 1 つ作成します。
+        OTLP エンドポイントの URL と、ステップ 2 で作成したシークレットを指定します。
+        設定完了後、メトリクスは毎日 02:00 UTC に自動的に配信されます。
+        詳細は <a class="aws-link" href="https://kiro.dev/docs/enterprise/monitor-and-track/user-activity/opentelemetry/" target="_blank" rel="noopener noreferrer">公式ドキュメント</a> を参照してください。
+      </p>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>✅ メリット</h2>
+
+      <h3>💼 ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>導入効果の可視化</strong>: 組織内での Kiro の採用状況やエンゲージメントをユーザー単位で継続的に把握でき、AI コーディングツール導入の投資対効果を評価しやすくなる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト管理の強化</strong>: ユーザー別・モデル別のクレジット消費をダッシュボードで監視でき、予算超過の早期検知やチーム間のコスト配分の判断に活用できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の削減</strong>: CSV の取得・変換・ロードを行う独自の仕組みが不要になり、管理者の運用工数を削減できる</span></div>
+
+      <h3>🛠️ 技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>既存の可観測性スタックとの統合</strong>: OpenTelemetry 標準に準拠しているため、CloudWatch や Datadog など既に運用中のプラットフォームにベンダーロックインなく統合できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>開発者環境への影響ゼロ</strong>: サーバーサイドからの配信のため、各開発者の IDE や端末に設定やエージェントを追加する必要がない</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>アラートや自動化への応用</strong>: クレジット消費の閾値アラートや利用状況レポートの自動生成といった既存のワークフローを再利用できる</span></div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>🚧 制限事項</h3>
+      <div class="cross-item"><span class="cross-icon">✗</span><span>OTLP エンドポイントはパブリックに到達可能である必要があり、プライベートネットワーク内に閉じたコレクターには直接配信できない</span></div>
+      <div class="cross-item"><span class="cross-icon">✗</span><span>メトリクスの配信は毎日 02:00 UTC の 1 回であり、リアルタイムのストリーミング配信ではない</span></div>
+      <div class="cross-item"><span class="cross-icon">✗</span><span>エクスポート設定はアカウントレベルで 1 つのため、複数の宛先へ同時に直接配信する場合は独自コレクターでのルーティングなどの工夫が必要</span></div>
+
+      <h3>🤔 考慮すべき点</h3>
+      <div class="warn-item"><span class="warn-icon">⚠️</span><span>認証情報の管理に AWS Secrets Manager を使用するため、AWS アカウントとシークレットの管理体制が必要</span></div>
+      <div class="warn-item"><span class="warn-icon">⚠️</span><span>ユーザー単位のメトリクスを外部プラットフォームへ送信するため、組織のプライバシーポリシーやデータ取り扱い規程との整合性を事前に確認することが望ましい</span></div>
+      <div class="warn-item"><span class="warn-icon">⚠️</span><span>Secrets Manager のシークレット保管や接続先プラットフォーム側の取り込みに伴う費用が別途発生する可能性がある</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">📊 ユースケース 1: CloudWatch ダッシュボードでの全社利用状況の可視化</div>
+        <p><span class="label">シナリオ</span>: AWS を主要基盤とする企業が、Kiro の全社導入の進捗をユーザー単位で追跡し、既存の CloudWatch ダッシュボードで他の開発メトリクスと並べて確認したい。</p>
+        <p class="label">実装例:</p>
+        <ol>
+          <li>CloudWatch の OTLP エンドポイントを用意する</li>
+          <li>認証情報を AWS Secrets Manager のシークレットとして作成する</li>
+          <li>Kiro コンソールでエンドポイントとシークレットを指定してエクスポートを設定する</li>
+          <li>CloudWatch ダッシュボードに採用状況・エンゲージメントのウィジェットを追加する</li>
+        </ol>
+        <div class="usecase-effect">💡 <strong>効果</strong>: 導入推進チームが毎日更新される利用状況を一目で確認でき、利用が低調なチームへのフォローアップを迅速に実施できる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🔔 ユースケース 2: Datadog でのモデル別クレジット消費のアラート運用</div>
+        <p><span class="label">シナリオ</span>: 可観測性基盤として Datadog を利用している組織が、ユーザー別・モデル別のクレジット消費を監視し、想定以上の消費を早期に検知したい。</p>
+        <p class="label">実装例:</p>
+        <ol>
+          <li>Datadog の OTLP レシーバーへのエクスポートを Kiro コンソールで設定する</li>
+          <li>モデル別クレジット消費のメトリクスに対してモニターを作成する</li>
+          <li>日次配信後に閾値を超えたユーザーやモデルがあれば Slack へ通知する</li>
+        </ol>
+        <div class="usecase-effect">💡 <strong>効果</strong>: クレジットの予算超過を翌日には検知でき、高コストなモデルの使い方に関するガイドラインの周知など、早期の是正アクションにつなげられる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🔧 ユースケース 3: 独自 OpenTelemetry コレクターによる複数宛先への配信</div>
+        <p><span class="label">シナリオ</span>: メトリクスを長期保管用の OpenSearch と、リアルタイム監視用の商用プラットフォームの両方に取り込みたい組織が、配信を一元管理したい。</p>
+        <p class="label">実装例:</p>
+        <ol>
+          <li>パブリックに到達可能な OpenTelemetry コレクターを構築する</li>
+          <li>Kiro コンソールからコレクターへ OTLP/gRPC でエクスポートを設定する</li>
+          <li>コレクターのパイプラインで OpenSearch と商用プラットフォームの両方へルーティングする</li>
+        </ol>
+        <div class="usecase-effect">💡 <strong>効果</strong>: アカウントレベルの設定は 1 つのまま、複数の宛先へのメトリクス配信とフィルタリングや変換を柔軟に制御できる。</div>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金と利用可能リージョン</h2>
+      <div class="card" style="background: var(--aws-squid-ink); border: 1px solid rgba(255, 153, 0, 0.3); border-radius: 8px; padding: 16px; margin: 12px 0;">
+        <p style="margin: 0; font-size: 14px;">
+          <strong style="color: var(--aws-white);">💵 料金</strong>:
+          このエクスポート機能自体の追加料金に関する記載は Changelog にはありません。
+          ただし、AWS Secrets Manager のシークレット保管や、接続先の可観測性プラットフォーム側でのメトリクス取り込み・保管には、各サービスの料金が適用される場合があります。
+          Kiro 自体の料金は <a class="aws-link" href="https://kiro.dev/pricing/" target="_blank" rel="noopener noreferrer">Kiro の料金ページ</a> を参照してください。
+        </p>
+      </div>
+      <div class="card" style="background: var(--aws-squid-ink); border: 1px solid rgba(255, 153, 0, 0.3); border-radius: 8px; padding: 16px; margin: 12px 0;">
+        <p style="margin: 0; font-size: 14px;">
+          <strong style="color: var(--aws-white);">🌍 利用可能リージョン</strong>:
+          グローバル (Kiro はグローバルサービスとして提供)
+        </p>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="related-grid">
+        <div class="related-card">
+          <span class="name">🔑 AWS Secrets Manager</span>
+          エクスポート先への認証情報をシークレットとして安全に管理するために使用
+        </div>
+        <div class="related-card">
+          <span class="name">📈 Amazon CloudWatch</span>
+          OTLP レシーバー経由で Kiro メトリクスを取り込み、ダッシュボードやアラームで活用可能
+        </div>
+        <div class="related-card">
+          <span class="name">🔍 Amazon OpenSearch Service</span>
+          メトリクスの長期保管・分析基盤として OTLP 経由で連携可能
+        </div>
+        <div class="related-card">
+          <span class="name">🔧 OpenTelemetry Collector</span>
+          独自コレクターとして OTLP/gRPC または HTTP/protobuf で受信し、複数宛先へのルーティングに活用可能
+        </div>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <div class="summary-box">
+        <p style="margin: 0 0 10px;">
+          Kiro の使用状況メトリクスを <span class="highlight">OpenTelemetry 経由</span>で既存の可観測性プラットフォームに直接統合できるようになり、
+          組織での AI コーディングツールの<span class="highlight">採用状況とコストの継続的なモニタリング</span>が大幅に容易になりました。
+        </p>
+        <p style="margin: 0;">
+          👉 Kiro を組織導入している管理者は、まず AWS Secrets Manager のシークレットとパブリックな OTLP エンドポイントを準備し、
+          Kiro コンソールでアカウントレベルのエクスポート設定を試すことを推奨します。
+        </p>
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p style="margin-bottom: 8px;">📎 出典・参考リンク:</p>
+      <ul class="link-list" style="font-size: 12px;">
+        <li><a class="aws-link" href="https://kiro.dev/changelog/" target="_blank" rel="noopener noreferrer">Kiro Changelog</a></li>
+        <li><a class="aws-link" href="https://kiro.dev/changelog/general/open-telemetry-exports/" target="_blank" rel="noopener noreferrer">Changelog エントリ: Export Kiro usage metrics to OpenTelemetry</a></li>
+        <li><a class="aws-link" href="https://kiro.dev/docs/enterprise/monitor-and-track/user-activity/opentelemetry/" target="_blank" rel="noopener noreferrer">ドキュメント: OpenTelemetry によるユーザーアクティビティのモニタリング</a></li>
+        <li><a class="aws-link" href="https://kiro.dev/docs/" target="_blank" rel="noopener noreferrer">Kiro ドキュメント</a></li>
+      </ul>
+      <p style="margin-top: 12px;">生成日: 2026 年 9 月 1 日 ｜ このインフォグラフィックは AWS News レポートを基に作成されています</p>
+    </footer>
+
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
