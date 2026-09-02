@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Lambda - コンテナイメージ関数の SnapStart サポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.header-meta {
+  text-align: right;
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  white-space: nowrap;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  margin-bottom: 8px;
+}
+
+.lead {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+  margin: 16px 0 28px;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* 統計カード */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.ba-card {
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ba-card li { margin: 6px 0; font-size: 14px; }
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.feature-card p { margin: 4px 0; font-size: 14px; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+code.inline {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: 'Courier New', monospace;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-body { flex: 1; min-width: 0; }
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+.step-body p { font-size: 14px; margin: 8px 0 0; }
+
+/* チェックリスト */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 16px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { font-size: 14px; margin: 8px 0; }
+
+.effect-label {
+  display: inline-block;
+  background: rgba(29, 129, 2, 0.25);
+  color: #6FCF5B;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+ul.plain { margin: 8px 0; padding-left: 22px; }
+ul.plain li { margin: 6px 0; font-size: 15px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer p { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <span class="service-badge">⚡ AWS Lambda</span>
+      <h1>コンテナイメージ関数の<br>SnapStart サポート</h1>
+    </div>
+    <div class="header-meta">
+      📅 リリース日: 2026 年 9 月 2 日<br>
+      🏷️ SnapStart for container image functions
+    </div>
+  </div>
+
+  <p class="lead">
+    コンテナイメージとしてパッケージ化された Lambda 関数で <span class="highlight">SnapStart</span> が利用可能になりました。デプロイ時に初期化済み実行環境のスナップショットを作成・キャッシュし、呼び出し時にはスナップショットから再開することで、<span class="highlight">数秒かかっていた起動時間をサブ秒レベルまで短縮</span>できます。
+  </p>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">サブ秒</div>
+      <div class="stat-label">数秒かかっていたコールドスタートを短縮</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">10 GB</div>
+      <div class="stat-label">対応するコンテナイメージの最大サイズ</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">3 ランタイム</div>
+      <div class="stat-label">Java 11+ / Python 3.12+ / .NET 8+ はシームレス対応</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📌 概要 (Before / After)</h2>
+    <div class="before-after">
+      <div class="ba-card ba-before">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>SnapStart は ZIP アーカイブ形式のマネージドランタイム (Java、Python、.NET) の関数でのみ利用可能だった</li>
+          <li>コンテナイメージ関数 (最大 10 GB) は、呼び出し時のイメージレイヤーのダウンロードにより起動に数秒かかることがあった</li>
+          <li>大きな依存関係を含む ML 推論などでは、コールドスタートの長さがコンテナイメージ導入の障壁になっていた</li>
+        </ul>
+      </div>
+      <div class="ba-card ba-after">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>コンテナイメージ関数でも SnapStart を有効化し、起動時間をサブ秒レベルまで短縮できるようになった</li>
+          <li>AWS ベースイメージの Java (11 以降)、Python (3.12 以降)、.NET (8 以降) では ZIP アーカイブと同等の体験で利用可能</li>
+          <li>その他のベースイメージ (Node.js、Ruby など) やカスタムベースイメージでも、ランタイムフックの実装で利用可能</li>
+        </ul>
+      </div>
+    </div>
+    <p style="font-size: 14px;">新規・既存を問わず、Lambda API、AWS マネジメントコンソール、AWS CLI、AWS CloudFormation、AWS SAM、AWS SDK、AWS CDK から SnapStart を設定できます。</p>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Deploy["🚀 デプロイ時"]
+        direction LR
+        ECR[("🪣 Amazon ECR<br/>コンテナイメージ")]
+        Init["⚙️ 実行環境の初期化<br/>イメージ取得 + Init 実行"]
+        Snap[("📸 スナップショット<br/>暗号化してキャッシュ")]
+        ECR --> Init --> Snap
+    end
+
+    subgraph Invoke["⚡ 呼び出し時"]
+        direction LR
+        Req(["👤 呼び出しリクエスト"])
+        Resume["🔄 スナップショットから再開<br/>サブ秒レベルで起動"]
+        Handler["🧩 ハンドラー実行"]
+        Req --> Resume --> Handler
+    end
+
+    Snap -.->|再開| Resume
+
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class ECR,Snap storage
+    class Init,Handler process
+    class Resume internal
+    class Req input
+    class Deploy,Invoke layer
+      </pre>
+    </div>
+    <p style="font-size: 14px;">SnapStart は、新しい関数バージョンの発行時に初期化済み実行環境のスナップショットを作成してキャッシュし、呼び出し時にはコールドスタートの初期化を行わずスナップショットから再開します。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔧 主要機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">📦 コンテナイメージ関数での SnapStart 有効化</div>
+      <p>コンテナイメージとしてパッケージ化された Lambda 関数で SnapStart をオプトインで有効化。デプロイ時に初期化済み実行環境のスナップショットを作成・キャッシュし、呼び出し時に再開することで、数秒かかっていた起動時間をサブ秒レベルまで短縮できます。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🧩 AWS ベースイメージでのシームレスな利用</div>
+      <p>AWS ベースイメージの Java (11 以降)、Python (3.12 以降)、.NET (8 以降) では、ZIP アーカイブデプロイと同等の体験で利用可能。その他のベースイメージ (Node.js、Ruby など) やカスタムベースイメージでは、開発者ガイドに従いランタイムフックを実装することで利用できます。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🛠️ 幅広い設定手段</div>
+      <p>新規・既存の関数に対して、Lambda API、AWS マネジメントコンソール、AWS CLI、AWS CloudFormation、AWS SAM、AWS SDK、AWS CDK から設定できます。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📋 技術仕様</h2>
+    <table>
+      <tr><th style="width: 32%;">項目</th><th>詳細</th></tr>
+      <tr><td>対応パッケージ形式</td><td>ZIP アーカイブに加え、コンテナイメージに対応</td></tr>
+      <tr><td>コンテナイメージサイズ</td><td>最大 10 GB (Lambda コンテナイメージの上限)</td></tr>
+      <tr><td>シームレス対応ランタイム</td><td>AWS ベースイメージの Java 11 以降、Python 3.12 以降、.NET 8 以降</td></tr>
+      <tr><td>その他のランタイム</td><td>Node.js、Ruby、カスタムベースイメージはランタイムフックの実装が必要</td></tr>
+      <tr><td>有効化方法</td><td>Lambda API、コンソール、AWS CLI、CloudFormation、SAM、SDK、CDK</td></tr>
+      <tr><td>動作方式</td><td>バージョン発行時にスナップショットを作成し、呼び出し時に再開</td></tr>
+    </table>
+
+    <h3>設定例 (AWS CLI)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">SnapStart の有効化とバージョン発行</span>
+      </div>
+      <pre><code class="language-bash"># コンテナイメージ関数で SnapStart を有効化
+aws lambda update-function-configuration \
+  --function-name my-container-function \
+  --snap-start ApplyOn=PublishedVersions
+
+# 新しいバージョンを発行 (スナップショットが作成される)
+aws lambda publish-version \
+  --function-name my-container-function</code></pre>
+    </div>
+    <p style="font-size: 14px;"><code class="inline">SnapStart</code> の <code class="inline">ApplyOn</code> を <code class="inline">PublishedVersions</code> に設定すると、バージョン発行時にスナップショットが作成されます。SnapStart は発行済みバージョンおよびそのバージョンを指すエイリアスに対して機能します。</p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <ul class="plain">
+      <li>コンテナイメージとしてパッケージ化された Lambda 関数 (Amazon ECR にイメージを格納)</li>
+      <li>シームレスに利用する場合: AWS ベースイメージの Java 11 以降、Python 3.12 以降、または .NET 8 以降</li>
+      <li>その他のベースイメージやカスタムベースイメージの場合: ランタイムフックの実装</li>
+    </ul>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-body">
+        <div class="step-title">コンテナイメージ関数の作成または確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">aws lambda create-function \
+  --function-name my-container-function \
+  --package-type Image \
+  --code ImageUri=123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/my-image:latest \
+  --role arn:aws:iam::123456789012:role/lambda-execution-role</code></pre>
+        </div>
+        <p>Amazon ECR に格納したコンテナイメージを指定して Lambda 関数を作成します。既存のコンテナイメージ関数がある場合はこのステップは不要です。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-body">
+        <div class="step-title">SnapStart の有効化</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">aws lambda update-function-configuration \
+  --function-name my-container-function \
+  --snap-start ApplyOn=PublishedVersions</code></pre>
+        </div>
+        <p>関数設定を更新し、発行済みバージョンに対して SnapStart を適用するように設定します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-body">
+        <div class="step-title">バージョンの発行と動作確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">aws lambda publish-version \
+  --function-name my-container-function
+
+aws lambda get-function-configuration \
+  --function-name my-container-function:1 \
+  --query "SnapStartResponse"</code></pre>
+        </div>
+        <p>バージョンを発行するとスナップショットが作成されます。<code class="inline">SnapStartResponse</code> の <code class="inline">OptimizationStatus</code> が <code class="inline">On</code> になっていることを確認し、発行したバージョン (またはエイリアス) を呼び出して起動時間を検証します。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ユーザー体験の向上</strong>: レイテンシーに敏感な API やインタラクティブなアプリケーションで、コールドスタートによる応答遅延を大幅に削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンテナ移行の促進</strong>: 起動時間を理由に採用を見送っていたワークロードでも、既存のコンテナベースの CI/CD やツールチェーンを活用可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ML 推論のサーバーレス化</strong>: 大きな依存関係やモデルを含む推論ワークロードを、プロビジョニング済み同時実行なしで低レイテンシーに提供</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">🔬 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>サブ秒起動</strong>: 数秒かかっていたコンテナイメージ関数の起動をサブ秒レベルまで短縮</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>初期化処理の再利用</strong>: 依存関係のロードやフレームワークの初期化をスナップショットに含め、呼び出しごとの初期化を回避</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>既存ツールとの統合</strong>: コンソール、CLI、CloudFormation、SAM、CDK など既存のデプロイ手段でそのまま設定可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3 style="margin-top: 0;">制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>アジアパシフィック (ニュージーランド) およびアジアパシフィック (台北) リージョンでは利用不可</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>AWS ベースイメージでシームレスに利用できるのは Java 11 以降、Python 3.12 以降、.NET 8 以降のみ</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>Node.js、Ruby などのベースイメージやカスタムベースイメージでは、ランタイムフックの実装が必要</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>Java 以外のランタイムではキャッシュとスナップショットからの再開に対する追加料金が発生するため、料金ページの SnapStart Pricing セクションで確認が必要</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>スナップショットから複数の実行環境が再開されるため、初期化時に生成する一意性が必要な値 (乱数シード、一時的な認証情報など) の扱いに注意が必要</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>SnapStart は発行済みバージョンに対して機能するため、バージョン管理を前提とした運用設計が必要</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1️⃣ コンテナイメージによる ML 推論 API</div>
+      <p><strong>シナリオ</strong>: 数 GB のモデルや依存ライブラリを含む推論処理をコンテナイメージ関数で提供しているが、コールドスタートが長くリアルタイム推論に使いにくい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws lambda update-function-configuration \
+  --function-name ml-inference \
+  --snap-start ApplyOn=PublishedVersions
+aws lambda publish-version --function-name ml-inference</code></pre>
+      </div>
+      <p><span class="effect-label">効果</span>モデルロードを含む初期化処理をスナップショットに取り込み、呼び出し時はサブ秒レベルで起動できるため、リアルタイム性が求められる推論 API にも対応しやすくなる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2️⃣ Java フレームワークを使ったコンテナベースの Web API</div>
+      <p><strong>シナリオ</strong>: Spring Boot など初期化の重い Java フレームワークをコンテナイメージで運用しており、コールドスタート時の応答遅延がユーザー体験を損なっている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">AWS SAM テンプレート</span></div>
+        <pre><code class="language-yaml"># AWS SAM テンプレート
+Resources:
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      SnapStart:
+        ApplyOn: PublishedVersions
+      AutoPublishAlias: live</code></pre>
+      </div>
+      <p><span class="effect-label">効果</span>フレームワークの初期化完了後の状態から再開できるため、ピーク時のスケールアウトでも安定した低レイテンシーを維持できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3️⃣ 既存コンテナ CI/CD パイプラインの活用</div>
+      <p><strong>シナリオ</strong>: 組織のビルド・スキャン・配布の仕組みがコンテナイメージ前提で整備されており、Lambda でも同じパイプラインを使いたいが、起動時間の懸念から ZIP デプロイを併用していた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># 既存の CI/CD で ECR にプッシュ後、SnapStart 有効の関数を更新
+aws lambda update-function-code \
+  --function-name my-service \
+  --image-uri 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/my-service:v2
+aws lambda publish-version --function-name my-service</code></pre>
+      </div>
+      <p><span class="effect-label">効果</span>コンテナ前提の CI/CD とセキュリティスキャンを維持したまま、ZIP デプロイ相当の起動性能を得られ、デプロイ方式を統一できる。</p>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="section" style="margin-bottom: 24px;">
+      <h2>💰 料金</h2>
+      <p style="font-size: 14px;">SnapStart の料金は、対象ランタイムに応じてスナップショットのキャッシュ量と復元回数に基づく追加料金が発生します (Java マネージドランタイムは追加料金なしの体系)。コンテナイメージ関数での具体的な料金は、AWS Lambda 料金ページの SnapStart Pricing セクションを参照してください。</p>
+      <p style="font-size: 14px;">🔗 <a class="aws-link" href="https://aws.amazon.com/lambda/pricing/#SnapStart_Pricing" target="_blank" rel="noopener noreferrer">AWS Lambda 料金 (SnapStart Pricing)</a></p>
+    </div>
+    <div class="section" style="margin-bottom: 24px;">
+      <h2>🌏 利用可能リージョン</h2>
+      <p style="font-size: 14px;">アジアパシフィック (ニュージーランド) およびアジアパシフィック (台北) を除く、すべての AWS 商用リージョンで利用可能です。<span class="highlight">東京・大阪リージョンを含みます</span>。</p>
+      <p style="font-size: 14px;">🔗 <a class="aws-link" href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer">AWS リージョン別サービス一覧</a></p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">🪣 Amazon ECR</div>
+      <p>コンテナイメージ関数のイメージ格納先。既存のイメージ配布フローをそのまま利用できる。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">📜 AWS SAM / AWS CDK / CloudFormation</div>
+      <p>SnapStart 設定を IaC として管理し、バージョン発行やエイリアス運用を自動化できる。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🔥 Lambda プロビジョニング済み同時実行</div>
+      <p>コールドスタート対策の代替手段。常時ウォームな環境を確保する方式で、SnapStart とはコスト特性が異なる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>コンテナイメージ関数の最大の弱点であった<span class="highlight">コールドスタートの長さ</span>が、SnapStart により<span class="highlight">サブ秒レベルまで短縮可能</span>になりました。ML 推論や Java フレームワークなど初期化の重いワークロードをコンテナで運用しているチームは、まず AWS ベースイメージ (Java 11 以降、Python 3.12 以降、.NET 8 以降) の関数で SnapStart を有効化し、起動時間とコストへの影響を検証することを推奨します。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <p>・公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/07/aws-lambda-snapstart-container/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/07/aws-lambda-snapstart-container/</a></p>
+    <p>・ドキュメント: Lambda SnapStart: <a class="aws-link" href="https://docs.aws.amazon.com/lambda/latest/dg/snapstart.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/lambda/latest/dg/snapstart.html</a></p>
+    <p>・ドキュメント: コンテナイメージ関数の作成: <a class="aws-link" href="https://docs.aws.amazon.com/lambda/latest/dg/images-create.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/lambda/latest/dg/images-create.html</a></p>
+    <p>・ドキュメント: カスタムランタイムフック: <a class="aws-link" href="https://docs.aws.amazon.com/lambda/latest/dg/snapstart-runtime-hooks-custom.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/lambda/latest/dg/snapstart-runtime-hooks-custom.html</a></p>
+    <p>・料金ページ: <a class="aws-link" href="https://aws.amazon.com/lambda/pricing/#SnapStart_Pricing" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/lambda/pricing/#SnapStart_Pricing</a></p>
+    <p>・元レポート: reports/2026/2026-09-02-aws-lambda-snapstart-container.md (AWS News Summary)</p>
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
