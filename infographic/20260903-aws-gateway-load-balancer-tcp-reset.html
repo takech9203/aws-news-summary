@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Gateway Load Balancer - TCP Reset による高速な障害復旧のサポート</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .highlight-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.inline-code {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: var(--aws-smile-orange);
+  word-break: break-all;
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+.before-box .ba-title { color: #FF8A70; }
+.after-box .ba-title { color: #6BCB4A; }
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ba-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+.ba-item .mark { flex-shrink: 0; }
+.before-box .mark { color: #FF8A70; }
+.after-box .mark { color: #6BCB4A; }
+
+/* Key point banner */
+.key-point {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.5);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 16px 0;
+  font-size: 15px;
+}
+.key-point strong { color: var(--aws-smile-orange); }
+
+/* Feature cards */
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+.feature-card .feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+.feature-card p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+.table-wrap { overflow-x: auto; }
+
+/* Check / cross list */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #6BCB4A; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF8A70; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* Steps */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+}
+.step-number {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-content .step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.usecase .usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid #6BCB4A;
+  border-radius: 0 6px 6px 0;
+  padding: 8px 12px;
+  margin-top: 10px;
+}
+
+/* Region grid */
+.region-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.region-chip {
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(0, 161, 201, 0.5);
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 14px;
+}
+
+/* Stats */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(35, 47, 62, 0.4));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* Related services */
+.related-item {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+  font-size: 14px;
+  align-items: flex-start;
+}
+.related-item .rel-name {
+  font-weight: 700;
+  color: var(--aws-white);
+  white-space: nowrap;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- ===== ヘッダー ===== -->
+  <div class="header">
+    <span class="service-badge">⚖️ AWS Gateway Load Balancer</span>
+    <h1>TCP Reset による高速な障害復旧のサポート</h1>
+    <div class="subtitle">
+      📅 リリース日: <span class="highlight-date">2026 年 9 月 3 日</span> ｜
+      サービス: AWS Gateway Load Balancer (GWLB) ｜
+      機能: TCP Reset (RST) パケット送信による TCP フローの高速復旧
+    </div>
+  </div>
+
+  <!-- ===== 概要 ===== -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      AWS Gateway Load Balancer (GWLB) が、ターゲットが<span class="highlight">異常 (unhealthy)</span> になったとき、
+      <span class="highlight">登録解除</span>されたとき、または<span class="highlight">アイドルタイムアウト</span>が期限切れになったときに、
+      <span class="highlight">TCP Reset (RST) パケット</span>を送信する機能をサポートしました。
+      TCP エンドポイントが失敗した接続を迅速に検出して正常なターゲット経由の新しいフローを確立できるため、
+      トラフィックの中断時間を<span class="highlight">数分から数秒</span>に短縮できます。
+    </p>
+    <div class="key-point">
+      💡 <strong>ポイント</strong>: 従来はターゲット障害時も既存の TCP 接続が異常なターゲットに転送され続ける「フェイルオープン」動作となり、
+      TCP の再送と指数バックオフにより<strong>数分間の中断</strong>が発生していました。
+      本機能は後方互換性のため<strong>デフォルト無効のオプトイン方式</strong>で、コンソール、CLI、API から
+      ターゲットグループ単位およびリスナー単位で有効化できます。
+      GWLB が利用可能なすべてのリージョンで、新規・既存を問わず<strong>追加料金なし</strong>で利用できます。
+    </div>
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">数分 → 数秒</div>
+        <div class="stat-label">ターゲット障害時のトラフィック中断時間</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">3 トリガー</div>
+        <div class="stat-label">unhealthy / 登録解除 / アイドルタイムアウトを個別に有効化可能</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">GWLB の標準料金のみで利用可能</div>
+      </div>
+    </div>
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ アップデート前の課題</div>
+        <div class="ba-item"><span class="mark">✗</span><span>ターゲットが障害を起こしても既存の TCP フローは異常なターゲットに転送され続け、トラフィックはサイレントにドロップされていた</span></div>
+        <div class="ba-item"><span class="mark">✗</span><span>クライアント/サーバーは TCP の再送と指数バックオフにより、接続断の検出までに 30 秒から 5 分以上を要することがあった</span></div>
+        <div class="ba-item"><span class="mark">✗</span><span>取引プラットフォーム、リアルタイム通信、EC サイトのチェックアウトなど、レイテンシーに敏感なワークロードでは長時間の中断が大きな影響となっていた</span></div>
+        <div class="ba-item"><span class="mark">✗</span><span>アイドルタイムアウトでフローテーブルからフローが削除されても、エンドポイント側には通知されず切断状態の検出が遅れていた</span></div>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <div class="ba-item"><span class="mark">✓</span><span>異常検出時、登録解除時、アイドルタイムアウト期限切れ時に GWLB が TCP RST を返すことで、送信元が接続断を即座に検知できるようになった</span></div>
+        <div class="ba-item"><span class="mark">✓</span><span>RST 受信後すぐに再接続して正常なターゲット経由の新しいフローを確立できるため、復旧時間が数分から数秒に短縮された</span></div>
+        <div class="ba-item"><span class="mark">✓</span><span>3 つのトリガーを個別に有効化でき、要件に応じた柔軟な設定が可能になった</span></div>
+        <div class="ba-item"><span class="mark">✓</span><span>新しい CloudWatch メトリクス <span class="inline-code">TCP_ELB_Reset_Count</span> により、GWLB が生成した RST の数を監視できるようになった</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== アーキテクチャ図 ===== -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+sequenceDiagram
+    participant C as 💻 クライアント
+    participant G as ⚖️ GWLB
+    participant A1 as 🛡️ アプライアンス 1 障害
+    participant A2 as 🛡️ アプライアンス 2 正常
+
+    Note over G,A1: ヘルスチェック失敗でターゲットを unhealthy と判定
+    alt 従来のフェイルオープン動作
+        C->>G: 既存フローのパケット送信
+        G--xA1: 異常ターゲットへ転送継続
+        Note over C: TCP 再送と指数バックオフ<br/>数分間の中断が発生
+    else TCP Reset 有効時
+        C->>G: 既存フローのパケット送信
+        G-->>C: TCP RST を返送しフローテーブルから削除
+        C->>G: 新しい TCP 接続を確立
+        G->>A2: 正常なターゲットへ新規フローを転送
+        Note over C,A2: 数秒で復旧完了
+    end
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      ターゲット障害時の従来動作と TCP Reset 有効時の動作の比較です。TCP Reset を有効にすると、
+      GWLB は着信トラフィックへの応答として RST を返し、送信元が<span class="highlight">即座に再接続</span>して
+      正常なターゲット経由で通信を再開できます。
+    </p>
+  </div>
+
+  <!-- ===== 主要機能 ===== -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">1️⃣ ターゲット異常時の TCP Reset (ターゲットグループ属性)</div>
+      <p>→ ヘルスチェックが設定回数連続で失敗し、ターゲットが unhealthy と判定された後、該当フローへの着信トラフィックに対して TCP RST を送信</p>
+      <p>→ 属性名: <span class="inline-code">send_tcp_reset.on_unhealthy.enabled</span> (デフォルト: <span class="inline-code">false</span>)</p>
+      <p>→ RST 送信後にフローエントリをフローテーブルから削除し、後続トラフィックは新しいフローとして正常なターゲットにルーティング</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">2️⃣ ターゲット登録解除時の TCP Reset (ターゲットグループ属性)</div>
+      <p>→ ターゲットの登録解除後、コネクションドレイン時間が経過した後に TCP RST を送信</p>
+      <p>→ 属性名: <span class="inline-code">send_tcp_reset.on_deregistration.enabled</span> (デフォルト: <span class="inline-code">false</span>)</p>
+      <p>→ アプライアンスの計画的な入れ替えやスケールインの際に、既存フローを安全かつ迅速に移行できる</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">3️⃣ アイドルタイムアウト期限切れ時の TCP Reset (リスナー属性)</div>
+      <p>→ TCP フローのアイドルタイムアウト期限切れ時、またはフローテーブルに存在しないフローの非 SYN TCP パケット受信時に TCP RST を送信</p>
+      <p>→ 属性名: <span class="inline-code">send_tcp_reset.on_idle_timeout.enabled</span> (デフォルト: <span class="inline-code">false</span>)</p>
+      <p>→ 従来はサイレントにドロップされていた古いフローを能動的にクローズし、エンドポイント側の無駄な再送を防止</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">4️⃣ TCP Reset の動作原則</div>
+      <p>→ GWLB は着信トラフィックへの応答としてのみ RST を送信し、自発的に RST パケットを生成することはない</p>
+      <p>→ RST は、トリガーとなったパケットの送信元 (クライアントまたはリモート宛先) に返送される</p>
+      <p>→ TCP トラフィックのみが対象であり、UDP などその他のプロトコルには影響しない</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">5️⃣ CloudWatch による監視</div>
+      <p>→ 新しいメトリクス <span class="inline-code">TCP_ELB_Reset_Count</span> で、ロードバランサーが生成した TCP RST の総数を追跡可能</p>
+      <p>→ GWLB のモニタリングタブから確認可能</p>
+    </div>
+  </div>
+
+  <!-- ===== 技術仕様 ===== -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+    <h3>TCP Reset のトリガーと設定属性</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>トリガー</th><th>RST 送信タイミング</th><th>属性名</th><th>設定レベル</th><th>デフォルト</th></tr>
+        <tr>
+          <td>ターゲット異常</td>
+          <td>ヘルスチェックの連続失敗で unhealthy 判定後</td>
+          <td><span class="inline-code">send_tcp_reset.on_unhealthy.enabled</span></td>
+          <td>ターゲットグループ</td>
+          <td><span class="inline-code">false</span></td>
+        </tr>
+        <tr>
+          <td>ターゲット登録解除</td>
+          <td>コネクションドレイン時間の経過後</td>
+          <td><span class="inline-code">send_tcp_reset.on_deregistration.enabled</span></td>
+          <td>ターゲットグループ</td>
+          <td><span class="inline-code">false</span></td>
+        </tr>
+        <tr>
+          <td>アイドルタイムアウト</td>
+          <td>TCP アイドルタイムアウト期限切れ後の非 SYN パケット受信時</td>
+          <td><span class="inline-code">send_tcp_reset.on_idle_timeout.enabled</span></td>
+          <td>リスナー</td>
+          <td><span class="inline-code">false</span></td>
+        </tr>
+      </table>
+    </div>
+    <h3>関連するリスナー属性</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>属性</th><th>詳細</th></tr>
+        <tr>
+          <td><span class="inline-code">tcp.idle_timeout.seconds</span></td>
+          <td>TCP アイドルタイムアウト値。有効範囲は 60〜6000 秒、デフォルトは 350 秒</td>
+        </tr>
+        <tr>
+          <td><span class="inline-code">send_tcp_reset.on_idle_timeout.enabled</span></td>
+          <td>アイドルタイムアウト時の RST 送信。RST 送信後にフローエントリをフローテーブルから削除</td>
+        </tr>
+      </table>
+    </div>
+    <h3>有効化の前提条件</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>フロースティッキネス</td><td>5-tuple フロースティッキネスが必須 (<span class="inline-code">stickiness.enabled</span> が <span class="inline-code">false</span> の場合のデフォルト動作)</td></tr>
+        <tr><td>スティッキネスとの排他</td><td><span class="inline-code">stickiness.enabled</span> が <span class="inline-code">true</span> (2-tuple/3-tuple) の場合は有効化不可</td></tr>
+        <tr><td>Flow Rebalance との排他</td><td><span class="inline-code">target_failover.on_unhealthy</span> / <span class="inline-code">target_failover.on_deregistration</span> が <span class="inline-code">rebalance</span> の場合は有効化不可</td></tr>
+        <tr><td>対象プロトコル</td><td>TCP のみ (UDP その他は対象外)</td></tr>
+        <tr><td>対象ロードバランサー</td><td>新規および既存のすべての GWLB</td></tr>
+      </table>
+    </div>
+    <h3>API 変更</h3>
+    <p style="font-size: 14px;">
+      本機能は既存の <span class="inline-code">ModifyTargetGroupAttributes</span> API および
+      <span class="inline-code">ModifyListenerAttributes</span> API に新しい属性キーを追加する形で提供されており、
+      新規 API メソッドの追加はありません。
+    </p>
+  </div>
+
+  <!-- ===== 設定方法 ===== -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Gateway Load Balancer とターゲットグループが作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ターゲットグループのフロースティッキネスが 5-tuple (デフォルト、<span class="inline-code">stickiness.enabled=false</span>) であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ターゲットフェイルオーバー属性が <span class="inline-code">no_rebalance</span> (デフォルト) であること</span></div>
+
+    <h3>手順</h3>
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">ターゲットグループ属性で TCP Reset を有効化</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI - ターゲットグループ属性の変更</span></div>
+          <pre><code class="language-bash">aws elbv2 modify-target-group-attributes \
+  --target-group-arn &lt;target-group-arn&gt; \
+  --attributes \
+    Key=send_tcp_reset.on_unhealthy.enabled,Value=true \
+    Key=send_tcp_reset.on_deregistration.enabled,Value=true</code></pre>
+        </div>
+        <p>ターゲットが unhealthy になった場合と登録解除された場合の両方で TCP RST を送信するよう設定します。要件に応じて片方のみ有効化することも可能です。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">リスナー属性でアイドルタイムアウト時の TCP Reset を有効化</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI - リスナー属性の変更</span></div>
+          <pre><code class="language-bash">aws elbv2 modify-listener-attributes \
+  --listener-arn &lt;listener-arn&gt; \
+  --attributes Key=send_tcp_reset.on_idle_timeout.enabled,Value=true</code></pre>
+        </div>
+        <p>TCP フローのアイドルタイムアウト期限切れ時、またはフローテーブルに存在しないフローの非 SYN パケット受信時に、GWLB が RST を返すようになります。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">設定の確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI - 属性の確認</span></div>
+          <pre><code class="language-bash">aws elbv2 describe-target-group-attributes \
+  --target-group-arn &lt;target-group-arn&gt;</code></pre>
+        </div>
+        <p><span class="inline-code">send_tcp_reset.on_unhealthy.enabled</span> と <span class="inline-code">send_tcp_reset.on_deregistration.enabled</span> が <span class="inline-code">true</span> になっていることを確認します。コンソールの場合は EC2 コンソールの [Target Groups] から対象ターゲットグループの [Attributes] タブを開き、[No rebalance and send TCP reset] タイルを選択して各リセットオプションを有効化します。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">ヘルスチェックのチューニングと監視</div>
+        <p>障害検出時間は「ヘルスチェック間隔 × unhealthy しきい値」で決まります。デフォルト設定 (間隔 30 秒、しきい値 3) では障害発生から約 3 分後に RST が送信されます。<span class="highlight">間隔 5 秒、しきい値 2</span> に短縮すると約 10 秒で障害を検出でき、RST の配信は最大 90 秒以内に完了します。有効化後は CloudWatch メトリクス <span class="inline-code">TCP_ELB_Reset_Count</span> で RST の発生状況を監視します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== メリット / デメリット ===== -->
+  <div class="section">
+    <h2>⚖️ メリット・デメリット</h2>
+    <h3>✅ ビジネス面のメリット</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">ダウンタイムの大幅短縮</strong>: アプライアンス障害時のトラフィック中断が数分から数秒に短縮され、取引システムや EC サイトなどレイテンシーに敏感なビジネスへの影響を最小化できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">追加コストなし</strong>: 本機能に追加料金は発生せず、既存の GWLB 構成にそのまま適用できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">運用の柔軟性向上</strong>: 登録解除時の RST により、アプライアンスの計画的なメンテナンスや入れ替えをユーザー影響を抑えながら実施できる</span></div>
+    <h3>✅ 技術面のメリット</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">TCP レベルでの即時通知</strong>: TCP スタックの再送・指数バックオフ (30 秒〜5 分以上) を待たずに、RST により接続断を即座にエンドポイントへ通知できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">トリガーごとの個別制御</strong>: unhealthy、登録解除、アイドルタイムアウトの 3 つのトリガーを独立して有効化でき、きめ細かな制御が可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">後方互換性の維持</strong>: デフォルト無効のオプトイン方式のため、既存環境の動作に影響を与えずに段階的に導入できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">可観測性の向上</strong>: <span class="inline-code">TCP_ELB_Reset_Count</span> メトリクスにより、障害発生や古いフローのクローズ状況を定量的に把握できる</span></div>
+    <h3>⚠️ 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>TCP トラフィックのみが対象であり、UDP やその他のプロトコルには適用されない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>5-tuple フロースティッキネスが必須であり、2-tuple/3-tuple スティッキネス (<span class="inline-code">stickiness.enabled=true</span>) との併用はできない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Flow Rebalance 機能 (<span class="inline-code">target_failover</span> が <span class="inline-code">rebalance</span>) との併用はできない。リバランスは既存フローを新しいターゲットへ意図的に移行するため、RST の目的と相反するためである</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>GWLB は自発的に RST を生成せず、着信トラフィックへの応答としてのみ送信するため、無通信のフローには RST が送られない</span></div>
+    <h3>💭 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>障害検出までの時間はヘルスチェック設定 (間隔 × しきい値) に依存。迅速な復旧が必要な場合は積極的なチューニングが必要だが、間隔短縮はヘルスチェックトラフィックの増加と誤検知リスクの上昇を伴う</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>アプリケーション層の既存タイムアウトやリトライロジックは維持することが推奨される。本機能はリトライロジックを置き換えるものではなく補完するものである</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>ステートフルなアプライアンスが再接続を正しく処理できるか、本番環境への適用前に非本番環境でのテストが推奨される</span></div>
+  </div>
+
+  <!-- ===== ユースケース ===== -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+    <div class="usecase">
+      <div class="usecase-title">🔥 ユースケース 1: ファイアウォールアプライアンス障害時の高速フェイルオーバー</div>
+      <p><span class="label">シナリオ</span>: GWLB の背後に複数のサードパーティ製ファイアウォールアプライアンスを配置してインターネット向けトラフィックを検査している環境で、1 台のアプライアンスがソフトウェア障害でヘルスチェックに失敗した。従来は既存の TCP セッションが数分間ハングしていた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">TCP Reset 有効化とヘルスチェックの高速化</span></div>
+        <pre><code class="language-bash"># unhealthy 時の TCP Reset を有効化
+aws elbv2 modify-target-group-attributes \
+  --target-group-arn &lt;firewall-target-group-arn&gt; \
+  --attributes Key=send_tcp_reset.on_unhealthy.enabled,Value=true
+
+# ヘルスチェックを積極的な設定に変更して検出を高速化
+aws elbv2 modify-target-group \
+  --target-group-arn &lt;firewall-target-group-arn&gt; \
+  --health-check-interval-seconds 5 \
+  --unhealthy-threshold-count 2</code></pre>
+      </div>
+      <p class="effect">✅ <span class="label">効果</span>: 障害検出が約 10 秒に短縮され、RST を受信したクライアントが即座に再接続することで、正常なファイアウォール経由での通信が数秒で再開される。</p>
+    </div>
+    <div class="usecase">
+      <div class="usecase-title">🔧 ユースケース 2: アプライアンスの計画メンテナンスにおける安全な切り離し</div>
+      <p><span class="label">シナリオ</span>: IDS/IPS アプライアンスのバージョンアップのため、ターゲットを順次登録解除して入れ替えたい。コネクションドレイン後も残る長時間接続 (長命な TCP セッション) が、ドレイン完了後にサイレントドロップされることを避けたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">登録解除時の TCP Reset とドレインの開始</span></div>
+        <pre><code class="language-bash"># 登録解除時の TCP Reset を有効化
+aws elbv2 modify-target-group-attributes \
+  --target-group-arn &lt;ips-target-group-arn&gt; \
+  --attributes Key=send_tcp_reset.on_deregistration.enabled,Value=true
+
+# ターゲットを登録解除 (ドレイン開始)
+aws elbv2 deregister-targets \
+  --target-group-arn &lt;ips-target-group-arn&gt; \
+  --targets Id=&lt;instance-id&gt;</code></pre>
+      </div>
+      <p class="effect">✅ <span class="label">効果</span>: ドレイン時間経過後に残存フローへ RST が送信され、クライアントが即座に別のアプライアンス経由で再接続するため、メンテナンス作業をユーザー影響を最小限に抑えて実施できる。</p>
+    </div>
+    <div class="usecase">
+      <div class="usecase-title">🧹 ユースケース 3: 長時間アイドルな接続の能動的なクリーンアップ</div>
+      <p><span class="label">シナリオ</span>: 金融系のリアルタイム通信システムで、TCP アイドルタイムアウト (デフォルト 350 秒) の期限切れにより GWLB のフローテーブルからフローが削除された後も、エンドポイントは接続が有効と認識したままパケットを送信し、再送を繰り返していた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">アイドルタイムアウト時の TCP Reset とタイムアウト値の調整</span></div>
+        <pre><code class="language-bash"># アイドルタイムアウト時の TCP Reset を有効化し、タイムアウト値も調整
+aws elbv2 modify-listener-attributes \
+  --listener-arn &lt;listener-arn&gt; \
+  --attributes \
+    Key=send_tcp_reset.on_idle_timeout.enabled,Value=true \
+    Key=tcp.idle_timeout.seconds,Value=600</code></pre>
+      </div>
+      <p class="effect">✅ <span class="label">効果</span>: フローテーブルに存在しないフローの非 SYN パケットに対して RST が返るため、エンドポイントが古い接続を即座に破棄して再接続でき、無駄な再送トラフィックとアプリケーションのハングが解消される。</p>
+    </div>
+  </div>
+
+  <!-- ===== 料金 ===== -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">TCP Reset 機能の利用は無料</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">標準料金</div>
+        <div class="stat-label">GWLB 時間料金および GLCU 単位の使用量課金がそのまま適用</div>
+      </div>
+    </div>
+    <p style="font-size: 14px;">
+      CloudWatch メトリクス <span class="inline-code">TCP_ELB_Reset_Count</span> の参照についても、CloudWatch の標準的な利用範囲内で確認できます。
+      詳細は <a href="https://aws.amazon.com/elasticloadbalancing/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Elastic Load Balancing 料金ページ</a> を参照してください。
+    </p>
+  </div>
+
+  <!-- ===== 利用可能リージョン ===== -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <div class="region-grid">
+      <div class="region-chip">🌐 Gateway Load Balancer が利用可能なすべての AWS リージョン</div>
+    </div>
+    <p style="font-size: 14px; margin-top: 12px;">新規および既存のすべての Gateway Load Balancer に対して利用できます。</p>
+  </div>
+
+  <!-- ===== 関連サービス ===== -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-item"><span class="rel-name">🔌 GWLB Endpoint (GWLBE)</span><span>GWLB へトラフィックを送るための PrivateLink ベースのエンドポイント。TCP Reset は GWLBE 経由のトラフィックにも透過的に機能する</span></div>
+    <div class="related-item"><span class="rel-name">⚖️ Elastic Load Balancing</span><span>NLB にも同様の TCP アイドルタイムアウトやリセットの概念があり、GWLB が同水準の障害復旧機能を獲得した形となる</span></div>
+    <div class="related-item"><span class="rel-name">📈 Amazon CloudWatch</span><span>新メトリクス <span class="inline-code">TCP_ELB_Reset_Count</span> による RST 発生状況の監視と、既存のヘルスチェック関連メトリクスとの組み合わせで障害対応を可視化できる</span></div>
+    <div class="related-item"><span class="rel-name">🔀 AWS Transit Gateway</span><span>アプライアンスモードと組み合わせた集中検査アーキテクチャで GWLB を利用する場合、5-tuple スティッキネスが必要であり、本機能の前提条件とも整合する</span></div>
+  </div>
+
+  <!-- ===== まとめ ===== -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="key-point">
+      GWLB の TCP Reset サポートにより、セキュリティアプライアンス障害時のトラフィック中断が
+      <strong>数分から数秒へと大幅に短縮</strong>され、GWLB を用いた集中検査アーキテクチャの可用性が向上しました。
+      <strong>デフォルト無効のオプトイン方式かつ追加料金なし</strong>で利用できるため、
+      GWLB の背後でファイアウォールや IDS/IPS を運用しているユーザーは、
+      非本番環境での動作確認とヘルスチェック設定のチューニングを行ったうえで、本機能の有効化を検討することを推奨します。
+    </div>
+  </div>
+
+  <!-- ===== フッター ===== -->
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/09/aws-gateway-load-balancer-tcp-reset/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): AWS Gateway Load Balancer - TCP Reset</a></li>
+      <li><a href="https://aws.amazon.com/blogs/networking-and-content-delivery/reduce-traffic-interruptions-with-gateway-load-balancer-tcp-reset/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: Reduce traffic interruptions with Gateway Load Balancer TCP Reset</a></li>
+      <li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/gateway/edit-target-group-attributes.html#send-tcp-reset-target-failover" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Edit target group attributes for your Gateway Load Balancer</a></li>
+      <li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/gateway/gateway-listeners.html#listener-attributes" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Listeners for your Gateway Load Balancers</a></li>
+      <li><a href="https://aws.amazon.com/elasticloadbalancing/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ: Elastic Load Balancing pricing</a></li>
+    </ul>
+    <p>元レポート: reports/2026/2026-09-03-aws-gateway-load-balancer-tcp-reset.md ｜ 生成日: 2026 年 9 月 3 日</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
