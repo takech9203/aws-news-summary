@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon ECS - サービスデプロイの Early Success Criteria</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Header */
+.header {
+  background: linear-gradient(135deg, var(--aws-dark-squid) 0%, #2d3d50 100%);
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 153, 0, 0.4);
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul { margin: 8px 0 0 0; padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-label {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+
+.before-box .ba-label { color: #FF6B4A; }
+.after-box .ba-label { color: #4CAF50; }
+
+.ba-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.before-box .ba-item::before { content: "✗"; color: #FF6B4A; font-weight: bold; flex-shrink: 0; }
+.after-box .ba-item::before { content: "✓"; color: #4CAF50; font-weight: bold; flex-shrink: 0; }
+
+/* Stat cards */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18) 0%, rgba(255, 153, 0, 0.06) 100%);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  margin-top: 6px;
+  color: var(--aws-light-gray);
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-weight: 600;
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+td code, li code, p code {
+  background: rgba(255, 153, 0, 0.12);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.25);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Check / warning list */
+.check-item, .warn-item, .note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-item::before { content: "✅"; flex-shrink: 0; }
+.warn-item::before { content: "⚠️"; flex-shrink: 0; }
+.note-item::before { content: "💡"; flex-shrink: 0; }
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 16px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 8px 0; font-size: 14px; }
+
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+/* Steps */
+.step {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0 8px 0;
+  align-items: center;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.step-title {
+  font-weight: 600;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+ul.plain { margin: 8px 0; padding-left: 20px; }
+ul.plain li { margin: 6px 0; }
+
+/* Related services */
+.related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.related-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 14px;
+}
+
+.related-card .rc-title {
+  color: var(--aws-teal);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* Summary */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15) 0%, rgba(140, 79, 255, 0.1) 100%);
+  border: 1px solid rgba(255, 153, 0, 0.5);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .before-after { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+  body { padding: 12px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="service-badge">Amazon ECS</div>
+    <h1>🚀 サービスデプロイの Early Success Criteria</h1>
+    <div class="subtitle">ローリングデプロイの成功条件を自分で定義し、デプロイを早期に完了できるように</div>
+    <div class="release-date">📅 リリース日: 2026 年 9 月 4 日</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon ECS が、ローリングデプロイ戦略を使用するサービスデプロイにおいて <span class="highlight">Early Success Criteria (早期成功基準)</span> をサポートしました。
+      デプロイを「成功」と見なす条件を、ワークロードの運用要件と信頼度に基づいて柔軟に定義できます。
+    </p>
+    <p>
+      <span class="highlight">healthy percent</span> (成功と見なすために必要な正常タスクの割合) を設定でき、例えば desired count 100 のサービスで 90% に設定すると、
+      90 タスクが正常になった時点でデプロイが完了します。残りのタスクはデプロイ外の通常のサービススケーリングで起動されます。
+      さらに、旧リビジョンのクリーンアップ方式として <span class="highlight">BLOCKING</span> と <span class="highlight">DEFERRED</span> を選択できます。
+    </p>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">90%</div>
+        <div class="stat-label">例: healthy percent 設定で 90 タスク正常時に完了 (desired count 100)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">2 方式</div>
+        <div class="stat-label">クリーンアップ方式<br>BLOCKING / DEFERRED</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">最大 2 週間</div>
+        <div class="stat-label">DEFERRED の非同期クリーンアップ試行期間</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">全 AWS 商用リージョン + GovCloud (US) で利用可能</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-label">❌ Before: アップデート前の課題</div>
+        <div class="ba-item">タスクが desired count の 100% に到達し、すべて正常になるまでデプロイが完了しなかった</div>
+        <div class="ba-item">GPU インスタンスなど容量制約のある環境では、タスク起動待ちでデプロイ全体が長時間ブロック</div>
+        <div class="ba-item">長時間接続やスケールイン保護タスクのドレインが遅いと、CI/CD パイプラインや後続デプロイが待たされる</div>
+        <div class="ba-item">ロールバック監視 (サーキットブレーカー / アラーム) の適用期間をワークロードに合わせて制御しにくい</div>
+      </div>
+      <div class="after-box">
+        <div class="ba-label">✅ After: アップデート後の改善</div>
+        <div class="ba-item">healthy percent 到達時点でデプロイを早期に完了できる</div>
+        <div class="ba-item">残りのタスクはデプロイ外の通常のサービススケーリングで起動され、パイプラインをブロックしない</div>
+        <div class="ba-item">DEFERRED クリーンアップで旧タスクのドレインを待たずに完了し、非同期でクリーンアップ</div>
+        <div class="ba-item">ロールバック監視の適用期間を「自分で定義した健全性レベルに到達するまで」に限定できる</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ デプロイフロー</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Deploy(["🚀 ローリングデプロイ開始"]) --> Launch["⚙️ ターゲットリビジョンの<br/>タスクを起動"]
+    Launch --> Check{"🩺 healthy percent<br/>例: 90% に到達?"}
+    Check -->|未達| Monitor["🛡️ ロールバック監視<br/>サーキットブレーカー / アラーム"]
+    Monitor --> Launch
+    Check -->|到達| Bake["⏱️ アラームロールバック使用時<br/>ベイクタイム経過を待機"]
+    Bake --> Mode{"🔀 クリーンアップ方式"}
+
+    Mode -->|BLOCKING| CleanB["🧹 ソースリビジョンの<br/>タスクをクリーンアップ"]
+    CleanB --> DoneB(["✅ デプロイ完了"])
+
+    Mode -->|DEFERRED| DoneD(["✅ デプロイ完了"])
+    DoneD -.-> CleanD["🧹 ソースリビジョンを<br/>非同期でクリーンアップ<br/>最大 2 週間試行"]
+
+    DoneB -.-> Scale["📈 残りタスクは通常の<br/>サービススケーリングで起動"]
+    DoneD -.-> Scale
+
+    classDef start fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef warn fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef done fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Deploy start
+    class Launch,Bake,CleanB process
+    class Check,Mode decision
+    class Monitor warn
+    class DoneB,DoneD done
+    class CleanD,Scale internal
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      Early Success Criteria を有効にしたローリングデプロイのフローです。healthy percent に到達した時点で成功判定が行われ、
+      BLOCKING では旧リビジョンのクリーンアップ完了後に、DEFERRED ではクリーンアップを待たずにデプロイが完了します。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🩺 1. healthy percent による早期成功判定</div>
+      <ul>
+        <li><code>earlySuccessCriteria.healthyPercent</code> で、成功に必要な正常タスクの割合を desired count に対するパーセンテージで指定</li>
+        <li>必要タスク数は切り上げで計算 (例: desired count 3 で 50% の場合は 2 タスク)</li>
+        <li>タスクの「正常」判定は、サービスに設定したヘルスチェックに基づく</li>
+        <li>設定可能な値はサービスの <code>minimumHealthyPercent</code> 以上 100 以下</li>
+        <li>残りのタスクは、デプロイ完了後に通常のサービススケーリングでデプロイ外で起動</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🧹 2. ソースリビジョンのクリーンアップ方式 (BLOCKING / DEFERRED)</div>
+      <ul>
+        <li><code>earlySuccessCriteria.sourceServiceRevisionCleanup</code> で指定</li>
+        <li><strong>BLOCKING</strong>: 旧タスクのクリーンアップ完了後にデプロイを成功と判定 (従来に近い動作)</li>
+        <li><strong>DEFERRED</strong>: 成功基準を満たした時点で完了し、旧タスクのクリーンアップは非同期で実行 (最大 2 週間試行)</li>
+        <li>DEFERRED は、長時間接続やタスクスケールイン保護を使用するサービスで、旧タスクの継続実行がデプロイをブロックしないようにするために有効</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🛡️ 3. ロールバック監視期間の制御</div>
+      <ul>
+        <li>サーキットブレーカーおよび CloudWatch アラームによるロールバックは、デプロイ進行中 (成功基準を満たすまで) に適用</li>
+        <li>デプロイ完了後は、残りタスクのスケールアウト中も含めてロールバックは行われない</li>
+        <li>ロールバック監視の適用範囲を healthy percent の設定によって実質的に制御可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔧 4. 既存の運用ツールとの整合性</div>
+      <ul>
+        <li><code>DescribeServiceDeployments</code> でステータスと設定した Early Success Criteria を確認可能 (進行中はライブのタスク数、完了後はスナップショット)</li>
+        <li>ライブのタスク数の確認には <code>DescribeServices</code> を使用</li>
+        <li>早期完了したデプロイも <code>ListServiceDeployments</code> の <code>SUCCESSFUL</code> フィルタに含まれる</li>
+        <li>状態変更イベントと CloudTrail は標準の <code>IN_PROGRESS</code> → <code>SUCCESSFUL</code> のライフサイクルを示し、新しいデプロイステータスは追加されない</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>📋 技術仕様</h2>
+
+    <h3>Early Success Criteria の設定項目</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対象デプロイ戦略</td><td>ローリングデプロイ (<code>ROLLING</code>)</td></tr>
+      <tr><td><code>earlySuccessCriteria.enable</code></td><td>Early Success Criteria の有効化フラグ</td></tr>
+      <tr><td><code>earlySuccessCriteria.healthyPercent</code></td><td>成功判定に必要な正常タスクの割合。<code>minimumHealthyPercent</code> 以上 100 以下。切り上げで計算</td></tr>
+      <tr><td><code>earlySuccessCriteria.sourceServiceRevisionCleanup</code></td><td><code>BLOCKING</code> または <code>DEFERRED</code></td></tr>
+      <tr><td>DEFERRED のクリーンアップ試行期間</td><td>デプロイ完了後、最大 2 週間</td></tr>
+      <tr><td>成功判定の前提</td><td>ターゲットリビジョンで少なくとも 1 タスクが正常になってから healthy percent を評価</td></tr>
+      <tr><td>設定手段</td><td>AWS Management Console、AWS CLI、AWS SDK、IaC ツール</td></tr>
+    </table>
+
+    <h3>healthy percent の計算例 (切り上げ)</h3>
+    <table>
+      <tr><th>desired count</th><th>healthy percent</th><th>必要な正常タスク数</th></tr>
+      <tr><td>2</td><td>50</td><td>1</td></tr>
+      <tr><td>3</td><td>50</td><td>2</td></tr>
+      <tr><td>10</td><td>80</td><td>8</td></tr>
+      <tr><td>100</td><td>90</td><td>90</td></tr>
+      <tr><td>10</td><td>100</td><td>10</td></tr>
+    </table>
+
+    <h3>API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/08/28</td>
+        <td><a href="https://awsapichanges.com/archive/changes/b6cdac-ecs.html" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon EC2 Container Service</a></td>
+        <td>5 updated api methods - ECS ローリングデプロイの Early Success Criteria サポートを追加。設定可能な割合のタスクが正常になった時点でデプロイを完了でき、旧サービスリビジョンのクリーンアップ方式として BLOCKING (必須) または DEFERRED (非同期) を選択可能</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item">Amazon ECS サービスがローリングデプロイ戦略 (<code>ROLLING</code>) を使用していること</div>
+    <div class="check-item">healthy percent の判定に使用するヘルスチェック (コンテナヘルスチェックまたは ELB ヘルスチェック) がサービスに設定されていること</div>
+    <div class="check-item">healthy percent はサービスの <code>minimumHealthyPercent</code> 以上 100 以下で設定すること</div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-title">既存サービスに Early Success Criteria を設定する</div>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">update-service で Early Success Criteria を有効化</span>
+      </div>
+      <pre><code class="language-bash">aws ecs update-service \
+    --cluster MyCluster \
+    --service MyService \
+    --deployment-configuration '{
+        "strategy": "ROLLING",
+        "earlySuccessCriteria": {
+            "enable": true,
+            "healthyPercent": 90,
+            "sourceServiceRevisionCleanup": "BLOCKING"
+        }
+    }'</code></pre>
+    </div>
+    <p style="font-size: 14px;">
+      healthy percent を 90%、クリーンアップ方式を BLOCKING に設定しています。新規サービスの場合は <code>create-service</code> で同じパラメータを指定します。
+      コンソールの場合は、サービスの作成 / 更新フローの「デプロイ設定」で Early Success Criteria をオンにし、Healthy percent とクリーンアップ方式 (Blocking / Deferred) を選択します。
+    </p>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-title">デプロイの状況と成功判定を確認する</div>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">デプロイステータスと設定の確認</span>
+      </div>
+      <pre><code class="language-bash">aws ecs describe-service-deployments \
+    --service-deployment-arns &lt;deployment-arn&gt;</code></pre>
+    </div>
+    <p style="font-size: 14px;">デプロイ進行中はライブのタスク数が返され、完了後は完了時点のスナップショットが返されます。</p>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-title">デプロイ完了後のタスク状況を監視する</div>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">ライブのタスク数を確認</span>
+      </div>
+      <pre><code class="language-bash">aws ecs describe-services \
+    --cluster MyCluster \
+    --services MyService</code></pre>
+    </div>
+    <p style="font-size: 14px;">DEFERRED を使用している場合は、ソースリビジョンのタスクが非同期でクリーンアップされる様子をこのコマンドで監視できます。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>👍 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span><strong>デリバリー速度の向上</strong>: デプロイが早期に完了するため、CI/CD パイプライン、後続のデプロイ、依存する運用作業の待ち時間を短縮できる</span></div>
+    <div class="check-item"><span><strong>GPU など希少リソースの制約を吸収</strong>: ハードウェア可用性によりタスク起動が遅れても、パイプライン全体が長時間ブロックされることを回避できる</span></div>
+    <div class="check-item"><span><strong>CI/CD ツールのタイムアウト対策</strong>: 旧タスクのドレインが長引くケース (long-tail) でも、DEFERRED によりツール側の時間制限内にデプロイを完了できる</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span><strong>成功判定の柔軟な制御</strong>: ワークロードへの信頼度に応じて、100% を待たずにデプロイを完了する基準を定義できる</span></div>
+    <div class="check-item"><span><strong>ロールバック監視期間の明確化</strong>: サーキットブレーカー / CloudWatch アラームによる保護を「自分が定義した健全性レベルに到達するまで」に限定できる</span></div>
+    <div class="check-item"><span><strong>旧リビジョンの安全な非同期ドレイン</strong>: 長時間接続やタスクスケールイン保護を使用するサービスでも、旧タスクを稼働させたままデプロイを完了できる</span></div>
+    <div class="check-item"><span><strong>既存の運用フローとの互換性</strong>: 新しいデプロイステータスは追加されず、既存のイベント / CloudTrail / API との整合性が保たれる</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>制限事項</h3>
+    <div class="warn-item">対象はローリングデプロイ戦略のみ (Blue/Green デプロイは対象外)</div>
+    <div class="warn-item">healthy percent はサービスの <code>minimumHealthyPercent</code> 以上 100 以下に制限される</div>
+    <div class="warn-item">DEFERRED のクリーンアップ試行は最大 2 週間で、タスクスケールイン保護などにより 2 週間を超えて保護されたタスクは ECS がクリーンアップできない</div>
+    <div class="warn-item">デプロイ完了後の残りタスクのスケールアウトには、サーキットブレーカー / アラームによるロールバック保護が適用されない</div>
+
+    <h3>考慮すべき点</h3>
+    <div class="note-item">デプロイ完了後はロールバックできない (デプロイを停止できない) ため、ターゲットリビジョンが健全であると確信できる割合に healthy percent を設定する必要がある</div>
+    <div class="note-item">DEFERRED 使用時は、ソースリビジョンのタスクが残留していないか <code>DescribeServices</code> で監視する運用を組み込むことが望ましい</div>
+    <div class="note-item"><code>DescribeServiceDeployments</code> のタスク数はデプロイ完了後スナップショットになるため、ライブの状態確認には <code>DescribeServices</code> を使用する必要がある</div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🖥️ ユースケース 1: GPU 推論サービスのデプロイ時間短縮</div>
+      <p><strong>シナリオ</strong>: GPU インスタンス上で ML 推論サービスを desired count 20 で運用。GPU 容量の制約により一部のタスク起動に時間がかかり、デプロイが数時間ブロックされることがある。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">deployment-configuration</span>
+        </div>
+        <pre><code class="language-json">{
+    "strategy": "ROLLING",
+    "earlySuccessCriteria": {
+        "enable": true,
+        "healthyPercent": 80,
+        "sourceServiceRevisionCleanup": "BLOCKING"
+    }
+}</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 16 タスク (80%) が正常になった時点でデプロイが完了し、残り 4 タスクは GPU 容量が確保でき次第、通常のサービススケーリングで起動。CI/CD パイプラインの待ち時間を大幅に短縮できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔌 ユースケース 2: 長時間接続を持つサービスの非同期ドレイン</div>
+      <p><strong>シナリオ</strong>: WebSocket ベースのリアルタイム通信サービスで、旧リビジョンのタスクが接続をドレインするまで数時間かかる。CI/CD ツールにはジョブのタイムアウト制限があり、デプロイが失敗扱いになることがある。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">deployment-configuration</span>
+        </div>
+        <pre><code class="language-json">{
+    "strategy": "ROLLING",
+    "earlySuccessCriteria": {
+        "enable": true,
+        "healthyPercent": 100,
+        "sourceServiceRevisionCleanup": "DEFERRED"
+    }
+}</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 新リビジョンのタスクがすべて正常になった時点でデプロイが完了し、旧タスクは接続をドレインしながら非同期でクリーンアップ。CI/CD ツールのタイムアウトを回避しつつ、既存接続を切断せずに安全に移行できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🏭 ユースケース 3: 大規模サービスの連続デプロイ</div>
+      <p><strong>シナリオ</strong>: desired count 100 の大規模 Web サービスで 1 日に複数回デプロイを実施。全タスクの入れ替え完了を待つと後続のデプロイが詰まり、リリースサイクルが遅延する。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">update-service コマンド</span>
+        </div>
+        <pre><code class="language-bash">aws ecs update-service \
+    --cluster ProdCluster \
+    --service WebService \
+    --deployment-configuration '{
+        "strategy": "ROLLING",
+        "earlySuccessCriteria": {
+            "enable": true,
+            "healthyPercent": 90,
+            "sourceServiceRevisionCleanup": "BLOCKING"
+        }
+    }'</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 90 タスクが正常になった時点でデプロイが完了し、サーキットブレーカーと CloudWatch アラームによる保護もその時点まで適用。後続のデプロイを早期に開始でき、リリースサイクル全体のスループットが向上する。</div>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>Early Success Criteria 自体に<span class="highlight">追加料金はありません</span>。Amazon ECS の料金は従来どおり、起動タイプに応じた課金です。</p>
+    <ul class="plain">
+      <li><strong>AWS Fargate</strong>: タスクが使用する vCPU、メモリ、ストレージに対する課金</li>
+      <li><strong>Amazon EC2 起動タイプ</strong>: 使用する EC2 インスタンスに対する課金 (ECS 自体は無料)</li>
+    </ul>
+    <p style="font-size: 14px;">詳細は <a href="https://aws.amazon.com/ecs/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon ECS の料金ページ</a> を参照してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>すべての <span class="highlight">AWS 商用リージョン</span>および <span class="highlight">AWS GovCloud (US) リージョン</span>で利用可能です。</p>
+  </div>
+
+  <!-- 関連サービス・機能 -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="related-card">
+        <div class="rc-title">🛡️ Amazon ECS デプロイサーキットブレーカー</div>
+        デプロイ失敗を自動検出してロールバックする機能。Early Success Criteria の成功判定までの期間に適用される。
+      </div>
+      <div class="related-card">
+        <div class="rc-title">📊 Amazon CloudWatch アラームによるロールバック</div>
+        アラームに基づくデプロイのロールバック機能。ベイクタイムの経過が早期成功判定の条件に含まれる。
+      </div>
+      <div class="related-card">
+        <div class="rc-title">🔒 タスクスケールイン保護</div>
+        処理中のタスクを終了から保護する機能。DEFERRED クリーンアップと組み合わせることで、保護されたタスクがデプロイをブロックしなくなる。
+      </div>
+      <div class="related-card">
+        <div class="rc-title">🔄 AWS CodePipeline / CI/CD ツール</div>
+        デプロイの早期完了により、パイプラインの後続ステージの待ち時間を短縮できる。
+      </div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin-top: 0;">
+        Amazon ECS の Early Success Criteria により、ローリングデプロイの成功条件をワークロードの特性に合わせて定義できるようになり、
+        GPU 推論などの容量制約下や長時間接続を持つサービスでのデプロイ遅延を解消できます。
+      </p>
+      <p style="margin-bottom: 0;">
+        デプロイ完了後はロールバック保護が適用されなくなるため、まずは信頼度の高い <span class="highlight">healthy percent (例: 90%)</span> と
+        <span class="highlight">BLOCKING クリーンアップ</span>から導入し、ドレインが長いサービスでは <span class="highlight">DEFERRED</span> の活用を検討することを推奨します。
+      </p>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-ecs-deployments-early-success/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-ecs-deployments-early-success/</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/early-success-criteria.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Complete Amazon ECS rolling deployments early with early success criteria</a></li>
+      <li><a href="https://aws.amazon.com/ecs/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon ECS 製品ページ</a></li>
+      <li><a href="https://aws.amazon.com/ecs/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/b6cdac-ecs.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 (awsapichanges.com)</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-09-04) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
