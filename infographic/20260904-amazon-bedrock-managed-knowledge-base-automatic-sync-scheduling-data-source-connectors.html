@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Bedrock - Managed Knowledge Base のデータソースコネクタ自動同期スケジューリング</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.ba-card {
+  border-radius: 8px;
+  padding: 16px;
+}
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+.ba-card ul { margin: 0; padding-left: 4px; list-style: none; }
+.ba-card li {
+  margin: 8px 0;
+  padding-left: 24px;
+  position: relative;
+}
+.ba-before li::before { content: "✗"; position: absolute; left: 0; color: #FF6B4A; font-weight: 700; }
+.ba-after li::before { content: "✓"; position: absolute; left: 0; color: #4CAF50; font-weight: 700; }
+
+/* 頻度カード */
+.freq-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 20px 0 4px 0;
+}
+@media (max-width: 720px) {
+  .freq-grid { grid-template-columns: 1fr; }
+}
+.freq-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(255, 153, 0, 0.05));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.freq-card .freq-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--aws-orange);
+}
+.freq-card .freq-desc {
+  font-size: 13px;
+  margin-top: 8px;
+}
+.freq-card .freq-example {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--aws-white);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 16px;
+  margin: 14px 0;
+}
+.feature-card .feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+.feature-card p { margin: 4px 0; font-size: 14.5px; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 12px;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+td code, li code, p code {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 153, 0, 0.25);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* チェックリスト */
+.check-item, .cross-item, .info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #4CAF50; font-size: 16px; line-height: 1.6; }
+.cross-icon { color: #FF6B4A; font-size: 16px; line-height: 1.6; }
+.info-icon { color: var(--aws-teal); font-size: 16px; line-height: 1.6; }
+
+/* メリット 2 カラム */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+.merit-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+}
+.merit-card h3 { margin-top: 0; color: var(--aws-smile-orange); font-size: 16px; }
+
+/* ユースケース */
+.usecase-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(255, 153, 0, 0.03));
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.usecase-card .uc-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase-card .uc-label {
+  font-weight: 700;
+  color: var(--aws-orange);
+  font-size: 13px;
+  margin-top: 10px;
+}
+.usecase-card p { margin: 4px 0; font-size: 14.5px; }
+.usecase-card ol { margin: 6px 0; padding-left: 22px; font-size: 14px; }
+.usecase-card li { margin: 4px 0; }
+
+/* ステップ */
+.step-card {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.step-body { flex: 1; }
+.step-body .step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-body p { margin: 4px 0; font-size: 14.5px; }
+
+/* 関連サービス */
+.related-card {
+  background: rgba(140, 79, 255, 0.08);
+  border: 1px solid rgba(140, 79, 255, 0.35);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 10px 0;
+  font-size: 14.5px;
+}
+.related-card .rel-name { font-weight: 700; color: var(--aws-purple); }
+
+ul.plain { margin: 8px 0; padding-left: 22px; }
+ul.plain li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">Amazon Bedrock</span>
+    <h1>⏰ Managed Knowledge Base のデータソースコネクタ自動同期スケジューリング</h1>
+    <div class="subtitle">📅 リリース日: <span class="date">2026 年 9 月 4 日</span> | 機能: Managed Knowledge Base データソースコネクタの自動同期スケジューリング</div>
+  </div>
+
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>Amazon Bedrock <span class="highlight">Managed Knowledge Base</span> が、データソースコネクタの<span class="highlight">自動同期スケジューリング</span>をサポートしました。Managed Knowledge Base は、ベクトルデータベースやデータパイプラインの管理を必要とせずに、データの取り込み、ストレージ最適化、高度な検索を処理するフルマネージド型の検索拡張生成 (RAG) サービスです。</p>
+    <p>今回のアップデートにより、すべてのネイティブデータソースコネクタに対して<span class="highlight">日次・週次・月次</span>の同期スケジュールを設定できるようになり、独自のスケジューリング用ワークアラウンドを構築・保守することなく、RAG アプリケーションが常に最新のエンタープライズデータに基づいて回答できる状態を維持できます。</p>
+
+    <div class="freq-grid">
+      <div class="freq-card">
+        <div class="freq-name">📆 日次</div>
+        <div class="freq-desc">オフピーク時間帯に 1 日 1 回自動同期</div>
+        <div class="freq-example">例: Confluence のサポートナレッジ</div>
+      </div>
+      <div class="freq-card">
+        <div class="freq-name">🗓️ 週次</div>
+        <div class="freq-desc">指定した曜日に週 1 回自動同期</div>
+        <div class="freq-example">例: SharePoint のポリシー文書</div>
+      </div>
+      <div class="freq-card">
+        <div class="freq-name">📅 月次</div>
+        <div class="freq-desc">指定日 1〜28 日または月末に月 1 回自動同期</div>
+        <div class="freq-example">例: S3 上の参照資料</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-card ba-before">
+        <div class="ba-title">😰 アップデート前の課題</div>
+        <ul>
+          <li>ソースデータが変更されるたびに、手動で同期をトリガーする必要があった</li>
+          <li>定期同期には EventBridge Scheduler と Lambda などを組み合わせたカスタムソリューションの構築・保守が必要だった</li>
+          <li>同期漏れにより、AI エージェントが古い情報に基づいて回答するリスクがあった</li>
+        </ul>
+      </div>
+      <div class="ba-card ba-after">
+        <div class="ba-title">🎉 アップデート後の改善</div>
+        <ul>
+          <li>すべてのネイティブデータソースコネクタに対して、日次・週次・月次の同期スケジュールを設定可能に</li>
+          <li>カスタムスケジューリングの構築・保守が不要になり、運用オーバーヘッドを削減</li>
+          <li>データソースごとに更新頻度に合わせた同期頻度を設定でき、AI エージェントが常に最新情報を検索可能に</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart LR
+    subgraph SRC["🗂️ ネイティブデータソース"]
+        direction LR
+        CF["📄 Confluence<br/>日次同期"]
+        SP["📑 SharePoint<br/>週次同期"]
+        S3[("🪣 Amazon S3<br/>月次同期")]
+        CF ~~~ SP ~~~ S3
+    end
+
+    subgraph MKB["🧠 Amazon Bedrock Managed Knowledge Base"]
+        SCH["⏰ 同期スケジューラ<br/>syncSchedule"]
+        CONN["🔌 データソースコネクタ<br/>増分同期"]
+        KB[("📚 ナレッジベース<br/>ベクトルインデックス")]
+    end
+
+    APP(["🤖 AI エージェント / RAG アプリ"])
+    USER(["👤 ユーザー"])
+
+    SCH -->|スケジュールに従い自動起動| CONN
+    CF --> CONN
+    SP --> CONN
+    S3 --> CONN
+    CONN -->|追加・更新・削除を反映| KB
+    APP -->|常に最新情報を検索| KB
+    USER --> APP
+
+    classDef external fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class CF,SP,S3 external
+    class SCH internal
+    class CONN compute
+    class KB database
+    class APP,USER user
+    class SRC,MKB boundary
+      </pre>
+    </div>
+    <p class="diagram-note">💡 データソースごとに設定した同期スケジュールに従い、Managed Knowledge Base がコネクタの同期ジョブを自動的に起動します。同期は増分方式のため、前回同期以降に追加・更新・削除されたドキュメントのみが処理されます。</p>
+  </div>
+
+  <div class="section">
+    <h2>⭐ 主要機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">1️⃣ 日次・週次・月次の同期スケジュール</div>
+      <p>→ デフォルトはオンデマンド (手動同期のみ) で、自動スケジュールは行われない</p>
+      <p>→ 日次: 1 日 1 回、システムが自動的に選択したオフピーク時間帯に同期</p>
+      <p>→ 週次: 指定した曜日 (日曜〜土曜) に週 1 回同期</p>
+      <p>→ 月次: 指定した日 (1〜28 日) または月末に月 1 回同期</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">2️⃣ すべてのネイティブデータソースコネクタに対応</div>
+      <p>→ Amazon S3、SharePoint、OneDrive、Confluence、Google Drive、Web Crawler など、Managed Knowledge Base のネイティブコネクタで利用可能</p>
+      <p>→ 直近で追加された ServiceNow コネクタを含め、コネクタごとに個別のスケジュールを設定可能</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">3️⃣ 作成時・作成後の柔軟な設定変更</div>
+      <p>→ データソースの接続時にスケジュールを設定できるほか、既存データソースの編集でも変更可能</p>
+      <p>→ コンソールの Sync schedule セクション、または API の <code>syncSchedule</code> フィールドで設定</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">4️⃣ 増分同期との組み合わせ</div>
+      <p>→ スケジュール実行される同期は増分方式で、前回同期以降の追加・更新・削除のみを処理</p>
+      <p>→ フルクロールを繰り返さないため、スケジュール同期でも効率的にインデックスを最新化</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>同期スケジュールの設定項目</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>設定場所</td><td><code>dataSourceConfiguration</code> 内の <code>managedKnowledgeBaseConnectorConfiguration.syncSchedule</code></td></tr>
+      <tr><td>対象 API</td><td>CreateDataSource / UpdateDataSource (Agents for Amazon Bedrock ビルドタイムエンドポイント)</td></tr>
+      <tr><td>On-demand</td><td><code>syncSchedule</code> を省略。手動同期のみ (デフォルト)</td></tr>
+      <tr><td>daily</td><td>空オブジェクト <code>{}</code> を指定。システムが選択したオフピーク時間帯に 1 日 1 回同期</td></tr>
+      <tr><td>weekly</td><td><code>dayOfWeek</code> (SUNDAY〜SATURDAY) を指定。週 1 回同期</td></tr>
+      <tr><td>monthly</td><td><code>dayOfMonth</code> に <code>dayNumber</code> (1〜28) または <code>lastDayOfMonth {}</code> を指定。月 1 回同期</td></tr>
+      <tr><td>実行時刻</td><td>自動的にスケジュールされ、変動する可能性がある (時刻の指定は不可)</td></tr>
+    </table>
+
+    <h3>API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/08/28</td>
+        <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/b6cdac-bedrock-agent.html" target="_blank" rel="noopener noreferrer">Agents for Amazon Bedrock</a></td>
+        <td>3 updated api methods - Managed Knowledge Base のデータソースコネクタ向けに、CreateDataSource / UpdateDataSource へオプションの <code>syncSchedule</code> フィールドを追加。日次・週次・月次の自動同期に対応</td>
+      </tr>
+    </table>
+
+    <h3>設定例 (dataSourceConfiguration)</h3>
+    <p>毎週月曜日に同期する場合の設定例です。</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">週次同期の設定例</span>
+      </div>
+      <pre><code class="language-json">{
+    "dataSourceConfiguration": {
+        "type": "MANAGED_KNOWLEDGE_BASE_CONNECTOR",
+        "managedKnowledgeBaseConnectorConfiguration": {
+            "connectorParameters": {
+                "type": "CONNECTOR_TYPE",
+                "version": "1"
+            },
+            "syncSchedule": {
+                "weekly": {
+                    "dayOfWeek": "MONDAY"
+                }
+            }
+        }
+    }
+}</code></pre>
+    </div>
+    <p>毎月 15 日に同期する場合は、<code>syncSchedule</code> を次のように置き換えます。</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">月次同期の設定例</span>
+      </div>
+      <pre><code class="language-json">{
+    "syncSchedule": {
+        "monthly": {
+            "dayOfMonth": {
+                "dayNumber": 15
+            }
+        }
+    }
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon Bedrock Managed Knowledge Base を作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>対象のネイティブデータソースコネクタ (S3、SharePoint、Confluence など) の接続情報を設定済み、または設定できる状態であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>CreateDataSource / UpdateDataSource を呼び出す IAM 権限があること (API で設定する場合)</span></div>
+
+    <h3>手順</h3>
+    <div class="step-card">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">データソースの接続時または編集時にスケジュールを選択する (コンソール)</div>
+        <p>マネジメントコンソールでデータソースを接続または編集し、Sync schedule セクションで Frequency (On-demand / Daily / Weekly / Monthly) を選択します。Weekly を選択した場合は同期を実行する曜日を、Monthly を選択した場合は日付 (1〜28) または月末を指定します。</p>
+      </div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">API でスケジュールを設定する (CLI / SDK)</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI での設定例</span>
+          </div>
+          <pre><code class="language-bash">aws bedrock-agent update-data-source \
+  --knowledge-base-id "your-knowledge-base-id" \
+  --data-source-id "your-data-source-id" \
+  --name "confluence-connector" \
+  --data-source-configuration file://data-source-config.json</code></pre>
+        </div>
+        <p>既存のデータソースに <code>syncSchedule</code> を含む <code>dataSourceConfiguration</code> を適用しています。data-source-config.json には前述の設定例のように、daily、weekly、monthly のいずれか 1 つのみを指定します。オンデマンド同期に戻す場合は <code>syncSchedule</code> を省略します。</p>
+      </div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">同期履歴を確認する</div>
+        <p>コンソールのデータソース詳細画面で Sync history を確認するか、ListIngestionJobs API で同期ジョブの実行状況とステータスを確認します。スケジュール同期が期待どおりに実行されているかを定期的に確認してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-card">
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>回答品質の維持</strong>: ナレッジベースが常に最新のエンタープライズデータに基づくため、AI エージェントが古い情報で回答するリスクを低減できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: 手動同期の運用やカスタムスケジューラの保守が不要になり、担当者の作業負荷を削減できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>導入までの時間短縮</strong>: スケジューリング基盤を自前で構築する必要がなく、RAG アプリケーションの本番運用をすぐに開始できる</span></div>
+      </div>
+      <div class="merit-card">
+        <h3>🛠️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>カスタムワークアラウンドの排除</strong>: EventBridge Scheduler + Lambda などによる StartIngestionJob の定期実行を自前で実装・保守する必要がなくなる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>データソースごとの柔軟な頻度設定</strong>: コンテンツの更新頻度に合わせて、コネクタ単位で日次・週次・月次を使い分けられる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>オフピーク実行</strong>: 同期時刻はシステムがオフピーク時間帯に自動選択するため、時刻設計を意識する必要がない</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>同期の実行時刻は自動的にスケジュールされ、特定の時刻を指定することはできない (実行時刻は変動する可能性がある)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>選択できる頻度は日次・週次・月次のみで、時間単位や cron 式のような細かいスケジュールは指定できない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>月次スケジュールで指定できる日付は 1〜28 日または月末のみ (29 日、30 日は指定不可)</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="info-item"><span class="info-icon">ℹ️</span><span>日次よりも高い頻度 (数時間ごとなど) で同期したい場合は、引き続き StartIngestionJob API による独自スケジューリングが必要</span></div>
+    <div class="info-item"><span class="info-icon">ℹ️</span><span><code>syncSchedule</code> はオプションフィールドであり、省略するとオンデマンド (手動同期のみ) となるため、既存データソースには明示的な設定変更が必要</span></div>
+    <div class="info-item"><span class="info-icon">ℹ️</span><span>公式発表には利用可能リージョンの明記がないため、利用予定のリージョンで Managed Knowledge Base が提供されているかドキュメントやコンソールで確認が必要</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+    <div class="usecase-card">
+      <div class="uc-title">📄 ユースケース 1: カスタマーサポートナレッジベースの日次同期</div>
+      <div class="uc-label">シナリオ</div>
+      <p>サポートチームが Confluence でナレッジ記事を頻繁に更新しており、サポート用 AI アシスタントに常に最新の記事を反映したい。</p>
+      <div class="uc-label">実装例</div>
+      <ol>
+        <li>Confluence コネクタのデータソースを Managed Knowledge Base に接続</li>
+        <li><code>syncSchedule</code> に daily を設定</li>
+        <li>AI アシスタントは毎日オフピーク時間帯に更新された記事を自動で取り込み</li>
+      </ol>
+      <div class="uc-label">効果</div>
+      <p>手動同期なしで最新のサポートナレッジに基づく回答を提供でき、誤案内のリスクを低減できる。</p>
+    </div>
+    <div class="usecase-card">
+      <div class="uc-title">📑 ユースケース 2: 社内ポリシードキュメントの週次同期</div>
+      <div class="uc-label">シナリオ</div>
+      <p>SharePoint 上の社内ポリシードキュメントが週次程度で更新されるため、更新サイクルに合わせてナレッジベースを同期したい。</p>
+      <div class="uc-label">実装例</div>
+      <ol>
+        <li>SharePoint コネクタのデータソースを接続</li>
+        <li><code>syncSchedule</code> に weekly を設定し、<code>dayOfWeek</code> に MONDAY を指定</li>
+        <li>週初めに前週の更新分が自動でナレッジベースへ反映される</li>
+      </ol>
+      <div class="uc-label">効果</div>
+      <p>更新頻度に見合った同期頻度により、不要な同期ジョブを避けつつ、社内問い合わせボットの回答を最新のポリシーに保てる。</p>
+    </div>
+    <div class="usecase-card">
+      <div class="uc-title">🪣 ユースケース 3: S3 上の参照資料の月次同期</div>
+      <div class="uc-label">シナリオ</div>
+      <p>Amazon S3 に保存された製品マニュアルや参照資料が月 1 回の定期リリースで更新されるため、リリース後に自動で同期したい。</p>
+      <div class="uc-label">実装例</div>
+      <ol>
+        <li>S3 コネクタのデータソースを接続</li>
+        <li><code>syncSchedule</code> の monthly で <code>dayOfMonth</code> に <code>dayNumber</code> 15 を指定 (毎月 15 日のリリース後)</li>
+        <li>月末更新の資料には <code>lastDayOfMonth</code> を指定</li>
+      </ol>
+      <div class="uc-label">効果</div>
+      <p>リリースサイクルに同期タイミングを合わせられ、運用作業ゼロで参照資料の鮮度を維持できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>公式発表には自動同期スケジューリングに関する<span class="highlight">追加料金の記載はありません</span>。Amazon Bedrock Knowledge Bases の料金体系に準じます。スケジュール同期により同期ジョブの実行頻度が増える場合は、取り込みに伴う料金への影響を考慮してください。詳細は <a class="aws-link" href="https://aws.amazon.com/bedrock/pricing/" target="_blank" rel="noopener noreferrer">Amazon Bedrock の料金ページ</a> を参照してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>公式発表には利用可能リージョンの明記がありません。利用予定のリージョンでの Managed Knowledge Base の提供状況は、<a class="aws-link" href="https://docs.aws.amazon.com/bedrock/latest/userguide/kb-managed-sync.html" target="_blank" rel="noopener noreferrer">Amazon Bedrock のドキュメント</a> およびマネジメントコンソールで確認してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-card"><span class="rel-name">Amazon Bedrock Knowledge Bases</span>: 本機能の基盤となる RAG 機能。ネイティブコネクタ (S3、SharePoint、OneDrive、Confluence、Google Drive、Web Crawler、ServiceNow など) を提供</div>
+    <div class="related-card"><span class="rel-name">Amazon Bedrock AgentCore</span>: Managed Knowledge Base を組み込みツールとして利用する AI エージェント基盤。最新のナレッジに基づくエージェント構築が容易になる</div>
+    <div class="related-card"><span class="rel-name">Amazon EventBridge Scheduler</span>: 従来の定期同期のワークアラウンドとして利用されてきたスケジューリングサービス。本機能により Managed Knowledge Base の同期用途では不要になる</div>
+    <div class="related-card"><span class="rel-name">AWS Lambda</span>: StartIngestionJob を定期実行するカスタムソリューションで利用されてきたサービス。本機能により同期用途の実装・保守が不要になる</div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>Amazon Bedrock Managed Knowledge Base の自動同期スケジューリングにより、データソースコネクタごとに<span class="highlight">日次・週次・月次の同期を設定するだけ</span>で、ナレッジベースの鮮度をノーコードで維持できるようになりました。これまで EventBridge Scheduler や Lambda で同期を自動化していた場合は、本機能への置き換えによる運用簡素化を検討する価値があります。まずは既存データソースの更新頻度を整理し、コネクタごとに適切な同期スケジュールを設定することから始めることを推奨します。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-bedrock-managed-knowledge-base-automatic-sync-scheduling-data-source-connectors/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): Amazon Bedrock Managed Knowledge Base automatic sync scheduling</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/bedrock/latest/userguide/kb-managed-sync.html#kb-managed-sync-schedule" target="_blank" rel="noopener noreferrer">ドキュメント: Sync scheduling for data sources</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/bedrock/latest/userguide/kb-managed-connect-ds.html" target="_blank" rel="noopener noreferrer">ドキュメント: Connect a data source</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/bedrock/knowledge-bases/" target="_blank" rel="noopener noreferrer">Amazon Bedrock Knowledge Bases 製品ページ</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/bedrock/pricing/" target="_blank" rel="noopener noreferrer">Amazon Bedrock 料金ページ</a></li>
+      <li><a class="aws-link" href="https://awsapichanges.com/archive/changes/b6cdac-bedrock-agent.html" target="_blank" rel="noopener noreferrer">API 変更履歴: Agents for Amazon Bedrock (2026/08/28)</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-09-04) を基に作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

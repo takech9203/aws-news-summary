@@ -7,9 +7,12 @@
 
 - [2026-09-04 - AWS MCP Server - AWS Lambda 関数向け serverless capability の追加](2026/2026-09-04-aws-mcp-server-serverless.md)
 - [2026-09-04 - Amazon EC2 - AMI への互換インスタンスタイプ指定のサポート](2026/2026-09-04-ec2-images-supported-instances.md)
+- [2026-09-04 - Amazon Bedrock - Managed Knowledge Base の SharePoint / OneDrive / Confluence 向け user-managed setup (3LO)](2026/2026-09-04-amazon-bedrock-managed-knowledge-base-user-managed-setup-sharepoint-onedrive-confluence.md)
+- [2026-09-04 - Amazon Bedrock - Managed Knowledge Base のデータソースコネクタ自動同期スケジューリング](2026/2026-09-04-amazon-bedrock-managed-knowledge-base-automatic-sync-scheduling-data-source-connectors.md)
 - [2026-09-04 - Amazon SageMaker AI - Batch Transform での G6e インスタンスサポート](2026/2026-09-04-sagemaker-batch-transform-g6e-instances.md)
 - [2026-09-04 - Amazon EC2 - C8g インスタンスの利用可能リージョン拡大](2026/2026-09-04-amazon-ec2-c8g-instances-additional-regions.md)
 - [2026-09-04 - AWS Transfer Family - SFTP Connectors の認証情報ローテーション中のファイル転送継続サポート](2026/2026-09-04-transfer-family-sftp-credential-rotation.md)
+- [2026-09-04 - Amazon Bedrock - Managed Knowledge Base の ServiceNow ネイティブデータソースコネクタ](2026/2026-09-04-amazon-bedrock-managed-knowledge-base-servicenow-native-data-source-connector.md)
 - [2026-09-04 - Amazon ECS - サービスデプロイの Early Success Criteria](2026/2026-09-04-amazon-ecs-deployments-early-success.md)
 - [2026-09-03 - Amazon WorkSpaces Applications - NVIDIA Blackwell GPU 搭載 Graphics G7 インスタンスのサポート](2026/2026-09-03-amazon-workspaces-applications-nvidia-blackwell-gpu-instances.md)
 - [2026-09-03 - Amazon Linux - Amazon Linux 2027 (AL2027) パブリックプレビュー](2026/2026-09-03-announcing-amazon-linux-2027.md)
