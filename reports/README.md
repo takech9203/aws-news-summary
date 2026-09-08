@@ -5,6 +5,18 @@
 
 ## 2026 年
 
+- [2026-09-08 - AWS HealthOmics - WDL ワークフロー向けリソースフォールバックオーダー](2026/2026-09-08-aws-healthomics-resourcefallback-wdl.md)
+- [2026-09-08 - Nx Plugin for AWS - フルスタックアプリケーションのスキャフォールディングツールキット バージョン 1.0](2026/2026-09-08-nx-plugin-for-aws.md)
+- [2026-09-08 - Amazon SageMaker Feature Store - 個別フィーチャ更新 (UpdateRecord) のサポート](2026/2026-09-08-sgm-feature-store-update-record.md)
+- [2026-09-08 - Kiro - Kiro Students プログラムの世界展開 (16 カ国 121 大学に拡大)](2026/2026-09-08-kiro-students-2026.md)
+- [2026-09-08 - Amazon RDS for SQL Server - 最新の CU および GDR アップデートのサポート](2026/2026-09-08-amazon-rds-supports-latest-cu-gdr-microsoft-sql-server.md)
+- [2026-09-08 - Kiro - ISO/IEC 27001:2022 認証範囲への追加](2026/2026-09-08-kiro-iso-27001.md)
+- [2026-09-08 - AWS Builder ID - リカバリーオプションとサードパーティログイン向け MFA の追加](2026/2026-09-08-aws-builder-id-recovery-mfa-third-party.md)
+- [2026-09-08 - Amazon S3 - Object Lock の可変リテンション (イベントホールド) サポート](2026/2026-09-08-amazon-s3-object-lock-variable-retention.md)
+- [2026-09-08 - Dynamic Image Transformation for Amazon CloudFront - 4 つの新機能を追加](2026/2026-09-08-dynamic-image-transfromation-adds-new-features.md)
+- [2026-09-08 - Amazon Bedrock AgentCore Memory - 長期メモリへの直接取り込み (IngestData API)](2026/2026-09-08-agentcore-memory-direct-ingest.md)
+- [2026-09-08 - Amazon Timestream for InfluxDB - カスタムプラグインのサポート](2026/2026-09-08-timestream-influxdb-custom-plugins.md)
+- [2026-09-08 - Amazon RDS for MariaDB - コミュニティマイナーバージョン 10.6.28 / 10.11.19 / 11.4.13 / 11.8.9 / 12.3.3 のサポート](2026/2026-09-08-amazon-rds-mariadb-community-versions.md)
 - [2026-09-04 - AWS MCP Server - AWS Lambda 関数向け serverless capability の追加](2026/2026-09-04-aws-mcp-server-serverless.md)
 - [2026-09-04 - Amazon EC2 - AMI への互換インスタンスタイプ指定のサポート](2026/2026-09-04-ec2-images-supported-instances.md)
 - [2026-09-04 - Amazon Bedrock - Managed Knowledge Base の SharePoint / OneDrive / Confluence 向け user-managed setup (3LO)](2026/2026-09-04-amazon-bedrock-managed-knowledge-base-user-managed-setup-sharepoint-onedrive-confluence.md)

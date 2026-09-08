@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon S3 Object Lock - イベントホールドによる可変リテンション</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.card ul { margin: 8px 0 0 0; padding-left: 20px; }
+.card li { margin: 4px 0; font-size: 14px; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box h4 { color: #FF8A73; margin: 0 0 10px 0; font-size: 16px; }
+.after-box h4 { color: #7DD87D; margin: 0 0 10px 0; font-size: 16px; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* Stat cards */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px 14px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+.table-wrap { overflow-x: auto; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.25);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Check list */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+.check-icon { color: #7DD87D; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+
+/* Use case */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.usecase h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+/* Steps */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.step-body { flex: 1; min-width: 0; }
+.step-body h4 { margin: 0 0 6px 0; color: var(--aws-white); font-size: 16px; }
+.step-body p { margin: 6px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+.note-box {
+  background: rgba(0, 161, 201, 0.1);
+  border-left: 4px solid var(--aws-teal);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 14px 0;
+  font-size: 14px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">Amazon S3</span>
+    <h1>🔒 S3 Object Lock が可変リテンション<br>(イベントホールド) をサポート</h1>
+    <div class="subtitle">
+      <span class="date">📅 リリース日: 2026 年 9 月 8 日</span> ｜
+      S3 Object Lock Variable Retention with Event Holds
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon S3 Object Lock が、<span class="highlight">イベントホールドによる可変リテンション</span>をサポートしました。
+      契約の終了や監査の完了といった、データ書き込み時点では時期が確定していない将来のビジネスイベントを起点として、
+      保持期間を開始する <span class="highlight">WORM 保護</span> (Write-Once-Read-Many) を実現できます。
+    </p>
+    <p>
+      ホールドを設定した瞬間からオブジェクトは WORM 保護され、ホールドがアクティブな間は retain-until-date が時間の経過とともに前進します。
+      ホールドを解除すると「解除時刻 + 設定期間」で retain-until-date が確定します (既存の期限日がそれより後の場合は既存の日付を維持)。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">2 回</div>
+        <div class="stat-label">API 呼び出しで完結<br>(設定 1 回 + 解除 1 回)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">1 日〜100 年</div>
+        <div class="stat-label">設定可能なホールド期間</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">PUT リクエスト課金のみ</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">全リージョン</div>
+        <div class="stat-label">GovCloud・中国リージョン含む</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h4>❌ Before: 回避策とトレードオフ</h4>
+        <ul>
+          <li><strong>遠い将来の期限日 + Compliance</strong>: 義務終了後も短縮できず、不要なストレージ料金が継続</li>
+          <li><strong>遠い将来の期限日 + Governance</strong>: <code>s3:BypassGovernanceRetention</code> 権限を持つ誰もが削除可能</li>
+          <li><strong>期限日の定期延長 (30 日ごと等)</strong>: オブジェクトごと・サイクルごとに PutObjectRetention が必要</li>
+          <li><strong>リーガルホールドの代用</strong>: 解除後の保持期間がなく、解除即削除が可能になってしまう</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h4>✅ After: イベント起点のネイティブ保持</h4>
+        <ul>
+          <li>イベントホールドと期間を <strong>1 回の呼び出し</strong>で設定し、保持終了日が不明なまま WORM 保護</li>
+          <li>ホールド解除後も<strong>指定期間の WORM 保護が継続</strong> (リーガルホールドとの相違点)</li>
+          <li>保持期間がイベント発生時点から正確に開始され、<strong>余分なストレージコストが不要</strong></li>
+          <li>定期延長ジョブが不要になり、<strong>合計 2 回の API 呼び出し</strong>で完結</li>
+        </ul>
+      </div>
+    </div>
+
+    <p>
+      主な対象は、金融規制対象の記録管理、契約書アーカイブ、ランサムウェア対策など
+      「イベント発生後 N 年間保持」という要件を持つユーザーです。
+      <span class="highlight">Cohasset Associates</span> により SEC Rule 17a-4(f)、FINRA Rule 4511、CFTC Regulation 1.31 の対象環境での利用について評価済みです。
+    </p>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ 可変リテンションのライフサイクル</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Setup["📥 書き込み時"]
+        Write["📄 オブジェクト書き込み"]
+        Hold["🔒 イベントホールド設定<br/>Compliance モード + 期間 5 年"]
+    end
+
+    subgraph Active["🛡️ ホールド期間中"]
+        WORM["WORM 保護継続<br/>retain-until-date は<br/>現在時刻 + 5 年で前進"]
+    end
+
+    subgraph Release["📅 ビジネスイベント発生"]
+        Event["✍️ 契約終了・監査完了など"]
+        Off["🔓 ホールド解除<br/>PutObjectRetention EventHold=OFF"]
+    end
+
+    subgraph Retention["⏳ 確定保持期間"]
+        Fixed["retain-until-date 確定<br/>解除時刻 + 5 年"]
+        Delete["🗑️ 期限経過後に削除可能<br/>S3 Lifecycle で自動削除も可"]
+    end
+
+    Write --> Hold --> WORM
+    WORM --> Event --> Off --> Fixed --> Delete
+
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef protect fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef warn fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Write,Event input
+    class Hold,WORM protect
+    class Off warn
+    class Fixed,Delete process
+    class Setup,Active,Release,Retention layer
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      書き込み時にイベントホールドと期間を設定すると即座に WORM 保護が開始され、
+      ビジネスイベント発生時にホールドを解除すると、その時点から指定期間の保持が確定します。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <h4>🔒 イベントホールドによる可変リテンション</h4>
+      <ul>
+        <li>保持モード (Compliance / Governance) にイベントホールドと期間 (1 日〜100 年) を組み合わせて設定</li>
+        <li>設定の瞬間から WORM 保護。Compliance モードでは root ユーザーを含む誰も削除・緩和不可</li>
+        <li>ホールド中の retain-until-date は「現在時刻 + 設定期間」として前進</li>
+        <li>解除時に「解除時刻 + 設定期間」で確定 (既存の日付が後の場合はそちらを維持)</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🛠️ 柔軟な適用方法</h4>
+      <ul>
+        <li><strong>個別オブジェクト</strong>: <code>PutObjectRetention</code> API で <code>EventHold</code> と <code>EventHoldDuration</code> を指定</li>
+        <li><strong>バケットデフォルト</strong>: <code>DefaultEventHoldDuration</code> で新規オブジェクトバージョンに自動適用</li>
+        <li><strong>S3 Batch Operations</strong>: 既存アーカイブ全体への一括適用・一括解除が 1 ジョブで可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🔑 新しい IAM / バケットポリシー条件キー</h4>
+      <ul>
+        <li><code>s3:object-lock-event-hold</code>: ホールドの設定 (ON) / 解除 (OFF) の権限を分離制御</li>
+        <li><code>s3:object-lock-event-hold-duration-days</code>: ホールド期間の最小値・最大値を強制</li>
+        <li>バケットポリシーやリソースコントロールポリシー (RCP) で要件未達のリクエストを拒否可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>📊 監査・可視化の統合</h4>
+      <ul>
+        <li><strong>AWS CloudTrail</strong>: すべてのホールド操作 (設定・解除・期間変更) を記録</li>
+        <li><strong>S3 Event Notifications</strong>: 明示的な呼び出しで <code>s3:ObjectRetention:Put</code> 通知が発生</li>
+        <li><strong>S3 Inventory</strong>: ホールドステータスと期間をレポート</li>
+        <li><strong>S3 Storage Lens</strong>: Object Lock 対象のオブジェクト数・割合・バイト数をエステート全体で把握</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🔄 レプリケーションとの連携</h4>
+      <ul>
+        <li>ホールドのステータスと期間はオブジェクトとともにレプリケーション (両バケットで Object Lock 有効化が必要)</li>
+        <li>ソースでの解除はレプリカにも伝播し、レプリカ側はレプリケーション時刻を基準に retain-until-date を計算</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>可変リテンションの仕様</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>ホールド期間</td><td>最小 1 日、最大 100 年 (日数または年数で指定)</td></tr>
+        <tr><td>保持モード</td><td>Compliance / Governance (Compliance では root を含め短縮・削除不可)</td></tr>
+        <tr><td>retain-until-date の挙動</td><td>ホールド中は「現在時刻 + 期間」で前進、解除時に確定</td></tr>
+        <tr><td>期間の変更</td><td>ホールド中に増減可能 (増加で期限日が延長、減少しても期限日は後退しない)</td></tr>
+        <tr><td>明示的な期限日との併用</td><td>可能 (固定の最低保持 + イベント起点の延長。遅い方の日付が有効)</td></tr>
+        <tr><td>対象バケット</td><td>汎用バケット (Object Lock 有効化が必要)</td></tr>
+        <tr><td>課金</td><td>追加料金なし (<code>PutObjectRetention</code> は S3 Standard レートの PUT リクエストとして課金)</td></tr>
+        <tr><td>コンプライアンス評価</td><td>Cohasset Associates による SEC Rule 17a-4(f)、FINRA Rule 4511、CFTC Regulation 1.31 の評価済み</td></tr>
+      </table>
+    </div>
+
+    <h3>固定リテンションとの比較</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>観点</th><th>固定リテンション</th><th>可変リテンション (イベントホールド)</th><th>リーガルホールド</th></tr>
+        <tr><td>保持終了日の指定</td><td>設定時に確定が必要</td><td>不要 (イベント発生時に確定)</td><td>なし</td></tr>
+        <tr><td>解除後の保護</td><td>-</td><td>指定期間の WORM 保護が継続</td><td>即座に保護終了</td></tr>
+        <tr><td>過剰保持のリスク</td><td>長めに設定すると発生</td><td>なし (義務終了時点から正確に計測)</td><td>なし</td></tr>
+        <tr><td>運用負荷</td><td>定期延長が必要な場合あり</td><td>設定 1 回 + 解除 1 回</td><td>設定 1 回 + 解除 1 回</td></tr>
+      </table>
+    </div>
+
+    <h3>API 変更履歴</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/09/08</td>
+          <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/dc8510-s3-control.html" target="_blank" rel="noopener noreferrer">AWS S3 Control</a></td>
+          <td>2 updated api methods - オブジェクトレベルの <code>EventHold</code> / <code>EventHoldDuration</code> パラメータ、バケットレベルの <code>DefaultEventHoldDuration</code> パラメータを追加</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>ホールド解除権限を分離するポリシー例</h3>
+    <p style="font-size: 14px;">
+      削除権限 (<code>s3:DeleteObjectVersion</code>) を持つ ID からホールド解除権限を剥奪し、二者による承認プロセスを S3 のレイヤーで強制する例です。
+    </p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">DenyEventHoldRelease ポリシー</span>
+      </div>
+      <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "DenyEventHoldRelease",
+    "Effect": "Deny",
+    "Action": "s3:PutObjectRetention",
+    "Resource": "arn:aws:s3:::amzn-s3-demo-bucket1/*",
+    "Condition": {"StringEquals": {"s3:object-lock-event-hold": "OFF"}}
+  }]
+}</code></pre>
+    </div>
+    <div class="note-box">
+      💡 ホールド解除と削除を別々の ID に割り当てることで、単一の ID ではデータを破壊できず、
+      さらに解除から削除可能になるまでの待機期間を S3 自身が強制します。
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>📝 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Object Lock が有効化された S3 汎用バケット (バージョニング必須)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><code>s3:PutObjectRetention</code> 権限を持つ IAM プリンシパル</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS CLI または AWS SDK の最新バージョン</span></div>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h4>オブジェクトにイベントホールドを設定</h4>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">Compliance モード + イベントホールド + 5 年</span>
+          </div>
+          <pre><code class="language-bash">aws s3api put-object-retention \
+  --bucket amzn-s3-demo-bucket1 \
+  --key my-object \
+  --retention '{
+    "Mode": "COMPLIANCE",
+    "EventHold": "ON",
+    "EventHoldDuration": {"Years": 5}
+  }'</code></pre>
+        </div>
+        <p>この時点からオブジェクトバージョンは WORM 保護され、root ユーザーを含む誰も削除や保護の緩和ができなくなります。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h4>ビジネスイベント発生時にホールドを解除</h4>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">ホールド解除 → 解除時刻 + 5 年で確定</span>
+          </div>
+          <pre><code class="language-bash">aws s3api put-object-retention \
+  --bucket amzn-s3-demo-bucket1 \
+  --key my-object \
+  --retention '{"Mode":"COMPLIANCE","EventHold":"OFF"}'</code></pre>
+        </div>
+        <p>S3 は retain-until-date を「解除時刻 + 5 年」に確定し、その期間中は引き続き WORM 保護が継続します。同じリクエストで明示的な retain-until-date も設定でき、S3 は遅い方の日付を採用します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h4>バケットデフォルトとして設定 (オプション)</h4>
+        <p>S3 コンソールでバケットの [プロパティ] タブから Object Lock 設定を編集し、[デフォルトの保持] で [有効にする]、保持モードで [コンプライアンス]、保持タイプで [イベントホールド付き可変リテンション] を選択し、デフォルトのホールド期間 (例: 30 日) を入力して保存します。以降の新規オブジェクトバージョンにアプリケーションコードの変更なしで自動適用されます。</p>
+        <p>なお、バケットデフォルトはアップロード時に明示的な Object Lock パラメータが指定されると上書きされるため、強制が必要な場合はバケットポリシーまたは RCP で <code>s3:object-lock-event-hold</code> / <code>s3:object-lock-event-hold-duration-days</code> 条件キーを使用して要件を満たさないリクエストを拒否します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h4>既存アーカイブへの一括適用 (オプション)</h4>
+        <p>S3 Batch Operations で同じパラメータをアーカイブ全体に 1 ジョブで適用できます。retain-until-date の定期延長スケジュールを運用しているアーカイブは、オブジェクトを個別に更新することなく可変リテンションへ移行できます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+
+    <h3>ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>保持コストの最適化</strong>: 保持義務がイベント発生時点から正確に計測され、義務終了後の余分なストレージ料金が発生しない</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンスの厳密化</strong>: 「削除可能になるのが早すぎる」リスクと「保持しすぎる」コストの両方を排除</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>規制対応の裏付け</strong>: Cohasset Associates による SEC 17a-4(f)、FINRA 4511、CFTC 1.31 の評価済みで、金融規制環境での採用判断がしやすい</span></div>
+
+    <h3>技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用の簡素化</strong>: 定期延長ジョブが不要になり、設定 1 回 + 解除 1 回で完結。リクエスト課金も大幅に削減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>二者承認プロセスの実現</strong>: ホールド解除と削除の権限を条件キーで分離し、S3 が待機期間を強制する two-person プロセスを構築可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ランサムウェア対策</strong>: バケットデフォルトで全新規バージョンに回復ウィンドウを付与。攻撃者がホールドを解除しても Compliance モードにより期間中は削除不可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>メタデータのみの操作</strong>: ホールドの設定・解除はアーカイブストレージクラスからの復元や S3 Intelligent-Tiering の中断を発生させない</span></div>
+  </div>
+
+  <!-- デメリット・制約 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>汎用バケットのみ対応 (Object Lock の一般的な制約と同様)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ホールド期間は最小 1 日、最大 100 年</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ホールド中に期間を短縮しても retain-until-date は後退しない (その位置で一時停止し、短縮後の期間が追い越した時点で再び前進)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>保護中のオブジェクトは暗号化設定の変更や S3 アノテーションの作成・更新・削除ができない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ホールドがアクティブな間は S3 Lifecycle による削除が行われず、ストレージ料金が継続する</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>Compliance モードで保護されたバージョンの早期削除手段は、データを保持する AWS アカウントの解約のみ</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>Governance モードでは <code>s3:BypassGovernanceRetention</code> 権限により単一 ID でホールド解除・期限短縮・削除が可能になるため、権限分離パターンには Compliance モードが前提</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>バケットデフォルトは強制力を持たないため、確実な適用にはバケットポリシーまたは RCP による条件キーでの強制が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>レプリケーション構成では、レプリカの retain-until-date がレプリケーション所要時間の分だけソースより後になる (S3 Replication Time Control で 99.99% のオブジェクトを 15 分以内に抑制可能)</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span><code>s3:ObjectRetention:Put</code> 通知は明示的な PutObjectRetention 呼び出しでのみ発生し、アップロード時のデフォルト適用では <code>s3:ObjectCreated:*</code> が発生する点に注意</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>📄 ユースケース 1: 契約書の「契約終了後 5 年保持」</h4>
+      <p><strong>シナリオ</strong>: 署名済み契約書を契約終了後 5 年間保持する義務がある企業。契約は更新・早期解約・満了などがあり、署名時点では終了時期が不明。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">実装例</span>
+        </div>
+        <pre><code class="language-bash"># 書き込み時: Compliance モード + イベントホールド + 5 年を設定
+aws s3api put-object-retention \
+  --bucket amzn-s3-demo-bucket1 --key contract-001.pdf \
+  --retention '{"Mode":"COMPLIANCE","EventHold":"ON","EventHoldDuration":{"Years":5}}'
+
+# 契約終了時: ホールドを解除 → 解除時刻 + 5 年で保持期間が確定
+aws s3api put-object-retention \
+  --bucket amzn-s3-demo-bucket1 --key contract-001.pdf \
+  --retention '{"Mode":"COMPLIANCE","EventHold":"OFF"}'</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 契約が数週間で終わっても数年続いても、スケジュールジョブなしで正確に「終了 + 5 年」の保持を実現。期限経過後は削除可能になり、過剰保持のコストが発生しない。</div>
+    </div>
+
+    <div class="usecase">
+      <h4>🛡️ ユースケース 2: ランサムウェア対策の回復ウィンドウ</h4>
+      <p><strong>シナリオ</strong>: 全新規オブジェクトバージョンに 30 日の削除猶予を設け、有効な認証情報を奪った攻撃者によるデータ破壊から保護したいシステム。</p>
+      <p><strong>実装例</strong> (バケットの Object Lock 設定・コンソール):</p>
+      <ul style="font-size: 14px;">
+        <li>デフォルトの保持: 有効</li>
+        <li>デフォルト保持モード: Compliance</li>
+        <li>デフォルト保持タイプ: イベントホールド付き可変リテンション</li>
+        <li>デフォルトイベントホールド期間: 30 日</li>
+      </ul>
+      <div class="effect">✅ <strong>効果</strong>: 攻撃者が保護されたバージョンの削除を試みても失敗し、ホールドを解除しても Compliance モードにより 30 日間は削除不可。この間に検知・調査し、既知の正常バージョンへロールバックできる。不要になったバージョンはホールド解除後 30 日で S3 Lifecycle により自動削除され、ストレージ料金を停止できる。</div>
+    </div>
+
+    <div class="usecase">
+      <h4>👥 ユースケース 3: ホールド解除と削除の二者分離</h4>
+      <p><strong>シナリオ</strong>: 規制対象データの削除に、複数の担当者の関与と強制的な待機期間を必要とする金融機関。</p>
+      <p><strong>実装例</strong>:</p>
+      <ul style="font-size: 14px;">
+        <li><strong>ID-A (削除担当)</strong>: <code>s3:DeleteObjectVersion</code> を保持 + DenyEventHoldRelease ポリシー (<code>s3:object-lock-event-hold</code> = OFF を拒否)</li>
+        <li><strong>ID-B (解除担当)</strong>: <code>s3:PutObjectRetention</code> のみ保持、<code>s3:DeleteObjectVersion</code> なし</li>
+      </ul>
+      <div class="effect">✅ <strong>効果</strong>: どちらの ID も単独では「保持期間の開始」と「バージョンの削除」の両方を実行できず、削除には二者の関与と S3 が強制する待機期間 (ホールド期間) が必要になる。さらに <code>s3:DeleteObjectVersion</code> を誰にも付与せず、Lifecycle ルールに削除を委ねる構成も可能。</div>
+    </div>
+
+    <div class="usecase">
+      <h4>🤖 ユースケース 4: 自動化されたホールド解除 (夜間エクスポートや Apache Iceberg)</h4>
+      <p><strong>シナリオ</strong>: 毎晩同じキーを上書きするデータベースエクスポートで、置き換えられた旧バージョンから回復ウィンドウを開始したい。または Apache Iceberg のスナップショット期限切れで参照されなくなったデータファイルを扱いたい。</p>
+      <p><strong>実装例</strong>: AWS サンプル「Automatic removal of event hold for S3」を使用。削除マーカーで隠されたバージョン、上書きで置き換えられたバージョン、またはその両方を対象に、設定ポリシーに従って非現行バージョンのイベントホールドを自動解除。</p>
+      <div class="effect">✅ <strong>効果</strong>: エクスポートジョブ側は Object Lock を意識することなく、旧バージョンが置き換えられた時点から自動的に回復ウィンドウが開始され、期限後に Lifecycle で削除される。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <p><span class="highlight">追加料金なし</span>で利用できます。</p>
+    <div class="check-item"><span class="check-icon">✓</span><span>ホールドの設定・解除は <code>PutObjectRetention</code> 呼び出しであり、オブジェクトのストレージクラスにかかわらず S3 Standard レートの PUT リクエストとして課金</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>オブジェクトバージョンが保持されている間は通常どおりストレージ料金が発生</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>従来の定期延長パターンと比較して、設定 1 回 + 解除 1 回のみとなりリクエスト数を大幅に削減可能</span></div>
+    <div class="note-box">
+      🌍 <strong>利用可能リージョン</strong>: すべての AWS リージョンで利用可能 (AWS GovCloud (US) および AWS 中国リージョンを含む)
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <ul>
+        <li><strong>S3 Batch Operations</strong>: 既存アーカイブ全体へのホールドの一括設定・一括解除。定期延長パターンからの移行を 1 ジョブで実施可能</li>
+        <li><strong>AWS CloudTrail</strong>: すべてのホールド操作 (設定・解除・期間変更) の監査ログを記録</li>
+        <li><strong>S3 Inventory / S3 Storage Lens</strong>: Inventory はバージョンごとのホールドステータスと期間を、Storage Lens はエステート全体の Object Lock カバレッジ (オブジェクト数・割合・バイト数) をレポート</li>
+        <li><strong>S3 Replication</strong>: ホールドのステータスと期間をレプリカに伝播。S3 Replication Time Control で伝播遅延を 15 分以内 (99.99%) に抑制</li>
+        <li><strong>S3 Lifecycle</strong>: retain-until-date 経過後の自動削除により、プリンシパルに削除権限を付与しない運用が可能</li>
+        <li><strong>リソースコントロールポリシー (RCP)</strong>: 条件キーと組み合わせ、バケットポリシーや管理者権限で上書きできない組織レベルの強制を実現</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📋 まとめ</h2>
+    <p>
+      S3 Object Lock の可変リテンションは、<span class="highlight">「イベント発生後 N 年間保持」</span>という現実のビジネス要件を、
+      回避策なしにネイティブに実現する重要なアップデートです。
+      保持終了日が不明なデータの WORM 保護、ランサムウェア回復ウィンドウ、二者承認による削除プロセスなど、
+      コンプライアンスとデータ保護の設計を大きく簡素化します。
+    </p>
+    <p>
+      retain-until-date の定期延長スケジュールを運用中の場合は、
+      <span class="highlight">S3 Batch Operations による可変リテンションへの移行</span>を検討することを推奨します。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-s3-object-lock-variable-retention/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): Amazon S3 Object Lock variable retention</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/blogs/storage/flexibly-control-amazon-s3-object-lock-retention-based-on-real-business-events/" target="_blank" rel="noopener noreferrer">AWS Blog: Flexibly control Amazon S3 Object Lock retention based on real business events</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html" target="_blank" rel="noopener noreferrer">ドキュメント: Locking objects with Object Lock</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/s3/features/object-lock/" target="_blank" rel="noopener noreferrer">S3 Object Lock 機能ページ</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a></li>
+      <li><a class="aws-link" href="https://awsapichanges.com/archive/changes/dc8510-s3-control.html" target="_blank" rel="noopener noreferrer">API 変更履歴 (AWS S3 Control)</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-09-08) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
