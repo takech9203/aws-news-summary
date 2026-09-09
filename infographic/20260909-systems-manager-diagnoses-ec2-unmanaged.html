@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Systems Manager - 非管理状態の EC2 インスタンスに対する診断機能の拡張</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 12px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.card p, .card ul { margin: 6px 0 0 0; font-size: 14px; }
+.card ul { padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF6B4A; }
+.after-box h3 { color: #4CAF50; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; font-size: 14px; }
+.before-box li, .after-box li { margin: 8px 0; }
+
+/* 統計カード */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 720px) {
+  .stats-row { grid-template-columns: 1fr; }
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px 14px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+.new-tag {
+  display: inline-block;
+  background: var(--aws-green);
+  color: var(--aws-white);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.ok { color: #4CAF50; font-weight: 700; }
+.manual { color: var(--aws-smile-orange); }
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+}
+
+/* ステップ */
+.step-list { counter-reset: step; list-style: none; padding: 0; margin: 12px 0; }
+.step-list > li {
+  counter-increment: step;
+  position: relative;
+  padding: 12px 16px 12px 56px;
+  margin: 10px 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-radius: 8px;
+  font-size: 14px;
+}
+.step-list > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 14px;
+  top: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.step-title { font-weight: 700; color: var(--aws-white); display: block; margin-bottom: 2px; }
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase-effect {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* メリット/デメリット */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.link-list { list-style: none; padding: 0; margin: 0; }
+.link-list li { margin: 8px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">☁️ AWS Systems Manager</span>
+    <h1>🔍 非管理状態の EC2 インスタンスに対する診断機能の拡張</h1>
+    <div class="subtitle">
+      <span class="release-date">📅 リリース日: 2026 年 9 月 9 日</span> |
+      非管理状態の EC2 インスタンスおよびハイブリッドノードの原因診断機能の拡張
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      AWS Systems Manager は、EC2 インスタンスやハイブリッドノードが<span class="highlight">管理対象 (マネージド) にならない原因を診断する機能</span>を拡張しました。
+      従来のネットワーク接続性の診断に加えて、<span class="highlight">6 つの新カテゴリ</span> (IAM 権限、SSM Agent バージョン、インスタンスステータスチェック、OS 設定、DHMC、ハイブリッドアクティベーション) の問題を自動診断できるようになりました。
+    </p>
+    <p style="font-size: 14px;">
+      インスタンスがマネージド状態であることは、パッチ適用、Run Command、Session Manager、インベントリ収集などの運用機能を利用するための前提条件です。今回の拡張により、これまで「原因不明」と表示されていたケースの多くで、具体的で対処可能な原因が特定されるようになります。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">+6</div>
+        <div class="stat-label">新たに追加された診断カテゴリ</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">VPC 単位</div>
+        <div class="stat-label">フリート全体を一括検査</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">診断機能自体は追加料金なし</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ Before (アップデート前)</h3>
+        <ul>
+          <li>診断対象は<strong>ネットワーク接続性のみ</strong> (セキュリティグループ、DNS、VPC エンドポイント、ネットワーク ACL)。それ以外は「原因不明」に</li>
+          <li>IAM 権限不足や古い SSM Agent が原因の場合、<strong>手動でトラブルシューティング</strong>ドキュメントを参照して切り分けが必要</li>
+          <li>ハイブリッドアクティベーションの期限切れや登録数上限など、<strong>ハイブリッド環境固有の問題は診断対象外</strong></li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ After (アップデート後)</h3>
+        <ul>
+          <li>ネットワーク接続性に加えて <strong>6 カテゴリを自動診断</strong> (IAM 権限 / SSM Agent / ステータスチェック / OS 設定 / DHMC / ハイブリッドアクティベーション)</li>
+          <li>「原因不明」ではなく、<strong>具体的で対処可能な原因</strong>が返される</li>
+          <li>すべての問題に<strong>ステップバイステップのガイダンス</strong>が付属し、一部はコンソールから <strong>Automation ランブックで即時修復</strong>可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Admin(["👤 管理者"]) --> Console["🖥️ Systems Manager 統合コンソール"]
+    Console --> Diagnosis["🔍 診断の実行<br/>VPC 単位でフリートを検査"]
+
+    subgraph Categories["📋 診断カテゴリ"]
+        direction LR
+        Net["🌐 ネットワーク接続性<br/>従来から対応"]
+        New["🆕 新規 6 カテゴリ<br/>IAM 権限 / SSM Agent バージョン<br/>ステータスチェック / OS 設定<br/>DHMC / ハイブリッドアクティベーション"]
+        Net ~~~ New
+    end
+
+    Diagnosis --> Categories
+    Categories --> Result{"⚖️ 修復方法の判定"}
+    Result -->|自動修復可能| Runbook["⚡ Automation ランブック<br/>コンソールから実行"]
+    Result -->|手動対応が必要| Guidance["📖 ステップバイステップ<br/>ガイダンス"]
+    Runbook --> Managed["✅ マネージドインスタンス化"]
+    Guidance --> Managed
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef auto fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef ok fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class Admin user
+    class Console,Diagnosis,Net,New,Guidance process
+    class Categories layer
+    class Result decision
+    class Runbook auto
+    class Managed ok
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      Systems Manager 統合コンソールから診断を実行すると、VPC 単位でインスタンスグループが検査され、問題のカテゴリに応じて Automation ランブックによる自動修復、または手動対応のためのガイダンスが提供されます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能 (新規 6 カテゴリの診断)</h2>
+
+    <div class="card">
+      <div class="card-title">🔑 1. IAM ロールと権限の診断</div>
+      <ul>
+        <li>インスタンスプロファイルが EC2 インスタンスにアタッチされていない問題を検出</li>
+        <li>IAM ロールに <code>AmazonSSMManagedInstanceCore</code> 管理ポリシーまたは同等の権限が含まれていない問題を検出</li>
+        <li>Systems Manager との通信に最低限必要なアクション (<code>ssm:UpdateInstanceInformation</code>、<code>ssmmessages:CreateControlChannel</code>、<code>ssmmessages:CreateDataChannel</code>、<code>ec2messages:GetMessages</code>) の不足を検出</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📦 2. SSM Agent バージョンの診断</div>
+      <ul>
+        <li>接続に必要な最小サポートバージョンより古い SSM Agent を検出</li>
+        <li>Systems Manager サービスが使用する通信プロトコルに対応していないバージョンを検出</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💓 3. インスタンスステータスチェックの診断</div>
+      <ul>
+        <li>システムステータスチェックの失敗 (基盤となるホストインフラの問題) を検出</li>
+        <li>インスタンスステータスチェックの失敗 (OS やネットワーク設定の応答不良) を検出</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🖥️ 4. オペレーティングシステム設定の診断</div>
+      <ul>
+        <li>インスタンスの<span class="highlight">コンソール出力を分析</span>し、SSM Agent サービスの停止・クラッシュ、ブートエラー (カーネルパニックやファイルシステム破損など)、ホストベースファイアウォール (iptables や Windows Firewall) による HTTPS 通信のブロック、ディスク容量の枯渇を検出</li>
+        <li>OS レベルの問題は自動修復の対象外であり、手動解決のためのガイダンスが提供される</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🛠️ 5. Default Host Management Configuration (DHMC) の診断</div>
+      <ul>
+        <li>アカウントとリージョンで DHMC が有効化されていない問題を検出</li>
+        <li>DHMC 用の IAM ロールに必要なポリシーが不足している問題を検出</li>
+        <li>DHMC 用の IAM ロールの信頼ポリシーが正しく設定されていない問題を検出</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🌐 6. ハイブリッドアクティベーションの診断</div>
+      <ul>
+        <li>アクティベーションの期限切れ、登録数上限への到達を検出</li>
+        <li>VM のクローンなどに起因するエージェント登録の競合を検出</li>
+        <li>ハイブリッドノードから Systems Manager エンドポイントへの接続性の問題を検出</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📊 診断カテゴリと修復方法</h3>
+    <table>
+      <thead>
+        <tr><th>問題カテゴリ</th><th>診断</th><th>自動修復 (ランブック)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>セキュリティグループ設定と HTTPS 通信</td><td class="ok">✓</td><td class="ok">✓ <span class="manual">(一部は手動)</span></td></tr>
+        <tr><td>DNS / DNS ホスト名設定</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+        <tr><td>VPC エンドポイント設定</td><td class="ok">✓</td><td class="ok">✓ <span class="manual">(一部は手動)</span></td></tr>
+        <tr><td>ネットワーク ACL 設定</td><td class="ok">✓</td><td class="manual">手動対応</td></tr>
+        <tr><td>IAM ロールと権限 <span class="new-tag">NEW</span></td><td class="ok">✓</td><td class="manual">ガイダンス提供</td></tr>
+        <tr><td>SSM Agent バージョン <span class="new-tag">NEW</span></td><td class="ok">✓</td><td class="manual">ガイダンス提供</td></tr>
+        <tr><td>インスタンスステータスチェック <span class="new-tag">NEW</span></td><td class="ok">✓</td><td class="manual">ガイダンス提供</td></tr>
+        <tr><td>オペレーティングシステム設定 <span class="new-tag">NEW</span></td><td class="ok">✓</td><td class="manual">手動対応 (コンソール出力分析による診断)</td></tr>
+        <tr><td>DHMC 設定 <span class="new-tag">NEW</span></td><td class="ok">✓</td><td class="manual">ガイダンス提供</td></tr>
+        <tr><td>ハイブリッドアクティベーション <span class="new-tag">NEW</span></td><td class="ok">✓</td><td class="manual">ガイダンス提供</td></tr>
+      </tbody>
+    </table>
+
+    <h3>⚡ 診断の動作</h3>
+    <table>
+      <thead>
+        <tr><th>項目</th><th>詳細</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>診断の単位</td><td>VPC ごとにインスタンスグループを一括検査</td></tr>
+        <tr><td>実行場所</td><td>Systems Manager 統合コンソール</td></tr>
+        <tr><td>修復手段</td><td>Automation ランブックの実行、または手動対応のためのステップバイステップガイダンス</td></tr>
+        <tr><td>対象ノード</td><td>EC2 インスタンス、ハイブリッドアクティベーションで登録したノード (オンプレミスサーバーや他クラウドの VM)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>🔑 IAM 権限診断で確認される最小権限の例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">Systems Manager 通信に必要な最小権限</span>
+      </div>
+      <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ssm:UpdateInstanceInformation",
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ec2messages:GetMessages"
+      ],
+      "Resource": "*"
+    }
+  ]
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🚀 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Systems Manager 統合コンソール (unified console) が有効化されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>診断および Automation ランブックを実行するための IAM 権限を持っていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>診断対象の EC2 インスタンスまたはハイブリッドノードが存在すること</span></div>
+
+    <h3>📝 手順</h3>
+    <ol class="step-list">
+      <li>
+        <span class="step-title">Systems Manager 統合コンソールを開く</span>
+        AWS マネジメントコンソールから Systems Manager を開き、統合コンソールのダッシュボードで管理対象外 (unmanaged) のインスタンス数を確認します。
+      </li>
+      <li>
+        <span class="step-title">診断を実行する</span>
+        コンソールから診断 (Diagnose) を実行します。VPC ごとにインスタンスグループを一括で検査し、ネットワーク接続性、IAM 権限、SSM Agent バージョン、ステータスチェック、OS 設定、DHMC、ハイブリッドアクティベーションの各カテゴリの問題を特定します。
+      </li>
+      <li>
+        <span class="step-title">診断結果を確認し修復する</span>
+        <strong>自動修復可能な問題</strong>はコンソールから Automation ランブックを実行 (例: セキュリティグループのルール更新、VPC の DNS 属性の有効化、VPC エンドポイントの作成)。<strong>手動対応が必要な問題</strong>はステップバイステップのガイダンスに従って修正 (例: インスタンスプロファイルのアタッチ、SSM Agent の更新、DHMC の有効化)。
+      </li>
+      <li>
+        <span class="step-title">修復後の状態を確認する</span>
+        インスタンスがマネージドインスタンスとして表示されることを確認します。マネージド化されると、パッチ適用、Run Command、Session Manager、インベントリ収集などの機能が利用可能になります。
+      </li>
+    </ol>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>💡 メリットと制約事項</h2>
+    <div class="merit-grid">
+      <div>
+        <h3>👍 ビジネス面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用工数の削減</strong>: 非管理状態の原因を手動で切り分ける作業が不要になり、トラブルシューティング時間を大幅に短縮</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ガバナンスの向上</strong>: フリート全体の管理カバレッジを高め、パッチ適用やインベントリ収集などのコンプライアンス要件を満たしやすく</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: 診断機能は統合コンソールの一部として提供され、ランブック実行分の標準料金のみ</span></div>
+        <h3>🔬 技術面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>診断範囲の大幅な拡大</strong>: 6 カテゴリ追加により「原因不明」のケースが減少</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンソール出力に基づく OS 診断</strong>: SSM Agent が動作していない状態でも OS レベルの問題 (ブートエラー、ディスク枯渇など) を特定可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ハイブリッド環境への対応</strong>: オンプレミスサーバーや他クラウドの VM 固有の問題も診断可能</span></div>
+      </div>
+      <div>
+        <h3>⚠️ 制限事項</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>すべての問題が自動修復できるわけではなく、OS 設定やネットワーク ACL などは手動対応が必要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>OS レベルの問題は OS への直接アクセスが必要なため、自動修復は提供されない (コンソール出力の分析による診断のみ)</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>VPC エンドポイントの一部の設定不備 (サブネットとの関連付け不足など) は、診断は可能だが修復用ランブックが未提供</span></div>
+        <h3>🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>診断は VPC 単位のため、大規模環境では VPC ごとの実行計画を検討</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>修復に Automation ランブックを使用する場合、Systems Manager Automation の標準料金が適用される</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>自動修復ランブックはセキュリティグループや VPC 設定を変更する可能性があるため、本番環境では変更内容を事前に確認</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📌 ユースケース 1: 新規アカウントで EC2 インスタンスが管理対象にならない原因の特定</div>
+      <p><strong>シナリオ</strong>: 新しく作成した AWS アカウントで EC2 インスタンスを起動したが、マネージドインスタンスとして表示されない。インスタンスプロファイルの設定や DHMC の有効化状態が不明。</p>
+      <p><strong>対応</strong>: 統合コンソールで診断を実行 → 「DHMC が有効化されていない」「インスタンスプロファイルが未アタッチ」といった問題が特定される → ガイダンスに従って DHMC を有効化、または <code>AmazonSSMManagedInstanceCore</code> を含むインスタンスプロファイルをアタッチ。</p>
+      <div class="usecase-effect">✅ <strong>効果</strong>: IAM や DHMC の設定不備を推測ではなく診断結果に基づいて特定でき、セットアップ時間を短縮できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📌 ユースケース 2: 古い SSM Agent が原因で管理対象から外れたインスタンスの検出</div>
+      <p><strong>シナリオ</strong>: 長期間稼働しているインスタンス群の一部が、いつの間にか管理対象から外れていた。原因が古い SSM Agent なのか、ネットワーク変更なのか不明。</p>
+      <p><strong>対応</strong>: 対象 VPC の診断を実行 → 「SSM Agent バージョンが最小サポートバージョンより古い」問題が特定される → ガイダンスに従い SSM Agent を更新し、以後は自動更新 (<code>AWS-UpdateSSMAgent</code> の定期実行) を構成。</p>
+      <div class="usecase-effect">✅ <strong>効果</strong>: 原因の切り分け作業なしでエージェントの問題を特定でき、再発防止策 (自動更新) の導入につなげられる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📌 ユースケース 3: ハイブリッド環境でのアクティベーション問題の診断</div>
+      <p><strong>シナリオ</strong>: オンプレミスの VM をハイブリッドアクティベーションで登録して運用しているが、VM をクローンして追加したノードが管理対象にならない。</p>
+      <p><strong>対応</strong>: 診断を実行 → 「エージェント登録の競合」(クローン元の登録情報が残存) や「アクティベーションの登録数上限到達」が特定される → 競合する登録を解除して再登録、または登録上限を増やした新しいアクティベーションを作成。</p>
+      <div class="usecase-effect">✅ <strong>効果</strong>: ハイブリッド環境固有の登録問題を体系的に診断でき、オンプレミスノードの管理カバレッジを維持できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p>診断機能自体に<span class="highlight">追加料金はありません</span>。修復に Automation ランブックを実行した場合、AWS Systems Manager Automation の標準料金が適用されます。詳細は <a href="https://aws.amazon.com/systems-manager/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Systems Manager 料金ページ</a> を参照してください。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 利用可能リージョン</div>
+      <p>Systems Manager 統合コンソールが提供されているすべての AWS リージョンで利用可能です。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">⚡ AWS Systems Manager Automation</div>
+      <p>診断で特定された問題の一部を自動修復するランブックの実行基盤。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🛠️ Default Host Management Configuration (DHMC)</div>
+      <p>インスタンスプロファイルなしで EC2 インスタンスを管理対象にする機能。今回の診断カテゴリに追加された。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🖥️ Session Manager / Patch Manager / Run Command</div>
+      <p>インスタンスがマネージド状態になることで利用可能になる主要な運用機能。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">💓 Amazon EC2 ステータスチェック</div>
+      <p>インスタンスの基盤・OS レベルの健全性を確認する機能。診断カテゴリの 1 つとして統合された。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      Systems Manager の診断機能がネットワーク接続性に加えて <span class="highlight">IAM 権限、SSM Agent バージョン、ステータスチェック、OS 設定、DHMC、ハイブリッドアクティベーションの 6 カテゴリ</span>に拡張され、非管理状態のインスタンスの原因特定が大幅に容易になりました。
+      フリート内に管理対象外のインスタンスが存在する場合は、統合コンソールから診断を実行し、提供されるガイダンスやランブックで管理カバレッジを高めることを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul class="link-list">
+      <li>📰 <a href="https://aws.amazon.com/about-aws/whats-new/2026/09/systems-manager-diagnoses-ec2-unmanaged/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): AWS Systems Manager diagnoses EC2 unmanaged instances</a></li>
+      <li>📖 <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/diagnosing-ec2-category-types.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: 診断可能な非管理 EC2 インスタンス問題のカテゴリ</a></li>
+      <li>📖 <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/troubleshooting-ssm-agent.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: SSM Agent のトラブルシューティング</a></li>
+      <li>📖 <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/fleet-manager-default-host-management-configuration.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Default Host Management Configuration</a></li>
+      <li>💰 <a href="https://aws.amazon.com/systems-manager/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Systems Manager 料金ページ</a></li>
+    </ul>
+    <p style="margin-top: 12px;">本インフォグラフィックは AWS News レポート (2026-09-09) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#FF9900',
+      primaryTextColor: '#232F3E',
+      primaryBorderColor: '#FF9900',
+      lineColor: '#FF9900',
+      secondaryColor: '#F5F5F5',
+      tertiaryColor: '#FAFAFA',
+      background: '#FFFFFF',
+      mainBkg: '#FFF3E0',
+      nodeBorder: '#FF9900',
+      clusterBkg: '#FFF8E1',
+      clusterBorder: '#FF9900',
+      edgeLabelBackground: '#FFFFFF',
+      textColor: '#232F3E'
+    }
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

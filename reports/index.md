@@ -5,13 +5,23 @@
 
 ## 2026 年
 
+- [2026-09-09 - AWS Lambda - Lambda Managed Instances での 90 分間の関数タイムアウトサポート](2026/2026-09-09-aws-lambda-90-minute-function.md)
+- [2026-09-09 - AWS Transform - .NET モダナイゼーションが CLI 経由で一般提供開始](2026/2026-09-09-aws-transform-dotnet-cli.md)
+- [2026-09-09 - AWS Systems Manager - 非管理状態の EC2 インスタンスに対する診断機能の拡張](2026/2026-09-09-systems-manager-diagnoses-ec2-unmanaged.md)
+- [2026-09-09 - Amazon Connect Customer - Task と Email のワークロードタイプ別キャパシティ制限](2026/2026-09-09-amazon-connect-capacity-limits.md)
+- [2026-09-09 - Amazon Bedrock - Managed Knowledge Base の Confluence Data Center ネイティブデータソースコネクタ](2026/2026-09-09-amazon-bedrock-managed-knowledge-base-confluence-data-center-native-data-source-connector.md)
+- [2026-09-09 - AWS Lambda - Lambda Managed Instances での Graviton5 搭載 EC2 インスタンスサポート](2026/2026-09-09-aws-lambda-graviton5-ec2.md)
+- [2026-09-09 - Amazon Bedrock - Managed Knowledge Base のドキュメントレベルアクセス制御デバッグ機能](2026/2026-09-09-amazon-bedrock-knowledge-base-debugging-document-access-control.md)
 - [2026-09-08 - AWS HealthOmics - WDL ワークフロー向けリソースフォールバックオーダー](2026/2026-09-08-aws-healthomics-resourcefallback-wdl.md)
 - [2026-09-08 - Nx Plugin for AWS - フルスタックアプリケーションのスキャフォールディングツールキット バージョン 1.0](2026/2026-09-08-nx-plugin-for-aws.md)
+- [2026-09-08 - Amazon Bedrock - OpenAI GPT-6 Astra の一般提供開始](2026/2026-09-08-openai-gpt-6-astra-on-amazon-bedrock.md)
 - [2026-09-08 - Amazon SageMaker Feature Store - 個別フィーチャ更新 (UpdateRecord) のサポート](2026/2026-09-08-sgm-feature-store-update-record.md)
 - [2026-09-08 - Kiro - Kiro Students プログラムの世界展開 (16 カ国 121 大学に拡大)](2026/2026-09-08-kiro-students-2026.md)
+- [2026-09-08 - Amazon EMR - 旧リリースからの移行に向けた追加費用なしのサポート延長](2026/2026-09-08-emr-extended-support-migration.md)
 - [2026-09-08 - Amazon RDS for SQL Server - 最新の CU および GDR アップデートのサポート](2026/2026-09-08-amazon-rds-supports-latest-cu-gdr-microsoft-sql-server.md)
 - [2026-09-08 - Kiro - ISO/IEC 27001:2022 認証範囲への追加](2026/2026-09-08-kiro-iso-27001.md)
 - [2026-09-08 - AWS Builder ID - リカバリーオプションとサードパーティログイン向け MFA の追加](2026/2026-09-08-aws-builder-id-recovery-mfa-third-party.md)
+- [2026-09-08 - Amazon API Gateway - バックエンド統合向け相互 TLS (mTLS) サポート](2026/2026-09-08-amazon-api-gateway-mutual-tls-backend.md)
 - [2026-09-08 - Amazon S3 - Object Lock の可変リテンション (イベントホールド) サポート](2026/2026-09-08-amazon-s3-object-lock-variable-retention.md)
 - [2026-09-08 - Dynamic Image Transformation for Amazon CloudFront - 4 つの新機能を追加](2026/2026-09-08-dynamic-image-transfromation-adds-new-features.md)
 - [2026-09-08 - Amazon Bedrock AgentCore Memory - 長期メモリへの直接取り込み (IngestData API)](2026/2026-09-08-agentcore-memory-direct-ingest.md)
