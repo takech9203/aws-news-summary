@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon EBS - Volume Clones のクロスアカウントコピー対応</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+.card li { margin: 4px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF6B4A; }
+.after-box h3 { color: #4CAF50; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 8px 0; font-size: 14px; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 110px;
+  font-size: 14px;
+  color: var(--aws-white);
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+code.inline {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-content .step-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid #4CAF50;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(255, 153, 0, 0.05));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="service-badge">Amazon EBS</div>
+    <h1>💾 EBS Volume Clones がクロスアカウントコピーに対応</h1>
+    <div class="subtitle">
+      <span class="date">📅 2026 年 9 月 9 日リリース</span> ｜ Amazon Elastic Block Store ｜ 再暗号化対応のアカウント間ボリュームコピー
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      Amazon EBS Volume Clones が <span class="highlight">AWS アカウントをまたいだボリュームコピー</span>に対応しました。
+      コピー時に<span class="highlight">ターゲットアカウントの KMS キーで再暗号化</span>できるため、本番環境と開発環境をアカウント単位で分離している組織が、アカウント境界を越えて安全にデータをコピーできます。
+      非暗号化ボリュームおよびカスタマーマネージドキーで暗号化されたボリュームを含む、すべてのボリュームタイプでサポートされます。
+    </p>
+
+    <div class="flow-diagram">
+      <div class="flow-step">🏢 ソースアカウント<br/>本番ボリューム</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🤝 AWS RAM で<br/>ボリューム共有</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">⚙️ CopyVolumes<br/>同一 AZ 内</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔑 ターゲット側<br/>KMS キーで再暗号化</div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ Before: アップデート前の課題</h3>
+        <ul>
+          <li>Volume Clones (CopyVolumes API) は<strong>同一アカウント内に限定</strong>。アカウント間の受け渡しはスナップショットの作成・共有・復元という多段階の手順が必要</li>
+          <li>本番アカウントの最新データを開発アカウントに展開するまでに<strong>時間と運用負荷</strong>がかかっていた</li>
+          <li>環境ごとの KMS キー分離には、データコピーとキー付け替えを組み合わせた<strong>独自ワークフローの構築</strong>が必要</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ After: アップデート後の改善</h3>
+        <ul>
+          <li>AWS RAM で共有するだけで、ターゲットアカウントから直接 <code class="inline">CopyVolumes</code> による<strong>ボリュームコピーを作成可能</strong></li>
+          <li>コピー時にターゲット側の KMS キーを指定して再暗号化でき、<strong>本番と非本番のキー分離を維持</strong>したままデータを受け渡せる</li>
+          <li>コピーは作成後すぐに <code class="inline">available</code> 状態となり、初期化中でも<strong>シングルミリ秒レイテンシー</strong>で即座にアクセス可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart LR
+    subgraph Source["🏢 ソースアカウント 本番"]
+        direction TB
+        SrcVol[("💾 本番 EBS ボリューム")]
+        SrcKMS["🔑 カスタマーマネージドキー"]
+        SrcKMS -.->|暗号化| SrcVol
+    end
+
+    subgraph RAM["🤝 AWS RAM"]
+        Share["📤 リソース共有<br/>EBSVolumeCopyAccess 権限"]
+    end
+
+    subgraph Target["🏢 ターゲットアカウント 開発"]
+        direction TB
+        CopyVol[("💾 ボリュームコピー")]
+        TgtKMS["🔑 ターゲット側 KMS キー"]
+        TgtKMS -.->|再暗号化| CopyVol
+        EC2["⚙️ 開発用 EC2 インスタンス"]
+        CopyVol --> EC2
+    end
+
+    SrcVol -->|共有| Share
+    Share -->|CopyVolumes 実行<br/>同一 AZ 内| CopyVol
+
+    classDef account fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef key fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef ram fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+
+    class Source,Target account
+    class SrcVol,CopyVol storage
+    class SrcKMS,TgtKMS key
+    class Share ram
+    class EC2 compute
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      ソースアカウントが AWS RAM でボリュームを共有し、ターゲットアカウントが同一アベイラビリティーゾーン内にコピーを作成、ターゲット側の KMS キーで再暗号化する流れ
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🤝 1. AWS RAM によるボリューム共有</div>
+      <ul>
+        <li>個別のアカウント ID、組織単位 (OU)、または AWS Organizations の<strong>組織全体</strong>に共有可能</li>
+        <li>マネージド権限は 2 種類: メタデータ参照のみの <code class="inline">AWSRAMDefaultPermissionEBSVolume</code> (デフォルト) と、コピー作成を許可する <code class="inline">AWSRAMPermissionEBSVolumeCopyAccess</code></li>
+        <li><code class="inline">ec2:Volume</code> リソースタイプへのカスタマーマネージド権限の作成にも対応</li>
+        <li>共有先ができるのは<strong>参照とコピー作成のみ</strong>。アタッチ・変更・削除・スナップショット作成は不可</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔑 2. 再暗号化を伴うクロスアカウントコピー</div>
+      <ul>
+        <li>共有ボリュームに対して <code class="inline">CopyVolumes</code> API (CLI: <code class="inline">copy-volumes</code>) を実行し、同一 AZ 内にコピーを作成</li>
+        <li>デフォルトでターゲットアカウントの EBS デフォルト暗号化キーを使用。<code class="inline">KmsKeyId</code> で任意のカスタマーマネージドキーも指定可能</li>
+        <li>ソース側キーが共有されていればそのキーも選択可 (デフォルトでソース側キーが再利用されることはない)</li>
+        <li>コピー時に<strong>ボリュームタイプ、サイズ、IOPS、スループットの変更</strong>も可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🚀 3. 即時アクセスとバックグラウンド初期化</div>
+      <ul>
+        <li>クラッシュコンシステントなポイントインタイムコピーで、作成後すぐに <code class="inline">available</code> 状態になり EC2 にアタッチ可能</li>
+        <li>データブロックはバックグラウンドでコピーされ、初期化中も<strong>シングルミリ秒レイテンシー</strong>でアクセス可能</li>
+        <li>初期化中のベースライン性能は、3,000 IOPS / 125 MiB/s、ソースのプロビジョンド性能、コピーのプロビジョンド性能のうち<strong>最小値</strong></li>
+        <li>コピー操作は<strong>ソースボリュームの性能に影響しない</strong></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📊 4. モニタリング</div>
+      <ul>
+        <li>初期化の進捗は <code class="inline">describe-volume-status</code> または Amazon EventBridge で監視</li>
+        <li>コピー完了時にはボリューム所有者と共有先の<strong>両アカウント</strong>に <code class="inline">sharedVolumeCopy</code> イベントを配信</li>
+        <li><code class="inline">CopyVolumes</code> 呼び出しは<strong>双方のアカウントの CloudTrail</strong> に記録され、監査証跡が残る</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>🔐 クロスアカウントコピーの暗号化の挙動</h3>
+    <table>
+      <tr><th>ソースボリューム</th><th>KMS キー指定</th><th>コピーの結果</th></tr>
+      <tr><td>非暗号化 (デフォルト暗号化無効)</td><td>なし</td><td>非暗号化</td></tr>
+      <tr><td>非暗号化 (デフォルト暗号化無効)</td><td>あり</td><td>指定したキーで暗号化</td></tr>
+      <tr><td>非暗号化 (デフォルト暗号化有効)</td><td>なし</td><td>アカウントのデフォルト EBS 暗号化キーで暗号化</td></tr>
+      <tr><td>暗号化済み (クロスアカウント)</td><td>なし</td><td>ターゲットアカウントのデフォルト EBS 暗号化キーで暗号化</td></tr>
+      <tr><td>暗号化済み (クロスアカウント)</td><td>あり</td><td>指定したキーで暗号化</td></tr>
+    </table>
+
+    <h3>🗝️ 共有と暗号化キーの要件</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>共有可能なボリューム</td><td>非暗号化ボリューム、カスタマーマネージドキーで暗号化されたボリューム</td></tr>
+      <tr><td>共有不可のボリューム</td><td>AWS マネージドキー (aws/ebs) で暗号化されたボリューム</td></tr>
+      <tr><td>ソース側の権限</td><td>デフォルト EBS 暗号化キーに対する <code class="inline">kms:DescribeKey</code> (非暗号化ボリュームの共有時も必要)</td></tr>
+      <tr><td>ターゲット側の KMS 権限</td><td><code class="inline">kms:CreateGrant</code>、<code class="inline">kms:GenerateDataKey</code>、<code class="inline">kms:GenerateDataKeyWithoutPlaintext</code>、<code class="inline">kms:ReEncrypt*</code>、<code class="inline">kms:Decrypt</code></td></tr>
+      <tr><td>カスタマーマネージドキーの共有</td><td>ソースがカスタマーマネージドキーで暗号化されている場合、キーポリシーでターゲットアカウントにキー共有が必要</td></tr>
+    </table>
+
+    <h3>⏱️ 初期化時間の目安</h3>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">最大 6 時間</div>
+        <div class="stat-label">最初の 1 TiB</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">+1.2 時間 / TiB</div>
+        <div class="stat-label">1 TiB 超 16 TiB まで加算</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">24 時間</div>
+        <div class="stat-label">16 TiB 超</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>ソースボリュームが非暗号化、またはカスタマーマネージドキーで暗号化されていること (aws/ebs で暗号化されたボリュームは共有不可)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>カスタマーマネージドキーの場合、キーポリシーでターゲットアカウントにキーを共有していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ターゲットアカウントがソースと同じアベイラビリティーゾーン (AZ ID で確認) にコピーを作成できること</span></div>
+
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">ソースアカウントでボリュームを共有する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS RAM リソース共有の作成</span></div>
+          <pre><code class="language-bash">aws ram create-resource-share \
+  --name prod-volume-share \
+  --resource-arns arn:aws:ec2:us-east-1:111111111111:volume/vol-1234567890abcdef0 \
+  --principals 222222222222 \
+  --permission-arns arn:aws:ram::aws:permission/AWSRAMPermissionEBSVolumeCopyAccess \
+  --region us-east-1</code></pre>
+        </div>
+        <p style="font-size:14px; margin:6px 0 0 0;">コピー作成を許可するには <code class="inline">AWSRAMPermissionEBSVolumeCopyAccess</code> の指定が必要。組織外のアカウントに共有した場合は招待の承諾が必要です。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">ターゲットアカウントで共有ボリュームを確認する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">共有ボリュームの一覧表示</span></div>
+          <pre><code class="language-bash">aws ec2 describe-volumes \
+  --filters Name=owner-id,Values=111111111111 \
+  --region us-east-1</code></pre>
+        </div>
+        <p style="font-size:14px; margin:6px 0 0 0;">コンソールでは [Volumes] 画面の [Shared with me] フィルターでも確認できます。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">ターゲットアカウントでボリュームをコピーする</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ターゲット側 KMS キーで再暗号化してコピー</span></div>
+          <pre><code class="language-bash">aws ec2 copy-volumes \
+  --source-volume-id vol-1234567890abcdef0 \
+  --volume-type gp3 \
+  --kms-key-id arn:aws:kms:us-east-1:222222222222:key/abcd1234-a123-456a-a12b-a123b4cd56ef \
+  --region us-east-1</code></pre>
+        </div>
+        <p style="font-size:14px; margin:6px 0 0 0;"><code class="inline">--kms-key-id</code> を省略するとターゲットアカウントのデフォルト EBS 暗号化キーが使用されます。コピーは短時間で <code class="inline">available</code> になります。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">初期化の進捗を監視する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">初期化ステータスの確認</span></div>
+          <pre><code class="language-bash">aws ec2 describe-volume-status \
+  --volume-ids vol-0abcdef1234567890 \
+  --region us-east-1</code></pre>
+        </div>
+        <p style="font-size:14px; margin:6px 0 0 0;">EventBridge の <code class="inline">EBS Volume Notification</code> イベント (<code class="inline">sharedVolumeCopy</code>) でコピー完了や失敗を自動検知できます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top:0;">📈 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>開発サイクルの高速化</strong>: 本番データの新しいコピーを開発アカウントに数ステップで展開でき、テスト環境のデータリフレッシュが迅速に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>アカウント分離によるガバナンス維持</strong>: マルチアカウント戦略を崩さずに、必要なデータだけを安全に受け渡し</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス対応</strong>: 環境ごとの KMS キー分離要件を満たしつつ、CloudTrail による双方向の監査証跡も残る</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top:0;">⚙️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>スナップショット経由の手順が不要</strong>: 作成・共有・復元の多段階ワークフローを共有とコピーの 2 ステップに簡素化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>即時アクセス</strong>: 初期化完了を待たずにアタッチでき、シングルミリ秒レイテンシーでアクセス可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ソースへの影響なし</strong>: 本番ワークロードを稼働させたままコピー可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な構成変更</strong>: コピー時にタイプ・サイズ・IOPS・スループットを変更し、開発向けにコスト最適化</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top:0;">🚫 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>コピーはソースと<strong>同じ AZ</strong> に作成する必要がある (クロス AZ・クロスリージョン不可)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>AWS マネージドキー (aws/ebs) で暗号化されたボリュームは共有・コピー不可</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>共有ボリュームへの進行中コピーは共有先アカウント全体で同時 1 つまで</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>1 ソースから同時コピーは 1 つ、リージョンあたり進行中コピーは最大 5 つ (クォータ引き上げ可)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>Outposts 上および Wavelength Zones のボリュームはコピー不可</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ソースボリュームのタグはコピーに引き継がれない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>共有先は共有ボリュームのアタッチ・変更・削除・スナップショット作成が不可</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top:0;">🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>コピーはクラッシュコンシステント。アプリケーションコンシステントが必要なら書き込み一時停止や I/O フリーズ (<code class="inline">fsfreeze</code>、VSS など) が必要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>AZ 名はアカウントごとにマッピングが異なるため、<strong>AZ ID</strong> (use1-az1 など) で同一ロケーションを確認</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>初期化中のベースライン性能は最小 3,000 IOPS / 125 MiB/s。高性能が必要ならソースとコピー双方のプロビジョンド性能を考慮</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>リソース共有からボリュームを削除しても、進行中のコピー操作はキャンセルされない</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>本番データを開発アカウントにコピーする際は、個人情報のマスキングなどデータ取り扱いポリシーへの準拠を別途検討</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">💽 1. 本番データベースの開発環境への展開</div>
+      <p style="margin:0 0 8px 0; font-size:14px;">本番アカウントで稼働する PostgreSQL データベースの EBS ボリュームを、分離された開発アカウントにコピーし、開発者が最新の本番相当データでテストを行う。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">DB ボリュームの共有と再暗号化コピー</span></div>
+        <pre><code class="language-bash"># ソースアカウント: DB ボリュームを開発アカウントに共有
+aws ram create-resource-share \
+  --name db-volume-share \
+  --resource-arns arn:aws:ec2:ap-northeast-1:111111111111:volume/vol-0db0123456789abcd \
+  --principals 222222222222 \
+  --permission-arns arn:aws:ram::aws:permission/AWSRAMPermissionEBSVolumeCopyAccess
+
+# ターゲットアカウント: 開発用 KMS キーで再暗号化してコピー
+aws ec2 copy-volumes \
+  --source-volume-id vol-0db0123456789abcd \
+  --kms-key-id alias/dev-ebs-key</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: スナップショットの作成・共有・復元を経由せずに本番データを展開。コピーは即座にアタッチ可能で、テスト開始までの待ち時間を短縮。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔐 2. 環境ごとの暗号化キー分離の徹底</div>
+      <p style="margin:0 0 8px 0; font-size:14px;">セキュリティポリシーで本番用と非本番用の KMS キー分離が義務付けられており、非本番環境への持ち出し時は必ず非本番キーで再暗号化する。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">非本番キーを指定してコピー</span></div>
+        <pre><code class="language-bash"># ターゲットアカウントで非本番用カスタマーマネージドキーを指定してコピー
+aws ec2 copy-volumes \
+  --source-volume-id vol-0prod123456789abc \
+  --kms-key-id arn:aws:kms:ap-northeast-1:222222222222:key/nonprod-key-id</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: ソース側キーはデフォルトで再利用されないため、キー分離ポリシーを自然に強制。本番キーへのアクセス権を非本番アカウントに広く付与する必要がない。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔄 3. コピー完了を起点とした環境構築の自動化</div>
+      <p style="margin:0 0 8px 0; font-size:14px;">毎週の開発環境リフレッシュで、ボリュームコピーの完了を検知して自動的に EC2 へのアタッチとアプリケーション起動を行う。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">EventBridge イベントパターン</span></div>
+        <pre><code class="language-json">{
+  "source": ["aws.ec2"],
+  "detail-type": ["EBS Volume Notification"],
+  "detail": {
+    "event": ["sharedVolumeCopy"],
+    "result": ["completed"]
+  }
+}</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: EventBridge ルールで <code class="inline">sharedVolumeCopy</code> イベントを捕捉し、Lambda で後続処理を自動化。イベントは両アカウントに配信され、双方で完了を追跡可能。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top:0;">💵 料金</h3>
+        <div class="check-item"><span class="arrow" style="color:var(--aws-orange);">→</span><span>コピー作成時、ソースに<strong>書き込まれていたデータブロックのサイズ</strong>に基づくコピー操作料金が発生</span></div>
+        <div class="check-item"><span class="arrow" style="color:var(--aws-orange);">→</span><span>作成されたボリュームは<strong>通常の EBS ボリュームと同様</strong>の料金体系</span></div>
+        <div class="check-item"><span class="arrow" style="color:var(--aws-orange);">→</span><span>AWS RAM によるボリューム共有自体は<strong>追加料金なし</strong></span></div>
+        <div class="check-item"><span class="arrow" style="color:var(--aws-orange);">→</span><span>クロスアカウントコピーの料金は<strong>ターゲットアカウントに課金</strong></span></div>
+        <p style="font-size:13px;">詳細: <a class="aws-link" href="https://aws.amazon.com/ebs/pricing/" target="_blank" rel="noopener noreferrer">Amazon EBS 料金ページ</a></p>
+      </div>
+      <div>
+        <h3 style="margin-top:0;">🌍 利用可能リージョン</h3>
+        <p style="font-size:14px;">Amazon EBS Volume Clones をサポートする<strong>すべての AWS リージョン</strong>で利用可能です。</p>
+        <div class="check-item"><span class="check-icon">✓</span><span>すべての商用リージョン</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>AWS GovCloud (US) リージョン</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>AWS 中国リージョン</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>サポートされている Local Zones</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🤝 AWS Resource Access Manager (AWS RAM)</div>
+      <p style="margin:0; font-size:14px;">ボリュームをアカウント間で共有するための基盤。マネージド権限 <code class="inline">AWSRAMPermissionEBSVolumeCopyAccess</code> でコピー作成を許可。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔑 AWS Key Management Service (AWS KMS)</div>
+      <p style="margin:0; font-size:14px;">コピー時の再暗号化に使用。クロスアカウントでのキー共有やターゲット側キーの指定に関わる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📸 Amazon EBS スナップショット</div>
+      <p style="margin:0; font-size:14px;">従来のクロスアカウントデータ共有手段。クロスリージョンコピーや長期保管が必要な場合は引き続きスナップショットが適する。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📡 Amazon EventBridge / AWS CloudTrail</div>
+      <p style="margin:0; font-size:14px;">コピー完了イベントの通知と API 呼び出しの監査に使用。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      Amazon EBS Volume Clones のクロスアカウントコピー対応により、<span class="highlight">スナップショットを経由せずに</span>本番アカウントから開発アカウントへボリュームを直接コピーし、<span class="highlight">ターゲット側の KMS キーで再暗号化</span>できるようになりました。
+      マルチアカウント戦略でのテストデータ展開やキー分離要件を持つ組織にとって、運用を大きく簡素化するアップデートです。
+    </p>
+    <div class="card">
+      <div class="icon-text">
+        <span style="color:var(--aws-orange); font-size:20px;">🎯</span>
+        <span><strong>推奨アクション</strong>: まずは AWS RAM でのボリューム共有と <code class="inline">copy-volumes</code> コマンドを開発環境で試し、同一 AZ 制約や AZ ID のマッピングを確認した上でワークフローへの組み込みを検討しましょう。</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li>レポート: <a class="aws-link" href="https://github.com/takech9203/aws-news-summary/blob/main/reports/2026/2026-09-09-ebs-volume-clones-cross-account-copy.md" target="_blank" rel="noopener noreferrer">reports/2026/2026-09-09-ebs-volume-clones-cross-account-copy.md</a></li>
+      <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/09/ebs-volume-clones-cross-account-copy/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/09/ebs-volume-clones-cross-account-copy/</a></li>
+      <li>ドキュメント: <a class="aws-link" href="https://docs.aws.amazon.com/ebs/latest/userguide/ebs-copying-volume.html" target="_blank" rel="noopener noreferrer">Copy an Amazon EBS volume</a></li>
+      <li>ドキュメント: <a class="aws-link" href="https://docs.aws.amazon.com/ebs/latest/userguide/share-volume.html" target="_blank" rel="noopener noreferrer">Share a volume</a></li>
+      <li>料金: <a class="aws-link" href="https://aws.amazon.com/ebs/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/ebs/pricing/</a></li>
+    </ul>
+    <p>リリース日: 2026 年 9 月 9 日 ｜ 生成日: 2026 年 9 月 10 日</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

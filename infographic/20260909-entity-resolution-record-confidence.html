@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Entity Resolution - ML マッチングのレコードレベル信頼度スコア</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 12px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card p, .card ul { margin: 6px 0; }
+
+ul { padding-left: 22px; margin: 8px 0; }
+li { margin: 6px 0; }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; font-size: 14px; }
+
+@media (max-width: 700px) {
+  .before-after { grid-template-columns: 1fr; }
+  h1 { font-size: 26px; }
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th, td {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-white);
+  font-weight: 600;
+}
+
+td { color: var(--aws-light-gray); }
+
+.table-wrap { overflow-x: auto; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Check items */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Use case */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label { color: var(--aws-white); font-weight: 600; }
+
+/* Tier bar */
+.tier-bar {
+  display: flex;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+.tier-bar > div { padding: 10px 8px; }
+.tier-review { flex: 3; background: rgba(209, 50, 18, 0.35); color: #FFC9BD; }
+.tier-expand { flex: 2; background: rgba(255, 153, 0, 0.35); color: #FFE0B2; }
+.tier-merge { flex: 2; background: rgba(29, 129, 2, 0.45); color: #C8E6C9; }
+
+.tier-labels {
+  display: flex;
+  font-size: 12px;
+  color: var(--aws-light-gray);
+  margin-top: -10px;
+  margin-bottom: 16px;
+}
+.tier-labels > div { padding: 0 4px; }
+.tl-1 { flex: 3; text-align: left; }
+.tl-2 { flex: 2; text-align: left; }
+.tl-3 { flex: 2; text-align: left; }
+
+/* Stat cards */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-white);
+}
+.stat-label { font-size: 13px; color: var(--aws-light-gray); }
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { padding-left: 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="service-badge">AWS Entity Resolution</div>
+    <h1>🔗 ML マッチングのレコードレベル信頼度スコア</h1>
+    <div class="subtitle">Record-level confidence scores for ML matching / <span class="release-date">📅 リリース日: 2026 年 9 月 9 日</span></div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>AWS Entity Resolution の <span class="highlight">ML ベースマッチングワークフロー</span>で、<span class="highlight">レコードレベルの信頼度スコア</span>が提供されるようになりました。個々の ID マッチに対して、モデルがどの程度確信を持っているかを<strong style="color:#FFFFFF;">レコード単位</strong>で把握できます。</p>
+    <p>AWS Entity Resolution は、複数のデータソースにまたがる顧客レコードなどを照合し、同一エンティティ (人物や組織など) を特定・名寄せするサービスです。今回のアップデートにより、マッチグループ単位ではなくレコード単位での品質評価が可能になり、マーケティングのオーディエンス拡大やコンプライアンス対応の監査証跡など、下流での活用の幅が広がります。</p>
+    <p>主な対象ユーザーは、顧客データ基盤 (CDP) の構築、広告オーディエンスの名寄せ、リード管理などで ML ベースの ID 解決を利用しているエンタープライズや開発者です。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: グループ一律のスコア</div>
+        <ul>
+          <li>マッチグループ内の全レコードに同一のグループレベル信頼度スコアが適用され、実際のマッチ品質に関係なく一律の値</li>
+          <li>ほぼ確実なマッチと境界線上のマッチを区別できない</li>
+          <li>単一の信頼度しきい値しか適用できず、下流で活用できる解決済み ID の数が制限される</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: レコードごとの固有スコア</div>
+        <ul>
+          <li>各レコードが実際のマッチ品質を反映した固有の信頼度スコアを持つ</li>
+          <li>高い信頼度は自動マージ、低めのしきい値はオーディエンス拡大と、用途別に使い分け可能</li>
+          <li>アクティベーション可能なオーディエンス拡大とリードコンバージョン向上、監査可能な証跡でマッチ透明性を維持</li>
+          <li>既存の <code>RecordConfidenceLevel</code> 列を使用するため、スキーマ変更は不要</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Input["📥 データ入力"]
+        direction LR
+        SRC1[("🗄️ データソース A")]
+        SRC2[("🗄️ データソース B")]
+        SRC1 ~~~ SRC2
+    end
+
+    subgraph ER["🔗 AWS Entity Resolution"]
+        ML["🤖 ML ベースマッチングワークフロー"]
+        MG["👥 マッチグループ生成<br/>Match ID 付与"]
+        SCORE["📊 信頼度スコア算出"]
+    end
+
+    subgraph Output["📤 出力 S3"]
+        REC1["✅ レコード 1<br/>RecordConfidenceLevel: 0.98"]
+        REC2["✅ レコード 2<br/>RecordConfidenceLevel: 0.91"]
+        REC3["⚠️ レコード 3<br/>RecordConfidenceLevel: 0.72"]
+    end
+
+    subgraph Activation["🎯 下流での活用"]
+        HIGH["🔒 高しきい値<br/>自動マージ"]
+        LOW["📈 低めのしきい値<br/>オーディエンス拡大"]
+    end
+
+    SRC1 --> ML
+    SRC2 --> ML
+    ML --> MG --> SCORE
+    SCORE --> REC1
+    SCORE --> REC2
+    SCORE --> REC3
+    REC1 --> HIGH
+    REC2 --> HIGH
+    REC3 --> LOW
+
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class SRC1,SRC2 input
+    class ML,MG,SCORE process
+    class REC1,REC2 internal
+    class REC3 warning
+    class HIGH,LOW internal
+    class Input,ER,Output,Activation layer
+      </pre>
+    </div>
+    <p class="diagram-caption">ML ベースマッチングワークフローが各レコードに固有の信頼度スコアを付与し、下流ではしきい値を使い分けることで、自動マージとオーディエンス拡大の両立が可能になる流れを示しています。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">📊 1. レコードレベル信頼度スコア</div>
+      <ul>
+        <li>ML ベースマッチングで解決された各レコードに、そのレコード固有のマッチ品質を反映した信頼度スコアが付与される</li>
+        <li>従来のグループレベル信頼度 (<code>ConfidenceLevel</code>) に加えて、レコード単位の粒度で品質を判断できる</li>
+        <li>ほぼ確実なマッチと境界線上のマッチをレコード単位で区別可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🎚️ 2. 差別化されたしきい値の適用</div>
+      <ul>
+        <li>用途に応じて複数の信頼度しきい値を使い分けられる</li>
+        <li>高い信頼度のレコードのみを自動マージに使用し、低めのしきい値で品質基準を満たす追加レコードをオーディエンスに含める運用が可能</li>
+        <li>アクティベーション可能なレコード数を増やしつつ品質を管理できる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔍 3. 監査対応のマッチ透明性</div>
+      <ul>
+        <li>各解決済みレコードに対して監査可能な証跡 (レコードごとのスコア) が残る</li>
+        <li>コンプライアンス水準のマッチ透明性を維持しながらオーディエンスを拡大できる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔄 4. スキーマ変更不要の移行</div>
+      <ul>
+        <li>インクリメンタル ML ワークフローでは、既存の <code>RecordConfidenceLevel</code> 列がレコードごとの実際のスコアを反映するようになる</li>
+        <li>出力スキーマの変更が不要なため、既存の下流パイプラインをそのまま利用できる</li>
+      </ul>
+    </div>
+
+    <h3>🎯 しきい値による 3 段階のアクティベーション例</h3>
+    <div class="tier-bar">
+      <div class="tier-review">🔎 レビュー対象</div>
+      <div class="tier-expand">📈 オーディエンス拡大</div>
+      <div class="tier-merge">🔒 自動マージ</div>
+    </div>
+    <div class="tier-labels">
+      <div class="tl-1">スコア &lt; 0.80</div>
+      <div class="tl-2">0.80 以上</div>
+      <div class="tl-3">0.95 以上</div>
+    </div>
+    <p style="font-size: 13px;">※ しきい値は例です。自社のデータ品質とユースケースに合わせて、実データのスコア分布を確認して決定します。</p>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>信頼度スコアの比較</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>ConfidenceLevel</th><th>RecordConfidenceLevel</th></tr>
+        <tr><td>粒度</td><td>マッチグループ単位</td><td><span class="highlight">レコード単位</span></td></tr>
+        <tr><td>対象</td><td>ML ベースマッチング</td><td>ML ベースのインクリメンタルマッチング</td></tr>
+        <tr><td>意味</td><td>ML がマッチしたレコードセットを特定した際にグループへ適用される信頼度</td><td>ML がマッチしたレコードセットを特定した際に各レコードへ適用される信頼度</td></tr>
+        <tr><td>出力</td><td>マッチングワークフローメタデータとして出力に含まれる</td><td>マッチングワークフローメタデータとして出力に含まれる</td></tr>
+        <tr><td>今回の変更</td><td>変更なし</td><td>グループ一律の値から、レコードごとの実際のマッチ品質を反映した値に</td></tr>
+      </table>
+    </div>
+
+    <h3>ML ベースマッチングワークフローの関連仕様</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>マッチング方式</td><td>ML モデルによるクリアテキストデータの比較 (ハッシュ化データは非対応)</td></tr>
+        <tr><td>データ入力</td><td>AWS Glue テーブル (最大 20 個) とスキーママッピング</td></tr>
+        <tr><td>正規化対象</td><td>Name、Phone、Email (ML ベースマッチングの場合)</td></tr>
+        <tr><td>処理形態</td><td>Manual (バッチ、全件処理) / Automatic (インクリメンタル、増分処理)</td></tr>
+        <tr><td>出力先</td><td>Amazon S3 (正規化データまたはオリジナルデータ)</td></tr>
+        <tr><td>出力メタデータ</td><td>MatchID、ConfidenceLevel、RecordConfidenceLevel、InputSourceARN など</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>入力データが AWS Glue テーブルとして定義されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>スキーママッピングが作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Entity Resolution が S3 や Glue にアクセスするためのサービスアクセスロールが設定されていること</span></div>
+
+    <h3>ステップ 1: ML ベースマッチングワークフローの作成</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">AWS CLI - マッチングワークフロー作成</span>
+      </div>
+      <pre><code class="language-bash">aws entityresolution create-matching-workflow \
+  --workflow-name "ml-matching-with-record-confidence" \
+  --input-source-config '[{
+    "inputSourceARN": "arn:aws:glue:ap-northeast-1:123456789012:table/customer_db/customers",
+    "schemaName": "customer-schema",
+    "applyNormalization": true
+  }]' \
+  --resolution-techniques '{"resolutionType": "ML_MATCHING"}' \
+  --output-source-config '[{
+    "outputS3Path": "s3://my-bucket/entity-resolution-output/",
+    "output": [{"name": "email"}, {"name": "name"}, {"name": "phone"}]
+  }]' \
+  --role-arn "arn:aws:iam::123456789012:role/EntityResolutionServiceRole"</code></pre>
+    </div>
+    <p style="font-size: 14px;">ML ベースマッチング (<code>ML_MATCHING</code>) を解決手法として指定し、入力の Glue テーブルとスキーママッピング、出力先の S3 パスと出力フィールドを定義します。コンソールの場合は「Step 2: Choose matching technique」で「Machine learning-based matching」を選択します。</p>
+
+    <h3>ステップ 2: ワークフローの実行</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">AWS CLI - マッチングジョブ開始</span>
+      </div>
+      <pre><code class="language-bash">aws entityresolution start-matching-job \
+  --workflow-name "ml-matching-with-record-confidence"</code></pre>
+    </div>
+    <p style="font-size: 14px;">処理が完了すると、指定した S3 パスにマッチ結果 (MatchID、信頼度スコアを含む) が出力されます。</p>
+
+    <h3>ステップ 3: 出力の確認としきい値の適用</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">SQL</span>
+        <span class="code-title">Amazon Athena - しきい値によるレコード分類</span>
+      </div>
+      <pre><code class="language-sql">SELECT
+  MatchID,
+  RecordConfidenceLevel,
+  CASE
+    WHEN RecordConfidenceLevel >= 0.95 THEN 'auto_merge'
+    WHEN RecordConfidenceLevel >= 0.80 THEN 'audience_expansion'
+    ELSE 'review'
+  END AS activation_tier
+FROM entity_resolution_output;</code></pre>
+    </div>
+    <p style="font-size: 14px;">レコードごとの信頼度スコアに応じて、自動マージ、オーディエンス拡大、レビュー対象の 3 段階に分類します。しきい値は自社の品質基準に合わせて調整します。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">アクティベーション可能なオーディエンスの拡大</strong>: 一律のしきい値では除外されていた「品質基準は満たすが信頼度がやや低い」レコードを取り込め、リーチ可能なオーディエンスが拡大</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">リードコンバージョンの向上</strong>: より多くの解決済み ID を下流のマーケティング施策に活用でき、コンバージョン機会が増加</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">コンプライアンス対応の強化</strong>: 各解決済みレコードに監査可能な証跡が残り、規制の厳しい業界でもマッチ品質を説明できる</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">レコード単位の品質可視化</strong>: マッチグループ内の品質のばらつきを検出し、境界線上のマッチを特定して個別に扱える</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">既存パイプラインへの影響なし</strong>: 既存の <code>RecordConfidenceLevel</code> 列がそのまま利用され、スキーマ変更が不要</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">柔軟なしきい値設計</strong>: 自動マージ用の高しきい値と拡大用の低しきい値など、ユースケースごとに複数のしきい値を設計できる</span></div>
+  </div>
+
+  <!-- デメリット・制約 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span><code>RecordConfidenceLevel</code> は ML ベースマッチングが対象。ルールベースマッチングには信頼度スコアの概念がない (ルール番号が出力される)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ML ベースマッチングはクリアテキストデータのみ対応。ハッシュ化されたデータの比較はサポートされない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ドキュメント上、レコードレベル信頼度は ML ベースのインクリメンタルマッチングに関するメタデータとして定義されている</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚡</span><span>しきい値の設計は自社のデータ品質とユースケースに依存するため、実データでスコア分布を確認してから決定する</span></div>
+    <div class="check-item"><span class="warn-icon">⚡</span><span>低めのしきい値でオーディエンスを拡大する場合、誤マッチ (偽陽性) の混入リスクとのトレードオフを評価する</span></div>
+    <div class="check-item"><span class="warn-icon">⚡</span><span>一律のグループレベルスコアを前提とした既存ロジックがある場合、レコードごとにスコアが異なるようになった影響を確認する</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📈 ユースケース 1: マーケティングオーディエンスの拡大</div>
+      <p><span class="label">シナリオ</span>: 広告主が複数のデータソース (EC サイト、店舗 POS、メール配信システム) の顧客レコードを名寄せし、広告配信用のオーディエンスを構築。従来は一律の高しきい値により、活用できる ID が限られていた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">中信頼度もオーディエンスに含める</span></div>
+        <pre><code class="language-sql">-- 高信頼度は自動マージ、中信頼度もオーディエンスに含める
+SELECT MatchID, email
+FROM entity_resolution_output
+WHERE RecordConfidenceLevel >= 0.80;</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 品質基準を満たす中信頼度のレコードもオーディエンスに含めることで、アドレサブルなオーディエンスが拡大し、キャンペーンのリーチとコンバージョンが向上する。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">👥 ユースケース 2: CDP における自動マージとレビューの振り分け</div>
+      <p><span class="label">シナリオ</span>: 顧客データ基盤 (CDP) で顧客プロファイルの統合を自動化したいが、誤マージによる顧客体験の毀損は避けたい。</p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>スコア範囲</th><th>アクション</th></tr>
+          <tr><td>RecordConfidenceLevel &gt;= 0.95</td><td>プロファイルを自動マージ</td></tr>
+          <tr><td>0.80 &lt;= RecordConfidenceLevel &lt; 0.95</td><td>マージ候補としてデータスチュワードのレビューキューへ</td></tr>
+          <tr><td>RecordConfidenceLevel &lt; 0.80</td><td>マージせず個別プロファイルとして維持</td></tr>
+        </table>
+      </div>
+      <p><span class="label">効果</span>: 高信頼度のレコードのみを自動マージすることで誤マージのリスクを抑えつつ、境界線上のレコードは人手のレビューで救済でき、統合率と品質を両立できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🏦 ユースケース 3: 規制業界における監査対応の ID 解決</div>
+      <p><span class="label">シナリオ</span>: 金融機関が KYC やマーケティング同意管理のために顧客レコードを名寄せしており、監査時に「なぜこの 2 レコードを同一顧客と判定したか」の説明が求められる。</p>
+      <ul style="font-size: 14px;">
+        <li>出力の MatchID、ConfidenceLevel、RecordConfidenceLevel を監査ログとして保全</li>
+        <li>レコードごとのスコアを判定根拠として監査レポートに添付</li>
+        <li>しきい値ポリシー (自動マージ 0.95 以上など) を社内規程として文書化</li>
+      </ul>
+      <p><span class="label">効果</span>: 解決済みレコードごとに監査可能な証跡が残るため、コンプライアンス水準のマッチ透明性を維持しながら ID 解決を運用できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>レコードレベル信頼度スコア自体に<span class="highlight">追加料金はなく</span>、AWS Entity Resolution の既存の料金体系が適用されます。</p>
+    <p>ML ベースマッチング (およびルールベースマッチング) は、処理されたレコード <strong style="color:#FFFFFF;">1,000 件あたり 0.25 USD</strong> が課金されます。マッチの成否にかかわらず、処理されたすべてのレコードが課金対象です。料金は全リージョンで共通で、AWS 無料利用枠の対象外です。</p>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">25 USD</div>
+        <div class="stat-label">10 万レコードを ML マッチングで処理 (月額概算)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">75 USD</div>
+        <div class="stat-label">30 万レコードを ML マッチングで処理 (月額概算)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">250 USD</div>
+        <div class="stat-label">100 万レコードを ML マッチングで処理 (月額概算)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>AWS Entity Resolution が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。対象リージョンの一覧は <a href="https://aws.amazon.com/entity-resolution/faqs/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Entity Resolution FAQ</a> を参照してください。</p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card"><div class="card-title">🧩 AWS Glue</div><p style="font-size:14px;">入力データは AWS Glue テーブルとして定義し、スキーママッピングで Entity Resolution に読み込ませる</p></div>
+    <div class="card"><div class="card-title">🪣 Amazon S3</div><p style="font-size:14px;">マッチングワークフローの出力先。MatchID や信頼度スコアを含む結果が出力される</p></div>
+    <div class="card"><div class="card-title">🔍 Amazon Athena</div><p style="font-size:14px;">S3 に出力された結果に対して、信頼度スコアによるしきい値分類などの SQL 分析を実行できる</p></div>
+    <div class="card"><div class="card-title">🤝 AWS Clean Rooms</div><p style="font-size:14px;">ID マッピングテーブルを用いたコラボレーション分析で Entity Resolution と連携する</p></div>
+    <div class="card"><div class="card-title">📞 Amazon Connect Customer Profiles</div><p style="font-size:14px;">マッチングワークフローの出力先として指定でき、顧客プロファイルの統合に活用できる</p></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>AWS Entity Resolution の ML ベースマッチングに<span class="highlight">レコードレベルの信頼度スコア</span>が追加され、マッチグループ一律だった品質評価をレコード単位で行えるようになりました。しきい値を用途別に使い分けることで、誤マージリスクを抑えながらアクティベーション可能なオーディエンスを拡大でき、監査証跡も強化されます。</p>
+    <div class="card">
+      <div class="icon-text" style="display:flex; align-items:flex-start; gap:8px;">
+        <span style="color: var(--aws-orange); font-size: 18px;">→</span>
+        <span><strong style="color:#FFFFFF;">推奨アクション</strong>: ML ベースマッチングを利用中の場合は、まず出力の <code>RecordConfidenceLevel</code> のスコア分布を確認し、自動マージ用・拡大用のしきい値ポリシーの見直しを検討する</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/09/entity-resolution-record-confidence/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/09/entity-resolution-record-confidence/</a></li>
+      <li>ドキュメント: Creating a machine learning-based matching workflow: <a href="https://docs.aws.amazon.com/entityresolution/latest/userguide/create-matching-workflow-ml.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/entityresolution/latest/userguide/create-matching-workflow-ml.html</a></li>
+      <li>ドキュメント: AWS Entity Resolution Glossary: <a href="https://docs.aws.amazon.com/entityresolution/latest/userguide/glossary.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/entityresolution/latest/userguide/glossary.html</a></li>
+      <li>AWS Entity Resolution 製品ページ: <a href="https://aws.amazon.com/entity-resolution/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/entity-resolution/</a></li>
+      <li>料金ページ: <a href="https://aws.amazon.com/entity-resolution/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/entity-resolution/pricing/</a></li>
+    </ul>
+    <p>ベースレポート: reports/2026/2026-09-09-entity-resolution-record-confidence.md | 生成日: 2026-09-10</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

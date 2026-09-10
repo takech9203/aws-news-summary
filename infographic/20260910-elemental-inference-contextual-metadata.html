@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Elemental Inference - ライブ映像からのリアルタイムコンテキストメタデータ生成</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  margin-right: 8px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 12px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul {
+  margin: 8px 0 0 0;
+  padding-left: 4px;
+  list-style: none;
+}
+
+.card ul li {
+  margin: 6px 0;
+  padding-left: 22px;
+  position: relative;
+}
+
+.card ul li::before {
+  content: "✓";
+  color: var(--aws-green);
+  position: absolute;
+  left: 0;
+  font-weight: 700;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+
+.aws-link:hover {
+  color: var(--aws-smile-orange);
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.ba-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-box ul {
+  margin: 0;
+  padding-left: 4px;
+  list-style: none;
+  font-size: 14px;
+}
+
+.ba-box ul li {
+  margin: 8px 0;
+  padding-left: 22px;
+  position: relative;
+}
+
+.ba-before ul li::before {
+  content: "✗";
+  color: #FF6B4A;
+  position: absolute;
+  left: 0;
+  font-weight: 700;
+}
+
+.ba-after ul li::before {
+  content: "✓";
+  color: #4CAF50;
+  position: absolute;
+  left: 0;
+  font-weight: 700;
+}
+
+/* メタデータタイル */
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.meta-tile {
+  background: linear-gradient(135deg, rgba(140, 79, 255, 0.18), rgba(255, 153, 0, 0.10));
+  border: 1px solid rgba(140, 79, 255, 0.5);
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+}
+
+.meta-tile .meta-icon { font-size: 26px; }
+
+.meta-tile .meta-name {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 14px;
+  margin: 6px 0 4px 0;
+}
+
+.meta-tile .meta-desc {
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+
+/* フロー / ステップ */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 18px;
+  text-align: center;
+  min-width: 110px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.step-content .step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+.step-content p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* チェック / 注意 */
+.check-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px 0;
+  font-size: 15px;
+}
+
+.check-icon { color: #4CAF50; font-size: 18px; line-height: 1.5; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; line-height: 1.5; }
+.cross-icon { color: #FF6B4A; font-size: 18px; line-height: 1.5; }
+
+/* ユースケース */
+.usecase {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(255, 153, 0, 0.04));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase .label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 4px;
+}
+
+/* 関連サービス */
+.related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.related-card {
+  background: rgba(0, 161, 201, 0.08);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 14px;
+}
+
+.related-card .related-name {
+  font-weight: 700;
+  color: var(--aws-teal);
+  margin-bottom: 6px;
+}
+
+/* まとめ */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.10));
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+
+ul.plain-list {
+  margin: 8px 0;
+  padding-left: 4px;
+  list-style: none;
+}
+
+ul.plain-list li {
+  margin: 8px 0;
+  padding-left: 22px;
+  position: relative;
+}
+
+ul.plain-list li::before {
+  content: "→";
+  color: var(--aws-orange);
+  position: absolute;
+  left: 0;
+  font-weight: 700;
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS Elemental Inference</span>
+      <span class="service-badge">MediaLive</span>
+      <span class="service-badge">MediaTailor</span>
+    </div>
+    <h1>🧠 ライブ映像からのリアルタイム<br>コンテキストメタデータ生成</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 9 月 10 日 | 機能: Contextual Metadata</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      AWS Elemental Inference が、ライブ映像ストリームから<span class="highlight">コンテキストメタデータをリアルタイムに生成</span>できるようになりました。
+      カスタムの機械学習インフラストラクチャを構築することなく、エンコードと並行して AI 分析を実行し、
+      <span class="highlight">IAB コンテンツタクソノミーカテゴリ</span>、<span class="highlight">GARM ブランド適合性シグナル</span>、
+      オブジェクト / アクション検出、ショット / シーンレベルの説明文を抽出します。
+    </p>
+    <p>
+      MediaLive が Elemental Inference のフィード ID を SCTE-35 広告マーカーに埋め込み、広告ブレークごとに MediaTailor の
+      Monetization Function がシーンレベルのシグナルを取得してターゲティングパラメータに変換。
+      <span class="highlight">カスタムインテグレーションなしでコンテキスト広告</span>を実現します。
+    </p>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">😰 Before: アップデート前の課題</div>
+        <ul>
+          <li>シーンレベルのメタデータ取得にはカスタム ML インフラや外部ポイントソリューションの構築・運用が必要</li>
+          <li>コンテキスト広告のシグナル (IAB カテゴリ、ブランド適合性など) を広告サーバーへ連携するには独自のインテグレーション開発が必要</li>
+          <li>メタデータ付与は手動ロギングやポストプロダクション作業に依存し、アーカイブの検索性・再利用性に限界</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">🎉 After: アップデート後の改善</div>
+        <ul>
+          <li>エンコードと並行した AI 分析で IAB カテゴリ、GARM シグナル、オブジェクト検出、シーン説明文をリアルタイムに自動生成</li>
+          <li>SCTE-35 マーカーと Monetization Function の連携により、カスタム開発なしでコンテキストを考慮した広告判断が可能</li>
+          <li>全シーン / ショットへの構造化メタデータ自動生成で、手動ロギング不要のリッチなアーカイブ・編集支援・レコメンドを実現</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Source(["📡 ライブ映像ソース"]) --> ML["🎬 AWS Elemental MediaLive<br/>エンコード"]
+    ML --> INF["🧠 AWS Elemental Inference<br/>エンコードと並行して AI 分析"]
+    INF --> Meta["📋 コンテキストメタデータ<br/>IAB カテゴリ / GARM シグナル<br/>オブジェクト検出 / シーン説明"]
+    ML -->|SCTE-35 マーカーに<br/>フィード ID を埋め込み| Stream["📺 ライブストリーム"]
+    Stream --> MT["🎯 AWS Elemental MediaTailor"]
+    MT -->|フィード ID で<br/>シグナルを取得| MF["⚡ Monetization Function"]
+    Meta -.-> MF
+    MF -->|ターゲティング<br/>パラメータに変換| ADS{{"🏢 広告サーバー ADS"}}
+    ADS -->|コンテキストに<br/>適合した広告| MT
+    MT --> Viewer(["👤 視聴者"])
+    Meta -.->|メタデータ活用| MAM["🗄️ メディアアセット管理<br/>検索 / 編集支援 / レコメンド"]
+
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Source,Viewer user
+    class ML,MT,Stream process
+    class INF,Meta,MF internal
+    class ADS decision
+    class MAM internal
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      ライブ映像のエンコードと並行して Elemental Inference が AI 分析を実行し、生成されたシーンレベルのシグナルを
+      MediaTailor の Monetization Function が広告ブレークごとに取得して、広告サーバー向けのターゲティングパラメータに変換します。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🧠 1. リアルタイムコンテキストメタデータ生成</div>
+      <ul>
+        <li>ライブ映像をエンコードと並行して AI 分析し、シーンレベルのインテリジェンスをリアルタイムに抽出</li>
+        <li>IAB コンテンツタクソノミーカテゴリの自動分類</li>
+        <li>GARM ブランド適合性シグナルの生成</li>
+        <li>オブジェクトとアクションの検出、ショット / シーンレベルの説明文生成</li>
+        <li>サーバーレスかつフルマネージドで、カスタム ML インフラストラクチャは不要</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🎯 2. SCTE-35 マーカーによるコンテキスト広告連携</div>
+      <ul>
+        <li>MediaLive が Elemental Inference のフィード ID を SCTE-35 広告マーカーに埋め込み</li>
+        <li>広告ブレークごとに MediaTailor の Monetization Function がフィード ID からシーンレベルのシグナルを取得</li>
+        <li>シグナルを広告サーバーが期待するターゲティングパラメータへ変換</li>
+        <li>コンテキストに基づくディールキュレーションやブランド適合性スコアリングでパブリッシャーの収益化を改善</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🗄️ 3. メディアアセット管理向けの構造化メタデータ</div>
+      <ul>
+        <li>すべてのシーンとショットに対して構造化メタデータを自動生成</li>
+        <li>手動ロギングやポストプロダクションでのメタデータ入力が不要</li>
+        <li>コンテンツディスカバリー、編集支援ワークフロー、パーソナライズされたレコメンデーションを支えるリッチなアーカイブを構築</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📋 生成されるメタデータの種類</h3>
+    <div class="meta-grid">
+      <div class="meta-tile">
+        <div class="meta-icon">🏷️</div>
+        <div class="meta-name">IAB コンテンツタクソノミー</div>
+        <div class="meta-desc">Interactive Advertising Bureau が定義するコンテンツ分類カテゴリ。コンテキスト広告のターゲティングに使用</div>
+      </div>
+      <div class="meta-tile">
+        <div class="meta-icon">🛡️</div>
+        <div class="meta-name">GARM ブランド適合性シグナル</div>
+        <div class="meta-desc">Global Alliance for Responsible Media の枠組みに基づくブランドセーフティ / 適合性の指標</div>
+      </div>
+      <div class="meta-tile">
+        <div class="meta-icon">🔍</div>
+        <div class="meta-name">オブジェクト / アクション検出</div>
+        <div class="meta-desc">映像内に登場する物体や動作の検出結果</div>
+      </div>
+      <div class="meta-tile">
+        <div class="meta-icon">📝</div>
+        <div class="meta-name">ショット / シーン説明</div>
+        <div class="meta-desc">ショットおよびシーン単位の自然言語による説明文</div>
+      </div>
+    </div>
+
+    <h3>🔗 広告連携の仕組み</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>フィード ID の伝搬</td><td>MediaLive が SCTE-35 広告マーカーに Elemental Inference のフィード ID を埋め込み</td></tr>
+      <tr><td>シグナル取得</td><td>MediaTailor の Monetization Function が広告ブレーク時にフィード ID をキーとしてシーンレベルのシグナルを取得</td></tr>
+      <tr><td>ターゲティング変換</td><td>取得したシグナルを広告サーバー (ADS) が期待するターゲティングパラメータへ変換</td></tr>
+      <tr><td>設定場所</td><td>AWS Elemental MediaLive コンソール</td></tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <ul class="plain-list">
+      <li>AWS Elemental MediaLive でライブチャンネルを運用していること</li>
+      <li>AWS Elemental Inference が利用可能なリージョンを使用していること</li>
+      <li>コンテキスト広告連携を行う場合は、AWS Elemental MediaTailor の設定と Monetization Function の構成が必要</li>
+    </ul>
+
+    <h3>📝 手順</h3>
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">MediaLive コンソールでコンテキストメタデータを有効化</div>
+        <p>チャンネルの Elemental Inference 設定でコンテキストメタデータ (Contextual Metadata) の生成を有効にします。エンコードと並行して AI 分析が実行され、フィード ID が割り当てられます。</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">SCTE-35 広告マーカーへのフィード ID 埋め込みを確認</div>
+        <p>MediaLive がライブストリームの SCTE-35 広告マーカーにフィード ID を埋め込みます。既存の SCTE-35 ベースの広告ワークフローをそのまま活用できます。</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">MediaTailor の Monetization Function を構成</div>
+        <p>広告ブレーク時にフィード ID からシーンレベルのシグナルを取得し、広告サーバー向けのターゲティングパラメータに変換するよう構成します。これにより ADS リクエストにコンテキスト情報が付与されます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✅</span><span><strong>収益化の改善</strong>: シーンの内容に適合した広告配信 (コンテキスト広告) により、広告単価やフィルレートの向上が期待でき、パブリッシャーの収益化を改善</span></div>
+    <div class="check-item"><span class="check-icon">✅</span><span><strong>ブランドセーフティの担保</strong>: GARM ブランド適合性シグナルにより、広告主のブランドイメージに適さないシーンへの広告配信を回避</span></div>
+    <div class="check-item"><span class="check-icon">✅</span><span><strong>運用コストの削減</strong>: 手動ロギングやポストプロダクションでのメタデータ入力が不要になり、アーカイブ整備の工数を削減</span></div>
+
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✅</span><span><strong>ML インフラ不要</strong>: サーバーレスかつフルマネージドな AI により、カスタム機械学習基盤の構築・運用が不要</span></div>
+    <div class="check-item"><span class="check-icon">✅</span><span><strong>エンコードとの並行処理</strong>: 既存のエンコードワークフローに追加の遅延を持ち込まず、単一のワークフロー内で AI 分析を実行</span></div>
+    <div class="check-item"><span class="check-icon">✅</span><span><strong>標準規格ベースの連携</strong>: 業界標準の SCTE-35 広告マーカーを利用するため、既存の SSAI ワークフローと自然に統合でき、カスタムインテグレーション開発が不要</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="warn-item"><span class="cross-icon">✗</span><span>AWS Elemental Inference が利用可能なリージョンでのみ使用できる</span></div>
+    <div class="warn-item"><span class="cross-icon">✗</span><span>設定は AWS Elemental MediaLive コンソールから行う (MediaLive のワークフローが前提)</span></div>
+    <div class="warn-item"><span class="cross-icon">✗</span><span>コンテキスト広告連携には MediaTailor の Monetization Function の構成が必要</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>Elemental Inference は従量課金制のため、分析対象のストリーム量に応じたコストを事前に見積もることが望ましい</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>広告サーバー側でターゲティングパラメータ (IAB カテゴリや適合性スコアなど) を受け取り活用できるよう、ADS 側の設定確認が必要</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>AI による自動分類のため、重要なブランドセーフティ判断についてはシグナルの精度を運用の中で検証することが推奨される</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">⚽ ユースケース 1: ライブスポーツ配信でのコンテキスト広告</div>
+      <p><span class="label">シナリオ</span>: スポーツ配信プラットフォームが、試合のシーン内容 (競技種目、盛り上がりの場面など) に応じた広告を広告ブレークで配信したい。</p>
+      <div class="flow-diagram">
+        <div class="flow-step">🎬 Inference<br>有効化</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📡 SCTE-35 に<br>フィード ID 埋込</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">⚡ シグナルを<br>パラメータ変換</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🏢 シーン適合<br>広告を返却</div>
+      </div>
+      <p><span class="label">効果</span>: シーンの文脈に合った広告配信により広告価値が向上し、コンテキストディールのキュレーションによる収益改善が期待できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📰 ユースケース 2: ニュース配信でのブランドセーフティ管理</div>
+      <p><span class="label">シナリオ</span>: ニュース配信事業者が、災害や事件などセンシティブな内容のシーンでは特定広告主の広告を配信しないよう制御したい。</p>
+      <div class="flow-diagram">
+        <div class="flow-step">🛡️ GARM シグナル<br>生成</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">⚡ 適合性スコアを<br>ADS に連携</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🏢 ポリシーに合わせ<br>配信制御</div>
+      </div>
+      <p><span class="label">効果</span>: センシティブなシーンへの広告出稿を自動的に回避でき、広告主との信頼関係を維持しながら収益機会を最大化できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🗄️ ユースケース 3: ライブアーカイブの自動メタデータ付与とコンテンツ活用</div>
+      <p><span class="label">シナリオ</span>: 放送事業者が、ライブ配信のアーカイブに対してシーン単位の検索やハイライト編集を効率化したい。</p>
+      <div class="flow-diagram">
+        <div class="flow-step">🧠 説明文 / 検出結果を<br>自動生成</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🗄️ MAM に<br>メタデータ取込</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🔍 全文検索 / 編集<br>レコメンドに活用</div>
+      </div>
+      <p><span class="label">効果</span>: 手動ロギングなしでリッチなアーカイブを構築でき、編集ワークフローの高速化とコンテンツの再利用促進につながる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      AWS Elemental Inference は<span class="highlight">従量課金制 (consumption-based pricing)</span> です。
+      分析対象のコンテンツ量に応じて課金されます。詳細は
+      <a href="https://aws.amazon.com/elemental-inference/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Elemental Inference 料金ページ</a>
+      を参照してください。
+    </p>
+    <p>また、コンテキスト広告連携で使用する AWS Elemental MediaTailor の広告挿入についても、MediaTailor の料金が別途発生します。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>
+      コンテキストメタデータは、<span class="highlight">AWS Elemental Inference が利用可能なすべての AWS リージョン</span>の
+      AWS Elemental MediaLive コンソールで本日から利用できます。
+    </p>
+    <p>参考として、Elemental Inference の GA 時点 (2026 年 2 月) では以下のリージョンで提供されていました。最新のリージョン情報は公式ドキュメントを確認してください。</p>
+    <table>
+      <tr><th>リージョン</th><th>リージョンコード</th></tr>
+      <tr><td>🇺🇸 米国東部 (バージニア北部)</td><td>us-east-1</td></tr>
+      <tr><td>🇺🇸 米国西部 (オレゴン)</td><td>us-west-2</td></tr>
+      <tr><td>🇮🇳 アジアパシフィック (ムンバイ)</td><td>ap-south-1</td></tr>
+      <tr><td>🇮🇪 欧州 (アイルランド)</td><td>eu-west-1</td></tr>
+    </table>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="related-card">
+        <div class="related-name">🎬 AWS Elemental MediaLive</div>
+        ライブ映像のエンコードを担当し、Elemental Inference の設定と SCTE-35 マーカーへのフィード ID 埋め込みを行う
+      </div>
+      <div class="related-card">
+        <div class="related-name">🎯 AWS Elemental MediaTailor</div>
+        サーバーサイド広告挿入 (SSAI) を提供し、Monetization Function でシーンレベルのシグナルをターゲティングパラメータに変換する
+      </div>
+      <div class="related-card">
+        <div class="related-name">🧠 AWS Elemental Inference の既存機能</div>
+        縦型動画の自動生成、ハイライトクリップ生成、スマート字幕 (Smart Subtitles) など、同一のエンコードパスから複数の AI 機能を利用可能
+      </div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section summary-box">
+    <h2>📝 まとめ</h2>
+    <p>
+      AWS Elemental Inference のコンテキストメタデータ生成により、ライブ映像から<span class="highlight">シーンレベルのインテリジェンスをリアルタイムに取得</span>し、
+      カスタム開発なしでコンテキスト広告やメディアアセット管理に活用できるようになりました。
+    </p>
+    <p>
+      MediaLive と MediaTailor を利用した SSAI ワークフローを運用中の事業者は、<span class="highlight">収益化改善とブランドセーフティ強化</span>の観点から本機能の評価を推奨します。
+      まずは MediaLive コンソールでコンテキストメタデータを有効化し、Monetization Function との連携を検証することから始めてください。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul style="list-style: none; padding-left: 0; margin: 4px 0;">
+      <li>・<a href="https://aws.amazon.com/about-aws/whats-new/2026/09/elemental-inference-contextual-metadata/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li>・<a href="https://aws.amazon.com/elemental-inference/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Elemental Inference 製品ページ</a></li>
+      <li>・<a href="https://aws.amazon.com/medialive/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Elemental MediaLive 製品ページ</a></li>
+      <li>・<a href="https://aws.amazon.com/mediatailor/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Elemental MediaTailor 製品ページ</a></li>
+      <li>・<a href="https://aws.amazon.com/elemental-inference/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Elemental Inference 料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-09-10) を基に生成されています。</p>
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+</body>
+</html>

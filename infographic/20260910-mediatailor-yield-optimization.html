@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Elemental MediaTailor - Yield Optimization</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.card p, .card ul {
+  margin: 0;
+  font-size: 14px;
+}
+
+.card ul { padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 14px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+
+.before-box .ba-title { color: #FF8A75; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #7DD46A; font-weight: 700; margin-bottom: 8px; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* Stats */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 4px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 12px 0;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  vertical-align: top;
+}
+
+/* Check / cross lists */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #7DD46A; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A75; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Flow */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 10px 16px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 22px;
+  font-weight: bold;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Use case */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.region-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.region-tag {
+  background: rgba(0, 161, 201, 0.15);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  color: var(--aws-light-gray);
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="service-badge">📺 AWS Elemental MediaTailor</div>
+    <h1>Yield Optimization</h1>
+    <div class="subtitle">未充足の広告枠を Amazon Ads 需要で自動収益化 | リリース日: 2026 年 9 月 10 日</div>
+  </div>
+
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>ライブ配信のサーバーサイド広告挿入 (SSAI) において、プライマリ広告サーバーで埋まらなかった広告枠を <span class="highlight">Amazon Ads の需要で自動的に収益化</span>する新機能です。<span class="highlight">追加インフラ不要、有効化コストゼロ</span>で、未充足の広告ブレイクを収益化されたインプレッションに変換できます。</p>
+    <p>Amazon Publisher Services (APS) の Streaming TV プログラムに参加しているパブリッシャー向けに提供され、広告はストリームに直接ステッチされるため、あらゆるデバイスでシームレスに再生されます。プロリーグのチャンピオンシップのような大規模ライブイベントを想定し、低レイテンシーかつ高速なレスポンスでピーク視聴時の広告充足率を最大化します。</p>
+    <p><strong style="color:#FFFFFF;">対象ユーザー</strong>: ライブスポーツ、ニュース、FAST チャンネルなどのライブ配信を SSAI で収益化しているブロードキャスターや動画配信プラットフォーム</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">有効化コスト (追加料金なし)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">15 秒〜</div>
+        <div class="stat-label">入札対象となる最小未充足時間</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">設定のみ</div>
+        <div class="stat-label">追加インフラ・クライアント変更不要</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>プライマリ広告デシジョンサーバー (ADS) が埋め切れない残余枠は、未収益のまま<strong>スレートやハウス広告</strong>で埋める必要があった</li>
+          <li>プログラマティック需要で埋めるには SSP や広告取引システムとの<strong>個別統合や追加インフラ</strong>の構築・運用が必要だった</li>
+          <li>同一ブレイク内の<strong>競合広告排除や重複広告防止</strong>を自前で実装する必要があった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>MediaTailor が未充足枠を検出し、<strong>OpenRTB 入札リクエストを APS に自動送信</strong>して Amazon Ads 需要 (Amazon DSP、Sponsored TV) で充足</li>
+          <li>API またはコンソールの<strong>設定だけで有効化</strong>でき、追加インフラやクライアント側の変更が不要</li>
+          <li>VAST 広告カテゴリシグナルの伝搬により、<strong>競合カテゴリ排除と重複排除が自動化</strong></li>
+          <li><strong>CloudWatch メトリクス</strong>で充足率を監視し、APS Publisher ポータルで収益を追跡</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+sequenceDiagram
+    participant V as 👤 視聴者プレイヤー
+    participant MT as 📺 MediaTailor
+    participant ADS as 🎯 プライマリ ADS
+    participant APS as 🛒 APS Amazon Ads
+
+    V->>MT: マニフェストリクエスト
+    Note over MT: SCTE マーカーで&lt;br/&gt;広告ブレイクを検出
+    MT->>ADS: 広告リクエスト
+    ADS-->>MT: 広告レスポンス
+    Note over MT: 未充足時間を計算&lt;br/&gt;15 秒以上なら入札
+    alt 未充足時間あり
+        MT->>APS: OpenRTB 入札リクエスト
+        APS-->>MT: プログラマティック広告
+        Note over MT: 広告をマージし&lt;br/&gt;重複を排除
+    else 失敗またはタイムアウト
+        Note over MT: プライマリ広告のみで続行&lt;br/&gt;フェイルオープン
+    end
+    MT-->>V: 完全にパーソナライズされた広告ブレイク
+      </pre>
+    </div>
+    <p style="font-size:14px;">広告ブレイク検出からプライマリ ADS への広告リクエスト、未充足時間の APS 需要による充足までの処理フローです。APS へのリクエストが失敗しても常に<span class="highlight">フェイルオープン</span>で動作し、視聴者の再生を妨げません。</p>
+  </div>
+
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <h4>💰 未充足広告枠の自動収益化</h4>
+      <ul>
+        <li>プライマリ ADS のレスポンス後に未充足時間を計算し、15 秒以上の未充足があれば APS に OpenRTB 入札リクエストを送信</li>
+        <li>Amazon DSP と Sponsored TV のプログラマティック需要で残余在庫を充足</li>
+        <li>APS リクエストの失敗時はプライマリ広告のみで続行するフェイルオープン設計で、再生をブロックまたは遅延させない</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🏟️ 大規模ライブイベント対応</h4>
+      <ul>
+        <li>プロリーグのチャンピオンシップなど大規模ライブイベント向けに設計</li>
+        <li>低レイテンシーと高速レスポンスにより、ピーク視聴時でも広告充足を最大化</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🛡️ ブランドセーフティ</h4>
+      <ul>
+        <li>VAST 広告カテゴリシグナルを OpenRTB 入札リクエストに伝搬し、同一ブレイク内での競合カテゴリや制限カテゴリの広告を除外</li>
+        <li>パブリッシャー自身がプライスフロア (最低価格) とカテゴリルールを設定し、配信される広告を完全にコントロール</li>
+        <li>同一ブレイク内で同じ広告が複数回挿入されないよう重複排除を実施</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🎛️ シンプルな有効化と可視性</h4>
+      <ul>
+        <li>MediaTailor API (<code>PutPlaybackConfiguration</code> の <code>YieldOptimizationConfiguration</code>) またはコンソールから設定可能</li>
+        <li>CloudWatch メトリクス (<code>YieldOptimization.BidRequest</code>、<code>YieldOptimization.AdsInserted</code>) で充足率改善を監視</li>
+        <li>収益とアーニングは APS Publisher ポータルで追跡</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対象コンテンツ</td><td>ライブ配信の HLS / DASH ミッドロール広告ブレイク (SCTE ブレイク時間が必要)</td></tr>
+      <tr><td>非対応</td><td>VOD、プリロール広告、プリフェッチワークフロー、オーバーレイ広告リクエスト</td></tr>
+      <tr><td>最小未充足時間</td><td>15 秒以上を推奨 (APS の広告クリエイティブは通常 15 秒以上のため)</td></tr>
+      <tr><td>需要ソース</td><td>Amazon Publisher Services (Amazon DSP、Sponsored TV)。今後、追加の需要ソースが提供予定</td></tr>
+      <tr><td>入札プロトコル</td><td>OpenRTB (JSON テンプレートでカスタマイズ可能)</td></tr>
+      <tr><td>Amazon Ads リージョン</td><td>Americas、Europe、Asia Pacific から主要オーディエンスに応じて選択</td></tr>
+      <tr><td>障害時動作</td><td>フェイルオープン (APS 失敗時はプライマリ広告のみで続行)</td></tr>
+      <tr><td>前提条件</td><td>APS Streaming TV プログラムへの登録と APS Publisher ID の取得</td></tr>
+    </table>
+
+    <h3>📅 API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/09/04</td>
+        <td><a href="https://awsapichanges.com/archive/changes/acf9b2-api.mediatailor.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS MediaTailor</a></td>
+        <td>7 updated api methods - Yield Optimization (APS 需要) の追加、Monetization Functions のライフサイクルフック追加など</td>
+      </tr>
+    </table>
+
+    <h3>⚙️ YieldOptimizationConfiguration の設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">YieldOptimizationConfiguration</span>
+      </div>
+      <pre><code class="language-json">{
+  "MinimumUnfilledDuration": 15,
+  "PublisherId": "your-aps-publisher-id",
+  "Region": "AMERICAS",
+  "OpenRtbTemplate": "{\"app\":{\"bundle\":\"your.app.bundle\",\"storeurl\":\"https://store-url\",\"content\":{}},\"device\":{\"ua\":\"{{session.user_agent}}\",\"ip\":\"{{session.client_ip}}\"},\"imp\":[{\"video\":{\"mimes\":[\"video/mp4\"],\"protocols\":[2,3,5,6],\"ext\":{\"slotId\":\"your-slot-id\"}},\"bidfloor\":1.0}]}"
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>📋 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon Publisher Services (APS) の Streaming TV プログラムへのオンボーディングが完了し、APS Publisher ID を取得済みであること (登録には数日かかる場合があるため早めに開始する)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>既存の MediaTailor 再生設定 (playback configuration) があること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>SCTE 広告ブレイクマーカー (ブレイク時間情報を含む) を持つライブ配信コンテンツソースがあること</span></div>
+
+    <div class="flow-diagram">
+      <div class="flow-step">📝 APS 登録<br/>Publisher ID 取得</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🎛️ 再生設定で<br/>有効化</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🧾 OpenRTB<br/>テンプレート設定</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📊 CloudWatch で<br/>動作確認</div>
+    </div>
+
+    <h3>ステップ 1: コンソールで Yield Optimization を有効化</h3>
+    <ol style="font-size:14px;">
+      <li><a href="https://console.aws.amazon.com/mediatailor/home" target="_blank" rel="noopener noreferrer" class="aws-link">MediaTailor コンソール</a>を開き、[Configurations] から対象の再生設定を選択して [Edit] を選択</li>
+      <li>[Yield Optimization Settings] セクションを展開し、有効化ドロップダウンを [Enabled] に設定</li>
+      <li><strong>APS Publisher ID</strong> / <strong>Minimum Unfilled Duration</strong> (15 以上) / <strong>Amazon Ads Region</strong> (Americas / Europe / Asia Pacific) / <strong>OpenRTB Template Configuration</strong> を入力</li>
+      <li>[Save] を選択 (コンソールが JSON 構文を検証し、必須フィールド不足はインラインで警告)</li>
+    </ol>
+
+    <h3>ステップ 2: API で設定する場合</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">PutPlaybackConfiguration で有効化</span>
+      </div>
+      <pre><code class="language-bash">aws mediatailor put-playback-configuration \
+  --name "MyStreamingService" \
+  --ad-decision-server-url "https://ads.example.com/vast" \
+  --video-content-source-url "https://origin.example.com/hls/" \
+  --yield-optimization-configuration '{
+    "MinimumUnfilledDuration": 15,
+    "PublisherId": "your-aps-publisher-id",
+    "Region": "AMERICAS",
+    "OpenRtbTemplate": "{\"app\":{\"bundle\":\"your.app.bundle\",\"storeurl\":\"https://store-url\",\"content\":{}},\"device\":{\"ua\":\"{{session.user_agent}}\",\"ip\":\"{{session.client_ip}}\"},\"imp\":[{\"video\":{\"mimes\":[\"video/mp4\"],\"protocols\":[2,3,5,6],\"ext\":{\"slotId\":\"your-slot-id\"}},\"bidfloor\":1.0}]}"
+  }'</code></pre>
+    </div>
+    <p style="font-size:14px;"><code>PutPlaybackConfiguration</code> API の <code>YieldOptimizationConfiguration</code> パラメータで、最小未充足時間、APS Publisher ID、Amazon Ads リージョン、OpenRTB テンプレートを指定して再生設定を更新します。</p>
+
+    <h3>ステップ 3: 動作確認</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">CloudWatch メトリクスの確認</span>
+      </div>
+      <pre><code class="language-bash">aws cloudwatch get-metric-statistics \
+  --namespace AWS/MediaTailor \
+  --metric-name YieldOptimization.BidRequest \
+  --dimensions Name=ConfigurationName,Value=MyStreamingService \
+  --start-time 2026-09-10T00:00:00Z \
+  --end-time 2026-09-10T23:59:59Z \
+  --period 300 \
+  --statistics Sum</code></pre>
+    </div>
+    <p style="font-size:14px;">プレイヤーパラメータ (User-Agent、IP アドレスなど) を含む再生セッションを開始し、未充足時間のある広告ブレイクを待った後、<code>YieldOptimization.BidRequest</code> と <code>YieldOptimization.AdsInserted</code> を確認します。<code>BidRequest</code> が出力されているのに <code>AdsInserted</code> が 0 の場合は、<code>ads_interaction_log</code> の <code>RAW_BID_REQUEST</code> イベントでテンプレートが有効な入札リクエストを生成しているか確認します。</p>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>残余在庫の収益化</strong>: プライマリ ADS が埋め切れなかった広告枠を Amazon DSP や Sponsored TV のプログラマティック需要で充足し、これまで失われていた収益機会を回収できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>有効化コストゼロ</strong>: 機能の利用に追加料金は不要で、追加インフラの構築・運用コストも発生しない</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>視聴体験の向上</strong>: 繰り返し表示されるハウス広告やスレートを、関連性の高いプログラマティック広告に置き換えられる</span></div>
+
+    <h3>🔩 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>統合作業が不要</strong>: SSP との個別統合を開発せずに、MediaTailor の設定だけでプログラマティック需要へ接続できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>フェイルオープン設計</strong>: APS リクエストの失敗やタイムアウトが視聴者の再生をブロック・遅延させない</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>サーバーサイド挿入</strong>: 広告がストリームにステッチされるため、クライアント側の変更なしにあらゆるデバイスでシームレスに再生される</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用可視性</strong>: CloudWatch メトリクスで充足率を監視し、APS Publisher ポータルで収益を追跡できる</span></div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>🚫 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>APS Streaming TV プログラムへの登録が必須であり、登録のないパブリッシャーは利用できない (オンボーディングには数日かかる場合がある)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>現時点ではライブ配信の HLS / DASH ミッドロール広告のみ対応 (VOD、プリロール、プリフェッチ、オーバーレイ広告は非対応)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>未充足時間が 15 秒未満の場合、APS の広告クリエイティブは通常 15 秒以上のため広告が返却されない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>SCTE マーカーにブレイク時間情報が含まれている必要がある</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>需要ソースは現時点で Amazon Ads (APS) のみ (追加の需要ソースは今後提供予定)</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>OpenRTB テンプレートの構築には <code>app.bundle</code>、<code>device</code>、<code>imp.video</code> など必須フィールドの理解が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>プライスフロアとカテゴリルールの設定はパブリッシャー側の責任であり、収益性とブランドセーフティのバランス調整が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>パーソナライズに使える残り時間が不足している場合は入札リクエストが行われない</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>1. 大規模ライブスポーツイベントの広告充足率向上</h4>
+      <p><strong>シナリオ</strong>: プロリーグのチャンピオンシップ中継で視聴者が急増し、プライマリ ADS の直販在庫だけでは広告ブレイクを埋め切れず、未充足枠がスレートで埋まっている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-json">{
+  "MinimumUnfilledDuration": 15,
+  "PublisherId": "aps-publisher-id",
+  "Region": "AMERICAS"
+}</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: ピーク視聴時の未充足枠が Amazon Ads 需要で自動的に充足され、最大視聴者数のタイミングで収益を最大化できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>2. FAST チャンネルの残余在庫の収益化</h4>
+      <p><strong>シナリオ</strong>: 24 時間 365 日運用するリニアチャンネルで、深夜帯やニッチコンテンツの時間帯に直販広告が埋まらず、ハウス広告の繰り返しが視聴体験を損ねている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws mediatailor put-playback-configuration \
+  --name "FastChannel01" \
+  --yield-optimization-configuration '{"MinimumUnfilledDuration": 15, "PublisherId": "aps-publisher-id", "Region": "ASIA_PACIFIC", "OpenRtbTemplate": "..."}'</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: 直販需要が薄い時間帯でもプログラマティック広告で充足され、ハウス広告の繰り返しが減って視聴体験と収益の両方が改善する。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>3. ブランドセーフティを維持した残余枠販売</h4>
+      <p><strong>シナリオ</strong>: 自動車メーカーがスポンサーの番組で、同一広告ブレイク内に競合他社の広告が混入することを避けながら残余枠を販売したい。</p>
+      <p><strong>実装例</strong>: OpenRTB テンプレートに <code>bidfloor</code> (プライスフロア) を設定し、VAST 広告カテゴリシグナルによる競合カテゴリ排除を活用する。プライマリ ADS が返した広告のカテゴリ情報が OpenRTB 入札リクエストに伝搬され、競合カテゴリの広告が自動的に除外される。</p>
+      <p class="effect">✅ <strong>効果</strong>: 同一ブレイク内の競合広告の混入や広告の重複を自動で防ぎつつ、パブリッシャーが設定した価格条件を満たす広告のみで残余枠を収益化できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>Yield Optimization は<span class="highlight">追加料金なし</span>で利用できます。MediaTailor の広告挿入に対する既存の料金 (挿入された広告に対する課金) は通常どおり適用されます。収益とアーニングは APS Publisher ポータルで確認できます。</p>
+    <p style="font-size:14px;">詳細は <a href="https://aws.amazon.com/mediatailor/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Elemental MediaTailor 料金ページ</a>を参照してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>MediaTailor が利用可能なすべての AWS リージョンで利用できます。</p>
+    <div class="region-tags">
+      <span class="region-tag">🇺🇸 米国東部 (オハイオ)</span>
+      <span class="region-tag">🇺🇸 米国東部 (バージニア北部)</span>
+      <span class="region-tag">🇺🇸 米国西部 (オレゴン)</span>
+      <span class="region-tag">🇿🇦 アフリカ (ケープタウン)</span>
+      <span class="region-tag">🇮🇳 アジアパシフィック (ハイデラバード)</span>
+      <span class="region-tag">🇲🇾 アジアパシフィック (マレーシア)</span>
+      <span class="region-tag">🇦🇺 アジアパシフィック (メルボルン)</span>
+      <span class="region-tag">🇮🇳 アジアパシフィック (ムンバイ)</span>
+      <span class="region-tag">🇯🇵 アジアパシフィック (大阪)</span>
+      <span class="region-tag">🇰🇷 アジアパシフィック (ソウル)</span>
+      <span class="region-tag">🇸🇬 アジアパシフィック (シンガポール)</span>
+      <span class="region-tag">🇦🇺 アジアパシフィック (シドニー)</span>
+      <span class="region-tag">🇯🇵 アジアパシフィック (東京)</span>
+      <span class="region-tag">🇨🇦 カナダ (中部)</span>
+      <span class="region-tag">🇩🇪 欧州 (フランクフルト)</span>
+      <span class="region-tag">🇮🇪 欧州 (アイルランド)</span>
+      <span class="region-tag">🇬🇧 欧州 (ロンドン)</span>
+      <span class="region-tag">🇫🇷 欧州 (パリ)</span>
+      <span class="region-tag">🇸🇪 欧州 (ストックホルム)</span>
+      <span class="region-tag">🇦🇪 中東 (UAE)</span>
+      <span class="region-tag">🇧🇷 南米 (サンパウロ)</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <h4>🛒 Amazon Publisher Services (APS)</h4>
+      <p>Yield Optimization の需要ソース。Streaming TV プログラムへの登録と Publisher ID の取得が前提条件で、収益追跡も APS Publisher ポータルで行う。</p>
+    </div>
+    <div class="card">
+      <h4>📡 AWS Elemental MediaLive</h4>
+      <p>ライブストリームのエンコードと SCTE-35 広告マーカーの挿入を担い、MediaTailor の広告ブレイク検出の起点となる。</p>
+    </div>
+    <div class="card">
+      <h4>🧠 AWS Elemental Inference</h4>
+      <p>同日発表されたコンテキストメタデータ生成機能と組み合わせることで、Monetization Function 経由のコンテキスト広告ターゲティングと併用できる。</p>
+    </div>
+    <div class="card">
+      <h4>📊 Amazon CloudWatch</h4>
+      <p><code>YieldOptimization.BidRequest</code> や <code>YieldOptimization.AdsInserted</code> などのメトリクスで充足率改善を監視する。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>MediaTailor の Yield Optimization は、ライブ配信 SSAI の未充足広告枠を Amazon Ads 需要で自動収益化する機能で、<span class="highlight">追加インフラなしに設定のみで残余在庫の収益機会を回収</span>できます。APS Streaming TV プログラムのパブリッシャーは、オンボーディングに数日かかる場合があるため、まず APS 登録を開始し、その後 MediaTailor 再生設定で本機能を有効化して CloudWatch メトリクスで充足率の改善を確認することを推奨します。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/09/mediatailor-yield-optimization/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li><a href="https://docs.aws.amazon.com/mediatailor/latest/ug/yield-optimization.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Working with MediaTailor Yield Optimization</a></li>
+      <li><a href="https://docs.aws.amazon.com/mediatailor/latest/ug/yield-optimization-quickstart.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Yield Optimization quick start guide</a></li>
+      <li><a href="https://aws.amazon.com/mediatailor/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/acf9b2-api.mediatailor.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 (awsapichanges.com)</a></li>
+    </ul>
+    <p>レポート: reports/2026/2026-09-10-mediatailor-yield-optimization.md | 生成日: 2026 年 9 月 10 日</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+    }
+});
+</script>
+</body>
+</html>
