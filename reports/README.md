@@ -5,6 +5,11 @@
 
 ## 2026 年
 
+- [2026-09-11 - Amazon SageMaker HyperPod - モデルキャッシング機能による推論オートスケーリングの高速化](2026/2026-09-11-sgm-hyperpod-model-caching-inf.md)
+- [2026-09-11 - Amazon RDS for Oracle - 2026 年 7 月 Release Update 向け Supplemental Patch Bundle サポート](2026/2026-09-11-amazon-rds-oracle-supports-spatial-patch-bundle-jul-2026-ru.md)
+- [2026-09-11 - AWS HealthOmics - Amazon CloudWatch へのリアルタイムランメトリクス発行](2026/2026-09-11-aws-healthomics-realtime-run-metrics.md)
+- [2026-09-11 - Amazon Bedrock Knowledge Bases - TwelveLabs Marengo 3.0 によるマルチモーダル埋め込み対応](2026/2026-09-11-amazon-bedrock-managed-knowledge-base-multimodal-embeddings-twelvelabs-marengo.md)
+- [2026-09-11 - AWS DevOps Agent - Slack 双方向コミュニケーション対応](2026/2026-09-11-aws-devops-agent-bidirectional-slack-communication.md)
 - [2026-09-10 - AWS Lambda - 再帰ループ検出機能が AWS European Sovereign Cloud で利用可能に](2026/2026-09-10-lambda-recursion-europe-sovereign-cloud.md)
 - [2026-09-10 - AWS Elemental MediaTailor - Low-Latency HLS 広告挿入のサポート](2026/2026-09-10-aws-elemental-mediatailor-low-latency-hls-ad-insertion.md)
 - [2026-09-10 - AWS Elemental - Dynamic Multiview for live video](2026/2026-09-10-aws-elemental-dynamic-multiview-video.md)
@@ -30,6 +35,7 @@
 - [2026-09-09 - Amazon Quick - 常時稼働エージェント、強化されたアクティビティフィード、エンタープライズ管理機能の追加](2026/2026-09-09-amazon-quick-always-on-agents-sharper-feed-enterprise-controls.md)
 - [2026-09-09 - AWS Systems Manager - 非管理状態の EC2 インスタンスに対する診断機能の拡張](2026/2026-09-09-systems-manager-diagnoses-ec2-unmanaged.md)
 - [2026-09-09 - Amazon Connect Customer - Task と Email のワークロードタイプ別キャパシティ制限](2026/2026-09-09-amazon-connect-capacity-limits.md)
+- [2026-09-09 - AWS Marketplace - デモリクエストとプライベートオファーリクエストの数分以内の自動クオリフィケーション](2026/2026-09-09-aws-marketplace-demo-private-offer-requests-qualification.md)
 - [2026-09-09 - Amazon Bedrock - Managed Knowledge Base の Confluence Data Center ネイティブデータソースコネクタ](2026/2026-09-09-amazon-bedrock-managed-knowledge-base-confluence-data-center-native-data-source-connector.md)
 - [2026-09-09 - Amazon Quick - デスクトップアプリが macOS と Windows で一般提供開始](2026/2026-09-09-amazon-quick-desktop-app-generally-available-macos-windows.md)
 - [2026-09-09 - Amazon EBS - Volume Clones のクロスアカウントコピー対応](2026/2026-09-09-ebs-volume-clones-cross-account-copy.md)

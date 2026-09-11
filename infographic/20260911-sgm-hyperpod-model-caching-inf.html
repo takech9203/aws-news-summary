@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon SageMaker HyperPod - モデルキャッシングによる推論オートスケーリングの高速化</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul { margin: 0; padding-left: 20px; }
+.card li { margin: 4px 0; font-size: 14px; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 38px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+  h1 { font-size: 26px; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+
+.before-box .box-title { color: #FF6B4A; font-weight: 700; margin-bottom: 10px; }
+.after-box .box-title { color: #4CAF50; font-weight: 700; margin-bottom: 10px; }
+
+.before-box ul, .after-box ul { margin: 0; padding-left: 4px; list-style: none; }
+.before-box li, .after-box li {
+  margin: 8px 0;
+  font-size: 14px;
+  padding-left: 22px;
+  position: relative;
+}
+.before-box li::before { content: "✗"; position: absolute; left: 0; color: #FF6B4A; font-weight: bold; }
+.after-box li::before { content: "✓"; position: absolute; left: 0; color: #4CAF50; font-weight: bold; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+td code, li code, p code {
+  background: rgba(255, 153, 0, 0.12);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+  word-break: break-all;
+}
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.step-content { flex: 1; min-width: 0; }
+.step-content .step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+/* メリット・デメリット */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+
+.check-item strong { color: var(--aws-white); }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .effect {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid #4CAF50;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
+
+/* 関連サービス */
+.related-item {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+  font-size: 14px;
+  align-items: flex-start;
+}
+.related-item .arrow { color: var(--aws-orange); flex-shrink: 0; }
+.related-item strong { color: var(--aws-white); }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="service-badge">Amazon SageMaker HyperPod</div>
+    <h1>🚀 モデルキャッシングで推論オートスケーリングを高速化</h1>
+    <div class="subtitle">
+      <span class="date">📅 リリース日: 2026 年 9 月 11 日</span> ｜ 機能: モデルキャッシング (Model Caching) による推論のコールドスタート削減
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon SageMaker HyperPod が推論ワークロード向けの<span class="highlight">モデルキャッシング</span>をサポート。モデルの重みファイルとコンテナイメージをクラスターノードに事前ロードすることで、推論ポッドの起動時間を<span class="highlight">数分から数秒に短縮</span>します。チャットアシスタント、エージェントパイプライン、RAG、ドキュメント分析など、大規模 LLM 推論のスケールアウト時のコールドスタートというボトルネックを解消します。
+    </p>
+    <p>
+      本機能は 2 つの独立したキャッシュ機構で構成されます。<strong style="color:#FFFFFF;">重みキャッシュ (weightsCache)</strong> はモデルの重みをノードのローカル NVMe ストレージに事前配置し、<strong style="color:#FFFFFF;">イメージキャッシュ (imageCache)</strong> は推論サーバーのコンテナイメージをノードに事前プルします。ウォームキャッシュのないノードでは元のソースから自動取得するフォールバック動作により、デプロイの信頼性が維持されます。
+    </p>
+
+    <h3>📊 数字で見るアップデート効果 (AWS ベンチマーク)</h3>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">約 60%</div>
+        <div class="stat-label">スケールアウト高速化<br>(57 GB ~ 145 GB のモデル)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">97%</div>
+        <div class="stat-label">イメージプル時間の削減<br>(2 分超のプル時間を削減)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">数秒</div>
+        <div class="stat-label">推論ポッドの起動時間<br>(従来は数分~数十分)</div>
+      </div>
+    </div>
+
+    <h3>🔄 Before / After</h3>
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ アップデート前の課題</div>
+        <ul>
+          <li>スケールアウトのたびに、新ポッドがイメージプルと重みダウンロード (S3 / FSx から) を完了するまでトラフィックを処理できなかった</li>
+          <li>大規模モデルでは重みのダウンロードだけで数十分かかる場合があり、急激なトラフィック増加に追従できなかった</li>
+          <li>同一ノード上の複数ポッドがそれぞれリモートから重みをダウンロードし、冗長なネットワーク転送が発生していた</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ アップデート後の改善</div>
+        <ul>
+          <li>モデル重みをノードローカルの NVMe に事前配置し、ポッドが数秒で起動 (スケールアウトが約 60% 高速化)</li>
+          <li>コンテナイメージの事前プルにより、2 分超のイメージプル時間を 97% 削減</li>
+          <li>キャッシュミス時は元のソースへ自動フォールバックし、キャッシュ未整備でもデプロイが停止しない</li>
+          <li><code>modelCacheConfig</code> を追加するだけで有効化でき、キャッシュの作成・削除をオペレーターが自動管理</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Sources["🌐 リモートソース"]
+        direction LR
+        S3[("🪣 Amazon S3 / FSx<br/>モデル重み")]
+        ECR[("📦 Amazon ECR<br/>コンテナイメージ")]
+        S3 ~~~ ECR
+    end
+
+    subgraph Cluster["☁️ SageMaker HyperPod クラスター"]
+        Operator["⚙️ HyperPod Inference Operator<br/>modelCacheConfig を読み取り<br/>キャッシュを事前ウォーム"]
+        subgraph Node["🖥️ クラスターノード"]
+            NVMe[("💾 ローカル NVMe<br/>重みキャッシュ")]
+            Image["📦 事前プル済み<br/>コンテナイメージ"]
+            Pod["🚀 推論ポッド<br/>数秒で起動"]
+        end
+    end
+
+    User(["👤 トラフィック増加"]) -.->|スケールアウト| Pod
+    Operator -->|重みを事前ダウンロード| NVMe
+    Operator -->|イメージを事前プル| Image
+    S3 --> NVMe
+    ECR --> Image
+    NVMe -->|読み取り専用マウント| Pod
+    Image -->|ローカルから起動| Pod
+    Pod -.->|キャッシュミス時<br/>フォールバック| S3
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Sources,Cluster,Node cloud
+    class S3,ECR database
+    class NVMe storage
+    class Operator compute
+    class Image,Pod process
+    class User user
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      HyperPod Inference Operator がモデル重みとコンテナイメージをノードへ事前配置し、スケールアウト時に新しいポッドがローカルキャッシュから数秒で起動する流れを示しています。ウォームキャッシュのないノードでは、リモートソースへ自動フォールバックします。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">💾 重みキャッシュ (weightsCache)</div>
+      <ul>
+        <li>モデルの重みファイルをノードローカルの NVMe ストレージ (デフォルト: <code>/opt/dlami/nvme</code>) に事前配置</li>
+        <li>推論ポッドはキャッシュされた重みを読み取り専用でマウントし、リモートダウンロードを省略</li>
+        <li>デプロイごとに分離されたキャッシュディレクトリを使用し、同一ノード上の複数デプロイが干渉しない</li>
+        <li>キャッシュがウォームになったノードにはラベルが付与され、優先的なノードアフィニティによりポッドがウォームノードへ優先スケジュールされる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📦 イメージキャッシュ (imageCache)</div>
+      <ul>
+        <li>推論サーバーのコンテナイメージを対象ノードへ事前プル</li>
+        <li>新しいポッドはコールドイメージプルを待たずに起動できる (ベンチマークで 2 分超のプル時間を 97% 削減)</li>
+        <li>重みキャッシュとは独立しており、単独でも組み合わせても利用可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔄 自動フォールバックとライフサイクル管理</div>
+      <ul>
+        <li>ウォームキャッシュのないノードにポッドがスケジュールされた場合は、元のモデルソースから直接ロード</li>
+        <li>ノード交換後は、オペレーターが新ノードのキャッシュを再ウォームするまで既存のウォームノードがトラフィックを処理</li>
+        <li>デプロイ削除時には、オペレーターがキャッシュ済みの重みファイルをノードから自動的にクリーンアップ</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🌐 幅広いモデルソースへの対応</div>
+      <ul>
+        <li>SageMaker JumpStart のデプロイ (オープンウェイトモデル・ゲート付きモデルの両方) に対応</li>
+        <li>Amazon S3 または Amazon FSx 上のカスタムモデルにも対応</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>modelCacheConfig の設定項目</h3>
+    <table>
+      <tr><th>フィールド</th><th>デフォルト</th><th>説明</th></tr>
+      <tr>
+        <td><code>weightsCache.enabled</code></td>
+        <td><code>false</code></td>
+        <td>ノードローカルの重みキャッシュを有効化するかどうか。<code>true</code> の場合、オペレーターが重みを事前配置しポッドにマウントする</td>
+      </tr>
+      <tr>
+        <td><code>weightsCache.hostPath</code></td>
+        <td><code>/opt/dlami/nvme</code></td>
+        <td>キャッシュされた重みの保存先ホストパス。255 文字以内の空でない絶対パスが必要</td>
+      </tr>
+      <tr>
+        <td><code>imageCache.enabled</code></td>
+        <td><code>false</code></td>
+        <td>コンテナイメージキャッシュを有効化するかどうか。<code>true</code> の場合、オペレーターがイメージを対象ノードへ事前プルする</td>
+      </tr>
+    </table>
+
+    <h3>ベンチマーク結果</h3>
+    <table>
+      <tr><th>項目</th><th>結果</th></tr>
+      <tr><td>対象モデルサイズ</td><td>57 GB ~ 145 GB</td></tr>
+      <tr><td>スケールアウト時間</td><td>約 60% 高速化</td></tr>
+      <tr><td>イメージプル時間</td><td>2 分超を削減 (97% 削減)</td></tr>
+    </table>
+
+    <h3>設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">YAML</span>
+        <span class="code-title">modelCacheConfig の設定例</span>
+      </div>
+      <pre><code class="language-yaml">spec:
+  # ... モデルソース、ワーカー、TLS の設定 ...
+  modelCacheConfig:
+    weightsCache:
+      enabled: true
+      hostPath: /opt/dlami/nvme
+    imageCache:
+      enabled: true</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span><strong>ローカル NVMe ストレージを持つインスタンスタイプ</strong>: 重みキャッシュは設定された <code>hostPath</code> にローカル NVMe ストレージが存在することを前提とする。EBS のみのインスタンスはサポートされない</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span><strong>十分な NVMe 容量</strong>: デプロイごとに独立したキャッシュディレクトリを使用するため、同一ノード上の複数デプロイはそれぞれストレージを消費する</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span><strong>対応バージョンの Inference Operator</strong>: <code>modelCacheConfig</code> フィールドが認識されない場合は、Inference Operator アドオンを最新バージョンに更新する</span></div>
+
+    <h3>手順</h3>
+
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">modelCacheConfig の追加</div>
+        <p><code>InferenceEndpointConfig</code> または <code>JumpStartModel</code> リソースの <code>spec</code> に <code>modelCacheConfig</code> ブロックを追加します。重みキャッシュとイメージキャッシュは独立して有効化できます。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">YAML</span></div>
+          <pre><code class="language-yaml">spec:
+  modelCacheConfig:
+    weightsCache:
+      enabled: true
+      hostPath: /opt/dlami/nvme
+    imageCache:
+      enabled: true</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">キャッシュのウォーム状態を確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">kubectl get nodes --show-labels | grep "cache-ready"</code></pre>
+        </div>
+        <p>ウォームになったノードには、重みキャッシュは <code>inference.sagemaker.aws.amazon.com/weights-cache-ready.</code>、イメージキャッシュは <code>inference.sagemaker.aws.amazon.com/image-cache-ready.</code> プレフィックスのラベルが付与されます。出力がない場合、まだキャッシュがウォームになったノードはありません。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">ポッドのキャッシュマウントを確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">kubectl describe pod {inference-pod-name} -n {namespace}</code></pre>
+        </div>
+        <p>推論ポッドがホストローカルのキャッシュパスを読み取り専用でマウントしていることを確認します。hostPath ボリュームが存在しない場合、そのポッドはリモートストレージから重みをロードしています。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">オペレーターログの確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">kubectl logs -n hyperpod-inference-system deployment/hyperpod-inference-controller-manager | grep -i "cache"</code></pre>
+        </div>
+        <p>Inference Operator のログから、キャッシュのウォームアップ処理やエラーの有無を確認します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット・デメリット -->
+  <div class="section">
+    <h2>💡 メリット・制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3>💼 ビジネス面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>応答性の高いスケーリング</strong>: トラフィック急増時に数秒でポッドを追加でき、ユーザー体験の劣化を防止</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト効率の向上</strong>: コールドスタートを見越した過剰なプロビジョニングが不要になり、必要な時に必要な分だけスケール</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>大規模モデルほど効果大</strong>: 57 GB ~ 145 GB クラスのモデルで約 60% のスケールアウト高速化が実証済み</span></div>
+
+        <h3>⚙️ 技術面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ネットワーク転送の削減</strong>: 同一ノード上のポッドがローカル NVMe から重みを読み込み、S3 / FSx への冗長なダウンロードが不要</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷ゼロのライフサイクル管理</strong>: キャッシュの作成、ノードラベル付与、削除時のクリーンアップまでオペレーターが自動管理</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>信頼性を損なわないフォールバック</strong>: キャッシュミス時は元のソースから取得するため、ポッドがスタック・失敗するリスクがない</span></div>
+      </div>
+      <div>
+        <h3>🚧 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>重みキャッシュにはローカル NVMe ストレージを持つインスタンスタイプが必要 (EBS のみのインスタンスは非対応)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>キャッシュ可能なモデルの最大サイズは、インスタンスタイプの NVMe 空き容量に制限される</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span><code>modelCacheConfig</code> に対応したバージョンの HyperPod Inference Operator が必要</span></div>
+
+        <h3>🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span>キャッシュのウォームアップ時間は、モデルサイズとリモートソースへのネットワークスループットに依存</span></div>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span>同一ノードに複数のキャッシュ済みデプロイを配置するとディスク圧迫が発生する可能性があるため、インスタンスグループの分離やデプロイ数の調整を検討</span></div>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span>ノード交換後は新ノードのキャッシュ再ウォームが完了するまで、優先スケジューリングの対象にならない</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">💬 ユースケース 1: トラフィック変動の大きいチャットアシスタント</div>
+      <p><strong style="color:#FFFFFF;">シナリオ</strong>: 業務時間帯にトラフィックが集中するチャットアシスタントで、大規模 LLM (100 GB 超) を HyperPod 上でサービング。従来はスケールアウトに数十分かかり、ピーク時に応答遅延が発生していた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">重み + イメージの両方をキャッシュ</span></div>
+        <pre><code class="language-yaml">spec:
+  modelCacheConfig:
+    weightsCache:
+      enabled: true
+      hostPath: /opt/dlami/nvme
+    imageCache:
+      enabled: true</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: スケールアウト時間を約 60% 短縮し、ピーク時のトラフィック増加に数秒~数分で追従できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🤖 ユースケース 2: 頻繁にスケールするエージェントパイプライン</div>
+      <p><strong style="color:#FFFFFF;">シナリオ</strong>: エージェントワークフローや RAG パイプラインで推論リクエストが断続的に発生し、スケールイン・スケールアウトが頻繁に繰り返される。推論サーバーのコンテナイメージが大きく、イメージプルが起動のボトルネック。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">イメージキャッシュのみ有効化</span></div>
+        <pre><code class="language-yaml">spec:
+  modelCacheConfig:
+    imageCache:
+      enabled: true</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: イメージキャッシュ単独の有効化により、2 分超のイメージプル時間を 97% 削減し、頻繁なスケールイベントでも安定した起動時間を実現。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🚀 ユースケース 3: JumpStart モデルの高速デプロイ</div>
+      <p><strong style="color:#FFFFFF;">シナリオ</strong>: SageMaker JumpStart のゲート付きモデルを複数チームで利用しており、デプロイやレプリカ追加のたびに重みのダウンロード待ちが発生。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">JumpStartModel リソースでの設定</span></div>
+        <pre><code class="language-yaml">apiVersion: inference.sagemaker.aws.amazon.com/v1alpha1
+kind: JumpStartModel
+spec:
+  # ... モデル設定 ...
+  modelCacheConfig:
+    weightsCache:
+      enabled: true
+      hostPath: /opt/dlami/nvme</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: JumpStart モデル (オープンウェイト・ゲート付きの両方) でも重みキャッシュが機能し、レプリカ追加時の起動を数秒レベルに短縮。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">💵 料金</div>
+        <p style="font-size:14px; margin:0;">モデルキャッシング機能自体に<span class="highlight">追加料金なし</span>。SageMaker HyperPod のクラスターリソース (インスタンス料金など) に対する標準の課金が適用されます。キャッシュはノードのローカル NVMe ストレージを使用するため、追加のストレージ料金は発生しません。詳細は <a href="https://aws.amazon.com/sagemaker/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a> を参照。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🌍 利用可能リージョン</div>
+        <p style="font-size:14px; margin:0;">Amazon SageMaker HyperPod が利用可能な<span class="highlight">すべての AWS リージョン</span>で一般提供されています。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-item"><span class="arrow">→</span><span><strong>SageMaker HyperPod Inference Operator</strong>: モデルキャッシングを管理する Kubernetes オペレーター。<code>InferenceEndpointConfig</code> や <code>JumpStartModel</code> リソースを通じて推論エンドポイントをデプロイ</span></div>
+    <div class="related-item"><span class="arrow">→</span><span><strong>Amazon SageMaker JumpStart</strong>: 事前学習済みモデルのカタログ。JumpStart モデルのデプロイでもモデルキャッシングを利用可能</span></div>
+    <div class="related-item"><span class="arrow">→</span><span><strong>Amazon S3 / Amazon FSx</strong>: モデル重みのリモートソース。キャッシュミス時のフォールバック先としても機能</span></div>
+    <div class="related-item"><span class="arrow">→</span><span><strong>Amazon ECR</strong>: 推論サーバーコンテナイメージのソース。イメージキャッシュにより事前プルされる</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      SageMaker HyperPod のモデルキャッシングは、大規模 LLM 推論の最大のボトルネックであった<span class="highlight">コールドスタート</span>を、重みとイメージの事前配置により解消するアップデートです。<code>modelCacheConfig</code> の追加だけで有効化でき、フォールバックにより信頼性も維持されるため、HyperPod で推論ワークロードを運用しているユーザーは、まず<strong style="color:#FFFFFF;">ローカル NVMe を持つインスタンスタイプであることを確認</strong>したうえで有効化を検討することを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/09/sgm-hyperpod-model-caching-inf/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/09/sgm-hyperpod-model-caching-inf/</a></li>
+      <li><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-model-deployment-model-caching.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Model weights caching and image caching</a></li>
+      <li><a href="https://aws.amazon.com/sagemaker/ai/hyperpod/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon SageMaker HyperPod</a></li>
+      <li><a href="https://aws.amazon.com/sagemaker/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon SageMaker 料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-09-11) を基に作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
