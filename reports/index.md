@@ -5,8 +5,11 @@
 
 ## 2026 年
 
+- [2026-09-11 - AWS Lambda - Amazon S3 Files のダイレクトリード設定サポート](2026/2026-09-11-aws-lambda-direct-read-s3files.md)
+- [2026-09-11 - Amazon EC2 - X2idn インスタンスがアジアパシフィック (香港) リージョンで利用可能に](2026/2026-09-11-ec2-x2idn-asia-pacific-hong-kong.md)
 - [2026-09-11 - Amazon SageMaker HyperPod - モデルキャッシング機能による推論オートスケーリングの高速化](2026/2026-09-11-sgm-hyperpod-model-caching-inf.md)
 - [2026-09-11 - Amazon RDS for Oracle - 2026 年 7 月 Release Update 向け Supplemental Patch Bundle サポート](2026/2026-09-11-amazon-rds-oracle-supports-spatial-patch-bundle-jul-2026-ru.md)
+- [2026-09-11 - Kiro - セッション検索スコープ、V2 ハーネスフラグ、設定メニューのキーボード操作統一](2026/2026-09-11-kiro-changelog-2026-09-11.md)
 - [2026-09-11 - AWS HealthOmics - Amazon CloudWatch へのリアルタイムランメトリクス発行](2026/2026-09-11-aws-healthomics-realtime-run-metrics.md)
 - [2026-09-11 - Amazon Bedrock Knowledge Bases - TwelveLabs Marengo 3.0 によるマルチモーダル埋め込み対応](2026/2026-09-11-amazon-bedrock-managed-knowledge-base-multimodal-embeddings-twelvelabs-marengo.md)
 - [2026-09-11 - AWS DevOps Agent - Slack 双方向コミュニケーション対応](2026/2026-09-11-aws-devops-agent-bidirectional-slack-communication.md)
