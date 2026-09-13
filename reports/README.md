@@ -5,6 +5,7 @@
 
 ## 2026 年
 
+- [2026-09-12 - AWS Elemental MediaLive - Video Aligned Locking (タイムコード不要のフレーム精度パイプラインロック)](2026/2026-09-12-medialive-pipeline-locking.md)
 - [2026-09-11 - AWS Lambda - Amazon S3 Files のダイレクトリード設定サポート](2026/2026-09-11-aws-lambda-direct-read-s3files.md)
 - [2026-09-11 - Amazon EC2 - X2idn インスタンスがアジアパシフィック (香港) リージョンで利用可能に](2026/2026-09-11-ec2-x2idn-asia-pacific-hong-kong.md)
 - [2026-09-11 - Amazon SageMaker HyperPod - モデルキャッシング機能による推論オートスケーリングの高速化](2026/2026-09-11-sgm-hyperpod-model-caching-inf.md)
