@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS End User Messaging - フォンプールの自動フェイルオーバーによる SMS 配信性の強化</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* ヘッダー */
+    .header {
+      background: linear-gradient(135deg, var(--aws-dark-squid) 0%, #2d3b4e 100%);
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 153, 0, 0.4);
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 12px 0;
+      line-height: 1.35;
+    }
+
+    .header-meta {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      font-size: 14px;
+      color: var(--aws-light-gray);
+    }
+
+    .header-meta span { display: flex; align-items: center; gap: 6px; }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Before/After 比較 */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 18px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 { margin-top: 0; }
+    .before-box h3 { color: #FF6B4A; }
+    .after-box h3 { color: #4CAF50; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .before-box li, .after-box li {
+      margin: 10px 0;
+      padding-left: 24px;
+      position: relative;
+      font-size: 14px;
+    }
+
+    .before-box li::before {
+      content: "✗";
+      position: absolute;
+      left: 0;
+      color: #FF6B4A;
+      font-weight: bold;
+    }
+
+    .after-box li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #4CAF50;
+      font-weight: bold;
+    }
+
+    /* キーポイント */
+    .key-points {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .key-point {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15) 0%, rgba(255, 153, 0, 0.05) 100%);
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .key-point .kp-icon { font-size: 32px; margin-bottom: 8px; }
+    .key-point .kp-title {
+      font-weight: 700;
+      color: var(--aws-orange);
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+    .key-point .kp-desc { font-size: 13px; }
+
+    /* 機能カード */
+    .feature-card {
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 14px 0;
+    }
+
+    .feature-card .feature-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      font-size: 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feature-card ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .feature-card li { margin: 4px 0; }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      text-align: left;
+      padding: 10px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    td {
+      padding: 10px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+    }
+
+    tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* ステップ */
+    .step-item {
+      display: flex;
+      gap: 16px;
+      margin: 16px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .step-content { flex: 1; }
+    .step-content .step-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+    }
+
+    /* メリット/デメリット */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .merit-box {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .merit-box h3 { margin-top: 0; font-size: 16px; }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: #4CAF50; font-size: 16px; min-width: 18px; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; min-width: 18px; }
+
+    /* ユースケース */
+    .usecase-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.12) 0%, rgba(255, 153, 0, 0.04) 100%);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 16px 0;
+    }
+
+    .usecase-card .uc-title {
+      font-weight: 700;
+      color: var(--aws-orange);
+      font-size: 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .usecase-card p { margin: 8px 0; font-size: 14px; }
+
+    .uc-label {
+      font-weight: 700;
+      color: var(--aws-white);
+    }
+
+    /* 情報バッジ行 */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .info-box {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .info-box h3 { margin-top: 0; font-size: 16px; color: var(--aws-orange); }
+    .info-box p, .info-box li { font-size: 14px; }
+    .info-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    /* まとめ */
+    .summary-box {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.18) 0%, rgba(255, 153, 0, 0.06) 100%);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 20px;
+      font-size: 15px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { margin: 8px 0; padding-left: 20px; }
+    footer li { margin: 4px 0; }
+
+    @media (max-width: 768px) {
+      .before-after, .key-points, .merit-grid, .info-grid {
+        grid-template-columns: 1fr;
+      }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div class="service-badge">✉️ AWS End User Messaging</div>
+      <h1>フォンプールの自動フェイルオーバーによる<br>SMS 配信性の強化</h1>
+      <div class="header-meta">
+        <span>📅 リリース日: 2026 年 9 月 14 日</span>
+        <span>🔧 機能: フォンプールにおける SMS 配信の自動フェイルオーバー</span>
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>
+        フォンプール (Phone Pool) 経由で SMS を送信しているお客様は、下流の障害によって SMS 配信が影響を受けた場合に、
+        プール内で<span class="highlight">次に最もパフォーマンスの良い電話番号へ自動的にフェイルオーバー</span>する機能を、
+        <span class="highlight">追加の操作なし</span>で利用できるようになりました。
+      </p>
+      <p>
+        SMS は AWS からメッセージングプロバイダー、モバイルキャリアへとルーティングされる過程で配信のドロップや遅延の影響を受けることがあり、
+        配達通知、ワンタイムパスコード (OTP)、リマインダーなど時間的制約の厳しいメッセージに影響を及ぼす可能性があります。
+        今回のアップデートにより、AWS End User Messaging が配信品質を監視し、より最適化された配信経路へトラフィックを自動再ルーティングします。
+      </p>
+
+      <div class="key-points">
+        <div class="key-point">
+          <div class="kp-icon">📊</div>
+          <div class="kp-title">自動監視</div>
+          <div class="kp-desc">配信遅延・メッセージ失敗・コンバージョン率低下の 3 つのシグナルを監視</div>
+        </div>
+        <div class="key-point">
+          <div class="kp-icon">🔄</div>
+          <div class="kp-title">自動フェイルオーバー</div>
+          <div class="kp-desc">プール内で次に最もパフォーマンスの良い番号へ自動で再ルーティング</div>
+        </div>
+        <div class="key-point">
+          <div class="kp-icon">⚙️</div>
+          <div class="kp-title">設定不要</div>
+          <div class="kp-desc">既存のフォンプールに自動適用され、追加の操作は一切不要</div>
+        </div>
+      </div>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ アップデート前の課題</h3>
+          <ul>
+            <li>下流の障害時に、配信の遅延や失敗を検知して送信元番号を切り替える仕組みを利用者側で用意する必要があった</li>
+            <li>OTP や配達通知などの時間的制約が厳しいメッセージが、下流の障害の影響を直接受けるリスクがあった</li>
+            <li>配信パフォーマンスの劣化検知には、配信メトリクスの監視と分析を独自に実装する必要があった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ アップデート後の改善</h3>
+          <ul>
+            <li>配信パフォーマンスの劣化を AWS が自動検知し、次に最もパフォーマンスの良い番号へ自動フェイルオーバー</li>
+            <li>配信遅延・メッセージ失敗・コンバージョン率低下の複数シグナルに基づき、最適な配信経路へ自動再ルーティング</li>
+            <li>既存のフォンプール利用者は追加の設定や操作なしで利用可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    App(["📱 アプリケーション"]) --> EUM["✉️ AWS End User Messaging"]
+
+    subgraph Pool["📞 フォンプール"]
+        direction LR
+        N1["#️⃣ 番号 A<br/>パフォーマンス劣化"]
+        N2["#️⃣ 番号 B<br/>次に最適な番号"]
+        N1 ~~~ N2
+    end
+
+    EUM --> Monitor{"📊 配信品質の監視<br/>遅延 / 失敗 / コンバージョン低下"}
+    Monitor -->|正常| N1
+    Monitor -.->|自動フェイルオーバー| N2
+
+    N1 --> Provider["🌐 メッセージングプロバイダー"]
+    N2 --> Provider
+    Provider --> Carrier{{"📡 モバイルキャリア"}}
+    Carrier --> User(["👤 受信者"])
+
+    classDef service fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef pool fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef number fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef external fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class EUM service
+    class Pool pool
+    class N1,N2 number
+    class Monitor decision
+    class Provider,Carrier external
+    class App,User user
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        AWS End User Messaging が配信遅延、メッセージ失敗、コンバージョン率低下を監視し、番号 A の配信品質が劣化した場合にプール内で次に最適な番号 B へ自動的にトラフィックを切り替える流れ
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="feature-title">📊 配信品質の自動監視</div>
+        <ul>
+          <li>AWS End User Messaging が SMS の配信状況を継続的に監視</li>
+          <li>監視対象のシグナルは、<strong>配信遅延</strong>、<strong>メッセージ失敗</strong>、<strong>コンバージョン率の低下</strong>の 3 つ</li>
+          <li>AWS からメッセージングプロバイダー、モバイルキャリアに至る下流の障害を検知</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">🔄 プール内の次善番号への自動フェイルオーバー</div>
+        <ul>
+          <li>配信の劣化を検知すると、フォンプール内で次に最もパフォーマンスの良い番号へトラフィックを自動再ルーティング</li>
+          <li>OTP、配達通知、リマインダーなどの時間的制約が厳しいメッセージの到達性を保護</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">⚙️ 既存フォンプールへの自動適用</div>
+        <ul>
+          <li>既存のフォンプール利用者は追加の設定や操作が不要で、自動的にこの機能の恩恵を受けられる</li>
+          <li>フォンプールを利用していない場合は、プールを新規作成することで利用可能</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔬 技術仕様</h2>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対象機能</td><td>フォンプール (Phone Pool)</td></tr>
+        <tr><td>検知シグナル</td><td>配信遅延、メッセージ失敗、コンバージョン率の低下</td></tr>
+        <tr><td>フェイルオーバー先</td><td>プール内で次に最もパフォーマンスの良い番号</td></tr>
+        <tr><td>必要な設定</td><td>不要 (既存のフォンプールに自動適用)</td></tr>
+        <tr><td>対象メッセージ</td><td>フォンプール経由で送信される SMS</td></tr>
+      </table>
+
+      <h3>💻 フォンプールの作成例</h3>
+      <p style="font-size: 14px;">フォンプールを利用していない場合は、AWS CLI で以下のように作成できます。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">フォンプールの作成</span>
+        </div>
+        <pre><code class="language-bash"># フォンプールを作成する (オリジネーション ID には既存の電話番号などを指定)
+aws pinpoint-sms-voice-v2 create-pool \
+    --origination-identity "phone-id-example" \
+    --iso-country-code "JP" \
+    --message-type "TRANSACTIONAL"</code></pre>
+      </div>
+      <p style="font-size: 14px;">
+        このコマンドは、指定したオリジネーション ID (電話番号など) を最初のメンバーとしてフォンプールを作成します。
+        作成後、<span class="highlight">associate-origination-identity</span> で追加の番号をプールに関連付けることで、フェイルオーバー先の候補を増やせます。
+      </p>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>📋 前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>AWS End User Messaging SMS を利用可能な AWS アカウント</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>SMS 送信用の電話番号 (フォンプールに関連付けるオリジネーション ID)</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>フォンプールを操作するための IAM 権限 (例: <code>sms-voice:CreatePool</code>)</span></div>
+
+      <h3>🚀 手順</h3>
+
+      <div class="step-item">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <div class="step-title">既存のフォンプール利用者の場合</div>
+          <p style="margin: 0; font-size: 14px;">対応は不要です。既存のフォンプールには自動フェイルオーバーが自動的に適用されます。</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <div class="step-title">フォンプールを新規作成する場合</div>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">電話番号の確認とプール作成</span>
+            </div>
+            <pre><code class="language-bash"># 既存の電話番号を確認する
+aws pinpoint-sms-voice-v2 describe-phone-numbers
+
+# フォンプールを作成する
+aws pinpoint-sms-voice-v2 create-pool \
+    --origination-identity "phone-id-example" \
+    --iso-country-code "JP" \
+    --message-type "TRANSACTIONAL"</code></pre>
+          </div>
+          <p style="margin: 0; font-size: 14px;">最初のコマンドでアカウント内の電話番号を確認し、2 つ目のコマンドでその番号を起点にフォンプールを作成します。</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <div class="step-title">プールに番号を追加する</div>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">追加番号の関連付け</span>
+            </div>
+            <pre><code class="language-bash"># 追加の電話番号をプールに関連付ける
+aws pinpoint-sms-voice-v2 associate-origination-identity \
+    --pool-id "pool-id-example" \
+    --origination-identity "phone-id-example-2" \
+    --iso-country-code "JP"</code></pre>
+          </div>
+          <p style="margin: 0; font-size: 14px;">プール内に複数の番号を関連付けることで、障害発生時のフェイルオーバー先の選択肢が増え、配信の冗長性が高まります。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット・デメリット -->
+    <div class="section">
+      <h2>⚖️ メリットと考慮事項</h2>
+      <div class="merit-grid">
+        <div class="merit-box">
+          <h3 style="color: #4CAF50;">💼 ビジネス面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>重要メッセージの到達性向上</strong>: OTP、配達通知、リマインダーなどが下流の障害の影響を受けにくくなる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>顧客体験の保護</strong>: 認証コードの遅延や不達によるログイン失敗、購入離脱などの機会損失を軽減</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の削減</strong>: 配信劣化の検知と番号切り替えを AWS が自動で行うため、独自の監視・切り替えの仕組みが不要</span></div>
+        </div>
+        <div class="merit-box">
+          <h3 style="color: #4CAF50;">🔧 技術面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>設定不要の自動適用</strong>: 既存のフォンプールに追加設定なしで有効になり、移行作業が発生しない</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>多面的な劣化検知</strong>: 配信遅延、メッセージ失敗、コンバージョン率低下という複数のシグナルで判断</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>経路レベルの最適化</strong>: 単純なローテーションではなく、次に最もパフォーマンスの良い番号への再ルーティング</span></div>
+        </div>
+      </div>
+
+      <div class="merit-grid" style="margin-top: 16px;">
+        <div class="merit-box">
+          <h3 style="color: var(--aws-smile-orange);">🚧 制限事項</h3>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>自動フェイルオーバーの対象はフォンプール経由の送信に限られる (単一の電話番号で直接送信している場合は対象外)</span></div>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>フェイルオーバー先はプール内の番号に限られるため、プールに複数の番号が関連付けられていることが実効性の前提</span></div>
+        </div>
+        <div class="merit-box">
+          <h3 style="color: var(--aws-smile-orange);">🤔 考慮すべき点</h3>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>フェイルオーバーにより送信元番号が変わる可能性があるため、受信者が特定の番号を前提とした運用をしている場合は影響を考慮</span></div>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>検知条件やしきい値の詳細は非公表のため、厳密な SLA が必要な場合は自社でも配信メトリクスの監視を併用することが望ましい</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase-card">
+        <div class="uc-title">🔐 ユースケース 1: ワンタイムパスコードの安定配信</div>
+        <p><span class="uc-label">シナリオ</span>: EC サイトやモバイルアプリのログイン時に SMS で OTP を送信しており、キャリア側の障害による認証コードの不達がログイン失敗やサポート問い合わせの増加につながっている。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">フォンプールを指定した OTP 送信</span>
+          </div>
+          <pre><code class="language-bash"># フォンプールを指定して OTP を送信する
+aws pinpoint-sms-voice-v2 send-text-message \
+    --destination-phone-number "+81901234XXXX" \
+    --origination-identity "pool-id-example" \
+    --message-body "認証コード: 123456"</code></pre>
+        </div>
+        <p><span class="uc-label">効果</span>: 配信経路の劣化時にプール内の別番号へ自動フェイルオーバーされるため、OTP の到達率が向上し、認証失敗によるユーザー離脱を軽減できる。</p>
+      </div>
+
+      <div class="usecase-card">
+        <div class="uc-title">📦 ユースケース 2: 配達通知やリマインダーの時間厳守配信</div>
+        <p><span class="uc-label">シナリオ</span>: 物流サービスで配達予定の通知を SMS で送信しており、通知の遅延が再配達率の増加につながっている。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">フォンプール経由の配達通知</span>
+          </div>
+          <pre><code class="language-bash"># フォンプール経由で配達通知を送信する
+aws pinpoint-sms-voice-v2 send-text-message \
+    --destination-phone-number "+81901234XXXX" \
+    --origination-identity "pool-id-example" \
+    --message-body "本日 14 時から 16 時の間にお荷物をお届けします。"</code></pre>
+        </div>
+        <p><span class="uc-label">効果</span>: 配信遅延を検知した時点でより最適な経路へ切り替わるため、時間的制約の厳しい通知の遅延リスクを低減し、再配達率の改善が期待できる。</p>
+      </div>
+
+      <div class="usecase-card">
+        <div class="uc-title">🔀 ユースケース 3: 単一番号運用からフォンプールへの移行</div>
+        <p><span class="uc-label">シナリオ</span>: 現在は単一の電話番号で SMS を送信しており、番号単位の障害が配信全体の停止に直結している。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">既存番号を起点としたプール作成</span>
+          </div>
+          <pre><code class="language-bash"># 既存番号を起点にフォンプールを作成し、冗長化する
+aws pinpoint-sms-voice-v2 create-pool \
+    --origination-identity "phone-id-example" \
+    --iso-country-code "JP" \
+    --message-type "TRANSACTIONAL"</code></pre>
+        </div>
+        <p><span class="uc-label">効果</span>: フォンプールへ移行することで自動フェイルオーバーの対象となり、番号単位の障害に対する耐性が大幅に向上する。</p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金と利用可能リージョン</h2>
+      <div class="info-grid">
+        <div class="info-box">
+          <h3>💵 料金</h3>
+          <p>
+            今回の発表では、自動フェイルオーバー機能自体の<span class="highlight">追加料金についての言及はありません</span>。
+            AWS End User Messaging SMS の利用には、通常どおりメッセージ送信ごとの料金と電話番号のリース料金が発生します。
+          </p>
+          <p><a href="https://aws.amazon.com/end-user-messaging/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">→ 料金ページ</a></p>
+        </div>
+        <div class="info-box">
+          <h3>🌍 利用可能リージョン</h3>
+          <p>AWS End User Messaging が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="feature-card">
+        <div class="feature-title">📨 Amazon Pinpoint / AWS End User Messaging SMS API</div>
+        <ul>
+          <li>フォンプールの作成や SMS 送信に使用する API (pinpoint-sms-voice-v2)。今回の機能はこの API で管理するフォンプールに適用される</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="feature-title">📢 Amazon SNS</div>
+        <ul>
+          <li>SMS 送信機能を持つ別のサービス。高度な配信性管理や双方向 SMS が必要な場合は AWS End User Messaging の利用が適する</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <div class="feature-title">📈 Amazon CloudWatch</div>
+        <ul>
+          <li>SMS 配信メトリクスの監視に利用でき、自動フェイルオーバーと組み合わせて配信状況の可視化に活用できる</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <div class="summary-box">
+        <p style="margin-top: 0;">
+          フォンプールの自動フェイルオーバーにより、OTP や配達通知など時間的制約の厳しい SMS の到達性が、
+          <span class="highlight">利用者側の追加対応なし</span>で強化されます。
+        </p>
+        <p style="margin-bottom: 0;">
+          既存のフォンプール利用者はそのまま恩恵を受けられるため対応は不要ですが、
+          単一番号で SMS を送信している場合は、この機会に<span class="highlight">フォンプールへの移行を検討</span>することを推奨します。
+        </p>
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/09/aws-end-user-messaging-improves-deliverability" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/09/aws-end-user-messaging-improves-deliverability</a></li>
+        <li><a href="https://docs.aws.amazon.com/sms-voice/latest/userguide/what-is-sms-mms.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS End User Messaging SMS ユーザーガイド</a></li>
+        <li><a href="https://docs.aws.amazon.com/sms-voice/latest/userguide/phone-pool-create.html" target="_blank" rel="noopener noreferrer" class="aws-link">フォンプールの作成手順</a></li>
+        <li><a href="https://aws.amazon.com/end-user-messaging/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-09-14) を基に生成されています。</p>
+    </footer>
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
