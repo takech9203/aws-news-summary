@@ -5,13 +5,21 @@
 
 ## 2026 年
 
+- [2026-09-15 - Amazon Connect Customer - シフト入札 (Shift Bidding)](2026/2026-09-15-amazon-connect-customer-shift-bidding.md)
+- [2026-09-15 - Amazon SageMaker AI - トレーニング/処理ジョブのインスタンス優先リスト対応](2026/2026-09-15-amazon-sagemaker-training-processing-instance-pref-lists.md)
+- [2026-09-15 - AWS CloudTrail - Amazon Q Console による自然言語でのイベント分析](2026/2026-09-15-cloudtrail-amazon-q-console.md)
+- [2026-09-15 - AWS Billing Conductor - カスタムレートとカスタム使用量ティアの料金設定サポート](2026/2026-09-15-AWS-Billing-Conductor-custom-rates-usage-tier.md)
 - [2026-09-14 - Amazon SageMaker JumpStart - Ministral-3-3B-Instruct-2512 / Ministral-3-8B-Instruct-2512 の提供開始](2026/2026-09-14-ministral-3-3b-instruct-2512-ministral-3-8B-Instruct-2512-jumpstart.md)
 - [2026-09-14 - Amazon SageMaker JumpStart - Qwen3.6-35B-A3B-NVFP4 および Wan2.1-T2V-1.3B-Diffusers モデルの提供開始](2026/2026-09-14-qwen3.6-35b-a3b-nvfp4-wan2.1-t2v-1.3B-diffusers-jumpstart.md)
+- [2026-09-14 - Kiro - Agent Artifacts とネイティブ ARM64 ビルド (IDE 1.1)](2026/2026-09-14-kiro-changelog-2026-09-14.md)
 - [2026-09-14 - AWS End User Messaging - フォンプールの自動フェイルオーバーによる SMS 配信性の強化](2026/2026-09-14-aws-end-user-messaging-improves-deliverability.md)
 - [2026-09-14 - Amazon SageMaker JumpStart - granite-speech-4.1-2b / kanana-2-30b-a3b-instruct / OpenFold3 の提供開始](2026/2026-09-14-granite-speech-4.1-2b-edge-kanana-2-30b-a3b-instruct-openfold3-jumpstart.md)
+- [2026-09-14 - Kiro - GPT-5.6 モデルの 1M トークンコンテキストウィンドウ対応](2026/2026-09-14-kiro-gpt-5-6-1m-context.md)
 - [2026-09-14 - Amazon SageMaker JumpStart - Gemma-4-31B-it-assistant および Gemma-4-31B-IT-NVFP4 モデルの提供開始](2026/2026-09-14-gemma-4-31b-it-assistant-gemma-4-31b-it-nvfp4-jumpstart.md)
 - [2026-09-14 - AWS End User Messaging - WhatsApp Dynamic Flows サポート](2026/2026-09-14-aws-end-user-messaging-whatsapp-dynamic-flows.md)
 - [2026-09-14 - Kiro - Kiro Web の自律モードによる大規模な技術的負債への取り組み](2026/2026-09-14-kiro-tackling-technical-debt-at-scale-with-autonomous-mode.md)
+- [2026-09-14 - AWS Glue - zero-ETL 統合のターゲットテーブルプロパティのオーナーシップ管理と競合検出](2026/2026-09-14-glue-zero-etl-ownership-conflicts.md)
+- [2026-09-14 - AWS Sign-In - ルートユーザーサインインのリージョン耐障害性向上](2026/2026-09-14-root-user-regional-resiliency.md)
 - [2026-09-12 - AWS Elemental MediaLive - Video Aligned Locking (タイムコード不要のフレーム精度パイプラインロック)](2026/2026-09-12-medialive-pipeline-locking.md)
 - [2026-09-11 - AWS Lambda - Amazon S3 Files のダイレクトリード設定サポート](2026/2026-09-11-aws-lambda-direct-read-s3files.md)
 - [2026-09-11 - Amazon EC2 - X2idn インスタンスがアジアパシフィック (香港) リージョンで利用可能に](2026/2026-09-11-ec2-x2idn-asia-pacific-hong-kong.md)

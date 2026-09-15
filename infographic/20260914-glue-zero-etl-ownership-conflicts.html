@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Glue - zero-ETL 統合のオーナーシップ管理と競合検出</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.card p { margin: 0; font-size: 14px; }
+
+.card ul { margin: 8px 0 0 0; padding-left: 20px; font-size: 14px; }
+.card li { margin: 4px 0; }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 14px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+}
+
+.before-box h3 { color: #FF6B4A; }
+.after-box h3 { color: #4CAF50; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Check list */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Use case */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 14px 0;
+}
+
+.usecase h4 {
+  color: var(--aws-smile-orange);
+  margin: 0 0 8px 0;
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase .label {
+  color: var(--aws-white);
+  font-weight: 600;
+}
+
+/* Key concept box */
+.key-concept {
+  background: rgba(140, 79, 255, 0.12);
+  border: 1px solid rgba(140, 79, 255, 0.5);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 16px 0;
+  font-size: 15px;
+}
+
+.key-concept .kc-title {
+  color: var(--aws-purple);
+  font-weight: 700;
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* Steps */
+.step-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 16px 0 4px 0;
+}
+
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  font-size: 16px;
+  padding-top: 3px;
+}
+
+/* Two-column grid for benefits */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 720px) {
+  .before-after, .grid-2 { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+  body { padding: 12px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="service-badge">AWS Glue</div>
+    <h1>⚙️ zero-ETL 統合のターゲットテーブルプロパティ<br>オーナーシップ管理と競合検出</h1>
+    <div class="subtitle">📅 リリース日: <span class="date">2026 年 9 月 14 日</span> | 対象: AWS Glue zero-ETL 統合</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      AWS Glue zero-ETL 統合が、<span class="highlight">ターゲットテーブルプロパティの競合検出</span>と<span class="highlight">統合オーナーシップの追跡</span>に対応しました。
+      生成されるターゲットテーブルプロパティが所有元の統合に関連付けられ、2 つの統合が意図せず同じターゲットテーブルを指して<strong>一方がもう一方のデータを上書きする事態</strong>を仕組みとして防止できます。
+    </p>
+    <p>
+      競合検出は<strong>コンソール、CLI、API のいずれの操作でも一貫して適用</strong>され、コンソールでは統合作成ワークフローの「Output settings」ステップで作成前に競合を検出・解決できます。ターゲットは <strong>Amazon S3 Tables</strong> と <strong>Amazon SageMaker Lakehouse</strong> カタログの両方に対応します。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <ul>
+          <li>複数の統合が同じターゲットテーブルを指しても検出されず、<strong>データ上書きのリスク</strong>があった</li>
+          <li>テーブルプロパティの所有統合を追跡する仕組みがなく、統合が増えるほど構成ミスの発見が困難</li>
+          <li>複数チーム・複数アカウントでは、運用ルールや手動確認で重複を防ぐ必要があった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <ul>
+          <li>テーブルプロパティが所有元の統合に関連付けられ、<strong>オーナーシップを明確に追跡</strong></li>
+          <li>同じ組み合わせへの 2 つ目の統合を<strong>検出してブロック</strong>し、意図しない上書きを防止</li>
+          <li>「Output settings」ステップで<strong>作成前に競合を可視化・解決</strong></li>
+          <li>新 API <code>ListIntegrationTableProperties</code> でプログラムから所有関係を確認可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Sources["📥 ソース"]
+        direction LR
+        DDB[("⚡ DynamoDB<br/>テーブル")]
+        SaaS{{"🌐 SaaS<br/>アプリケーション"}}
+        DDB ~~~ SaaS
+    end
+
+    subgraph Glue["⚙️ AWS Glue zero-ETL"]
+        INT1["🔗 統合 A<br/>所有: table_x"]
+        INT2["🔗 統合 B<br/>table_x を指定"]
+        CHECK{"🔍 競合検出<br/>オーナーシップ確認"}
+    end
+
+    subgraph Target["🗄️ ターゲット"]
+        direction LR
+        S3T[("🪣 Amazon S3 Tables<br/>カタログ")]
+        LH[("🏠 SageMaker Lakehouse<br/>カタログ")]
+        S3T ~~~ LH
+    end
+
+    DDB --> INT1
+    SaaS --> INT2
+    INT1 --> CHECK
+    INT2 --> CHECK
+    CHECK -->|所有統合のみ書き込み| S3T
+    CHECK -->|所有統合のみ書き込み| LH
+    CHECK -.->|競合をブロックし<br/>所有統合を提示| INT2
+
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Sources,Glue,Target layer
+    class DDB,SaaS input
+    class INT1,INT2 process
+    class CHECK decision
+    class S3T,LH storage
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      複数の zero-ETL 統合が同じターゲットリソースとソーステーブルの組み合わせを指定した場合、AWS Glue がオーナーシップを確認して競合を検出し、後から作成される統合をブロックする流れ
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🔧 主要機能</h2>
+
+    <div class="key-concept">
+      <span class="kc-title">🔑 競合検出の識別キー</span>
+      ターゲットテーブルプロパティは <span class="highlight">ターゲットリソース ARN + ソーステーブル名</span> の組み合わせで識別され、各組み合わせは<strong>同時に 1 つの統合のみ</strong>が所有できます。
+    </div>
+
+    <div class="card">
+      <h4>1️⃣ 統合オーナーシップの追跡</h4>
+      <ul>
+        <li>ターゲットリソースは、汎用 S3 ターゲットの場合は AWS Glue データベース、Amazon S3 Tables ターゲットの場合は S3 Tables カタログ</li>
+        <li>ソーステーブルのターゲットプロパティは 1 つの統合のみが所有可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>2️⃣ 競合の検出とブロック</h4>
+      <ul>
+        <li>同じソーステーブルを同じターゲットリソースに書き込む 2 つ目の統合の作成を防止</li>
+        <li>競合発生時は所有元の統合を提示し、別ターゲットの選択または既存統合の変更で解決</li>
+        <li>コンソール、CLI、API のいずれの操作経路でも同じルールを適用</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>3️⃣ コンソールでの競合の可視化</h4>
+      <ul>
+        <li>統合作成ワークフローの「Output settings」ステップで作成前に検出</li>
+        <li>マルチテーブルソース (SaaS など) は「Action required」「Notes」の 2 列で各テーブルの状態を表示</li>
+        <li>シングルテーブルソース (DynamoDB など) はインラインアラートで表示</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>4️⃣ 検出対象となる競合条件</h4>
+      <ul>
+        <li>別の統合が既に同じソーステーブルを選択中のターゲットリソースに書き込んでいる</li>
+        <li>出力テーブル名が、選択中のターゲットリソース上で別のソーステーブル用に登録済み</li>
+        <li>複数のソーステーブルが同じ出力テーブル名にマッピングされている</li>
+        <li>出力テーブル名が無効 (小文字・数字・アンダースコアのみ、255 文字以内。S3 Tables ではアンダースコア始まり不可)</li>
+        <li>出力設定への同時変更 (この条件のみブロックせず、最新設定への更新か現状続行かを選択可能)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>📋 技術仕様</h2>
+
+    <h3>競合検出の識別キー</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>識別キー</td><td>ターゲットリソース ARN + ソーステーブル名の組み合わせ</td></tr>
+      <tr><td>ターゲットリソース (汎用 S3)</td><td>AWS Glue データベース</td></tr>
+      <tr><td>ターゲットリソース (S3 Tables)</td><td>Amazon S3 Tables カタログ</td></tr>
+      <tr><td>所有可能な統合数</td><td>1 組み合わせにつき 1 統合のみ</td></tr>
+      <tr><td>適用される操作経路</td><td>コンソール、CLI、API のすべて</td></tr>
+      <tr><td>対応ソース</td><td>シングルテーブルソース (DynamoDB など)、マルチテーブルソース (SaaS アプリケーション)</td></tr>
+    </table>
+
+    <h3>API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/09/14</td>
+        <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/7b8c33-glue.html" target="_blank" rel="noopener noreferrer">AWS Glue</a></td>
+        <td>1 new 3 updated api methods - 新 API <code>ListIntegrationTableProperties</code> の追加、<code>TargetTableConfig</code> への <code>IntegrationArn</code> の追加</td>
+      </tr>
+    </table>
+
+    <h3>ターゲットテーブルプロパティの設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">ターゲットテーブルプロパティの登録</span>
+      </div>
+      <pre><code class="language-bash">aws glue create-integration-table-properties \
+  --resource-arn arn:aws:glue:us-east-1:123456789012:database/my-database \
+  --table-name my-source-table \
+  --target-table-config '{
+      "UnnestSpec": "TOPLEVEL",
+      "PartitionSpec": [
+          {
+              "FieldName": "created_at",
+              "FunctionSpec": "day"
+          }
+      ],
+      "TargetTableName": "my_target_table"
+  }' \
+  --region us-east-1</code></pre>
+    </div>
+    <p style="font-size: 14px;">
+      このプロパティは作成した統合に所有され、他の統合からの重複利用が競合として検出されます。
+    </p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>zero-ETL 統合のソース (Amazon DynamoDB、SaaS アプリケーションなど) が設定済み</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ターゲットリソース (SageMaker Lakehouse の AWS Glue データベース、または Amazon S3 Tables カタログ) が設定済み</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ターゲット IAM ロールの作成と、カタログ RBAC ポリシー (<code>glue:CreateInboundIntegration</code>、<code>glue:AuthorizeInboundIntegration</code>) の設定が完了</span></div>
+
+    <div class="step-row"><div class="step-num">1</div><div class="step-title">ターゲットリソースへのロール関連付け</div></div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">IAM ロールの関連付け</span></div>
+      <pre><code class="language-bash">aws glue create-integration-resource-property \
+  --resource-arn arn:aws:glue:us-east-1:123456789012:catalog/s3tablescatalog/my-table-bucket \
+  --target-processing-properties '{"RoleArn": "arn:aws:iam::123456789012:role/my-target-role"}' \
+  --region us-east-1</code></pre>
+    </div>
+
+    <div class="step-row"><div class="step-num">2</div><div class="step-title">ターゲットテーブルプロパティの設定と競合確認</div></div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">テーブルプロパティの登録</span></div>
+      <pre><code class="language-bash">aws glue create-integration-table-properties \
+  --resource-arn arn:aws:glue:us-east-1:123456789012:catalog/s3tablescatalog/my-table-bucket \
+  --table-name my-source-table \
+  --target-table-config '{"TargetTableName": "my_target_table"}' \
+  --region us-east-1</code></pre>
+    </div>
+    <p style="font-size: 14px;">
+      同じ組み合わせが既に別の統合に所有されている場合、AWS Glue が競合を検出します。コンソールでは「Output settings」ステップで同じ内容を設定でき、競合があれば「Action required」列またはインラインアラートで通知されます。
+    </p>
+
+    <div class="step-row"><div class="step-num">3</div><div class="step-title">統合の作成</div></div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">zero-ETL 統合の作成</span></div>
+      <pre><code class="language-bash">aws glue create-integration \
+  --integration-name my-integration \
+  --source-arn arn:aws:dynamodb:us-east-1:123456789012:table/my-source-table \
+  --target-arn arn:aws:glue:us-east-1:123456789012:catalog/s3tablescatalog/my-table-bucket \
+  --region us-east-1</code></pre>
+    </div>
+    <p style="font-size: 14px;">
+      登録済みのターゲットテーブルプロパティは、この統合に関連付けられて所有されます。競合が検出された場合は、別のターゲットリソースを選択するか、所有元の統合からソーステーブルを除外して解決します。
+    </p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="grid-2">
+      <div>
+        <h3>📈 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>データ破損リスクの低減</strong>: 統合同士の意図しない上書きを仕組みとして防止し、分析基盤のデータ信頼性が向上</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>チーム間ガバナンスの強化</strong>: 共有カタログでも所有関係が明確になり、運用ルールへの依存を削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>障害調査コストの削減</strong>: 書き込み元の統合が追跡可能になり、データ不整合の原因特定が容易に</span></div>
+      </div>
+      <div>
+        <h3>⚙️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>作成前の競合検出</strong>: 「Output settings」で作成後の手戻りを防止</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>一貫した適用</strong>: コンソール・CLI・API のどの経路でも保護が有効</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>プログラムによる確認</strong>: <code>ListIntegrationTableProperties</code> と <code>IntegrationArn</code> で所有関係を監査可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>非ブロッキングな同時変更検出</strong>: 他ユーザーの同時変更は警告のみで作業を中断しない</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>1 つのターゲットリソースとソーステーブルの組み合わせは 1 統合のみが所有できるため、同じテーブルを同じターゲットに複数統合で書き込む構成は不可</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>別の統合に既に所有されているソーステーブルは、競合を解決するまで自分の統合ではレプリケーションされない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>出力テーブル名には命名制約がある (小文字・数字・アンダースコアのみ、255 文字以内。S3 Tables カタログターゲットではアンダースコア始まり不可)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>zero-ETL 統合のターゲットは作成後に変更できない</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚡</span><span>意図的に同一ターゲットへ重複書き込みしている既存構成は、統合変更時に競合として検出される可能性があるため見直しが必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚡</span><span>クロスアカウントのターゲットでは、ターゲットテーブルプロパティの設定を統合作成前に完了しておく必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚡</span><span>統合作成後にテーブルプロパティを変更すると、既存設定と競合する変更 (パーティション列の変更など) ではフルリシンクが発生する可能性がある</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>1. 複数チームが共有する S3 Tables カタログの保護</h4>
+      <p><span class="label">シナリオ</span>: 全社共通の Amazon S3 Tables カタログに、各事業部チームがそれぞれ DynamoDB テーブルから zero-ETL 統合でデータを取り込む。チーム間の調整不足で同じターゲットテーブルに複数統合が書き込むリスクがある。</p>
+      <p><span class="label">実装</span>: 各チームが Output settings で出力テーブル名を指定 → 他チームの統合が所有する組み合わせはコンソールが所有元を提示してブロック → 別の出力テーブル名やネームスペースを選択して解決。</p>
+      <p><span class="label">効果</span>: 事前のチーム間調整に頼らず、プラットフォーム側の仕組みとしてターゲットの重複を防止し、共有カタログのデータ整合性を保てる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>2. SaaS マルチテーブルソースの出力マッピング検証</h4>
+      <p><span class="label">シナリオ</span>: SaaS アプリケーションをソースに数十のテーブルを SageMaker Lakehouse に同期。テーブル数が多く、出力テーブル名の重複や命名規則違反が発生しやすい。</p>
+      <p><span class="label">実装</span>: Output settings で全ソーステーブルの一覧を確認 → 「Action required」「Notes」列で名前の重複・無効な名前・他統合との競合を特定 → フラグ付きテーブルのみ修正して作成を続行。</p>
+      <p><span class="label">効果</span>: 多数のテーブルマッピングを作成前に一括検証でき、作成後に判明する構成ミスと修正作業を削減できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>3. IaC パイプラインでの統合構成の監査</h4>
+      <p><span class="label">シナリオ</span>: zero-ETL 統合を CLI / API ベースの IaC パイプラインで管理し、デプロイ前に所有状況を自動チェックしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">CI での所有統合の監査</span></div>
+        <pre><code class="language-bash"># ターゲットリソース上のテーブルプロパティと所有統合を一覧
+aws glue list-integration-table-properties \
+  --resource-arn arn:aws:glue:us-east-1:123456789012:catalog/s3tablescatalog/my-table-bucket
+
+# 出力の IntegrationArn を確認し、デプロイ対象の統合と
+# 競合しないことを CI で検証</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 所有関係をプログラムから監査でき、CI/CD パイプラインの段階で競合を検出して安全にデプロイできる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h4>💵 料金</h4>
+        <p>このアップデート自体に<strong>追加料金はありません</strong>。AWS Glue zero-ETL 統合の既存の料金体系が適用され、ソースからのデータ取り込み量などに基づいて課金されます。詳細は <a class="aws-link" href="https://aws.amazon.com/glue/pricing/" target="_blank" rel="noopener noreferrer">AWS Glue の料金ページ</a>を参照してください。</p>
+      </div>
+      <div class="card">
+        <h4>🌍 利用可能リージョン</h4>
+        <p>AWS Glue zero-ETL 統合がサポートされる<strong>すべての AWS 商用リージョン</strong>および <strong>AWS GovCloud (US) リージョン</strong>で利用可能です。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <h4>🪣 Amazon S3 Tables</h4>
+      <p>zero-ETL 統合のターゲットの 1 つ。S3 Tables カタログがターゲットリソースとして競合検出の識別キーになる。</p>
+    </div>
+    <div class="card">
+      <h4>🏠 Amazon SageMaker Lakehouse</h4>
+      <p>zero-ETL 統合のターゲットとなるレイクハウスアーキテクチャ。汎用 S3 バケット、S3 Tables、Redshift Managed Storage をストレージとして利用可能。</p>
+    </div>
+    <div class="card">
+      <h4>⚡ Amazon DynamoDB</h4>
+      <p>zero-ETL 統合の代表的なシングルテーブルソース。コンソールではインラインアラートで競合が通知される。</p>
+    </div>
+    <div class="card">
+      <h4>🔒 AWS Lake Formation</h4>
+      <p>S3 Tables カタログや SageMaker Lakehouse カタログの権限管理を担う。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      AWS Glue zero-ETL 統合のターゲットテーブルプロパティに<span class="highlight">オーナーシップ追跡と競合検出</span>が追加され、複数の統合が意図せず同じターゲットテーブルへ書き込むリスクを仕組みとして防止できるようになりました。複数チームや多数の統合を運用する環境では、共有カタログのデータ整合性を高める重要な保護機能です。
+    </p>
+    <div class="check-item"><span class="check-icon">✓</span><span>既存の統合構成に同一ターゲットへの重複がないかを確認する</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>新規統合の作成時は「Output settings」ステップで競合チェックを行う</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><code>ListIntegrationTableProperties</code> API を活用した競合チェックを CI/CD に組み込む</span></div>
+  </div>
+
+  <footer>
+    <p>📎 出典</p>
+    <ul>
+      <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/09/glue-zero-etl-ownership-conflicts/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/09/glue-zero-etl-ownership-conflicts/</a></li>
+      <li>ドキュメント: <a class="aws-link" href="https://docs.aws.amazon.com/glue/latest/dg/zero-etl-target.html" target="_blank" rel="noopener noreferrer">Configuring a target for a zero-ETL integration</a></li>
+      <li>API 変更履歴: <a class="aws-link" href="https://awsapichanges.com/archive/changes/7b8c33-glue.html" target="_blank" rel="noopener noreferrer">https://awsapichanges.com/archive/changes/7b8c33-glue.html</a></li>
+      <li>料金ページ: <a class="aws-link" href="https://aws.amazon.com/glue/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/glue/pricing/</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-09-14) を基に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

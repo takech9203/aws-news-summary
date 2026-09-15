@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Billing Conductor - カスタムレートとカスタム使用量ティアの料金設定サポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 12px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul { margin: 8px 0 0 0; padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+/* Before / After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF6B6B; }
+.after-box h3 { color: #6BCB77; }
+
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 8px 0; font-size: 14px; }
+
+@media (max-width: 700px) {
+  .before-after { grid-template-columns: 1fr; }
+  h1 { font-size: 26px; }
+}
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.check-icon { color: #6BCB77; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B6B; font-size: 18px; flex-shrink: 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+code.inline {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.table-wrap { overflow-x: auto; }
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+.step-content .step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 8px 0; font-size: 14px; }
+.usecase .label { font-weight: 700; color: var(--aws-white); }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+.tier-diagram {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.tier-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tier-range {
+  flex-shrink: 0;
+  width: 200px;
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: right;
+}
+
+.tier-fill {
+  height: 34px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--aws-squid-ink);
+}
+
+@media (max-width: 700px) {
+  .tier-range { width: 120px; }
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="service-badge">AWS Billing Conductor</div>
+    <h1>💰 カスタムレートとカスタム使用量ティアの料金設定サポート</h1>
+    <div class="subtitle">📅 リリース日: <span class="date">2026 年 9 月 15 日</span> | SKU スコープ料金ルールにおけるカスタムレートおよびカスタム使用量ティアの設定</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>AWS Billing Conductor が、AWS サービスに対する<span class="highlight">カスタムレート料金の設定</span>に対応しました。SKU スコープの料金ルールにおいて、正確なカスタムレートの入力と、使用量に応じた<span class="highlight">カスタム使用量ティア (段階料金)</span> のしきい値設定が可能になります。</p>
+    <p>このアップデートは、子会社、関連会社、エンドカスタマーとの商用契約をモデル化するお客様や AWS パートナーに特に有用です。交渉済みの独自料金をそのまま入力して <span class="highlight">pro forma (プロフォーマ) 請求データ</span>に正確に反映できるようになりました。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ Before: アップデート前の課題</h3>
+        <ul>
+          <li>料金ルールはパブリックオンデマンド料金に対する<strong>割合ベースのマークアップ / マークダウンのみ</strong>に対応し、独自レートを直接指定できなかった</li>
+          <li>交渉済みの固定単価を表現するには、パブリック料金から<strong>逆算して率を計算</strong>する必要があった</li>
+          <li>使用量ティアは AWS が事前定義したティア構造に依存し、<strong>独自のボリュームディスカウント構造を表現できなかった</strong></li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ After: アップデート後の改善</h3>
+        <ul>
+          <li>SKU スコープの料金ルールで、<strong>正確なカスタムレート (単価) を直接入力</strong>できるようになった</li>
+          <li>使用量の範囲ごとに適用レートを指定する<strong>カスタム使用量ティアを定義可能</strong> (1 つの料金ルールにつき最大 10 ティア)</li>
+          <li>割合計算が不要になり、pro forma 請求の設定を<strong>より正確かつシンプルに管理</strong>できるようになった</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">最大 10</div>
+        <div class="stat-label">1 つの料金ルールで定義できるカスタムティア数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0%</div>
+        <div class="stat-label">マークアップ / マークダウン率の逆算作業 (不要に)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">3 API</div>
+        <div class="stat-label">Create / Update / ListPricingRules がカスタムティア対応</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Before["🕰️ 従来の方法"]
+        direction TB
+        P1["💲 パブリックオンデマンド料金"]
+        M1["🧮 マークアップ / マークダウン率を逆算"]
+        R1["📋 料金ルール<br/>MARKUP / DISCOUNT"]
+        P1 --> M1 --> R1
+    end
+
+    subgraph After["✨ 今回のアップデート後"]
+        direction TB
+        R2["📋 SKU スコープの料金ルール<br/>TIERING タイプ"]
+        T1["📊 カスタムティア 1<br/>0 以上 1,000 未満: 独自レート A"]
+        T2["📊 カスタムティア 2<br/>1,000 以上: 独自レート B"]
+        R2 --> T1
+        R2 --> T2
+    end
+
+    R1 --> PP["🗂️ 料金プラン"]
+    T1 --> PP
+    T2 --> PP
+    PP --> BG["👥 請求グループ"]
+    BG --> PF["🧾 pro forma 請求データ"]
+
+    classDef legacy fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef newfeat fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class P1,M1,R1 legacy
+    class R2,T1,T2 newfeat
+    class PP,BG,PF process
+    class Before,After boundary
+      </pre>
+    </div>
+    <p>従来の割合ベースの料金ルールと、今回追加されたカスタムティア方式の比較です。カスタムティアでは使用量の範囲ごとに独自レートを直接指定でき、料金プランと請求グループを経由して pro forma 請求データに反映されます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ カスタムレートの直接指定</div>
+      <ul>
+        <li>SKU スコープ (サービス + 使用タイプ + オペレーションの組み合わせ) の料金ルールで、独自の単価を直接入力可能</li>
+        <li>パブリックオンデマンド料金に対する割合計算 (マークアップ / マークダウン) が不要</li>
+        <li>交渉済み料金や契約上の固定単価を正確に表現できる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ カスタム使用量ティアの定義</div>
+      <ul>
+        <li>料金ルールの <code class="inline">Tiering</code> 設定に <code class="inline">CustomTiers</code> が追加され、使用量の範囲ごとに適用レートを定義可能</li>
+        <li>各ティアは開始値 (<code class="inline">BeginRangeInclusive</code>、その値を含む)、終了値 (<code class="inline">EndRangeExclusive</code>、その値を含まない)、適用レート (<code class="inline">RateValue</code>) で構成</li>
+        <li>終了値を省略したティアは、開始値以上のすべての使用量に適用される</li>
+        <li>1 つの料金ルールにつき最小 1 個、最大 10 個のティアを定義可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 既存の料金ルール管理機能との統合</div>
+      <ul>
+        <li><code class="inline">CreatePricingRule</code>、<code class="inline">UpdatePricingRule</code>、<code class="inline">ListPricingRules</code> の各 API がカスタムティアに対応</li>
+        <li>作成した料金ルールは、従来どおり料金プランに関連付けて請求グループに適用</li>
+      </ul>
+    </div>
+
+    <h3>📊 カスタムティアのイメージ (S3 ストレージの例)</h3>
+    <div class="tier-diagram">
+      <div class="tier-bar">
+        <div class="tier-range">0 以上 51,200 GB 未満</div>
+        <div class="tier-fill" style="width: 55%; background: var(--aws-smile-orange);">ティア 1: 0.024 USD / GB</div>
+      </div>
+      <div class="tier-bar">
+        <div class="tier-range">51,200 GB 以上</div>
+        <div class="tier-fill" style="width: 75%; background: #6BCB77;">ティア 2: 0.022 USD / GB (ボリュームディスカウント)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>CustomTier データ型</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>フィールド</th><th>型</th><th>必須</th><th>説明</th></tr>
+        <tr>
+          <td><code class="inline">BeginRangeInclusive</code></td>
+          <td>Double (0 以上)</td>
+          <td>はい</td>
+          <td>ティアが適用される使用量範囲の開始値 (この値を含む)</td>
+        </tr>
+        <tr>
+          <td><code class="inline">EndRangeExclusive</code></td>
+          <td>Double (0 以上)</td>
+          <td>いいえ</td>
+          <td>ティアが適用される使用量範囲の終了値 (この値を含まない)。省略時は開始値以上のすべての使用量に適用</td>
+        </tr>
+        <tr>
+          <td><code class="inline">RateValue</code></td>
+          <td>Double (0 以上)</td>
+          <td>はい</td>
+          <td>このティア内の使用量に適用されるレート</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>料金ルールの構成要素</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>スコープ</td><td><code class="inline">GLOBAL</code>、<code class="inline">SERVICE</code>、<code class="inline">BILLING_ENTITY</code>、<code class="inline">SKU</code></td></tr>
+        <tr><td>タイプ</td><td><code class="inline">MARKUP</code>、<code class="inline">DISCOUNT</code>、<code class="inline">TIERING</code></td></tr>
+        <tr><td>Tiering 設定</td><td><code class="inline">FreeTier</code> (AWS 無料利用枠の有効 / 無効)、<code class="inline">CustomTiers</code> (今回追加、1〜10 個)</td></tr>
+        <tr><td>SKU スコープの指定項目</td><td><code class="inline">Service</code>、<code class="inline">UsageType</code>、<code class="inline">Operation</code></td></tr>
+      </table>
+    </div>
+
+    <h3>API 変更履歴</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/09/14</td>
+          <td><a href="https://awsapichanges.com/archive/changes/7b8c33-billingconductor.html" target="_blank" rel="noopener noreferrer" class="aws-link">billingconductor</a></td>
+          <td>3 updated api methods - <code class="inline">CreatePricingRule</code>、<code class="inline">UpdatePricingRule</code>、<code class="inline">ListPricingRules</code> にカスタムボリュームティア (<code class="inline">Tiering.CustomTiers</code>) のサポートを追加</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>API リクエスト例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">CreatePricingRule リクエスト例</span>
+      </div>
+      <pre><code class="language-json">{
+  "Name": "CustomTierPricingRule",
+  "Scope": "SKU",
+  "Type": "TIERING",
+  "Service": "AmazonS3",
+  "UsageType": "APN1-TimedStorage-ByteHrs",
+  "Operation": "StandardStorage",
+  "Tiering": {
+    "CustomTiers": [
+      {
+        "BeginRangeInclusive": 0,
+        "EndRangeExclusive": 51200,
+        "RateValue": 0.024
+      },
+      {
+        "BeginRangeInclusive": 51200,
+        "RateValue": 0.022
+      }
+    ]
+  }
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Organizations の管理アカウント、または Billing Conductor の操作権限を委任されたアカウントで操作すること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Billing Conductor で請求グループと料金プランを構成済み、または新規に構成すること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>カスタムレートを適用する対象の SKU (サービス、使用タイプ、オペレーション) を特定していること</span></div>
+
+    <h3>手順</h3>
+
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">カスタムティア付きの料金ルールを作成</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI</span>
+          </div>
+          <pre><code class="language-bash">aws billingconductor create-pricing-rule \
+  --name "S3StorageCustomTier" \
+  --description "S3 ストレージのカスタムティア料金" \
+  --scope "SKU" \
+  --type "TIERING" \
+  --service "AmazonS3" \
+  --usage-type "APN1-TimedStorage-ByteHrs" \
+  --operation "StandardStorage" \
+  --tiering '{
+    "CustomTiers": [
+      {"BeginRangeInclusive": 0, "EndRangeExclusive": 51200, "RateValue": 0.024},
+      {"BeginRangeInclusive": 51200, "RateValue": 0.022}
+    ]
+  }'</code></pre>
+        </div>
+        <p>SKU スコープの料金ルールを <code class="inline">TIERING</code> タイプで作成します。この例では、使用量 0 以上 51,200 GB 未満の範囲に単価 0.024 USD、51,200 GB 以上の範囲に単価 0.022 USD を適用するカスタムティアを定義しています。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">料金ルールを料金プランに関連付け</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI</span>
+          </div>
+          <pre><code class="language-bash">aws billingconductor associate-pricing-rules \
+  --arn "arn:aws:billingconductor::123456789012:pricingplan/example-plan-id" \
+  --pricing-rule-arns "arn:aws:billingconductor::123456789012:pricingrule/example-rule-id"</code></pre>
+        </div>
+        <p>作成した料金ルールを既存の料金プランに関連付けます。料金プランは請求グループに適用され、カスタムティアに基づく計算結果が pro forma 請求データに反映されます。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">設定内容の確認</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI</span>
+          </div>
+          <pre><code class="language-bash">aws billingconductor list-pricing-rules \
+  --filters '{"Arns": ["arn:aws:billingconductor::123456789012:pricingrule/example-rule-id"]}'</code></pre>
+        </div>
+        <p>料金ルールの一覧を取得し、レスポンスの <code class="inline">Tiering.CustomTiers</code> に定義したティアの範囲とレートが正しく設定されていることを確認します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>👍 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>契約条件の正確な反映</strong>: 子会社やエンドカスタマーと交渉した独自料金を、割合計算を経由せずにそのまま pro forma 請求データへ反映できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ボリュームディスカウントの表現</strong>: 使用量に応じた段階的な独自料金体系を定義でき、パートナービジネスにおける柔軟な価格戦略を実現できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>請求業務の効率化</strong>: マークアップ / マークダウン率の逆算や再計算の手間が不要になり、料金設定の運用負荷を軽減できる</span></div>
+
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>API による自動化</strong>: <code class="inline">CreatePricingRule</code> / <code class="inline">UpdatePricingRule</code> API を通じて、カスタムティア設定をコードで管理・自動化できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>粒度の高い制御</strong>: SKU スコープ (サービス + 使用タイプ + オペレーション) で使用状況を特定し、SKU 単位で独自レートを適用できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>既存構成との統合</strong>: 既存の料金プラン、請求グループの仕組みをそのまま利用でき、追加のアーキテクチャ変更が不要</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>カスタムティアは 1 つの料金ルールにつき<strong>最大 10 個</strong>まで定義可能</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>カスタムレートの直接入力は <strong>SKU スコープの料金ルールが対象</strong></span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>中国リージョン (北京: Sinnet 運営、寧夏: NWCD 運営) では利用不可</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>Billing Conductor が生成するのは pro forma (見せ方を変えた) 請求データであり、<strong>AWS への実際の支払い額は変わらない</strong></span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>ティアの範囲は<strong>開始値を含み終了値を含まない (半開区間)</strong> ため、範囲の境界値の設定に注意が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>対象 SKU ごとに料金ルールを定義する必要があるため、適用対象が多い場合は<strong>ルールの管理方法を事前に設計</strong>しておくことが望ましい</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🏢 ユースケース 1: 子会社への社内請求で交渉済み固定単価を適用</div>
+      <p><span class="label">シナリオ</span>: 親会社が AWS の支払いを一括で行い、子会社ごとに社内で取り決めた固定単価で請求書を発行したい。従来はパブリック料金からマークダウン率を逆算しており、AWS 側の料金改定のたびに再計算が必要だった。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">実装例</span></div>
+        <pre><code class="language-text">1. 子会社ごとの請求グループを作成
+2. 対象 SKU に対して TIERING タイプの料金ルールを作成し、
+   合意済みの固定単価を RateValue に直接入力
+3. 料金ルールを料金プランに関連付け、請求グループに適用</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 割合計算が不要になり、合意した単価をそのまま設定できるため、社内請求の正確性と運用効率が向上する。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🤝 ユースケース 2: AWS パートナーによるボリュームディスカウント付き再販価格の設定</div>
+      <p><span class="label">シナリオ</span>: AWS パートナーがエンドカスタマーに対し、「月間使用量が一定量を超えた分は割引単価を適用する」という段階的な価格体系で再販している。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">実装例</span></div>
+        <pre><code class="language-yaml">CustomTiers:
+  - ティア 1: 0 以上 10,000 単位未満 → 標準単価
+  - ティア 2: 10,000 以上 50,000 単位未満 → 割引単価 A
+  - ティア 3: 50,000 以上 → 割引単価 B</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 独自のボリュームディスカウント構造を pro forma 請求データで直接表現でき、エンドカスタマー向け請求の透明性が向上する。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🤖 ユースケース 3: 料金設定の IaC 化による運用自動化</div>
+      <p><span class="label">シナリオ</span>: 多数のエンドカスタマーを抱えるパートナーが、契約更新のたびに料金ルールを手動で更新しており、設定ミスのリスクがあった。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">実装例</span></div>
+        <pre><code class="language-text">1. 契約管理システムから顧客ごとの単価・ティア情報を取得
+2. UpdatePricingRule API で Tiering.CustomTiers を更新する
+   スクリプトを定期実行
+3. ListPricingRules API で設定内容を検証</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 契約条件の変更を API 経由で自動反映でき、手動運用による設定ミスを削減できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💵 料金</h2>
+    <p>AWS Billing Conductor 自体の利用には料金が発生します。単一の AWS Organizations 内で利用する場合、<span class="highlight">請求グループに配置したアカウント数に基づく段階的な料金モデル</span>が適用されます (アカウント内のリソース使用量は課金額に影響しません)。組織をまたいで利用する Billing Transfer では、カスタマーマネージド料金プランにマッピングした AWS Organizations ごとに<span class="highlight">月額 50 USD</span> が発生します (AWS マネージド料金プランは無料)。</p>
+    <p>カスタムレートおよびカスタム使用量ティア機能の利用による追加料金に関する記載は、公式発表にはありません。最新の料金詳細は <a href="https://aws.amazon.com/aws-cost-management/aws-billing-conductor/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Billing Conductor 料金ページ</a>を参照してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>以下を除くすべての AWS 商用リージョンで利用可能です。</p>
+    <div class="check-item"><span class="cross-icon">✗</span><span>中国 (北京) リージョン (Sinnet 運営)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>中国 (寧夏) リージョン (NWCD 運営)</span></div>
+  </div>
+
+  <!-- 関連サービス・機能 -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🏛️ AWS Organizations</div>
+      <p style="margin: 0; font-size: 14px;">Billing Conductor は Organizations の一括請求 (コンソリデーテッドビリング) を前提とし、管理アカウントまたは委任アカウントから請求グループを構成する</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📈 AWS Cost and Usage Report (CUR)</div>
+      <p style="margin: 0; font-size: 14px;">請求グループごとの pro forma データを CUR として出力し、エンドカスタマー向けの請求分析に利用できる</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔍 AWS Cost Explorer</div>
+      <p style="margin: 0; font-size: 14px;">pro forma 料金を反映したコストの可視化・分析に利用できる</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>🎯 まとめ</h2>
+    <p>AWS Billing Conductor の SKU スコープ料金ルールで、<span class="highlight">カスタムレートの直接入力</span>と<span class="highlight">カスタム使用量ティアの定義</span>が可能になり、割合ベースのマークアップ / マークダウン計算に依存しない正確な pro forma 請求設定を実現できます。</p>
+    <p>子会社への社内請求やエンドカスタマーへの再販で独自の料金体系を運用しているお客様・パートナーは、既存の料金ルールをカスタムティア方式へ移行することで、<strong>料金改定時の再計算作業の削減</strong>と<strong>請求精度の向上</strong>が期待できます。</p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/09/AWS-Billing-Conductor-custom-rates-usage-tier" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li><a href="https://aws.amazon.com/aws-cost-management/aws-billing-conductor/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Billing Conductor 製品ページ</a></li>
+      <li><a href="https://docs.aws.amazon.com/billingconductor/latest/userguide/what-is-billingconductor.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Billing Conductor ユーザーガイド</a></li>
+      <li><a href="https://docs.aws.amazon.com/billingconductor/latest/APIReference/API_CreatePricingRule.html" target="_blank" rel="noopener noreferrer" class="aws-link">API リファレンス: CreatePricingRule</a></li>
+      <li><a href="https://docs.aws.amazon.com/billingconductor/latest/APIReference/API_CustomTier.html" target="_blank" rel="noopener noreferrer" class="aws-link">API リファレンス: CustomTier</a></li>
+      <li><a href="https://aws.amazon.com/aws-cost-management/aws-billing-conductor/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/7b8c33-billingconductor.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 (awsapichanges.com)</a></li>
+    </ul>
+    <p>生成日: 2026 年 9 月 15 日 | ベースレポート: 2026-09-15-AWS-Billing-Conductor-custom-rates-usage-tier.md</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
