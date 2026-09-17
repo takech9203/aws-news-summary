@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Transfer Family - NLB 配下の SFTP サーバーでソース IP 保持をサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+
+.feature-card .feature-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.feature-card p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.1);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .box-title { color: #FF8A73; font-weight: 700; margin-bottom: 10px; font-size: 16px; }
+.after-box .box-title { color: #7DD75E; font-weight: 700; margin-bottom: 10px; font-size: 16px; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 4px;
+  list-style: none;
+}
+
+.before-box li, .after-box li {
+  margin: 8px 0;
+  font-size: 14px;
+  padding-left: 22px;
+  position: relative;
+}
+
+.before-box li::before {
+  content: "✗";
+  color: var(--aws-red);
+  position: absolute;
+  left: 0;
+  font-weight: bold;
+}
+
+.after-box li::before {
+  content: "✓";
+  color: #7DD75E;
+  position: absolute;
+  left: 0;
+  font-weight: bold;
+}
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #7DD75E; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+  word-break: break-all;
+}
+
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+.step-card {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-body { flex: 1; min-width: 0; }
+
+.step-body .step-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.step-body p { margin: 6px 0; font-size: 14px; }
+
+.usecase-card {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+
+.usecase-card .usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase-card p { margin: 6px 0; font-size: 14px; }
+
+.usecase-label {
+  color: var(--aws-white);
+  font-weight: 600;
+}
+
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+
+.merit-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.merit-box .merit-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.merit-box .check-item { font-size: 14px; }
+
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+  border: 1px solid rgba(255, 153, 0, 0.5);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="service-badge">AWS Transfer Family</div>
+    <h1>🔁 NLB 配下の SFTP サーバーでソース IP 保持をサポート</h1>
+    <div class="subtitle">
+      PROXY protocol v2 でクライアントの真のソース IP をエンドツーエンドで保持 |
+      <span class="date">📅 リリース日: 2026 年 9 月 17 日</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      AWS Transfer Family が、VPC ホスト型エンドポイントを使用する SFTP サーバーの前段にお客様管理の
+      <span class="highlight">Network Load Balancer (NLB)</span> を配置した構成において、
+      <span class="highlight">PROXY protocol v2 (PPv2)</span> を使用してクライアントの元のソース IP アドレスを保持できるようになりました。
+      NLB が接続に PPv2 ヘッダーを付加し、Transfer Family がそのヘッダーを読み取ることで、クライアントの真のソース IP がエンドツーエンドで保持されます。
+    </p>
+    <p>
+      保持されたソース IP は <strong>Amazon CloudWatch Logs</strong> のログエントリに記録されるほか、
+      <strong>カスタム ID プロバイダー</strong>への認証リクエストにも引き渡されます。
+      これにより IP ベースの監査、アクセス制御、コンプライアンス対応が可能になります。
+      本機能はサーバーごとに個別に設定でき、コンソール、AWS CLI、API のいずれからでも有効化できます。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>NLB がソース IP を自身のプライベート IP に置き換えるため、ログやイベントで真のクライアント IP を確認できなかった</li>
+          <li>カスタム ID プロバイダーにも NLB の IP が渡され、IP ベースの認可を実装できなかった</li>
+          <li>接続元 IP を要件とする監査やコンプライアンス対応で NLB 経由の構成が採用しづらかった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>PPv2 により真のソース IP がエンドツーエンドで保持され、CloudWatch Logs に記録される</li>
+          <li>カスタム ID プロバイダーへの認証リクエストに真のソース IP が渡り、IP ベースのアクセスポリシーを記述できる</li>
+          <li>IP ベースの監査・アクセス制御・コンプライアンス要件を満たしつつ NLB 前段の SFTP 構成を採用できる</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart LR
+    Client(["👤 SFTP クライアント<br/>203.0.113.10"])
+
+    subgraph VPC["☁️ お客様 VPC"]
+        direction LR
+        NLB["⚖️ Network Load Balancer<br/>PPv2 ヘッダーを付加"]
+        EP["🔌 VPC ホスト型<br/>エンドポイント"]
+    end
+
+    subgraph TF["📦 AWS Transfer Family"]
+        Server["🖥️ SFTP サーバー<br/>SftpMode: PROXY_PROTOCOL_V2_ENFORCED"]
+    end
+
+    IdP{{"🔐 カスタム ID プロバイダー<br/>IP ベース認可"}}
+    CW[("📋 CloudWatch Logs<br/>真のソース IP を記録")]
+
+    Client -->|接続| NLB
+    NLB -->|PPv2 ヘッダー<br/>203.0.113.10| EP
+    EP --> Server
+    Server -.->|認証リクエスト<br/>ソース IP 付き| IdP
+    Server -.->|ログ出力| CW
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef vpc fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+
+    class Client user
+    class VPC,TF vpc
+    class NLB,EP process
+    class Server compute
+    class IdP decision
+    class CW database
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      NLB がクライアント接続に PPv2 ヘッダーを付加し、Transfer Family の SFTP サーバーがそのヘッダーからクライアントの真のソース IP を読み取ります。
+      保持された IP はカスタム ID プロバイダーへの認証リクエストと CloudWatch Logs の両方で利用できます。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">1️⃣ PROXY protocol v2 によるソース IP の保持</div>
+      <p>NLB のターゲットグループで <code class="inline">proxy_protocol_v2.enabled</code> 属性を有効化すると、NLB が各接続に PPv2 ヘッダーを付加。Transfer Family の SFTP サーバーがヘッダーを読み取り、クライアントの元のソース IP を取得します。VPC ホスト型エンドポイントを使用する SFTP サーバーが対象です。</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">2️⃣ カスタム ID プロバイダーへのソース IP の引き渡し</div>
+      <p>カスタム ID プロバイダーに送信する認証リクエストにクライアントの真のソース IP が含まれ、接続元アドレスに基づく IP ベースのアクセスポリシーを実装できます。</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">3️⃣ CloudWatch Logs への真のソース IP の記録</div>
+      <p>ログエントリにクライアントの元のソース IP が記録され、監査やトラブルシューティングに活用できます。<code class="inline">CONNECTED</code> アクティビティのログで PPv2 ヘッダーの受信状況を確認可能です (構造化ログでは <code class="inline">proxy-protocol-v2-header</code> フィールド、レガシーログでは <code class="inline">ProxyProtocolV2Header</code> フィールド)。</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">4️⃣ サーバー単位での有効化と強制モード</div>
+      <p><code class="inline">ProtocolDetails</code> の <code class="inline">ProxyConfig.SftpMode</code> パラメータで制御し、<code class="inline">NONE</code> (デフォルト) と <code class="inline">PROXY_PROTOCOL_V2_ENFORCED</code> の 2 値を持ちます。強制モードでは有効な PPv2 ヘッダーのない SFTP 接続をすべて拒否し、エラーを CloudWatch Logs に記録します。コンソール、CLI、API のいずれからでも設定可能です。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>⚙️ SftpMode の設定値</h3>
+    <table>
+      <tr><th style="width: 42%;">設定値</th><th>動作</th></tr>
+      <tr>
+        <td><code class="inline">NONE</code> (デフォルト)</td>
+        <td>PPv2 ヘッダーを読み取るが無視する。ヘッダーの有無にかかわらず接続を受け付ける</td>
+      </tr>
+      <tr>
+        <td><code class="inline">PROXY_PROTOCOL_V2_ENFORCED</code></td>
+        <td>すべての SFTP 接続に有効な PPv2 ヘッダーを要求する。ヘッダーのない接続は拒否され、エラーがログに記録される</td>
+      </tr>
+    </table>
+
+    <h3>📝 ログフィールドのセマンティクス</h3>
+    <table>
+      <tr><th style="width: 30%;">フィールドの状態</th><th>意味</th></tr>
+      <tr><td>フィールドなし</td><td>接続に PPv2 ヘッダーが含まれていなかった</td></tr>
+      <tr><td><code class="inline">ignored</code></td><td><code class="inline">SftpMode=NONE</code> の状態で PPv2 ヘッダーを受信した</td></tr>
+      <tr><td><code class="inline">applied</code></td><td><code class="inline">PROXY_PROTOCOL_V2_ENFORCED</code> の状態で PPv2 ヘッダーを受信し、サーバーが適用した</td></tr>
+    </table>
+
+    <h3>🗂️ API 変更履歴</h3>
+    <table>
+      <tr><th style="width: 16%;">日付</th><th style="width: 24%;">サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/09/15</td>
+        <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/4cd222-transfer.html" target="_blank" rel="noopener noreferrer">AWS Transfer Family</a></td>
+        <td>3 updated api methods - NLB 配下の SFTP 接続で PPv2 によるソース IP 保持をサポート (<code class="inline">ProtocolDetails</code> に <code class="inline">ProxyConfig</code> を追加)</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法: 3 ステップでダウンタイムなし移行</h2>
+
+    <h3>📌 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>VPC ホスト型エンドポイントを使用する SFTP プロトコルの Transfer Family サーバーが存在すること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>サーバーの VPC エンドポイントをターゲットとする NLB とターゲットグループが構成されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><code class="inline">PROXY_PROTOCOL_V2_ENFORCED</code> を有効化する場合、VPC エンドポイントのセキュリティグループを信頼された NLB 経由のインバウンドトラフィックのみ許可するよう制限すること</span></div>
+
+    <div class="flow-diagram">
+      <div class="flow-step">⚖️ ①<br/>NLB で PPv2<br/>有効化</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📋 ②<br/>ログで到達<br/>確認</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔒 ③<br/>強制モード<br/>有効化</div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">1</div>
+      <div class="step-body">
+        <div class="step-title">NLB ターゲットグループで PROXY protocol v2 を有効化</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash">aws elbv2 modify-target-group-attributes \
+  --target-group-arn &lt;your-target-group-arn&gt; \
+  --attributes Key=proxy_protocol_v2.enabled,Value=true</code></pre>
+        </div>
+        <p>NLB が各接続に PPv2 ヘッダーを付加するようにします。サーバーが <code class="inline">SftpMode=NONE</code> のままであればヘッダーは読み取られたうえで無視されるため、この段階で接続への影響はありません。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">2</div>
+      <div class="step-body">
+        <div class="step-title">すべての接続でヘッダーが到達していることを確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">CloudWatch Logs の確認</span></div>
+          <pre><code class="language-bash">aws logs filter-log-events \
+  --log-group-name /aws/transfer/&lt;your-server-id&gt; \
+  --filter-pattern '{ $.activity-type = "CONNECTED" }'</code></pre>
+        </div>
+        <p><code class="inline">CONNECTED</code> アクティビティのログエントリで、構造化 (JSON) ログの <code class="inline">proxy-protocol-v2-header</code> フィールドが <code class="inline">ignored</code> になっていることを確認します。フィールドが存在しないエントリがある場合、PPv2 ヘッダーなしで到達する経路が残っており、強制モード有効化時にそれらの接続が拒否されます。すべての <code class="inline">CONNECTED</code> エントリで <code class="inline">ignored</code> になるまで確認を続けます。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">3</div>
+      <div class="step-body">
+        <div class="step-title">PROXY protocol v2 の強制を有効化</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash">aws transfer update-server \
+  --server-id &lt;your-server-id&gt; \
+  --protocol-details ProxyConfig={SftpMode=PROXY_PROTOCOL_V2_ENFORCED}</code></pre>
+        </div>
+        <p>すべての SFTP 接続に有効な PPv2 ヘッダーを要求します。コンソールの場合は、サーバー詳細ページの [追加の詳細] で [PROXY protocol configuration] オプションを有効にします。ロールバックする場合は <code class="inline">SftpMode</code> を <code class="inline">NONE</code> に戻します。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <div class="merit-title">💼 ビジネス面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス対応の強化</strong>: 接続元 IP の記録が必要な監査・規制要件を NLB 経由の構成でも満たせる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>セキュリティポリシーの一貫性</strong>: 実際の接続元アドレスに基づくアクセス制御を SFTP 経路にも適用できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>既存アーキテクチャの活用</strong>: カスタムリスナーポート提供などの既存 NLB 構成を可視性を犠牲にせず維持できる</span></div>
+      </div>
+      <div class="merit-box">
+        <div class="merit-title">🔧 技術面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>IP ベース認可の実現</strong>: 認証リクエストに真のソース IP が含まれ、接続元に応じた許可 / 拒否ロジックを実装できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>トラブルシューティングの改善</strong>: 真のクライアント IP がログに記録され、接続問題の調査や不正アクセスの追跡が容易になる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ダウンタイムなしの移行</strong>: <code class="inline">NONE</code> モードで段階的に有効化し、接続断なしで強制モードへ移行できる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <div class="merit-title">🚧 制限事項</div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>対象は SFTP プロトコルのみ。FTP / FTPS では NLB を前段に配置すること自体が非推奨 (コスト増加と同時接続数の減少を招くため)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>VPC ホスト型エンドポイントを使用するサーバーが対象</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span><code class="inline">SftpMode</code> は <code class="inline">NONE</code> と <code class="inline">PROXY_PROTOCOL_V2_ENFORCED</code> の 2 値のみで、ヘッダーがある場合のみ適用する中間モードはない</span></div>
+      </div>
+      <div class="merit-box">
+        <div class="merit-title">🤔 考慮すべき点</div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>強制モード有効化時は、VPC エンドポイントのセキュリティグループを信頼された NLB 経由のトラフィックのみに制限する必要がある (PPv2 ヘッダーは偽装され得るため)</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>強制モードでは PPv2 ヘッダーのない接続がすべて拒否されるため、有効化前に全接続経路でヘッダー付加をログで確認する必要がある</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>Transfer Family はすでに複数ポートを提供しているため、NLB 追加前にエンドポイントタイプマトリクスを確認し、NLB が本当に必要か検討することを推奨</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase-card">
+      <div class="usecase-title">🏦 ユースケース 1: カスタム ID プロバイダーによる IP ベースのアクセス制御</div>
+      <p><span class="usecase-label">シナリオ</span>: 金融機関が取引先ごとに許可された IP アドレスからのみ SFTP 接続を受け付けたい。カスタムポートの提供のために NLB を利用している。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Python</span><span class="code-title">カスタム ID プロバイダー Lambda での IP ベース認可の例</span></div>
+        <pre><code class="language-python"># カスタム ID プロバイダー (Lambda) での IP ベース認可の例
+ALLOWED_CIDRS = {
+    "partner-a": ["203.0.113.0/24"],
+    "partner-b": ["198.51.100.0/24"],
+}
+
+def lambda_handler(event, context):
+    username = event["username"]
+    source_ip = event["sourceIp"]  # PPv2 により真のクライアント IP が渡される
+
+    if not is_ip_allowed(source_ip, ALLOWED_CIDRS.get(username, [])):
+        return {}  # 認証拒否
+
+    return build_auth_response(username)</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: NLB 経由の接続でも取引先の実際の接続元 IP で認可でき、許可外のネットワークからのアクセスを認証段階でブロックできる。</p>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">📊 ユースケース 2: 監査要件を満たすアクセスログの取得</div>
+      <p><span class="usecase-label">シナリオ</span>: 規制業種の企業が、ファイル転送の全アクセスについて接続元 IP を含む監査証跡の保存を義務付けられている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">CloudWatch Logs Insights で接続元 IP ごとのアクセスを集計</span></div>
+        <pre><code class="language-bash">aws logs start-query \
+  --log-group-name /aws/transfer/&lt;your-server-id&gt; \
+  --start-time $(date -d '7 days ago' +%s) \
+  --end-time $(date +%s) \
+  --query-string 'filter `activity-type` = "CONNECTED" | stats count(*) by `source-ip`'</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: NLB のプライベート IP ではなく真のクライアント IP がログに記録されるため、接続元単位の監査レポートを作成でき、コンプライアンス要件を満たせる。</p>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">🔄 ユースケース 3: 既存 NLB 構成のダウンタイムなしの移行</div>
+      <p><span class="usecase-label">シナリオ</span>: すでに NLB 配下で SFTP サーバーを運用しており、接続を止めずにソース IP 保持を有効化したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">段階的な有効化手順</span></div>
+        <pre><code class="language-bash"># 1. ターゲットグループで PPv2 を有効化 (この時点では無視されるため影響なし)
+aws elbv2 modify-target-group-attributes \
+  --target-group-arn &lt;tg-arn&gt; \
+  --attributes Key=proxy_protocol_v2.enabled,Value=true
+
+# 2. ログで全接続に proxy-protocol-v2-header: ignored が付くことを確認後、強制を有効化
+aws transfer update-server \
+  --server-id &lt;server-id&gt; \
+  --protocol-details ProxyConfig={SftpMode=PROXY_PROTOCOL_V2_ENFORCED}</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: <code class="inline">NONE</code> モードで PPv2 ヘッダーの到達を検証してから強制モードに切り替えることで、接続断を発生させずに安全に移行できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      本機能自体に<span class="highlight">追加料金はありません</span>。
+      AWS Transfer Family の標準料金 (有効化したプロトコルごとの時間課金とデータ転送量に基づく課金) と、
+      お客様管理の NLB に対する Elastic Load Balancing の料金が適用されます。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>
+      AWS Transfer Family が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。
+      最新のリージョン一覧は
+      <a class="aws-link" href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer">AWS リージョン別サービス表</a>
+      を参照してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="check-item"><span class="check-icon">⚖️</span><span><strong>Elastic Load Balancing (NLB)</strong>: ターゲットグループの <code class="inline">proxy_protocol_v2.enabled</code> 属性で PPv2 ヘッダーの付加を制御する</span></div>
+      <div class="check-item"><span class="check-icon">📋</span><span><strong>Amazon CloudWatch Logs</strong>: 保持されたソース IP や PPv2 ヘッダーの適用状況 (<code class="inline">ignored</code> / <code class="inline">applied</code>) がログに記録される</span></div>
+      <div class="check-item"><span class="check-icon">⚡</span><span><strong>AWS Lambda / Amazon API Gateway</strong>: カスタム ID プロバイダーの実装先として、認証リクエストに含まれる真のソース IP を使用した認可ロジックを実装できる</span></div>
+    </div>
+  </div>
+
+  <div class="section summary-box">
+    <h2>📝 まとめ</h2>
+    <p>
+      NLB 配下の SFTP サーバーでクライアントの真のソース IP を保持できるようになり、これまで NLB 構成のネックだった
+      <span class="highlight">IP ベースの認可・監査・コンプライアンス対応</span>が可能になりました。
+      すでに NLB を利用している場合は、①ターゲットグループでの PPv2 有効化、②ログでのヘッダー到達確認、③強制モードへの切り替え、という
+      <span class="highlight">3 ステップでダウンタイムなし</span>に導入できます。
+      強制モード有効化時は、セキュリティグループを信頼された NLB 経由のトラフィックのみに制限することを忘れないでください。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/09/transfer-family-sftp-source-ip-nlb/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/09/transfer-family-sftp-source-ip-nlb/</a></li>
+      <li>ドキュメント: Working with Network Load Balancers: <a class="aws-link" href="https://docs.aws.amazon.com/transfer/latest/userguide/working-with-nlb.html#nlb-sftp-source-ip" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/transfer/latest/userguide/working-with-nlb.html#nlb-sftp-source-ip</a></li>
+      <li>API リファレンス: ProtocolDetails: <a class="aws-link" href="https://docs.aws.amazon.com/transfer/latest/APIReference/API_ProtocolDetails.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/transfer/latest/APIReference/API_ProtocolDetails.html</a></li>
+      <li>API 変更履歴: <a class="aws-link" href="https://awsapichanges.com/archive/changes/4cd222-transfer.html" target="_blank" rel="noopener noreferrer">https://awsapichanges.com/archive/changes/4cd222-transfer.html</a></li>
+      <li>料金ページ: <a class="aws-link" href="https://aws.amazon.com/aws-transfer-family/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/aws-transfer-family/pricing/</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-09-17) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

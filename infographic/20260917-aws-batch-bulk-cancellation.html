@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Batch - 一括ジョブキャンセル・終了のサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 12px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 200px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.05));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before / After */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.before-box, .after-box {
+  flex: 1;
+  min-width: 300px;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3 { color: #FF6B4A; margin-top: 0; }
+.after-box h3 { color: #4CAF50; margin-top: 0; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+
+/* 機能カード */
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 16px 20px;
+  margin: 14px 0;
+}
+
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.feature-desc { font-size: 14px; }
+
+.badge-new {
+  display: inline-block;
+  background: var(--aws-green);
+  color: var(--aws-white);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 16px 0;
+}
+
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+.spec-table td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+.table-wrap { overflow-x: auto; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+/* ユースケース */
+.usecase-card {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase-label {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.usecase-card p { font-size: 14px; margin: 6px 0; }
+
+/* 2 カラムグリッド */
+.two-col {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.two-col > div {
+  flex: 1;
+  min-width: 300px;
+}
+
+/* 注意ボックス */
+.warn-box {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+/* 関連サービス */
+.related-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.related-name {
+  font-weight: 700;
+  color: var(--aws-white);
+  white-space: nowrap;
+}
+
+ul { padding-left: 20px; margin: 8px 0; }
+li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { list-style: none; padding-left: 0; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 640px) {
+  h1 { font-size: 26px; }
+  h2 { font-size: 20px; }
+  .stat-value { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">⚙️ AWS Batch</span>
+    <h1>一括ジョブキャンセル・終了のサポート</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 9 月 17 日 | CancelJobs / TerminateJobs / TerminateServiceJobs API</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>AWS Batch が、<span class="highlight">単一の API コールで最大 50 ジョブ</span>のキャンセルまたは終了を実行できる一括操作をサポートしました。新たに追加された <span class="highlight">CancelJobs</span>、<span class="highlight">TerminateJobs</span>、<span class="highlight">TerminateServiceJobs</span> の 3 つの API により、ジョブグループに対する一括操作が可能になり、単一のレスポンスでジョブごとの成功・失敗の結果を取得できます。</p>
+    <p>また、ListJobs API のレスポンスに <span class="highlight">isCancelled</span> と <span class="highlight">isTerminated</span> フィールドが、ListServiceJobs API のレスポンスに isTerminated フィールドが追加され、ジョブのライフサイクル状態の追跡が容易になりました。ゲノム解析、金融シミュレーション、機械学習など、数百から数千のジョブを一度に投入するワークロードで特に有効です。</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">最大 50</div>
+        <div class="stat-label">1 コールで操作できるジョブ数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">1/50</div>
+        <div class="stat-label">API コール数の削減 (最大)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">3 つ</div>
+        <div class="stat-label">新規追加された一括操作 API</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>CancelJob / TerminateJob は 1 回の呼び出しで 1 ジョブしか処理できず、ジョブ数分の API コールが必要</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>呼び出し回数の増加により API スロットリングを考慮したリトライ処理やスクリプトの実装が必要</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>各ジョブの操作結果を個別に確認し、結果の集約処理を自前で実装する必要があった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>キャンセル・終了リクエストの受付状態を一覧 API から直接確認する手段がなかった</span></div>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span>単一の API コールで最大 50 ジョブを一括操作でき、API コール数が最大 50 分の 1 に削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>単一レスポンスでジョブごとの結果 (成功リストとエラーリスト) を取得でき、結果集約の実装が不要</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>List API の isCancelled / isTerminated フィールドで、ライフサイクル状態を一覧取得時に確認可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>個別ジョブ・配列ジョブに加え、SageMaker Training などのサービスジョブも一括終了に対応</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Before["🔴 アップデート前"]
+        direction LR
+        U1(["👤 運用者"]) --> C1["🔁 ジョブ数分のループ処理"]
+        C1 -->|"CancelJob x 50 回"| B1["⚙️ AWS Batch"]
+    end
+
+    subgraph After["🟢 アップデート後"]
+        direction LR
+        U2(["👤 運用者"]) -->|"CancelJobs 1 回<br/>最大 50 ジョブ ID"| B2["⚙️ AWS Batch"]
+        B2 -->|"successful リスト<br/>errors リスト"| U2
+    end
+
+    Before ~~~ After
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef warn fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class U1,U2 user
+    class B1,B2 process
+    class C1 warn
+    class Before,After boundary
+      </pre>
+    </div>
+    <p style="font-size: 14px;">アップデート前は 50 ジョブの停止に 50 回の API コールとループ処理が必要でしたが、アップデート後は 1 回の API コールで一括操作でき、ジョブごとの結果も単一レスポンスで取得できます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">🚫 CancelJobs API<span class="badge-new">NEW</span></div>
+      <div class="feature-desc">SUBMITTED、PENDING、RUNNABLE 状態のジョブを最大 50 件まで一括キャンセル。リクエストはジョブ ID のリスト (jobs) とキャンセル理由 (reason) を受け付け、レスポンスは成功したジョブ ID のリスト (successful) と失敗したジョブごとのエラー情報 (errors: job、code、message) を返します。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🛑 TerminateJobs API<span class="badge-new">NEW</span></div>
+      <div class="feature-desc">STARTING や RUNNING を含む任意の状態のジョブを最大 50 件まで一括終了。実行中のジョブを強制的に停止する場合に使用します。リクエスト・レスポンス構造は CancelJobs と同一です。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🤖 TerminateServiceJobs API<span class="badge-new">NEW</span></div>
+      <div class="feature-desc">SageMaker Training ジョブなどのサービスジョブを任意の状態で最大 50 件まで一括終了。リクエスト・レスポンス構造は CancelJobs / TerminateJobs と同一です。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">📋 List API のレスポンス拡張</div>
+      <div class="feature-desc">ListJobs のジョブサマリーに isCancelled と isTerminated、ListServiceJobs のジョブサマリーに isTerminated のブール値フィールドが追加。キャンセル・終了リクエストを受け付けたジョブを一覧から識別でき、ライフサイクル状態の追跡が容易になりました。</div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>新 API の比較</h3>
+    <div class="table-wrap">
+      <table class="spec-table">
+        <tr>
+          <th>項目</th>
+          <th>CancelJobs</th>
+          <th>TerminateJobs</th>
+          <th>TerminateServiceJobs</th>
+        </tr>
+        <tr>
+          <td>対象ジョブ</td>
+          <td>通常ジョブ・配列ジョブ</td>
+          <td>通常ジョブ・配列ジョブ</td>
+          <td>サービスジョブ</td>
+        </tr>
+        <tr>
+          <td>対象状態</td>
+          <td>SUBMITTED、PENDING、RUNNABLE</td>
+          <td>任意の状態 (STARTING、RUNNING 含む)</td>
+          <td>任意の状態</td>
+        </tr>
+        <tr>
+          <td>最大ジョブ数 / コール</td>
+          <td>50</td>
+          <td>50</td>
+          <td>50</td>
+        </tr>
+        <tr>
+          <td>リクエストパラメータ</td>
+          <td>jobs、reason</td>
+          <td>jobs、reason</td>
+          <td>jobs、reason</td>
+        </tr>
+        <tr>
+          <td>レスポンス</td>
+          <td>successful、errors</td>
+          <td>successful、errors</td>
+          <td>successful、errors</td>
+        </tr>
+        <tr>
+          <td>アクセス方法</td>
+          <td>AWS CLI / SDK</td>
+          <td>AWS CLI / SDK</td>
+          <td>AWS CLI / SDK</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>API 変更履歴</h3>
+    <div class="table-wrap">
+      <table class="spec-table">
+        <tr>
+          <th>日付</th>
+          <th>サービス</th>
+          <th>変更内容</th>
+        </tr>
+        <tr>
+          <td>2026/09/11</td>
+          <td><a href="https://awsapichanges.com/archive/changes/45d607-batch.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Batch</a></td>
+          <td>3 new 2 updated api methods - 一括ジョブ操作 API (CancelJobs、TerminateJobs、TerminateServiceJobs) の追加。ListJobs、ListServiceJobs のレスポンスに isCancelled / isTerminated フィールドを追加</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>レスポンス構造</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">一括操作 API のレスポンス</span>
+      </div>
+      <pre><code class="language-json">{
+    "successful": [
+        "job-id-1",
+        "job-id-2"
+    ],
+    "errors": [
+        {
+            "job": "job-id-3",
+            "code": "エラーコード",
+            "message": "エラーメッセージ"
+        }
+    ]
+}</code></pre>
+    </div>
+    <p style="font-size: 14px;">一括操作の結果はジョブ単位で返されるため、一部のジョブが失敗しても成功したジョブの操作は継続されます。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <ul>
+      <li>AWS Batch のジョブキューとジョブが存在すること</li>
+      <li>AWS CLI または AWS SDK が最新バージョンに更新されていること</li>
+      <li>IAM ポリシーで <span class="highlight">batch:CancelJobs</span>、<span class="highlight">batch:TerminateJobs</span>、<span class="highlight">batch:TerminateServiceJobs</span> などの必要なアクションが許可されていること</li>
+    </ul>
+
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">対象ジョブの確認</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI</span>
+          </div>
+          <pre><code class="language-bash">aws batch list-jobs \
+    --job-queue my-job-queue \
+    --job-status RUNNABLE</code></pre>
+        </div>
+        <p style="font-size: 14px;">指定したジョブキュー内の RUNNABLE 状態のジョブ一覧を取得します。各ジョブサマリーに isCancelled と isTerminated フィールドが含まれるため、既に操作リクエスト済みのジョブを識別できます。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">ジョブの一括キャンセル</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI</span>
+          </div>
+          <pre><code class="language-bash">aws batch cancel-jobs \
+    --jobs job-id-1 job-id-2 job-id-3 \
+    --reason "Deployment rollback"</code></pre>
+        </div>
+        <p style="font-size: 14px;">SUBMITTED、PENDING、RUNNABLE 状態のジョブを最大 50 件まで一括キャンセルします。レスポンスの successful に成功したジョブ ID、errors に失敗したジョブとその理由が返されます。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">実行中ジョブの一括終了</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI</span>
+          </div>
+          <pre><code class="language-bash">aws batch terminate-jobs \
+    --jobs job-id-4 job-id-5 \
+    --reason "Cost control - stopping long running jobs"</code></pre>
+        </div>
+        <p style="font-size: 14px;">STARTING や RUNNING を含む任意の状態のジョブを一括終了します。サービスジョブの場合は <span class="highlight">aws batch terminate-service-jobs</span> を使用します。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">操作結果の確認</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI</span>
+          </div>
+          <pre><code class="language-bash">aws batch list-jobs \
+    --job-queue my-job-queue \
+    --job-status RUNNING</code></pre>
+        </div>
+        <p style="font-size: 14px;">一覧取得時に isTerminated が true のジョブは終了リクエストを受け付けた状態であることを確認できます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div>
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">運用負荷の軽減</strong>: 大規模バッチワークロードにおける多数ジョブの停止作業が簡素化され、運用チームの工数を削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">迅速なコスト制御</strong>: 不要になったジョブ群を即座に一括終了でき、無駄なコンピューティングコストの発生を最小限に抑制</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">インシデント対応の高速化</strong>: 障害時や誤投入時に大量のジョブを短時間で停止でき、影響範囲の拡大を防止</span></div>
+      </div>
+      <div>
+        <h3>⚙️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">API コール数の削減</strong>: 最大 50 ジョブを 1 コールで処理でき、スロットリングのリスクが低減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">結果集約の簡素化</strong>: 単一レスポンスでジョブごとの成功・失敗を取得でき、自前の結果集約ロジックが不要</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">ライフサイクル追跡の改善</strong>: List API の新フィールドで、リクエストの受付状態を一覧レベルで把握可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">配列ジョブ・サービスジョブへの対応</strong>: 配列ジョブや SageMaker Training などのサービスジョブにも一括操作を適用可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3>🚧 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">•</span><span>1 回の API コールで指定できるジョブ ID は最大 50 件</span></div>
+        <div class="check-item"><span class="cross-icon">•</span><span>CancelJobs は SUBMITTED、PENDING、RUNNABLE 状態のジョブにのみ有効 (STARTING や RUNNING に進んだジョブの停止には TerminateJobs が必要)</span></div>
+        <div class="check-item"><span class="cross-icon">•</span><span>一括操作の結果はジョブごとに異なる可能性があるため、errors リストの確認とリトライ処理の実装が引き続き推奨される</span></div>
+      </div>
+      <div>
+        <h3>🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="cross-icon">•</span><span>50 件を超えるジョブを操作する場合は、ジョブ ID をバッチに分割して複数回呼び出す必要がある</span></div>
+        <div class="check-item"><span class="cross-icon">•</span><span>既存の CancelJob / TerminateJob (単一ジョブ用 API) を利用するスクリプトは引き続き動作するが、大量ジョブを扱う場合は新 API への移行で効率化できる</span></div>
+        <div class="check-item"><span class="cross-icon">•</span><span>IAM ポリシーで API 単位のアクセス制御を行っている場合、新 API のアクションを許可リストに追加する必要がある</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase-card">
+      <div class="usecase-title">1. デプロイ失敗時の一括ロールバック</div>
+      <p><strong style="color: var(--aws-white);">シナリオ</strong>: 新しいジョブ定義でバッチ処理パイプラインをデプロイした直後に不具合が発覚し、キュー内で待機中の多数のジョブを即座にキャンセルしたい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">RUNNABLE 状態のジョブを 50 件ずつ一括キャンセル</span>
+        </div>
+        <pre><code class="language-bash"># RUNNABLE 状態のジョブ ID を取得して 50 件ずつ一括キャンセル
+JOB_IDS=$(aws batch list-jobs \
+    --job-queue my-job-queue \
+    --job-status RUNNABLE \
+    --query 'jobSummaryList[:50].jobId' \
+    --output text)
+
+aws batch cancel-jobs \
+    --jobs $JOB_IDS \
+    --reason "Rollback due to job definition bug"</code></pre>
+      </div>
+      <p><strong style="color: #4CAF50;">効果</strong>: 従来はジョブごとに CancelJob を呼び出すループ処理が必要だったが、1 コールで最大 50 ジョブを停止でき、ロールバック時間を大幅に短縮できる。</p>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">2. コスト超過時の実行中ジョブの緊急停止</div>
+      <p><strong style="color: var(--aws-white);">シナリオ</strong>: コスト監視アラートが発報し、長時間実行されている検証用ジョブ群を即座に停止してコストの増加を防ぎたい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">boto3 による一括終了と結果確認</span>
+        </div>
+        <pre><code class="language-python">import boto3
+
+batch = boto3.client("batch")
+
+response = batch.terminate_jobs(
+    jobs=["job-id-1", "job-id-2", "job-id-3"],
+    reason="Cost alert - emergency stop"
+)
+
+print("成功:", response["successful"])
+for error in response["errors"]:
+    print(f"失敗: {error['job']} ({error['code']}): {error['message']}")</code></pre>
+      </div>
+      <p><strong style="color: #4CAF50;">効果</strong>: RUNNING 状態のジョブも含めて一括終了でき、コスト超過への対応時間を短縮できる。ジョブごとの結果が単一レスポンスで返るため、失敗したジョブのみを対象としたリトライも容易。</p>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">3. SageMaker Training サービスジョブの一括終了</div>
+      <p><strong style="color: var(--aws-white);">シナリオ</strong>: AWS Batch 経由で投入した複数の SageMaker Training ジョブについて、ハイパーパラメータ設定の誤りが判明したため一括で終了したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">サービスジョブの一括終了と状態確認</span>
+        </div>
+        <pre><code class="language-bash">aws batch terminate-service-jobs \
+    --jobs service-job-id-1 service-job-id-2 \
+    --reason "Incorrect hyperparameter configuration"
+
+# 終了状態の確認
+aws batch list-service-jobs \
+    --job-queue my-sagemaker-queue \
+    --query 'jobSummaryList[?isTerminated==`true`].[jobId,jobName]'</code></pre>
+      </div>
+      <p><strong style="color: #4CAF50;">効果</strong>: サービスジョブも一括終了に対応しており、ListServiceJobs の isTerminated フィールドで終了リクエストの受付状態を確認できるため、機械学習ワークロードの運用管理が効率化される。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="two-col">
+      <div>
+        <h3>💵 料金</h3>
+        <p style="font-size: 14px;">AWS Batch 自体の利用に<span class="highlight">追加料金は発生しません</span>。今回の新 API の利用による追加料金もなく、ジョブの実行に使用する EC2 インスタンス、Fargate、SageMaker などの基盤リソースに対してのみ料金が発生します。ジョブを早期にキャンセル・終了することで、不要なリソース消費を抑えられます。</p>
+      </div>
+      <div>
+        <h3>🌍 利用可能リージョン</h3>
+        <p style="font-size: 14px;">AWS Batch が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。詳細は <a href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS リージョン別サービス一覧</a>を参照してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-item"><span>🖥️</span><span><span class="related-name">Amazon EC2 / AWS Fargate</span>: AWS Batch ジョブの実行基盤。ジョブの一括終了により、これらのコンピューティングリソースの消費を迅速に停止できる</span></div>
+    <div class="related-item"><span>🤖</span><span><span class="related-name">Amazon SageMaker AI</span>: AWS Batch のサービスジョブとして Training ジョブを投入可能。TerminateServiceJobs で一括終了できる</span></div>
+    <div class="related-item"><span>📡</span><span><span class="related-name">Amazon EventBridge</span>: ジョブ状態の変化イベントを検知し、一括キャンセル・終了を組み込んだ自動化ワークフローを構築できる</span></div>
+    <div class="related-item"><span>🔀</span><span><span class="related-name">AWS Step Functions</span>: バッチ処理のオーケストレーションにおいて、エラー時の一括停止処理を組み込むことでワークフローの信頼性を向上できる</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>AWS Batch の一括ジョブキャンセル・終了機能により、大規模バッチワークロードの停止操作が<span class="highlight">単一 API コールで完結</span>し、運用の複雑さと API コール数が大幅に削減されます。多数のジョブを扱う環境では、既存のループベースの停止スクリプトを新しい CancelJobs / TerminateJobs API に移行することを推奨します。また、List API の新フィールドを活用することで、ジョブのライフサイクル状態の監視も強化できます。</p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>・<a href="https://aws.amazon.com/about-aws/whats-new/2026/09/aws-batch-bulk-cancellation/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li>・<a href="https://docs.aws.amazon.com/batch/latest/APIReference/API_CancelJobs.html" target="_blank" rel="noopener noreferrer" class="aws-link">CancelJobs API リファレンス</a></li>
+      <li>・<a href="https://docs.aws.amazon.com/batch/latest/APIReference/API_TerminateJobs.html" target="_blank" rel="noopener noreferrer" class="aws-link">TerminateJobs API リファレンス</a></li>
+      <li>・<a href="https://docs.aws.amazon.com/batch/latest/APIReference/API_TerminateServiceJobs.html" target="_blank" rel="noopener noreferrer" class="aws-link">TerminateServiceJobs API リファレンス</a></li>
+      <li>・<a href="https://docs.aws.amazon.com/batch/latest/userguide/what-is-batch.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Batch ユーザーガイド</a></li>
+      <li>・<a href="https://aws.amazon.com/batch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Batch 料金ページ</a></li>
+      <li>・<a href="https://awsapichanges.com/archive/changes/45d607-batch.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS API Changes - AWS Batch</a></li>
+    </ul>
+    <p>ベースレポート: reports/2026/2026-09-17-aws-batch-bulk-cancellation.md | 生成日: 2026 年 9 月 17 日</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
