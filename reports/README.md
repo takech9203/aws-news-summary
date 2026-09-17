@@ -5,10 +5,23 @@
 
 ## 2026 年
 
+- [2026-09-16 - AWS Elemental MediaTailor - Monetization Functions の広告応答フック追加](2026/2026-09-16-aws-elemental-mediatailor-functions-ad-response-hooks.md)
+- [2026-09-16 - Amazon Connect Customer - AI による評価フォーム PDF インポート](2026/2026-09-16-amazon-connect-customer-import-evaluation-form-PDF.md)
+- [2026-09-16 - Amazon Connect Customer - カスタムメトリクス管理 API](2026/2026-09-16-connect-customer-custom-metrics-apis.md)
+- [2026-09-16 - AWS Client VPN - macOS 27 Golden Gate サポート](2026/2026-09-16-aws-client-vpn-macos-golden-gate.md)
+- [2026-09-16 - AWS - ビルダー向け新しい AWS エクスペリエンス](2026/2026-09-16-New-AWS-Builder-Experience.md)
+- [2026-09-16 - Amazon ECS - Amazon S3 Files の EC2 起動タイプ対応](2026/2026-09-16-amazon-ecs-s3-files-ec2.md)
+- [2026-09-16 - Amazon Connect Customer - カスタムメトリクスのタグベースアクセス制御](2026/2026-09-16-connect-customer-custom-metrics-tag.md)
+- [2026-09-16 - Amazon WorkSpaces - NVIDIA Blackwell GPU 搭載 Graphics G7 バンドルのサポート](2026/2026-09-16-amazon-workspaces-nvidia-blackwell-gpu-instances.md)
 - [2026-09-15 - Amazon Connect Customer - シフト入札 (Shift Bidding)](2026/2026-09-15-amazon-connect-customer-shift-bidding.md)
 - [2026-09-15 - Amazon SageMaker AI - トレーニング/処理ジョブのインスタンス優先リスト対応](2026/2026-09-15-amazon-sagemaker-training-processing-instance-pref-lists.md)
 - [2026-09-15 - AWS CloudTrail - Amazon Q Console による自然言語でのイベント分析](2026/2026-09-15-cloudtrail-amazon-q-console.md)
 - [2026-09-15 - AWS Billing Conductor - カスタムレートとカスタム使用量ティアの料金設定サポート](2026/2026-09-15-AWS-Billing-Conductor-custom-rates-usage-tier.md)
+- [2026-09-15 - AWS Step Functions - 新しい AWS サービス統合の自動追加 (AWS Lambda MicroVMs から開始)](2026/2026-09-15-aws-step-functions-integrations.md)
+- [2026-09-15 - AWS STS - セッショントークンサイズ制限の簡素化とサイズモニタリング機能](2026/2026-09-15-aws-sts.md)
+- [2026-09-15 - AWS Billing and Cost Management - Detected Anomalies ウィジェット](2026/2026-09-15-monitor-detected-anomalies-using-dashboards.md)
+- [2026-09-15 - AWS Direct Connect - 専用接続向けフラットレート料金](2026/2026-09-15-aws-direct-connect-announces-flat-rate-pricing.md)
+- [2026-09-15 - AWS Glue - zero-ETL 統合による Salesforce アーカイブ済みレコードのキャプチャ](2026/2026-09-15-glue-zero-etl-archived-salesforce.md)
 - [2026-09-14 - Amazon SageMaker JumpStart - Ministral-3-3B-Instruct-2512 / Ministral-3-8B-Instruct-2512 の提供開始](2026/2026-09-14-ministral-3-3b-instruct-2512-ministral-3-8B-Instruct-2512-jumpstart.md)
 - [2026-09-14 - Amazon SageMaker JumpStart - Qwen3.6-35B-A3B-NVFP4 および Wan2.1-T2V-1.3B-Diffusers モデルの提供開始](2026/2026-09-14-qwen3.6-35b-a3b-nvfp4-wan2.1-t2v-1.3B-diffusers-jumpstart.md)
 - [2026-09-14 - Kiro - Agent Artifacts とネイティブ ARM64 ビルド (IDE 1.1)](2026/2026-09-14-kiro-changelog-2026-09-14.md)

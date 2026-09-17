@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS STS - セッショントークンサイズ制限の簡素化とサイズモニタリング機能</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 8px;
+  font-size: 17px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255,153,0,0.25), rgba(140,79,255,0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 20px 0;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .box-title { color: #FF7B5A; font-weight: 700; margin-bottom: 10px; }
+.after-box .box-title { color: #6BCB4A; font-weight: 700; margin-bottom: 10px; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #6BCB4A; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF7B5A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+code {
+  font-family: 'Courier New', monospace;
+  background: rgba(255, 153, 0, 0.12);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.92em;
+}
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  background: transparent;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--aws-squid-ink);
+  background: var(--aws-smile-orange);
+  border-radius: 4px;
+  padding: 1px 8px;
+  margin-right: 6px;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.step-body { flex: 1; min-width: 0; }
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+ul { margin: 8px 0; padding-left: 22px; }
+li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { list-style: none; padding-left: 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">🔐 AWS Security Token Service</span>
+    <h1>AWS STS セッショントークンサイズ制限の簡素化とサイズモニタリング機能</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 9 月 15 日 | 機能: セッショントークンサイズ制限の統一とセッショントークンサイズモニタリング</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>AWS STS のセッショントークンに関する複数のサイズ制限が、<span class="highlight">「組み立てられたセッショントークン全体で 4,096 バイト」という単一の制限に統一</span>されました。従来はトークン自体の制限に加え、インラインポリシー、マネージドポリシー、セッションタグなどに対する「パックドポリシー」サイズ制限が個別に存在していました。</p>
+    <p>あわせて、API レスポンス、AWS CloudTrail、Amazon CloudWatch を通じた<span class="highlight">トークンサイズのモニタリング</span>と、新パラメータ <code>MinimumSessionTokenSize</code> による<span class="highlight">大きなトークンの事前検証</span>が可能になりました。セッションポリシーやセッションタグを多用する ID フェデレーション環境や、マルチテナント SaaS で ABAC を実装しているユーザーに特に重要なアップデートです。</p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">4,096 バイト</div>
+        <div class="stat-label">統一されたトークン全体の単一制限<br>(恒久的な上限ではなく将来拡大の可能性)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">3 つの手段</div>
+        <div class="stat-label">API レスポンス / CloudTrail / CloudWatch<br>でサイズをモニタリング</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">5 つの API</div>
+        <div class="stat-label">AssumeRole 系 3 API + GetSessionToken<br>+ GetFederationToken が対象</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ アップデート前の課題</div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>トークン自体の制限とパックドポリシー制限の 2 つが独立して存在し、どちらに抵触しても同じ <code>PackedPolicyTooLargeException</code> が返され原因の切り分けが困難</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>セッショントークンの実際のサイズを確認する手段がなく、制限への近さを把握できない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>大きなトークンに対するアプリケーションやインフラストラクチャの耐性を本番相当の条件で事前テストできない</span></div>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ アップデート後の改善</div>
+        <div class="check-item"><span class="check-icon">✓</span><span>「トークン全体で 4,096 バイト」の単一制限に統一され、より大きなセッションポリシーとセッションタグの組み合わせが利用可能に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>API レスポンス、CloudTrail ログ、CloudWatch メトリクスでサイズと使用率を継続的にモニタリング可能に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><code>MinimumSessionTokenSize</code> パラメータで大きなトークンを生成し、受け入れ可能サイズを事前検証可能に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>エラーメッセージにトークンサイズと最大許容サイズがバイト単位で含まれるように (エラーハンドリングコードの変更は不要)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    App(["👤 アプリケーション"])
+
+    subgraph STS["🔐 AWS STS"]
+        API["🔌 セッション発行 API<br/>AssumeRole など"]
+        Check{"📏 トークンサイズ<br/>4,096 バイト以内?"}
+    end
+
+    subgraph Monitor["📊 モニタリング"]
+        direction LR
+        CT["📜 AWS CloudTrail<br/>sessionTokenSize<br/>sessionTokenUtilization"]
+        CW["📈 Amazon CloudWatch<br/>AWS/STS 名前空間<br/>SessionTokenSize"]
+        CT ~~~ CW
+    end
+
+    App -->|"リクエスト<br/>MinimumSessionTokenSize 指定可"| API
+    API --> Check
+    Check -->|"OK"| Resp["✅ レスポンス<br/>SessionTokenSize<br/>SessionTokenUtilization"]
+    Check -->|"超過"| Err["❌ PackedPolicyTooLargeException<br/>サイズ情報付きメッセージ"]
+    Resp --> App
+    Err --> App
+    API -.-> CT
+    API -.-> CW
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef sts fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef ok fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef error fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+    classDef monitor fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class App user
+    class STS sts
+    class API process
+    class Check decision
+    class Resp ok
+    class Err error
+    class Monitor monitor
+    class CT,CW internal
+      </pre>
+    </div>
+    <p class="diagram-caption">セッション発行 API がトークンサイズを単一の 4,096 バイト制限で検証し、成功時はレスポンスにサイズ情報を含めて返却するとともに、CloudTrail と CloudWatch にサイズ情報を記録するフローを示しています。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ セッショントークンサイズ制限の統一</div>
+      <ul>
+        <li>従来の「パックドポリシーサイズ制限」と「トークン全体の制限」の 2 つを廃止し、<span class="highlight">単一の 4,096 バイト制限</span>に統一</li>
+        <li>セッションポリシーとセッションタグのより大きな組み合わせが利用可能になり、従来失敗していたリクエストの一部が成功するように</li>
+        <li>制限超過時の例外は従来と同じ <code>PackedPolicyTooLargeException</code> のため、既存のエラーハンドリングコードの変更は不要</li>
+        <li>エラーメッセージにトークンサイズと最大許容サイズがバイト単位で含まれ、トラブルシューティングが容易に</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ セッショントークンサイズのモニタリング</div>
+      <ul>
+        <li>API レスポンスに <code>SessionTokenSize</code> (バイト単位のサイズ) と <code>SessionTokenUtilization</code> (制限に対する使用率) が追加</li>
+        <li>後方互換性のため <code>PackedPolicySize</code> フィールドは維持され、<code>SessionTokenUtilization</code> と同じ使用率を返却</li>
+        <li>CloudTrail のセッション発行イベントの <code>responseElements</code> に <code>sessionTokenSize</code>、<code>sessionTokenUtilization</code>、<code>packedPolicySize</code> が記録される</li>
+        <li>CloudWatch の <code>AWS/STS</code> 名前空間に <code>SessionTokenSize</code> と <code>SessionTokenMaxSize</code> メトリクスが発行される</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 大きなトークンの生成によるテスト機能</div>
+      <ul>
+        <li>新しいオプションパラメータ <code>MinimumSessionTokenSize</code> により、指定サイズ以上 (最大 4,096 バイト) にパディングされたトークンを生成可能</li>
+        <li>アプリケーション、ロードバランサー、プロキシ、データベースなどが大きなトークンを処理できるかを事前に検証できる</li>
+        <li>最新の AWS SDK、AWS CLI、AWS Tools for PowerShell で利用可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📌 対象 API</h3>
+    <table>
+      <tr><th>API</th><th>用途</th></tr>
+      <tr><td><code>AssumeRole</code></td><td>IAM ロールの引き受け</td></tr>
+      <tr><td><code>AssumeRoleWithSAML</code></td><td>SAML フェデレーションによるロールの引き受け</td></tr>
+      <tr><td><code>AssumeRoleWithWebIdentity</code></td><td>Web ID フェデレーションによるロールの引き受け</td></tr>
+      <tr><td><code>GetSessionToken</code></td><td>一時的な認証情報の取得</td></tr>
+      <tr><td><code>GetFederationToken</code></td><td>フェデレーションユーザー向け一時認証情報の取得</td></tr>
+    </table>
+
+    <h3>📊 モニタリング関連の要素</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>レスポンス要素 <code>SessionTokenSize</code></td><td>セッショントークンのサイズ (バイト)</td></tr>
+      <tr><td>レスポンス要素 <code>SessionTokenUtilization</code></td><td>4,096 バイト制限に対する使用率 (%)</td></tr>
+      <tr><td>レスポンス要素 <code>PackedPolicySize</code></td><td>後方互換用。<code>SessionTokenUtilization</code> と同じ使用率を返却</td></tr>
+      <tr><td>CloudWatch 名前空間</td><td><code>AWS/STS</code></td></tr>
+      <tr><td>CloudWatch メトリクス</td><td><code>SessionTokenSize</code>、<code>SessionTokenMaxSize</code></td></tr>
+      <tr><td>CloudTrail 記録項目</td><td><code>responseElements</code> 内の <code>sessionTokenSize</code>、<code>sessionTokenUtilization</code>、<code>packedPolicySize</code></td></tr>
+      <tr><td>テスト用パラメータ</td><td><code>MinimumSessionTokenSize</code> (最大 4,096 バイト)</td></tr>
+    </table>
+
+    <h3>📝 API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/09/14</td>
+        <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/7b8c33-sts.html" target="_blank" rel="noopener noreferrer">AWS Security Token Service</a></td>
+        <td>6 updated api methods - セッション発行 API へのサイズ情報レスポンス要素と <code>MinimumSessionTokenSize</code> パラメータの追加</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <ul>
+      <li>AWS アカウントと STS を呼び出す IAM プリンシパル (追加の権限設定は不要)</li>
+      <li>レスポンスの新フィールドを参照する場合は最新の AWS SDK または AWS CLI</li>
+      <li>CloudWatch メトリクスや CloudTrail での確認は SDK の更新なしで利用可能</li>
+    </ul>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-body">
+        <div class="step-title">大きなトークンでの動作検証</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">MinimumSessionTokenSize による検証</span></div>
+          <pre><code class="language-bash">aws sts assume-role \
+  --role-arn arn:aws:iam::123456789012:role/MyRole \
+  --role-session-name validation-test \
+  --minimum-session-token-size 4096</code></pre>
+        </div>
+        <p>4,096 バイトにパディングされたトークンを生成し、アプリケーションやインフラストラクチャが最大サイズのトークンを処理できるかを検証します。システムがトークンを拒否または切り捨てる場合は、サイズを下げて許容範囲を特定し、可能な範囲でインフラストラクチャ側の制限を引き上げます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-body">
+        <div class="step-title">レスポンスでのサイズ確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">サイズと使用率の取得</span></div>
+          <pre><code class="language-bash">aws sts assume-role \
+  --role-arn arn:aws:iam::123456789012:role/MyRole \
+  --role-session-name size-check \
+  --query '{Size: SessionTokenSize, Utilization: SessionTokenUtilization}'</code></pre>
+        </div>
+        <p>レスポンスからトークンサイズ (バイト) と制限に対する使用率 (%) を取得します。使用率が高い場合は、セッションポリシーの簡素化やセッションタグの整理を検討します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-body">
+        <div class="step-title">CloudWatch アラームの設定</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">SessionTokenSize メトリクスのアラーム</span></div>
+          <pre><code class="language-bash">aws cloudwatch put-metric-alarm \
+  --alarm-name sts-session-token-size-alarm \
+  --namespace AWS/STS \
+  --metric-name SessionTokenSize \
+  --statistic Maximum \
+  --period 300 \
+  --threshold 3500 \
+  --comparison-operator GreaterThanThreshold \
+  --evaluation-periods 1 \
+  --alarm-actions arn:aws:sns:us-east-1:123456789012:security-alerts</code></pre>
+        </div>
+        <p>トークンサイズがしきい値を超えた場合に通知します。AWS はしきい値として 4,096 バイトの上限値ではなく、ステップ 1 で検証した自社インフラストラクチャの許容サイズを基準にすることを推奨しています。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>フェデレーション設計の柔軟性向上</strong>: より大きなセッションポリシーとタグの組み合わせにより、マルチテナント SaaS や ABAC を活用したきめ細かいアクセス制御の設計余地が広がる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用リスクの低減</strong>: トークンサイズの継続的なモニタリングにより、制限超過による認証エラーを未然に検知し、サービス停止を防止できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>移行コストが不要</strong>: 既存のエラーハンドリングやワークフローを変更することなく、制限緩和の恩恵を自動的に受けられる</span></div>
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>可観測性の向上</strong>: API レスポンス、CloudTrail、CloudWatch の 3 つの手段でトークンサイズを把握でき、既存の監視基盤に容易に組み込める</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>事前検証が可能</strong>: <code>MinimumSessionTokenSize</code> により、将来のトークンサイズ増大に対するシステムの耐性を本番相当の条件でテストできる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>トラブルシューティングの改善</strong>: エラーメッセージに実際のトークンサイズと上限が含まれるため、制限超過時の原因特定が迅速になる</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚧 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>セッショントークン全体の上限は現時点で 4,096 バイトであり、これを超えるポリシーやタグの組み合わせは引き続き <code>PackedPolicyTooLargeException</code> となる</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>新フィールド <code>SessionTokenSize</code> と <code>SessionTokenUtilization</code> の参照には最新の AWS SDK / CLI が必要</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>トークンの圧縮率は内容によって変動するため、入力パラメータの長さからトークンサイズを正確に見積もることはできない</span></div>
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>4,096 バイトは恒久的な上限ではなく、耐量子署名や監査メタデータの拡充などにより将来増加する可能性があるため、<span class="highlight">上限値をハードコードしない設計</span>が推奨される</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>SDK が管理する認証情報は影響を受けないが、トークンを独自に保存・転送するシステム (ロードバランサー、プロキシ、キャッシュ、データベースの <code>varchar(2048)</code> カラムなど) は最大サイズのトークンを扱えるか監査が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>過去に <code>PackedPolicyTooLargeException</code> への回避策 (ポリシーの分割など) を実装している場合、一部のリクエストが成功するようになるため回避策の見直しが有効</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🏢 ユースケース 1: マルチテナント SaaS での ABAC 実装の拡張</div>
+      <p><span class="usecase-label">シナリオ</span>SaaS プロバイダーがテナントごとのアクセス制御にセッションタグを使用しており、従来はパックドポリシー制限によりタグ数やポリシーサイズを厳しく切り詰める必要があった。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws sts assume-role \
+  --role-arn arn:aws:iam::123456789012:role/TenantAccessRole \
+  --role-session-name tenant-session \
+  --tags Key=TenantId,Value=tenant-a Key=Tier,Value=premium Key=Region,Value=apne1 \
+  --policy file://tenant-session-policy.json</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>制限の統一により、より多くのセッションタグと詳細なセッションポリシーを組み合わせられるようになり、テナント分離の粒度を高められる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📈 ユースケース 2: トークンサイズの継続的なモニタリング</div>
+      <p><span class="usecase-label">シナリオ</span>ID フェデレーション基盤の運用チームが、SAML アサーションに含まれる属性の増加に伴い、セッショントークンサイズが制限に近づいていないかを常時監視したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws cloudwatch get-metric-statistics \
+  --namespace AWS/STS \
+  --metric-name SessionTokenSize \
+  --statistics Maximum \
+  --start-time 2026-09-14T00:00:00Z \
+  --end-time 2026-09-15T00:00:00Z \
+  --period 3600</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>トークンサイズの推移を可視化し、使用率が高まった時点でセッションポリシーやタグ設計を見直すことで、認証エラーの発生を未然に防げる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🧪 ユースケース 3: 大きなトークンに対するインフラストラクチャの耐性テスト</div>
+      <p><span class="usecase-label">シナリオ</span>認証プロキシやセッション情報を保存するデータベースを運用しており、将来トークンサイズが増大した場合にシステムが正常に動作するかを事前に確認したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># 最大サイズのトークンを生成して既存システムに通す
+aws sts get-session-token \
+  --minimum-session-token-size 4096</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>本番相当のサイズのトークンでエンドツーエンドの動作を確認でき、トークンの切り捨てや拒否が発生する箇所を事前に特定して修正できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p>AWS STS の利用は<span class="highlight">無料</span>であり、今回のアップデートによる追加料金は発生しません。CloudWatch メトリクスに対してアラームやダッシュボードを作成する場合は、CloudWatch の標準料金が適用されます。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 利用可能リージョン</div>
+      <p>すべての AWS 商用リージョン、AWS GovCloud (US) リージョン、および AWS European Sovereign Cloud リージョンで利用可能です。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>AWS IAM</strong>: セッションポリシーやセッションタグは IAM の一時的セキュリティ認証情報の仕組みの一部であり、今回の制限統一により設計の柔軟性が向上する</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>AWS CloudTrail</strong>: セッション発行イベントにトークンサイズ情報が記録され、SDK の更新なしでサイズの監査が可能</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>Amazon CloudWatch</strong>: <code>AWS/STS</code> 名前空間のメトリクスを使用して、トークンサイズのダッシュボード化やアラーム設定が可能</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>AWS IAM Identity Center</strong>: フェデレーションによるロールセッションの発行時にセッショントークンが生成されるため、属性マッピングが多い環境ではサイズモニタリングが有効</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>AWS STS のセッショントークンサイズ制限が<span class="highlight">単一の 4,096 バイト制限に統一</span>され、サイズのモニタリングとテストの手段が整備されました。セッションポリシーやセッションタグを多用する環境では、過去の制限回避策の見直しと、<code>MinimumSessionTokenSize</code> を使用したインフラストラクチャの耐性テストの実施を推奨します。また、トークンサイズは将来増加する可能性があるため、CloudWatch アラームによる継続的なモニタリングの導入が有効です。</p>
+    <div class="flow-diagram" style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:24px 0;">
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px;">🧪 耐性テスト<br>MinimumSessionTokenSize</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px;">📏 許容サイズの特定</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px;">🔔 CloudWatch アラーム設定</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px;">📊 継続的モニタリング</div>
+    </div>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li>📄 レポート: reports/2026/2026-09-15-aws-sts.md (AWS News Summary)</li>
+      <li>🔗 <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/09/aws-sts/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/09/aws-sts/</a></li>
+      <li>🔗 <a class="aws-link" href="https://aws.amazon.com/blogs/security/aws-sts-simplifies-session-token-size-limits-and-adds-session-token-size-monitoring/" target="_blank" rel="noopener noreferrer">AWS Security Blog - AWS STS simplifies session token size limits and adds session token size monitoring</a></li>
+      <li>🔗 <a class="aws-link" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html" target="_blank" rel="noopener noreferrer">ドキュメント - 一時的セキュリティ認証情報のリクエスト (IAM ユーザーガイド)</a></li>
+      <li>🔗 <a class="aws-link" href="https://docs.aws.amazon.com/STS/latest/APIReference/Welcome.html" target="_blank" rel="noopener noreferrer">ドキュメント - AWS STS API リファレンス</a></li>
+      <li>🔗 <a class="aws-link" href="https://awsapichanges.com/archive/changes/7b8c33-sts.html" target="_blank" rel="noopener noreferrer">AWS API Changes - AWS Security Token Service</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News Summary レポートに基づいて生成されました。生成日: 2026 年 9 月 16 日</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

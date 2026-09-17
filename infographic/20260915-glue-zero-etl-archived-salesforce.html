@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Glue - zero-ETL 統合による Salesforce アーカイブ済みレコードのキャプチャ</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.35;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 5px solid var(--aws-orange);
+    }
+
+    .card h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .card ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .card li {
+      margin: 4px 0;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    /* Before / After 比較 */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 720px) {
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px 20px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h4 {
+      color: #FF6B6B;
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+
+    .after-box h4 {
+      color: #6BCB77;
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .before-box li, .after-box li {
+      margin: 6px 0;
+      font-size: 14px;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      vertical-align: top;
+    }
+
+    code.inline {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-smile-orange);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+    }
+
+    /* Mermaid コンテナ */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon {
+      color: #6BCB77;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .warn-icon {
+      color: var(--aws-smile-orange);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 14px 0;
+    }
+
+    .usecase h4 {
+      color: var(--aws-smile-orange);
+      margin: 0 0 8px 0;
+      font-size: 16px;
+    }
+
+    .usecase p {
+      margin: 6px 0;
+      font-size: 14px;
+    }
+
+    .usecase .label {
+      font-weight: 600;
+      color: var(--aws-white);
+    }
+
+    /* ステップ */
+    .step {
+      display: flex;
+      gap: 14px;
+      margin: 18px 0;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .step-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .step-content h4 {
+      margin: 0 0 6px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .step-content p {
+      margin: 6px 0;
+      font-size: 14px;
+    }
+
+    /* 統計カード */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 720px) {
+      .stats-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.3;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a {
+      word-break: break-all;
+    }
+
+    footer ul {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <span class="service-badge">AWS Glue</span>
+      <h1>⚡ zero-ETL 統合が Salesforce アーカイブ済みレコードをキャプチャ可能に</h1>
+      <div class="subtitle">📅 リリース日: 2026 年 9 月 15 日 | 🔧 機能: zero-ETL 統合における Salesforce アーカイブ済みレコードの取り込み</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>
+        AWS Glue の Salesforce 向け zero-ETL 統合が、<span class="highlight">アーカイブ済みレコード</span>をターゲットテーブルに含められるようになりました。
+        アーカイブ済みレコードは <code class="inline">isArchived</code> フィールドで正確に識別・反映され、分析データが Salesforce ソースと同期された状態に保たれます。
+      </p>
+      <p>
+        Salesforce 側で自動アーカイブされる大量データのエンティティ (Events、Tasks、Activities など) で特に有効です。
+        <span class="highlight">既存の zero-ETL 統合にも自動適用</span>され、再同期・再設定・スキーマ変更は不要です。
+      </p>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value">100%</div>
+          <div class="stat-label">アーカイブ済みを含む Salesforce データの完全なコピーを保持</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">isArchived</div>
+          <div class="stat-label">フィールドでアクティブ / アーカイブ済みを識別</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">作業ゼロ</div>
+          <div class="stat-label">既存統合へ自動バックフィル、再設定は不要</div>
+        </div>
+      </div>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h4>❌ アップデート前の課題</h4>
+          <ul>
+            <li>Salesforce 側で自動アーカイブされたレコード (Events、Tasks、Activities など) がターゲットテーブルに反映されず、分析データに欠落が発生</li>
+            <li>アーカイブ済みデータを分析に含めるには、別途エクスポートやカスタム ETL パイプラインの構築が必要</li>
+            <li>分析基盤側のデータと Salesforce ソースの完全な一致の保証が困難</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h4>✅ アップデート後の改善</h4>
+          <ul>
+            <li>アーカイブ済みレコードを含む Salesforce データの完全なコピーを分析基盤に保持可能</li>
+            <li><code class="inline">isArchived</code> フィールドでアクティブなレコードとの区別が容易に</li>
+            <li>既存統合では再同期や再設定なしで、自動的にアーカイブ済みステータスをバックフィル</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart LR
+    subgraph SF["🏢 Salesforce"]
+        direction LR
+        Active["📄 アクティブレコード"]
+        Archived["🗃️ アーカイブ済みレコード&lt;br/&gt;Events / Tasks / Activities"]
+    end
+
+    subgraph AWS["☁️ AWS"]
+        ZETL["⚡ AWS Glue&lt;br/&gt;zero-ETL 統合"]
+        Target[("🗄️ ターゲットテーブル&lt;br/&gt;isArchived フィールド付き")]
+    end
+
+    Active -->|自動レプリケーション| ZETL
+    Archived -->|自動レプリケーション| ZETL
+    ZETL --> Target
+    User(["👤 分析ユーザー"]) -.->|クエリ| Target
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef external fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class SF,AWS boundary
+    class Active,Archived external
+    class ZETL compute
+    class Target database
+    class User user
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        Salesforce のアクティブレコードとアーカイブ済みレコードの両方が zero-ETL 統合を通じてターゲットテーブルにレプリケートされ、アーカイブ済みレコードは <code class="inline">isArchived</code> フィールドで識別できます。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>🚀 主要機能</h2>
+
+      <div class="card">
+        <h4>🗃️ 1. アーカイブ済みレコードの自動キャプチャ</h4>
+        <ul>
+          <li>Salesforce 側でアーカイブされたレコードが zero-ETL 統合のターゲットテーブルに含まれる</li>
+          <li>自動アーカイブ対象となる大量データのエンティティ (Events、Tasks、Activities) で特に有効</li>
+          <li>分析用途で Salesforce データの完全なコピーを保持できる</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>🔍 2. isArchived フィールドによる識別</h4>
+        <ul>
+          <li>アーカイブ済みレコードは <code class="inline">isArchived</code> フィールドで正確に識別・反映される</li>
+          <li>クエリ時にアクティブなレコードとアーカイブ済みレコードを容易に区別できる</li>
+          <li>分析データが Salesforce ソースと同期された状態に保たれる</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>🔄 3. 既存統合への自動適用</h4>
+        <ul>
+          <li>新規統合では作成時点からアーカイブ済みレコードがキャプチャされる</li>
+          <li>既存統合では AWS Glue がアーカイブ済みレコードのステータスを自動的にバックフィルする</li>
+          <li>再同期、再設定、スキーマ変更は不要で、既存パイプラインは中断なく稼働を継続する</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>⚙️ 技術仕様</h2>
+
+      <h3>機能の適用条件</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対象</td><td>AWS Glue の Salesforce 向け zero-ETL 統合</td></tr>
+        <tr><td>新規統合</td><td>統合の作成時点からアーカイブ済みレコードをキャプチャ</td></tr>
+        <tr><td>既存統合</td><td>自動バックフィルにより適用 (再同期・再設定・スキーマ変更は不要)</td></tr>
+        <tr><td>識別方法</td><td><code class="inline">isArchived</code> フィールド</td></tr>
+        <tr><td>主な対象エンティティ</td><td>Events、Tasks、Activities などの自動アーカイブ対象エンティティ</td></tr>
+        <tr><td>ユーザー操作</td><td>不要 (自動適用)</td></tr>
+      </table>
+
+      <h3>API 変更履歴</h3>
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/09/14</td>
+          <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/7b8c33-glue.html" target="_blank" rel="noopener noreferrer">AWS Glue</a></td>
+          <td>1 new 3 updated api methods - 新 API <code class="inline">ListIntegrationTableProperties</code> の追加、<code class="inline">TargetTableConfig</code> への <code class="inline">IntegrationArn</code> の追加 (zero-ETL 統合関連の更新)</td>
+        </tr>
+      </table>
+      <p style="font-size: 14px;">なお、今回のアーカイブ済みレコードのキャプチャ機能自体は自動適用であり、ユーザー側での API 呼び出しや設定変更は不要です。</p>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>AWS Glue の Salesforce 向け zero-ETL 統合がサポートされているリージョンを利用していること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>Salesforce への接続 (AWS Glue コネクション) が設定済みであること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>既存統合の場合は、追加の作業は不要 (自動適用)</span></div>
+
+      <h3>手順</h3>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h4>既存統合の確認</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">既存の zero-ETL 統合の一覧を確認</span>
+            </div>
+            <pre><code class="language-bash">aws glue describe-integrations</code></pre>
+          </div>
+          <p>既存の zero-ETL 統合の一覧と状態を確認します。既存統合ではアーカイブ済みレコードのステータスが自動的にバックフィルされるため、追加の操作は不要です。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h4>新規統合の作成 (新たに統合を作成する場合)</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">Salesforce をソースとする zero-ETL 統合を作成</span>
+            </div>
+            <pre><code class="language-bash">aws glue create-integration \
+  --integration-name salesforce-analytics-integration \
+  --source-arn &lt;Salesforce コネクションの ARN&gt; \
+  --target-arn &lt;ターゲットの ARN&gt;</code></pre>
+          </div>
+          <p>新規統合では作成時点からアーカイブ済みレコードがキャプチャされます。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h4>ターゲットテーブルでのデータ確認</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">SQL</span>
+              <span class="code-title">アクティブ / アーカイブ済みレコードの件数を集計</span>
+            </div>
+            <pre><code class="language-sql">SELECT isArchived, COUNT(*)
+FROM salesforce_tasks
+GROUP BY isArchived;</code></pre>
+          </div>
+          <p><code class="inline">isArchived</code> フィールドを含むクエリを実行し、アーカイブ済みレコードが取り込まれていることとデータの完全性を確認します。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+
+      <h3>💼 ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">分析の完全性向上</strong>: アーカイブ済みレコードを含む完全なコピーに基づき、過去の営業活動やタスク履歴を含めた正確な分析が可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">運用コストの削減</strong>: アーカイブ済みデータ取得のためのカスタムパイプラインや手動エクスポートが不要</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">移行作業ゼロ</strong>: 既存統合に自動適用されるため、追加の導入コストなしで恩恵を受けられる</span></div>
+
+      <h3>🔧 技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">自動バックフィル</strong>: 既存統合では再同期・再設定・スキーマ変更なしでアーカイブ済みステータスが反映される</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">明確なデータ識別</strong>: <code class="inline">isArchived</code> フィールドでクエリレベルの柔軟なフィルタリングが可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">パイプラインの継続稼働</strong>: <code class="inline">isArchived</code> フィールドの反映中も既存パイプラインは中断なく稼働</span></div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>制限事項</h3>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>対象は AWS Glue の Salesforce 向け zero-ETL 統合であり、他のソースの zero-ETL 統合に関する言及はない</span></div>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>Salesforce 向け zero-ETL 統合がサポートされているリージョンでのみ利用可能</span></div>
+
+      <h3>考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>アーカイブ済みレコードの取り込みでターゲット側のデータ量が増加するため、アクティブなレコードのみを対象としたいクエリでは <code class="inline">isArchived</code> フィールドでのフィルタリングを検討する必要がある</span></div>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>既存のダッシュボードや集計クエリがレコード件数に依存している場合、アーカイブ済みレコードの追加により集計結果が変化する可能性がある</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h4>📈 ユースケース 1: 営業活動の長期トレンド分析</h4>
+        <p><span class="label">シナリオ</span>: Salesforce の Tasks や Events は一定期間経過後に自動アーカイブされるため、従来は過去の営業活動データが分析基盤から欠落していた。年単位の営業活動トレンドを正確に把握したい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">月別の営業活動件数を集計</span></div>
+          <pre><code class="language-sql">SELECT DATE_TRUNC('month', activityDate) AS month,
+       COUNT(*) AS activity_count
+FROM salesforce_tasks
+GROUP BY 1
+ORDER BY 1;</code></pre>
+        </div>
+        <p><span class="label">効果</span>: アーカイブ済みレコードを含む完全なデータセットに基づき、過去にさかのぼった正確な営業活動のトレンド分析が可能になる。</p>
+      </div>
+
+      <div class="usecase">
+        <h4>📊 ユースケース 2: アクティブデータのみを対象とした既存レポートの維持</h4>
+        <p><span class="label">シナリオ</span>: 既存のレポートはアクティブなレコードのみを前提としており、アーカイブ済みレコードの追加による集計結果の変化を避けたい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">アクティブなレコードのみを抽出</span></div>
+          <pre><code class="language-sql">SELECT *
+FROM salesforce_events
+WHERE isArchived = false;</code></pre>
+        </div>
+        <p><span class="label">効果</span>: <code class="inline">isArchived</code> フィールドでフィルタリングすることで、既存レポートの集計結果を維持しつつ、必要に応じてアーカイブ済みデータを活用できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h4>🔒 ユースケース 3: コンプライアンス・監査対応のためのデータ保全</h4>
+        <p><span class="label">シナリオ</span>: 監査対応のため、Salesforce 上でアーカイブされた活動履歴を含むすべてのレコードを分析基盤に保全しておく必要がある。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">監査対象期間のアーカイブ済みレコードを抽出</span></div>
+          <pre><code class="language-sql">SELECT id, subject, activityDate, isArchived
+FROM salesforce_tasks
+WHERE isArchived = true
+  AND activityDate BETWEEN '2024-01-01' AND '2024-12-31';</code></pre>
+        </div>
+        <p><span class="label">効果</span>: Salesforce 側のアーカイブポリシーに関わらず、監査に必要な過去の活動履歴を分析基盤側で参照・保全できる。</p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金と利用可能リージョン</h2>
+
+      <div class="card">
+        <h4>💵 料金</h4>
+        <p style="margin: 0; font-size: 14px;">今回の機能に関する追加料金は発表されていません。zero-ETL 統合の利用には AWS Glue の zero-ETL 統合に関する料金が適用されます。詳細は <a class="aws-link" href="https://aws.amazon.com/glue/pricing/" target="_blank" rel="noopener noreferrer">AWS Glue 料金ページ</a> を参照してください。</p>
+      </div>
+
+      <div class="card">
+        <h4>🌏 利用可能リージョン</h4>
+        <p style="margin: 0; font-size: 14px;">Salesforce 向け AWS Glue zero-ETL 統合がサポートされているすべての AWS 商用リージョンおよび AWS GovCloud (US) リージョンで利用可能です。</p>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="check-item"><span class="check-icon">→</span><span><strong style="color: var(--aws-white);">Amazon SageMaker Lakehouse / Amazon Redshift</strong>: zero-ETL 統合のターゲットとして、取り込んだ Salesforce データの分析基盤となる</span></div>
+      <div class="check-item"><span class="check-icon">→</span><span><strong style="color: var(--aws-white);">AWS Glue コネクション</strong>: Salesforce への接続設定を管理し、zero-ETL 統合のソースとして機能する</span></div>
+      <div class="check-item"><span class="check-icon">→</span><span><strong style="color: var(--aws-white);">Amazon AppFlow</strong>: Salesforce などの SaaS アプリケーションとのデータ連携を行う別のアプローチとして利用できる</span></div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        AWS Glue の Salesforce 向け zero-ETL 統合がアーカイブ済みレコードをキャプチャできるようになり、Events、Tasks、Activities など自動アーカイブされるエンティティを含む<span class="highlight">完全な Salesforce データ</span>を分析基盤で保持できるようになりました。
+      </p>
+      <p>
+        既存統合には再設定不要で自動適用されるため、ユーザー側の作業は不要です。Salesforce データを分析している場合は、<code class="inline">isArchived</code> フィールドの追加によるデータ量や集計結果への影響を確認し、必要に応じてクエリのフィルタリング条件を見直すことを推奨します。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/09/glue-zero-etl-archived-salesforce/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/09/glue-zero-etl-archived-salesforce/</a></li>
+        <li>ドキュメント: Zero-ETL integration sources: <a class="aws-link" href="https://docs.aws.amazon.com/glue/latest/dg/zero-etl-sources.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/glue/latest/dg/zero-etl-sources.html</a></li>
+        <li>料金ページ: <a class="aws-link" href="https://aws.amazon.com/glue/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/glue/pricing/</a></li>
+        <li>API 変更履歴: <a class="aws-link" href="https://awsapichanges.com/archive/changes/7b8c33-glue.html" target="_blank" rel="noopener noreferrer">https://awsapichanges.com/archive/changes/7b8c33-glue.html</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-09-15-glue-zero-etl-archived-salesforce.md) を基に作成されました。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
