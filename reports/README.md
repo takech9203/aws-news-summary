@@ -5,6 +5,15 @@
 
 ## 2026 年
 
+- [2026-09-18 - Amazon Bedrock - Moonshot AI Kimi K3 の一般提供開始](2026/2026-09-18-moonshot-ai-kimi-k3-on-amazon-bedrock.md)
+- [2026-09-18 - AWS RTB Fabric - 設定可能なアベイラビリティーゾーンアフィニティ](2026/2026-09-18-aws-rtb-fabric-configurable-availability-zone-affinity.md)
+- [2026-09-18 - AWS Resilience Hub - EKS ラベルサポート、依存関係インサイト、ポリシー共有の 3 つの新機能](2026/2026-09-18-resilience-hub-eks-dependency-policy.md)
+- [2026-09-18 - Amazon Bedrock AgentCore - 新しい AgentCore Runtime (プラットフォームバージョン V2) の一般提供開始](2026/2026-09-18-new-agentcore-runtime-generally-available.md)
+- [2026-09-18 - AWS Continuum - 認証情報テストとアクセス可能ドメイン提案のサポート](2026/2026-09-18-aws-security-agent.md)
+- [2026-09-18 - AWS PrivateLink - Tunnel Endpoints によるネットワークセグメントへのアクセス](2026/2026-09-18-privatelink-tunnel-endpoint.md)
+- [2026-09-18 - Amazon ECS - Express Mode の AWS Graviton (ARM64) ワークロード対応](2026/2026-09-18-amazon-ecs-express-mode-arm-architecture.md)
+- [2026-09-18 - Kiro - Kiro Crew によるソフトウェアファクトリー構築で 1 週間に 1,000 件の PR をマージ](2026/2026-09-18-kiro-software-factory-1000-prs.md)
+- [2026-09-18 - Amazon SNS - 最大 1 MiB のメッセージペイロードサポート](2026/2026-09-18-amazon-sns-1mib-support.md)
 - [2026-09-17 - Amazon Corretto - Corretto 27 一般提供開始](2026/2026-09-17-amazon-corretto-27-generally-available.md)
 - [2026-09-17 - AWS Batch - 一括ジョブキャンセル・終了のサポート](2026/2026-09-17-aws-batch-bulk-cancellation.md)
 - [2026-09-17 - AWS HealthOmics - IAM セッションポリシーのサポート](2026/2026-09-17-omics-iam-session-policy.md)
@@ -12,7 +21,9 @@
 - [2026-09-17 - AWS Builder Center - iOS / Android モバイルアプリ提供開始](2026/2026-09-17-aws-builder-center-now-available-as-mobile-app.md)
 - [2026-09-17 - AWS Transfer Family - NLB 配下の SFTP サーバーにおけるソース IP 保持のサポート](2026/2026-09-17-transfer-family-sftp-source-ip-nlb.md)
 - [2026-09-17 - Amazon Quick - Generate Sheet と画像からの分析生成](2026/2026-09-17-generate-sheet-and-generate-analysis-from-an-image.md)
+- [2026-09-17 - Amazon S3 - S3 Express One Zone の 7 リージョン追加対応](2026/2026-09-17-s3-express-one-zone-7-regions.md)
 - [2026-09-17 - AWS Elastic Beanstalk - Cluster Mode](2026/2026-09-17-elastic-beanstalk-cluster-mode.md)
+- [2026-09-17 - Amazon SES - テナントレベルの到達性インサイト](2026/2026-09-17-amazon-ses-vdm-tenants.md)
 - [2026-09-16 - Amazon Keyspaces (for Apache Cassandra) - 11 の追加リージョンで一般提供開始](2026/2026-09-16-amazon-keyspaces.md)
 - [2026-09-16 - Kiro - Claude Fable 5.1 が利用可能に](2026/2026-09-16-kiro-fable-5-1.md)
 - [2026-09-16 - AWS Elemental MediaTailor - Monetization Functions の広告応答フック追加](2026/2026-09-16-aws-elemental-mediatailor-functions-ad-response-hooks.md)
