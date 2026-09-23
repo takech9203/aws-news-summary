@@ -5,6 +5,16 @@
 
 ## 2026 年
 
+- [2026-09-22 - AWS Billing Transfer - 2 階層転送における請求グループの自動作成サポート](2026/2026-09-22-aws-billing-transfer-supports-automatic-billing-group-creation.md)
+- [2026-09-22 - Amazon Bedrock / Claude Platform on AWS - Claude Opus 5.5 の提供開始](2026/2026-09-22-claude-opus-5-5-aws.md)
+- [2026-09-22 - Amazon RDS Custom - Microsoft SQL Server の最新 CU のサポート](2026/2026-09-22-amazon-rds-custom-supports-latest-cu-gdr-microsoft-sql-server.md)
+- [2026-09-22 - Amazon Bedrock - Claude Opus 5.5 が AWS GovCloud (US) で利用可能に](2026/2026-09-22-claude-opus-5-5-aws-govcloud.md)
+- [2026-09-22 - Amazon Bedrock - OpenAI GPT-6 Sol / GPT-6 Luna の一般提供開始](2026/2026-09-22-openai-gpt-6-sol-luna-on-amazon-bedrock.md)
+- [2026-09-22 - Amazon Route 53 Resolver - 第 2 世代 AWS Outposts ラックでの一般提供開始](2026/2026-09-22-route-53-resolver-gen2-outposts.md)
+- [2026-09-22 - AWS Glue - Data Quality コンテキスト対応ルールレコメンデーション](2026/2026-09-22-glue-data-quality-rule-recommendations.md)
+- [2026-09-22 - AWS Security Hub - AI Inventory の Microsoft Azure セルフホストインスタンス対応](2026/2026-09-22-security-hub-ai-inventory-azure-support.md)
+- [2026-09-21 - Amazon EVS - FedRAMP Class C 認証範囲への追加](2026/2026-09-21-amazon-evs-fedramp-class-c.md)
+- [2026-09-21 - Amazon ECS - AWS Management Console でのリアルタイムデプロイ可観測性](2026/2026-09-21-amazon-ecs-console-deployment-observability.md)
 - [2026-09-18 - Amazon Bedrock - Moonshot AI Kimi K3 の一般提供開始](2026/2026-09-18-moonshot-ai-kimi-k3-on-amazon-bedrock.md)
 - [2026-09-18 - AWS RTB Fabric - 設定可能なアベイラビリティーゾーンアフィニティ](2026/2026-09-18-aws-rtb-fabric-configurable-availability-zone-affinity.md)
 - [2026-09-18 - AWS Resilience Hub - EKS ラベルサポート、依存関係インサイト、ポリシー共有の 3 つの新機能](2026/2026-09-18-resilience-hub-eks-dependency-policy.md)
