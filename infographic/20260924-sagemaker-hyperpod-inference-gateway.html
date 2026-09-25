@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon SageMaker HyperPod - Inference Gateway によるスケーラブルな LLM 推論</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF8A73; }
+.after-box h3 { color: #6CCB5F; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.before-box li, .after-box li { margin: 8px 0; font-size: 14.5px; }
+
+/* 機能カード */
+.feature-card {
+  background: rgba(35, 47, 62, 0.6);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 6px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+
+.feature-card h3 {
+  margin: 0 0 8px 0;
+  font-size: 17px;
+  color: var(--aws-white);
+}
+
+.feature-card ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14.5px;
+}
+
+.feature-card li { margin: 5px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+
+.metric-good { color: #6CCB5F; font-weight: 700; }
+.metric-neutral { color: var(--aws-light-gray); }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase h3 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+}
+
+.usecase p { margin: 8px 0; font-size: 14.5px; }
+
+.effect-box {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 4px solid var(--aws-green);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+/* チェックリスト */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14.5px;
+}
+
+.check-icon { color: #6CCB5F; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 18px;
+  text-align: center;
+  min-width: 110px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 22px;
+  font-weight: bold;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 14px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* リンク */
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+
+.step-content h3 { margin: 3px 0 8px 0; font-size: 16px; }
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+/* 関連サービス */
+.related-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14.5px;
+}
+
+/* まとめボックス */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(0, 161, 201, 0.1));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { padding-left: 20px; margin: 8px 0; }
+footer li { margin: 5px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Amazon SageMaker HyperPod</span>
+    <h1>🚀 Inference Gateway によるスケーラブルな LLM 推論</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 9 月 24 日 | Kubernetes ネイティブかつ GPU の内部状態を認識するルーティングシステム</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      <span class="highlight">Amazon SageMaker HyperPod Inference Gateway</span> が発表されました。既存の HyperPod (Amazon EKS オーケストレーション) インフラストラクチャ上に<span class="highlight">単一の EKS マネージドアドオン</span>としてデプロイでき、<strong>アプリケーション側の変更は一切不要</strong>です。従来のラウンドロビン方式のロードバランシングを、KV キャッシュ使用率やキュー深度などの<strong>リアルタイム推論シグナルに基づくルーティング</strong>に置き換えます。
+    </p>
+    <p>
+      vLLM や SGLang をはじめとする <span class="highlight">OpenAI 互換の任意のモデルサーバー</span>で動作するため、特定の推論エンジンへのロックインもありません。LLM 推論をセルフホストする組織にとって、GPU の過剰プロビジョニングを抑えながらテールレイテンシを大幅に改善できる重要なアップデートです。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">-82%</div>
+        <div class="stat-label">初回トークンレイテンシ TTFT を最大 82% 削減</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">-97〜98%</div>
+        <div class="stat-label">混在 GPU / バースト時の p99 TTFT 削減</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">約 5 分</div>
+        <div class="stat-label">アドオンとしてセットアップ完了</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">100 モデル</div>
+        <div class="stat-label">単一エンドポイントで提供可能な最大スケジューラ数</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ Before: ラウンドロビン方式の課題</h3>
+        <ul>
+          <li>KV キャッシュの飽和状況、長文生成の進行状況、LoRA アダプタのロード状況を考慮できず、ビジー状態の Pod にリクエストが滞留する一方でアイドル容量が未使用のまま</li>
+          <li>トラフィックバースト時には TTFT が <strong>4 秒超</strong>に達することがあり、SLO を満たすために GPU の過剰プロビジョニングが必要でコスト増を招く</li>
+          <li>複数モデルの提供にはモデルごとの個別エンドポイントとクライアント側でのルーティング管理が必要</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ After: 推論シグナル駆動のルーティング</h3>
+        <ul>
+          <li>リアルタイム推論シグナルに基づきリクエストごとに最適な Pod へルーティング (混在 GPU 環境で p99 TTFT を最大 97〜98% 削減、<strong>4.4 秒 → 800 ミリ秒未満</strong>)</li>
+          <li>クラスターごとの単一プライベートエンドポイントで複数モデルを提供。リクエスト本文の <code>model</code> フィールドから自動で適切な GPU プールへルーティング</li>
+          <li>単一の EKS マネージドアドオンとして約 5 分でセットアップ。OpenAI 互換 API のためアプリケーションコードの変更ゼロ</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Client(["👤 クライアントアプリ&lt;br/&gt;OpenAI 互換 API 呼び出し"]) -->|HTTPS| Envoy
+
+    subgraph Cluster["☁️ SageMaker HyperPod クラスター on EKS"]
+        subgraph Gateway["🚪 Inference Gateway EKS マネージドアドオン"]
+            Envoy["🔀 Envoy Endpoint&lt;br/&gt;HTTPS 終端&lt;br/&gt;クラスターごとの単一エンドポイント"]
+            BBR["📨 Body-Based Router&lt;br/&gt;リクエスト本文の model 名を読み取り&lt;br/&gt;対象 GPU プールを決定"]
+            EPP["🎯 Endpoint Picker&lt;br/&gt;6 つの推論シグナルで&lt;br/&gt;全 Pod を継続スコアリング"]
+            Envoy --> BBR --> EPP
+        end
+        subgraph PoolA["🖥️ GPU プール A"]
+            direction LR
+            A1["⚡ vLLM Pod 1"]
+            A2["⚡ vLLM Pod 2"]
+            A1 ~~~ A2
+        end
+        subgraph PoolB["🖥️ GPU プール B"]
+            direction LR
+            B1["⚡ SGLang Pod 1"]
+            B2["⚡ SGLang Pod 2"]
+            B1 ~~~ B2
+        end
+    end
+
+    EPP -->|最適 Pod へ転送| A1
+    EPP -.->|別モデルのリクエスト| B1
+    A1 -.->|Prometheus メトリクス| EPP
+    B1 -.->|Prometheus メトリクス| EPP
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Cluster cloud
+    class Gateway,PoolA,PoolB layer
+    class Envoy,BBR,EPP internal
+    class A1,A2,B1,B2 compute
+    class Client user
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      Inference Gateway は <span class="highlight">Envoy Endpoint</span>、<span class="highlight">Body-Based Router</span>、<span class="highlight">Endpoint Picker</span> の 3 コンポーネントで構成され、各モデルサーバー Pod の Prometheus メトリクスをリアルタイムに評価して最適な Pod へリクエストをルーティングします。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="feature-card">
+      <h3>🔀 1. Envoy Endpoint (HTTPS 終端と単一エンドポイント)</h3>
+      <ul>
+        <li>高性能な L7 プロキシである Envoy Gateway が HTTPS トラフィックを終端</li>
+        <li>クラスターごとに単一のプライベートエンドポイントを公開し、複数モデルへの入口を一本化</li>
+        <li>ACM 証明書の指定、または cert-manager による証明書の自動発行 (ACM へのインポート) に対応</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h3>📨 2. Body-Based Router (モデル名ベースのルーティング)</h3>
+      <ul>
+        <li>OpenAI 互換リクエスト本文の <code>model</code> フィールドを検査し、対応する GPU プールへルーティング</li>
+        <li>LoRA アダプタ名をベースモデルに解決し、<code>X-Gateway-Model-Name</code> および <code>X-Gateway-Base-Model-Name</code> ヘッダーを設定</li>
+        <li>1 つのゲートウェイと単一のエンドポイント URL で最大 100 スケジューラ (モデル) を提供可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h3>🎯 3. Endpoint Picker (推論シグナルによる Pod スコアリング)</h3>
+      <ul>
+        <li>全 Pod を 6 つの推論レベルシグナルで継続的にスコアリング: <span class="highlight">KV キャッシュ使用率</span>、<span class="highlight">キュー深度</span>、<span class="highlight">LoRA アダプタ常駐性</span>、<span class="highlight">プレフィックスキャッシュヒット率</span>、<span class="highlight">予測レイテンシ</span>、<span class="highlight">実行中リクエスト数</span></li>
+        <li>各スコアラーの重みは設定可能で、レイテンシ重視・スループット重視などワークロードに合わせて調整可能</li>
+        <li>レプリカ数 2 以上でリーダー選出によるハイアベイラビリティ構成に対応</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h3>🔓 4. モデルサーバー非依存の OpenAI 互換設計</h3>
+      <ul>
+        <li>vLLM、SGLang など OpenAI 互換の任意のモデルサーバーで動作</li>
+        <li>標準の <code>/v1/chat/completions</code> エンドポイントにそのままリクエストを送信でき、SDK やアプリケーションコードの変更は不要</li>
+        <li>推論トラフィックに SigV4 署名は不要 (JWT 認証の有効化を強く推奨)</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h3>🛡️ 5. 障害耐性と可観測性</h3>
+      <ul>
+        <li>Pod 障害時はメトリクスが古い Pod を自動的に除外し、自動復旧</li>
+        <li>プール枯渇時は HTTP 429 と Retry-After ヘッダーを返却し、オートスケーリングで回復</li>
+        <li>OpenTelemetry Collector サイドカーが自動注入され、HyperPod 推論可観測性スタックの Grafana ダッシュボードでメトリクスを可視化</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>📊 パフォーマンスベンチマーク</h2>
+    <p style="font-size: 14px;">ラウンドロビン比、デフォルト設定。環境は 8B〜235B の 4 モデル、p5.48xlarge (H100) と g5 (A10G) の混在構成。</p>
+    <table>
+      <thead>
+        <tr>
+          <th>条件</th>
+          <th>TTFT P95</th>
+          <th>TTFT P99</th>
+          <th>スループット</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>混在 GPU 世代 (Llama-3.1-8B)</td>
+          <td class="metric-good">-97%</td>
+          <td class="metric-good">-97%</td>
+          <td class="metric-good">+8%</td>
+        </tr>
+        <tr>
+          <td>混在 GPU 世代 (Qwen3-32B)</td>
+          <td class="metric-good">-98%</td>
+          <td class="metric-good">-97%</td>
+          <td class="metric-good">+50%</td>
+        </tr>
+        <tr>
+          <td>バーストトラフィック (Llama-3.1-70B)</td>
+          <td class="metric-good">-94%</td>
+          <td class="metric-good">-98%</td>
+          <td class="metric-good">+12%</td>
+        </tr>
+        <tr>
+          <td>バーストトラフィック (Qwen3-235B)</td>
+          <td class="metric-neutral">同等</td>
+          <td class="metric-good">-89%</td>
+          <td class="metric-neutral">同等</td>
+        </tr>
+        <tr>
+          <td>共有プロンプトプレフィックス (Llama-3.1-8B)</td>
+          <td class="metric-good">-26%</td>
+          <td class="metric-good">-43%</td>
+          <td class="metric-neutral">同等</td>
+        </tr>
+        <tr>
+          <td>均一フリート・定常トラフィック (Qwen3-235B)</td>
+          <td class="metric-neutral">同等</td>
+          <td class="metric-neutral">同等</td>
+          <td class="metric-neutral">同等</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size: 14px;">💡 効果は<span class="highlight">ハードウェア混在</span>、<span class="highlight">バーストトラフィック</span>、<span class="highlight">共有プレフィックス</span>のシナリオで最大化されます。</p>
+  </div>
+
+  <!-- 主な要件 -->
+  <div class="section">
+    <h2>🔧 主な要件</h2>
+    <table>
+      <thead>
+        <tr><th>項目</th><th>詳細</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>提供形態</td><td>EKS マネージドアドオン <code>amazon-sagemaker-hyperpod-inference</code></td></tr>
+        <tr><td>必要アドオンバージョン</td><td>v2.0.0-eksbuild.2 以降</td></tr>
+        <tr><td>モデルサーバー要件</td><td>vLLM v0.9.2 以降、SGLang v0.3.5.post1 以降 (<code>--enable-metrics</code> フラグ必須)</td></tr>
+        <tr><td>クラスター依存関係</td><td>cert-manager (TLS 自動発行時)、AWS Load Balancer Controller (ALB エンドポイント時)</td></tr>
+        <tr><td>設定リソース</td><td><code>InferenceGatewayConfig</code> CRD (<code>inference.sagemaker.aws.amazon.com/v1alpha1</code>)</td></tr>
+        <tr><td>スケジューラ数</td><td>1 ゲートウェイあたり最大 100</td></tr>
+        <tr><td>LoRA アダプタ</td><td>1 スケジューラあたり最大 50</td></tr>
+        <tr><td>認証</td><td>JWT ベアラートークン認証 (<code>spec.auth.jwt</code>) を強く推奨。未設定時はリクエストレベルの認証なし</td></tr>
+      </tbody>
+    </table>
+
+    <h3>📄 InferenceGatewayConfig の設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">YAML</span>
+        <span class="code-title">inference-gateway-config.yaml</span>
+      </div>
+      <pre><code class="language-yaml">apiVersion: inference.sagemaker.aws.amazon.com/v1alpha1
+kind: InferenceGatewayConfig
+metadata:
+  name: inference-gateway-demo
+  namespace: inference-gateway
+spec:
+  bbr:
+    enabled: true
+  tls: {}   # cert-manager で証明書を自動発行し ACM にインポート
+  schedulers:
+    - name: llama
+      modelName: "meta-llama/Llama-3.2-1B-Instruct"
+      modelSelector:
+        matchLabels:
+          app: vllm-llama
+      targetPort: 8000
+      scheduler: llm-d</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon EKS オーケストレーションの SageMaker HyperPod クラスターが稼働していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>HyperPod Inference Operator でモデルサーバー Pod がデプロイ済みで、Pod のラベルを把握していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>モデルサーバーが要件バージョンを満たしていること (vLLM v0.9.2 以降、SGLang v0.3.5.post1 以降)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>TLS 自動発行を使用する場合、cert-manager がインストール済みで、証明書発行用 IAM ロール (IRSA) を事前に作成していること</span></div>
+
+    <div class="flow-diagram">
+      <div class="flow-step">🔑 IAM ロール<br/>作成</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📦 EKS アドオン<br/>インストール</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📄 CRD<br/>適用</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🚀 ゲートウェイ<br/>呼び出し</div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h3>証明書発行用 IAM ロールの作成</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">IRSA 用 IAM ロールの作成</span>
+          </div>
+          <pre><code class="language-bash">export CLUSTER=EKS_CLUSTER_NAME
+export REGION=REGION
+export ACCOUNT=AWS_ACCOUNT_ID
+export ROLE_NAME=CERT_ISSUER_ROLE_NAME
+
+export OIDC_ID=$(aws eks describe-cluster --name $CLUSTER --region $REGION \
+  --query 'cluster.identity.oidc.issuer' --output text | sed 's|https://||')
+
+aws iam create-role --role-name $ROLE_NAME \
+  --assume-role-policy-document file://trust-policy.json
+aws iam attach-role-policy --role-name $ROLE_NAME \
+  --policy-arn arn:aws:iam::aws:policy/AmazonSageMakerHyperPodInferenceGatewayAccess</code></pre>
+        </div>
+        <p>EKS クラスターの OIDC プロバイダーを取得し、<code>hyperpod-inference-system</code> 名前空間の <code>inference-gateway-controller</code> サービスアカウントが引き受ける IAM ロールを作成します。マネージドポリシーにより証明書の ACM インポートに必要な権限が付与されます。TLS 自動発行はデフォルトで有効なため、<strong>アドオンのインストール前</strong>にロールを作成する必要があります。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h3>EKS アドオンのインストール</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">HyperPod Inference アドオンのインストール</span>
+          </div>
+          <pre><code class="language-bash">aws eks create-addon \
+  --cluster-name $CLUSTER --region $REGION \
+  --addon-name amazon-sagemaker-hyperpod-inference \
+  --addon-version v2.0.0-eksbuild.2 \
+  --configuration-values '{
+    "executionRoleArn": "arn:aws:iam::&lt;ACCOUNT&gt;:role/&lt;EXEC_ROLE&gt;",
+    "inferenceOperator": { "enabled": true },
+    "inferenceGateway": {
+      "enabled": true,
+      "serviceAccount": { "roleArn": "arn:aws:iam::&lt;ACCOUNT&gt;:role/&lt;CERT_ISSUER_ROLE_NAME&gt;" }
+    }
+  }'</code></pre>
+        </div>
+        <p>Inference Operator と Inference Gateway の両方を有効化します。既にアドオンがインストール済みの場合は <code>create-addon</code> を <code>update-addon</code> に置き換え、<code>--resolve-conflicts OVERWRITE</code> を追加します。インストール後、<code>kubectl rollout status deploy/inference-gateway-controller -n hyperpod-inference-system</code> でコントローラーの起動を確認します。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h3>InferenceGatewayConfig の適用</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">CRD の適用</span>
+          </div>
+          <pre><code class="language-bash">kubectl get pods -n &lt;NAMESPACE&gt; --show-labels   # モデル Pod のラベルを確認
+kubectl apply -f inference-gateway-config.yaml  # 前述の設定例を適用</code></pre>
+        </div>
+        <p>コントローラーが <code>InferencePool</code>、Endpoint Picker、HTTPRoute、<code>EnvoyExtensionPolicy</code> を自動生成します。Inference Operator 経由の場合は、モデルの <code>InferenceEndpointConfig</code> に <code>spec.inferenceGateway.enabled: true</code> を設定するだけで自動的にゲートウェイへ接続されます。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <h3>ゲートウェイの呼び出し</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">OpenAI 互換 API の呼び出し</span>
+          </div>
+          <pre><code class="language-bash">curl https://your-gateway-endpoint/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "meta-llama/Llama-3.2-1B-Instruct",
+    "messages": [
+      {"role": "user", "content": "Hello"}
+    ]
+  }'</code></pre>
+        </div>
+        <p>リクエスト本文の <code>model</code> フィールドがスケジューラの <code>modelName</code> と照合され、Body-Based Router が適切な GPU プールへルーティングします。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3>💼 ビジネス面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>GPU コストの削減</strong>: テールレイテンシの改善により SLO 達成のための GPU 過剰プロビジョニングが不要になり、既存の GPU 容量をより効率的に活用できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>導入コストの低さ</strong>: 約 5 分でセットアップでき、アプリケーションコードの変更ゼロで既存の HyperPod 推論基盤に追加できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ロックインの回避</strong>: OpenAI 互換の任意のモデルサーバーで動作するため、推論エンジンの選択や将来の移行の自由度が保たれる</span></div>
+        <h3>🔬 技術面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>推論シグナル駆動のルーティング</strong>: KV キャッシュ使用率やキュー深度など GPU 内部の状態に基づく最適配置により、p99 TTFT を最大 97〜98% 削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>マルチモデルの単一エンドポイント化</strong>: Body-Based Router により、1 つのエンドポイント URL で複数モデルと LoRA アダプタを提供可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>Kubernetes ネイティブ設計</strong>: オープンソースの Gateway API Inference Extension 上に構築され、CRD による宣言的な設定と Prometheus / Grafana / CloudWatch による可観測性を標準装備</span></div>
+      </div>
+      <div>
+        <h3>🚧 制限事項</h3>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>均一なフリートかつ定常トラフィックの環境では、ラウンドロビンと同等の性能となり効果は限定的</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>クロスクラスター / クロスリージョンルーティング (Global Inference Router)、グローバルレート制限、コスト階層を考慮したトラフィック制御は今後提供予定</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>vLLM v0.9.2 未満では KV キャッシュメトリクスが読み取れず (エラーは報告されない)、SGLang は v0.3.5.post1 未満だとコンテナが起動しない</span></div>
+        <h3>⚠️ 考慮すべき点</h3>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>デフォルトでリクエストレベルの認証がなく、VPC とネットワーク制御のみでアクセスが制限される。<code>spec.auth.jwt</code> による JWT 認証の有効化が強く推奨される</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>TLS 自動発行を使用する場合、cert-manager のインストールと証明書発行用 IAM ロール (IRSA) の事前作成が必要</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>同一モデルで <code>inferenceGateway.enabled</code> と <code>intelligentRoutingSpec.enabled</code> は併用できない (相互排他)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase">
+      <h3>🖥️ ユースケース 1: 混在 GPU 世代でのマルチモデル提供</h3>
+      <p><strong>シナリオ</strong>: H100 (p5) と A10G (g5) が混在するクラスターで、サイズの異なる複数の LLM を単一エンドポイントから提供したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">YAML</span>
+          <span class="code-title">複数スケジューラの定義</span>
+        </div>
+        <pre><code class="language-yaml">spec:
+  bbr:
+    enabled: true
+  schedulers:
+    - name: llama-70b
+      modelName: "llama-3.1-70b"
+      modelSelector:
+        matchLabels:
+          app: vllm-llama
+      targetPort: 8000
+      scheduler: llm-d
+    - name: qwen-32b
+      modelName: "qwen3-32b"
+      modelSelector:
+        matchLabels:
+          app: vllm-qwen
+      targetPort: 8000</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: GPU 世代の性能差を考慮したルーティングにより、混在環境で p99 TTFT を最大 97% 削減し、スループットを最大 50% 向上。</div>
+    </div>
+
+    <div class="usecase">
+      <h3>📈 ユースケース 2: バーストトラフィックへの対応</h3>
+      <p><strong>シナリオ</strong>: チャットアプリケーションで時間帯によりトラフィックが急増し、ラウンドロビンでは初回トークンレイテンシが 4 秒超に達してしまう。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">YAML</span>
+          <span class="code-title">スコアラー重みのカスタマイズ</span>
+        </div>
+        <pre><code class="language-yaml">schedulers:
+  - name: chat-model
+    modelName: "llama-3.1-70b"
+    modelSelector:
+      matchLabels:
+        app: vllm-chat
+    weights:
+      queue: 3
+      kvCache: 2
+      runningRequests: 2</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: キュー深度と実行中リクエスト数を重視したスコアリングにより、バースト時の p99 TTFT を最大 98% 削減 (ブログ例では 4.4 秒から 800 ミリ秒未満)。プール枯渇時は HTTP 429 と Retry-After で適切にバックプレッシャーを返す。</div>
+    </div>
+
+    <div class="usecase">
+      <h3>🧩 ユースケース 3: LoRA アダプタを活用したマルチテナント推論</h3>
+      <p><strong>シナリオ</strong>: 共通のベースモデルに対しテナントごとの LoRA アダプタを提供しており、アダプタがロード済みの Pod へ優先的にルーティングしてロード遅延を避けたい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">YAML</span>
+          <span class="code-title">LoRA アダプタの ConfigMap 定義</span>
+        </div>
+        <pre><code class="language-yaml">apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deepseek-adapters
+  labels:
+    inference.networking.k8s.io/bbr-managed: "true"
+data:
+  baseModel: deepseek/vllm-deepseek-r1
+  adapters: |
+    - ski-resorts
+    - movie-critique</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: Body-Based Router がアダプタ名をベースモデルに解決し、Endpoint Picker の LoRA アダプタ常駐性スコアリングによりアダプタロード済み Pod へ優先ルーティング。アダプタの再ロードによるレイテンシスパイクを回避できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金 / リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card" style="background: rgba(35, 47, 62, 0.6); border: 1px solid rgba(255, 153, 0, 0.3); border-radius: 8px; padding: 16px;">
+        <h3 style="margin-top: 0;">💰 料金</h3>
+        <p style="font-size: 14.5px;">Inference Gateway 自体の<span class="highlight">追加料金に関する記載はありません</span>。SageMaker HyperPod クラスターのコンピューティングリソース (GPU インスタンス) に対する既存の料金が適用されます。むしろ推論シグナル駆動のルーティングにより GPU の過剰プロビジョニングを抑制でき、コスト削減効果が期待できます。</p>
+        <p style="font-size: 13px;">詳細: <a href="https://aws.amazon.com/sagemaker/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">SageMaker 料金ページ</a></p>
+      </div>
+      <div class="card" style="background: rgba(35, 47, 62, 0.6); border: 1px solid rgba(255, 153, 0, 0.3); border-radius: 8px; padding: 16px;">
+        <h3 style="margin-top: 0;">🌍 利用可能リージョン</h3>
+        <p style="font-size: 14.5px;">クラスター単位のルーティングは、<span class="highlight">SageMaker HyperPod 推論アドオンがサポートされているすべての AWS リージョン</span>で利用可能です。</p>
+        <p style="font-size: 14.5px;">今後の提供予定として、Global Inference Router によるクロスクラスター / クロスリージョンルーティング、グローバルレート制限、コスト階層を考慮したトラフィック制御が挙げられています。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>Amazon SageMaker HyperPod</strong>: 本ゲートウェイが動作する基盤。大規模な基盤モデルのトレーニングと推論のためのマネージドクラスター</span></div>
+    <div class="related-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>HyperPod Inference Operator</strong>: モデルのデプロイとオーケストレーションを担当。ゲートウェイはその前段に LLM 対応ルーティング層を追加する補完関係</span></div>
+    <div class="related-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>Amazon EKS</strong>: ゲートウェイは EKS マネージドアドオンとして提供され、Gateway API Inference Extension 上に構築</span></div>
+    <div class="related-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>AWS Certificate Manager (ACM)</strong>: ゲートウェイの HTTPS 終端に使用する証明書を管理。cert-manager による自動発行と ACM インポートに対応</span></div>
+    <div class="related-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>Amazon Managed Grafana / Amazon CloudWatch</strong>: ゲートウェイ、スケジューラ、モデルサーバーの各レベルのメトリクスを可視化</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section summary-box">
+    <h2>🎯 まとめ</h2>
+    <p>
+      Amazon SageMaker HyperPod Inference Gateway は、GPU 内部の推論シグナルに基づくインテリジェントなルーティングにより、<span class="highlight">LLM 推論のテールレイテンシを劇的に改善</span>する EKS マネージドアドオンです。<strong>アプリケーション変更ゼロ・約 5 分のセットアップ</strong>で導入でき、特にハードウェア混在環境やバーストトラフィックを抱える HyperPod ユーザーには大きな効果が見込めます。
+    </p>
+    <p>
+      導入時は <span class="highlight">JWT 認証の有効化</span>とモデルサーバーのバージョン要件を確認した上で、まず既存クラスターへのアドオン追加から評価を始めることを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/09/sagemaker-hyperpod-inference-gateway/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/09/sagemaker-hyperpod-inference-gateway/</a></li>
+      <li><a href="https://aws.amazon.com/blogs/machine-learning/introducing-amazon-sagemaker-hyperpod-inference-gateway/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: Introducing Amazon SageMaker HyperPod Inference Gateway</a></li>
+      <li><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-model-deployment-inference-gateway.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Inference Gateway for Amazon SageMaker HyperPod Inference</a></li>
+      <li><a href="https://aws.amazon.com/sagemaker/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ: https://aws.amazon.com/sagemaker/pricing/</a></li>
+    </ul>
+    <p>生成日: 2026-09-25 | AWS News Summary</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

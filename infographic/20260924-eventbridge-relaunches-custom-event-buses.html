@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon EventBridge - エンタープライズスケール向け強化版カスタムイベントバスの再始動</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 12px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.ba-card {
+  border-radius: 8px;
+  padding: 16px;
+}
+.ba-before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+.ba-card ul { margin: 0; padding-left: 4px; list-style: none; }
+.ba-card li {
+  margin: 8px 0;
+  padding-left: 22px;
+  position: relative;
+  font-size: 14px;
+}
+.ba-before li::before { content: "✗"; position: absolute; left: 0; color: #FF6B4A; font-weight: 700; }
+.ba-after li::before { content: "✓"; position: absolute; left: 0; color: #4CAF50; font-weight: 700; }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px 14px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 12px 0;
+}
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+.feature-card ul { margin: 6px 0 0 0; padding-left: 18px; font-size: 14px; }
+.feature-card li { margin: 4px 0; }
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+.spec-table td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+.table-wrap { overflow-x: auto; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.25);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.step-content { flex: 1; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-content p { margin: 4px 0; font-size: 14px; }
+
+/* メリット / 制約 */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase-card {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+.usecase-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--aws-squid-ink);
+  background: var(--aws-smile-orange);
+  border-radius: 4px;
+  padding: 1px 8px;
+  margin: 8px 0 4px 0;
+}
+.usecase-card p { margin: 6px 0; font-size: 14px; }
+.usecase-card ol { margin: 6px 0; padding-left: 22px; font-size: 14px; }
+.usecase-card li { margin: 4px 0; }
+.usecase-effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid #4CAF50;
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+/* リージョン */
+.region-group { margin: 10px 0; }
+.region-group-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+.region-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.region-badge {
+  background: rgba(0, 161, 201, 0.15);
+  border: 1px solid rgba(0, 161, 201, 0.5);
+  color: var(--aws-teal);
+  border-radius: 16px;
+  padding: 3px 12px;
+  font-size: 13px;
+}
+.region-badge.tokyo {
+  background: rgba(255, 153, 0, 0.2);
+  border-color: var(--aws-orange);
+  color: var(--aws-orange);
+  font-weight: 700;
+}
+
+/* 関連サービス */
+.related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+.related-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+.related-card .rel-name { font-weight: 700; color: var(--aws-teal); }
+
+/* まとめ */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(255, 153, 0, 0.05));
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 20px;
+  font-size: 15px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer a { word-break: break-all; }
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Amazon EventBridge</span>
+    <h1>🚌 強化版カスタムイベントバスの再始動</h1>
+    <div class="subtitle">
+      エンタープライズスケール向け Enhanced Custom Event Bus |
+      <span class="date">リリース日: 2026 年 9 月 24 日</span>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      Amazon EventBridge がイベントバスを刷新し、組織規模でスケールするイベント駆動型アプリケーションを構築できる
+      <span class="highlight">強化版カスタムイベントバス</span>を発表。カスタムイベントバスを 1 つ作成して
+      <span class="highlight">AWS RAM</span> で複数アカウントに共有すると、各チームは
+      <span class="highlight">厳密な順序保証</span>、<span class="highlight">オープンなイベントフォーマット</span>、
+      <span class="highlight">組み込みのイベント保持</span>、<span class="highlight">高度なイベント変換</span>を利用して
+      イベントを発行・消費できます。既存のイベントバスは「Custom event bus - classic」に名称変更され、既存 API はすべて変更なく利用可能です。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">24 時間 → 1 年</div>
+        <div class="stat-label">組み込みイベント保持 (既定 24 時間、最長 1 年)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">250 以上</div>
+        <div class="stat-label">Subscriber が配信できる AWS サービス数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">10,000</div>
+        <div class="stat-label">バスあたりの Subscriber デフォルトクォータ</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">14 リージョン</div>
+        <div class="stat-label">ローンチ時点の提供リージョン (東京対応)</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-card ba-before">
+        <div class="ba-title">😣 アップデート前の課題</div>
+        <ul>
+          <li>クロスアカウント集約にはアカウントごとのリソースポリシーやバス間ルーティングの手動構成が必要</li>
+          <li>順序保証や重複排除には SQS FIFO キューなど追加コンポーネントと運用が必要</li>
+          <li>バス自体に保持機能がなく、別途アーカイブとリプレイの仕組みが必要</li>
+          <li>ルール、ターゲット、リトライ設定、DLQ を個別構成する必要があり管理が煩雑</li>
+        </ul>
+      </div>
+      <div class="ba-card ba-after">
+        <div class="ba-title">😀 アップデート後の改善</div>
+        <ul>
+          <li>RAM 共有でアカウント、OU、組織全体、IAM ロール/ユーザー単位の連携が簡単に構成可能</li>
+          <li>EventGroupId による厳密な順序付き配信とコンテンツベースの自動重複排除がネイティブ機能に</li>
+          <li>24 時間の組み込み保持 (最長 1 年) でエラー復旧や過去イベント提供が容易に</li>
+          <li>Subscriber にフィルタ、変換、リトライ、失敗時宛先が統合されシンプルに</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Publishers["📤 パブリッシャーアカウント"]
+        direction LR
+        P1["⚙️ チーム A サービス"]
+        P2["⚙️ チーム B サービス"]
+        P1 ~~~ P2
+    end
+
+    subgraph Central["☁️ 中央アカウント"]
+        BUS["🚌 強化版カスタムイベントバス<br/>順序保証 / 重複排除<br/>保持 24 時間 - 最長 1 年"]
+        RAM["🤝 AWS RAM<br/>クロスアカウント共有"]
+        RAM -.-> BUS
+    end
+
+    subgraph Consumers["📥 コンシューマーアカウント"]
+        SUB1["📬 Subscriber<br/>FIFO / フィルタ / JSONata 変換"]
+        SUB2["📬 Subscriber<br/>UNORDERED / フィルタ"]
+        T1["⚡ Lambda"]
+        T2["🗄️ 250 以上の AWS サービス"]
+    end
+
+    P1 -->|CloudEvents 等の JSON 形式で発行| BUS
+    P2 -->|イベント発行 API| BUS
+    BUS --> SUB1
+    BUS --> SUB2
+    SUB1 --> T1
+    SUB2 --> T2
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+
+    class Publishers,Central,Consumers boundary
+    class P1,P2 input
+    class BUS,RAM internal
+    class SUB1,SUB2 process
+    class T1,T2 compute
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      中央アカウントに作成した強化版カスタムイベントバスを AWS RAM で共有し、複数アカウントのチームがイベントを発行・購読する構成です。
+      Subscriber リソースがフィルタリング、変換、配信を担います。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">🤝 1. AWS RAM によるクロスアカウント共有</div>
+      <ul>
+        <li>イベントバスを 1 つ以上のアカウントと AWS Resource Access Manager 経由で共有可能</li>
+        <li>共有先はアカウント ID、組織全体、OU、IAM ロール/ユーザーから選択可能</li>
+        <li>従来必要だったクロスアカウント権限やバス間ルーティングの手動設定が不要</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">📨 2. オープンなイベントフォーマットに対応した新しい発行 API</div>
+      <ul>
+        <li>CloudEvents などの JSON ベースのイベントフォーマットでイベントを発行可能</li>
+        <li>既存のイベントスキーマを変更せずにそのまま利用できる</li>
+        <li>Apache Avro / Protocol Buffers ペイロードを JSON にデシリアライズし、フルペイロードでのフィルタリングとルーティングが可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🕐 3. 組み込みのイベント保持 (Retention)</div>
+      <ul>
+        <li>既定で 24 時間のイベント保持が組み込まれ、最長 1 年まで延長可能</li>
+        <li>エラーからの復旧や、新規コンポーネントへの過去イベントの提供 (ハイドレーション) に活用</li>
+        <li>Subscriber の開始位置を LATEST または POINT_IN_TIME から選択でき、イベントリプレイが容易</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">📬 4. 新しい Subscriber リソース</div>
+      <ul>
+        <li>フィルタリング、ターゲット設定、リトライポリシー、失敗時の宛先 (OnFailure) を単一リソースに統合</li>
+        <li>250 以上の AWS サービスへイベントを配信可能</li>
+        <li>JSONata 式によるイベント変換 (フィールド抽出、リネーム、値の計算) をサポート</li>
+        <li>バスあたりのデフォルトクォータは 10,000 Subscriber (引き上げ申請可能)</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🔢 5. 厳密な順序保証と自動重複排除</div>
+      <ul>
+        <li>EventGroupId 単位で順序付き配信 (FIFO タイプの Subscriber) をネイティブサポート</li>
+        <li>コンテンツベースの自動重複排除で 5 分以内の同一イベントを統合し、exactly-once 配信セマンティクスを提供</li>
+        <li>Lambda などへの同期呼び出し (REQUEST_RESPONSE) に対応し、処理成功を確認してからイベントを承認可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🔄 6. 既存バスとの互換性</div>
+      <ul>
+        <li>既存のカスタムイベントバスは「Custom event bus - classic」に名称変更</li>
+        <li>既存の API はすべて変更なく利用可能で、移行は任意のペースで実施できる</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+    <h3>強化版カスタムイベントバスの主な仕様</h3>
+    <div class="table-wrap">
+      <table class="spec-table">
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>イベント保持</td><td>既定 24 時間、最長 1 年まで延長可能 (RetentionPeriodInDays)</td></tr>
+        <tr><td>順序保証</td><td>EventGroupId 単位の FIFO 配信 (Subscriber タイプ: FIFO / UNORDERED)</td></tr>
+        <tr><td>重複排除</td><td>コンテンツベースの自動重複排除 (5 分間のウィンドウ)</td></tr>
+        <tr><td>イベントフォーマット</td><td>CloudEvents などの JSON ベース形式、Avro / Protobuf のデシリアライズに対応</td></tr>
+        <tr><td>共有</td><td>AWS RAM によるクロスアカウント / 組織 / OU / IAM プリンシパル単位の共有</td></tr>
+        <tr><td>Subscriber</td><td>バスあたり 10,000 (デフォルトクォータ、引き上げ可)、配信先は 250 以上の AWS サービス</td></tr>
+        <tr><td>変換</td><td>RAW / WITH_METADATA / JSONata の 3 タイプ</td></tr>
+        <tr><td>開始位置</td><td>LATEST / POINT_IN_TIME (タイムスタンプ指定によるリプレイ)</td></tr>
+        <tr><td>暗号化</td><td>KMS キーによる暗号化設定 (KmsKeyIdentifier)</td></tr>
+        <tr><td>操作手段</td><td>AWS マネジメントコンソール、AWS CLI、SDK、CloudFormation、Serverless Agent スキル</td></tr>
+      </table>
+    </div>
+
+    <h3>API 変更履歴</h3>
+    <div class="table-wrap">
+      <table class="spec-table">
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/09/24</td>
+          <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/60d28e-eventsv2.html" target="_blank" rel="noopener noreferrer">Amazon EventBridgeV2 (eventsv2)</a></td>
+          <td>25 new api methods - 強化版カスタムイベントバス用の新 API 群 (CreateSubscriber、DescribeSubscriber、ListSubscribers、UpdateSubscriber、DeleteSubscriber、CreateEventSource、DescribeEventBus、GetResourcePolicy など)</td>
+        </tr>
+        <tr>
+          <td>2026/09/24</td>
+          <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/60d28e-events.html" target="_blank" rel="noopener noreferrer">Amazon EventBridge (events)</a></td>
+          <td>2 updated api methods - DescribeEventBus と ListEventBuses のレスポンスに ManagedBy フィールドを追加</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>Subscriber リソースの構成例 (boto3)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Python</span>
+        <span class="code-title">create_subscriber の例</span>
+      </div>
+      <pre><code class="language-python">import boto3
+
+client = boto3.client("eventsv2")
+
+response = client.create_subscriber(
+    Name="order-processor",
+    EventBusArn="arn:aws:events:ap-northeast-1:123456789012:eventbusv2/central-bus",
+    # 順序付き配信を有効化
+    Type="FIFO",
+    StartingPosition="LATEST",
+    # イベントのフィルタリング
+    FilterConfiguration={
+        "Language": "EVENT_BRIDGE_PATTERN",
+        "Filters": [
+            {"Pattern": '{"type": ["order.created"]}', "Scope": "DATA"}
+        ],
+    },
+    # JSONata によるイベント変換
+    Transformer={
+        "Type": "JSONATA",
+        "JsonataConfiguration": {"Expression": "{ 'orderId': data.id }"},
+    },
+    # Lambda を同期呼び出しし、成功を確認してからイベントを承認
+    InvokeConfiguration={
+        "RoleArn": "arn:aws:iam::123456789012:role/subscriber-role",
+        "LambdaParameters": {"InvocationType": "REQUEST_RESPONSE"},
+        "TargetArn": "arn:aws:lambda:ap-northeast-1:123456789012:function:process-order",
+    },
+    # リトライポリシーと失敗時の宛先
+    RetryPolicy={"MaxRetryAttempts": 10, "MaxEventAgeInSeconds": 3600, "RetryStrategy": "ALL"},
+    OnFailureConfiguration={"Arn": "arn:aws:sqs:ap-northeast-1:123456789012:dlq"},
+)</code></pre>
+    </div>
+    <p style="font-size: 14px;">
+      フィルタ、変換、ターゲット、リトライ、失敗時の宛先が<span class="highlight">単一の Subscriber リソース</span>にまとまっている点が、
+      従来のルール + ターゲットの構成との大きな違いです。
+    </p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>強化版カスタムイベントバスが利用可能なリージョンであること (東京リージョン対応済み)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>クロスアカウント共有を行う場合は AWS Organizations と AWS RAM の利用環境</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Subscriber がターゲットを呼び出すための IAM ロール</span></div>
+
+    <h3>手順</h3>
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">強化版カスタムイベントバスの作成</div>
+        <p>コンソールの「Create custom event bus」ページで新しい enhanced オプションを選択し、必要に応じて保持期間 (24 時間 - 1 年) と KMS 暗号化を設定します。CLI / SDK / CloudFormation からも作成可能です。</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">AWS RAM によるイベントバスの共有</div>
+        <p>Enable event bus sharing を有効化し、共有先プリンシパル (AWS アカウント ID / 組織全体または OU / IAM ロール・ユーザー) を選択します。共有先アカウントのチームは中央のバスへ直接イベントを発行・購読でき、クロスアカウント権限やバス間ルーティングの手動設定は不要です。</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">Subscriber の作成とイベント発行</div>
+        <p>Subscriber でフィルタリング条件と配信先 (250 以上の AWS サービス) を設定します。パブリッシャーは新しい発行 API で CloudEvents などの JSON ベースのイベントを発行します。順序保証が必要な場合はイベントに EventGroupId を付与し、Subscriber タイプに FIFO を選択します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#fff;">チーム間の疎結合化</strong>: 中央のイベントバスを共有するだけで、組織内の複数チームが独立してイベント駆動型アプリケーションを開発・運用できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#fff;">アーキテクチャの簡素化によるコスト削減</strong>: 順序保証や重複排除のために SQS FIFO などの中間コンポーネントを構築・運用する必要がなくなる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#fff;">スケールに適した新料金モデル</strong>: イベント数ではなくデータ転送量ベースの課金となり、マルチバス構成でのクロスアカウントルーティング料金の累積が解消される</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#fff;">exactly-once 処理の実現</strong>: コンテンツベースの自動重複排除と同期呼び出しにより、リトライに対して exactly-once 配信セマンティクスを実現できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#fff;">イベントリプレイの容易さ</strong>: 組み込み保持と POINT_IN_TIME 開始位置により、障害復旧や新規コンシューマのオンボーディングで過去イベントを再処理できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#fff;">オープンフォーマット対応</strong>: CloudEvents 形式をそのまま発行でき、Avro / Protobuf ペイロードのデシリアライズとフルペイロードフィルタリングにも対応する</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>提供リージョンはローンチ時点で 14 リージョンに限定される (大阪リージョンは未対応)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Subscriber のデフォルトクォータはバスあたり 10,000 (引き上げ申請可能)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>コンテンツベースの重複排除ウィンドウは 5 分間であり、それ以降に到着した重複イベントは統合されない</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>既存バスは「Custom event bus - classic」として継続利用できるが、強化版の新機能 (順序保証、保持、RAM 共有など) を利用するには新しいバスへの移行が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>料金モデルがイベント数ベースからデータ転送量ベースに変わるため、既存ワークロードのイベントサイズと流量からコストを再試算する必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>独自の冪等性トークンを既に実装している場合は、自動重複排除と併用せずそのまま利用することが推奨されている</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase-card">
+      <div class="usecase-title">🏢 ユースケース 1: 組織全体の中央イベントバス</div>
+      <span class="usecase-label">シナリオ</span>
+      <p>大規模組織で、複数アカウントに分散した数十のチームがイベントを相互に連携させたい。従来はアカウントごとのバスとクロスアカウントルーティングの構成が煩雑だった。</p>
+      <span class="usecase-label">実装例</span>
+      <ol>
+        <li>中央アカウントに強化版カスタムイベントバスを作成</li>
+        <li>AWS RAM で組織全体または特定 OU に共有</li>
+        <li>各チームは自アカウントからイベントを発行し、Subscriber で必要なイベントのみ購読</li>
+      </ol>
+      <div class="usecase-effect">✨ <strong>効果</strong>: バス間ルーティングとリソースポリシーの手動管理が不要になり、チームの追加が RAM の共有設定だけで完結する。</div>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">🛒 ユースケース 2: 順序保証が必要な注文処理パイプライン</div>
+      <span class="usecase-label">シナリオ</span>
+      <p>EC サイトの注文イベント (作成、更新、キャンセル) を顧客単位で順序どおりに処理したい。従来は EventBridge の後段に SQS FIFO キューを配置していた。</p>
+      <span class="usecase-label">実装例</span>
+      <ol>
+        <li>パブリッシャーが顧客 ID を EventGroupId としてイベントに付与</li>
+        <li>FIFO タイプの Subscriber を作成し、Lambda を REQUEST_RESPONSE で同期呼び出し</li>
+        <li>コンテンツベースの重複排除を有効化してリトライ時の二重処理を防止</li>
+      </ol>
+      <div class="usecase-effect">✨ <strong>効果</strong>: SQS FIFO キューが不要になり、順序保証と exactly-once 処理をイベントバスのネイティブ機能だけで実現できる。</div>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">📊 ユースケース 3: 過去イベントによる新規コンシューマのハイドレーション</div>
+      <span class="usecase-label">シナリオ</span>
+      <p>分析用の新しいマイクロサービスを追加する際に、直近のイベント履歴を使って初期データを構築したい。従来はアーカイブとリプレイの仕組みを別途構築する必要があった。</p>
+      <span class="usecase-label">実装例</span>
+      <ol>
+        <li>イベントバスの保持期間を必要な期間 (最長 1 年) に延長</li>
+        <li>新規 Subscriber を StartingPosition=POINT_IN_TIME で作成し、開始時刻を指定</li>
+        <li>過去イベントの処理が追いついた後は通常のリアルタイム処理に移行</li>
+      </ol>
+      <div class="usecase-effect">✨ <strong>効果</strong>: 追加のアーカイブ基盤なしで、新規コンポーネントへの過去イベントの提供と障害復旧を実現できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      強化版カスタムイベントバスでは、イベント数ではなく<span class="highlight">データ転送量に基づく新しい料金モデル</span>が採用されています。
+      パブリッシャーは取り込み (イングレス) データ量に、サブスクライバーは配信 (イーグレス) データ量に対して課金されます。
+      ワークロードのスケールに伴いコスト効率が向上する設計で、従来のマルチバス構成で発生していたクロスアカウント / バス間ルーティング料金の累積が解消されます。
+    </p>
+    <p style="font-size: 14px;">
+      具体的な単価は <a class="aws-link" href="https://aws.amazon.com/eventbridge/pricing/" target="_blank" rel="noopener noreferrer">EventBridge 料金ページ</a> を参照してください。
+    </p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p style="font-size: 14px;">ローンチ時点で以下の 14 リージョンで利用可能です。</p>
+    <div class="region-group">
+      <div class="region-group-title">🇺🇸 米国</div>
+      <div class="region-badges">
+        <span class="region-badge">バージニア北部</span>
+        <span class="region-badge">オハイオ</span>
+        <span class="region-badge">オレゴン</span>
+      </div>
+    </div>
+    <div class="region-group">
+      <div class="region-group-title">🇪🇺 欧州</div>
+      <div class="region-badges">
+        <span class="region-badge">アイルランド</span>
+        <span class="region-badge">フランクフルト</span>
+        <span class="region-badge">ストックホルム</span>
+        <span class="region-badge">スペイン</span>
+      </div>
+    </div>
+    <div class="region-group">
+      <div class="region-group-title">🌏 アジアパシフィック</div>
+      <div class="region-badges">
+        <span class="region-badge tokyo">東京</span>
+        <span class="region-badge">シンガポール</span>
+        <span class="region-badge">シドニー</span>
+        <span class="region-badge">マレーシア</span>
+        <span class="region-badge">タイ</span>
+        <span class="region-badge">ムンバイ</span>
+        <span class="region-badge">香港</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="related-card"><span class="rel-name">🤝 AWS Resource Access Manager (RAM)</span><br>イベントバスをアカウント、OU、組織全体、IAM プリンシパルと共有するために使用</div>
+      <div class="related-card"><span class="rel-name">⚡ AWS Lambda</span><br>Subscriber からの同期呼び出し (REQUEST_RESPONSE) に対応し、処理成功を確認してからイベントを承認できる</div>
+      <div class="related-card"><span class="rel-name">📮 Amazon SQS / SNS / Kinesis / Step Functions</span><br>Subscriber の配信先としてパラメータ設定に対応した主要ターゲット</div>
+      <div class="related-card"><span class="rel-name">🔑 AWS KMS</span><br>イベントバスの暗号化キー設定に使用</div>
+      <div class="related-card"><span class="rel-name">📜 AWS CloudFormation</span><br>強化版カスタムイベントバスと Subscriber の IaC 管理に対応</div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin-top: 0;">
+        強化版カスタムイベントバスは、<span class="highlight">順序保証</span>、<span class="highlight">重複排除</span>、
+        <span class="highlight">組み込み保持</span>、<span class="highlight">RAM によるクロスアカウント共有</span>をネイティブ機能として提供し、
+        これまで SQS FIFO や独自のアーカイブ基盤で補っていたイベント駆動アーキテクチャの課題を大きく解消するアップデートです。
+      </p>
+      <p style="margin-bottom: 0;">
+        東京リージョンでもローンチ時点から利用可能なため、マルチアカウントでイベント連携を運用しているチームは、
+        新しい発行 API と Subscriber モデル、およびデータ転送量ベースの料金モデルへの適合性を評価することを推奨します。
+      </p>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/09/eventbridge-relaunches-custom-event-buses/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/09/eventbridge-relaunches-custom-event-buses/</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/blogs/aws/introducing-enhanced-custom-event-buses-in-amazon-eventbridge-for-enterprise-scale-event-driven-applications" target="_blank" rel="noopener noreferrer">AWS Blog: Introducing enhanced custom event buses in Amazon EventBridge</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/eventbridge/" target="_blank" rel="noopener noreferrer">Amazon EventBridge 製品ページ</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-what-is.html" target="_blank" rel="noopener noreferrer">Amazon EventBridge ユーザーガイド</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/eventbridge/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a></li>
+    </ul>
+    <p>リリース日: 2026 年 9 月 24 日 | サービス: Amazon EventBridge | 機能: 強化版カスタムイベントバス (Enhanced Custom Event Bus)</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
