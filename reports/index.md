@@ -5,6 +5,12 @@
 
 ## 2026 年
 
+- [2026-09-25 - AWS Elastic Disaster Recovery - AWS Graviton ベースのソースサーバーをサポート](2026/2026-09-25-elastic-disaster-recovery-graviton.md)
+- [2026-09-25 - AWS End User Messaging - WhatsApp 音声通話サポート](2026/2026-09-25-aws-end-user-messaging-voice-calling-whatsapp.md)
+- [2026-09-25 - Amazon Transcribe - カスタムリソースのカスタマーマネージド KMS キー対応](2026/2026-09-25-amazon-transcribe.md)
+- [2026-09-25 - AWS DataSync - アカウント全体のタスク実行を追跡するモニタリングダッシュボード](2026/2026-09-25-datasync-monitoring-dashboard.md)
+- [2026-09-25 - AWS IAM - アウトバウンド ID フェデレーションの OIDC ディスカバリーがインターフェイス VPC エンドポイントをサポート](2026/2026-09-25-aws-sts-vpc-oidc.md)
+- [2026-09-25 - AWS Billing and Cost Management - ListBillingViewSegments API による請求コンテキストの取得](2026/2026-09-25-aws-billing-and-cost-management-billing-context-api.md)
 - [2026-09-24 - AWS Network Security Manager - 一般提供開始](2026/2026-09-24-network-security-manager-us-east-va.md)
 - [2026-09-24 - Amazon RDS for PostgreSQL - PostgreSQL 19 Beta 4 が RDS Database Preview Environment で利用可能に](2026/2026-09-24-postgresql-19-beta-4-amazon-rds-database-preview-environment.md)
 - [2026-09-24 - Amazon RDS for PostgreSQL - ポスト量子 TLS 鍵交換のサポート](2026/2026-09-24-postgresql-post-quantum-tls-key-exchange.md)
