@@ -6,7 +6,11 @@
 ## 2026 年
 
 - [2026-09-25 - AWS Elastic Disaster Recovery - AWS Graviton ベースのソースサーバーをサポート](2026/2026-09-25-elastic-disaster-recovery-graviton.md)
+- [2026-09-25 - Amazon EC2 - R8i / R8i-flex インスタンスの提供リージョン拡大](2026/2026-09-25-ec2-r8i-r8i-flex-thf.md)
+- [2026-09-25 - Amazon EC2 - C8i/C8i-flex インスタンスが AWS European Sovereign Cloud で利用可能に](2026/2026-09-25-c8i-c8i-flex-thf-september-2026.md)
+- [2026-09-25 - Amazon EC2 - M8i / M8i-flex インスタンスが追加リージョンで利用可能に](2026/2026-09-25-amazon-ec2-m8i-m8i-flex-thf.md)
 - [2026-09-25 - AWS End User Messaging - WhatsApp 音声通話サポート](2026/2026-09-25-aws-end-user-messaging-voice-calling-whatsapp.md)
+- [2026-09-25 - AWS End User Messaging / Amazon SES - AWS MCP Server 向け AI エージェントスキルの提供開始](2026/2026-09-25-aws-messaging-ses-ai-skills-mcp-server.md)
 - [2026-09-25 - Amazon Transcribe - カスタムリソースのカスタマーマネージド KMS キー対応](2026/2026-09-25-amazon-transcribe.md)
 - [2026-09-25 - AWS DataSync - アカウント全体のタスク実行を追跡するモニタリングダッシュボード](2026/2026-09-25-datasync-monitoring-dashboard.md)
 - [2026-09-25 - AWS IAM - アウトバウンド ID フェデレーションの OIDC ディスカバリーがインターフェイス VPC エンドポイントをサポート](2026/2026-09-25-aws-sts-vpc-oidc.md)
@@ -15,6 +19,7 @@
 - [2026-09-24 - Amazon RDS for PostgreSQL - PostgreSQL 19 Beta 4 が RDS Database Preview Environment で利用可能に](2026/2026-09-24-postgresql-19-beta-4-amazon-rds-database-preview-environment.md)
 - [2026-09-24 - Amazon RDS for PostgreSQL - ポスト量子 TLS 鍵交換のサポート](2026/2026-09-24-postgresql-post-quantum-tls-key-exchange.md)
 - [2026-09-24 - Amazon SageMaker HyperPod - Inference Gateway によるスケーラブルな LLM 推論](2026/2026-09-24-sagemaker-hyperpod-inference-gateway.md)
+- [2026-09-24 - Kiro - Crew 0.7.0: Live Settings, Durable Work, and Broader Pull Request Watches](2026/2026-09-24-kiro-changelog-2026-09-24-crew.md)
 - [2026-09-24 - Amazon RDS for MySQL - Extended Support マイナーバージョン 5.7.44-rds.20260902 および 8.0.46-rds.20260908 のリリース](2026/2026-09-24-amazon-rds-mysql-extended-support-minor-5744-8046-rds.md)
 - [2026-09-24 - Amazon RDS for SQL Server - Developer Edition の Multi-AZ 配置サポート](2026/2026-09-24-amazon-rds-sql-server-multi-az-developer-edition.md)
 - [2026-09-24 - Amazon ElastiCache - Global Datastore のタグ付けとタグベースアクセス制御のサポート](2026/2026-09-24-amazon-elasticache-global-datastore-tagging.md)
