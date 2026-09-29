@@ -5,6 +5,14 @@
 
 ## 2026 年
 
+- [2026-09-28 - Amazon Corretto - 2026 年 9 月パッチアップデート](2026/2026-09-28-amazon-corretto-sept-2026-updates.md)
+- [2026-09-28 - Amazon Rekognition - Face Liveness Feedback Codes](2026/2026-09-28-rekognition-liveness-feedback-codes.md)
+- [2026-09-28 - Amazon Bedrock - xAI Grok 4.7 の提供開始](2026/2026-09-28-amazon-bedrock-grok-4-7.md)
+- [2026-09-28 - Kiro - Claude Opus 5.5 の提供開始](2026/2026-09-28-kiro-opus-5-5.md)
+- [2026-09-28 - Amazon EC2 - Future-dated Capacity Reservations の開始日延期サポート](2026/2026-09-28-ec2-fcr-postpone-start-date.md)
+- [2026-09-28 - Amazon Bedrock - Claude Sonnet 5.5 が AWS GovCloud (US) で利用可能に](2026/2026-09-28-claude-sonnet-5-5-aws-govcloud-us.md)
+- [2026-09-28 - AWS - Anthropic Claude Sonnet 5.5 の提供開始](2026/2026-09-28-claude-sonnet-5-5-aws.md)
+- [2026-09-28 - AWS Backup - Amazon FSx for NetApp ONTAP の論理的エアギャップボールトサポート](2026/2026-09-28-aws-backup-air-gapped-vault-fsx-ontap.md)
 - [2026-09-25 - AWS Elastic Disaster Recovery - AWS Graviton ベースのソースサーバーをサポート](2026/2026-09-25-elastic-disaster-recovery-graviton.md)
 - [2026-09-25 - Amazon EC2 - R8i / R8i-flex インスタンスの提供リージョン拡大](2026/2026-09-25-ec2-r8i-r8i-flex-thf.md)
 - [2026-09-25 - Amazon EC2 - C8i/C8i-flex インスタンスが AWS European Sovereign Cloud で利用可能に](2026/2026-09-25-c8i-c8i-flex-thf-september-2026.md)
