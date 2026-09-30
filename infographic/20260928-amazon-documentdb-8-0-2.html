@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon DocumentDB 8.0.2 - 5 つの MongoDB 集計ステージと変更ストリーム機能をサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.card p, .card ul {
+  margin: 0;
+  font-size: 14px;
+}
+
+.card ul { padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+code.inline {
+  background: rgba(140, 79, 255, 0.15);
+  color: #C9A8FF;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.ba-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.4);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-box ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+
+.ba-box li { margin: 8px 0; }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.2));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px 12px;
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 12px 0;
+}
+
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.spec-table td {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.spec-table tr:nth-child(even) { background: rgba(255, 255, 255, 0.03); }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 15px;
+}
+
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 16px 0;
+}
+
+.usecase h4 {
+  margin: 0 0 10px 0;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid #4CAF50;
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  margin-top: 12px;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+footer ul { padding-left: 20px; margin: 8px 0; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 720px) {
+  .before-after, .two-col { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Amazon DocumentDB (with MongoDB compatibility)</span>
+    <h1>🗄️ Amazon DocumentDB 8.0.2<br>5 つの MongoDB 集計ステージと変更ストリーム機能をサポート</h1>
+    <div class="subtitle">📅 リリース日: <span class="date">2026 年 9 月 28 日</span> | Retryable Writes・新規集計ステージ・変更ストリーム強化・クエリパフォーマンス改善</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon DocumentDB がマイナーバージョン <span class="highlight">8.0.2</span> で
+      <span class="highlight">Retryable Writes (再試行可能な書き込み)</span>、
+      <span class="highlight">5 つの新しい集計ステージ</span>、
+      <span class="highlight">変更ストリームの機能強化</span>をサポート。
+      MongoDB API 互換性が拡大し、クエリパフォーマンスも向上するため、アプリケーションコードを変更することなく MongoDB ワークロードを移行することがより容易になります。
+    </p>
+    <p style="font-size: 14px;">
+      MongoDB からの移行を検討している開発者や、DocumentDB 上で分析的なクエリや CDC (変更データキャプチャ) パイプラインを構築しているユーザーにとって重要なアップデートです。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number">5</div>
+        <div class="stat-label">新しい集計ステージ</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">16 MB</div>
+        <div class="stat-label">超の変更イベントを分割可能</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">3 種</div>
+        <div class="stat-label">書き込み操作の自動再試行<br>insert / update / delete</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">4+</div>
+        <div class="stat-label">クエリプランナー改善項目</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li><code class="inline">$setWindowFields</code> や <code class="inline">$facet</code> などが未サポートで、ウィンドウ分析・ファセット検索・階層探索をアプリ側で実装するか、移行時にクエリを書き換える必要があった</li>
+          <li>一時的なネットワークエラーやフェイルオーバー時の書き込み失敗に、アプリ側で再試行ロジックを実装する必要があった</li>
+          <li>変更ストリームのイベントが 16 MB の制限を超えると処理できず、<code class="inline">createCollection</code> / <code class="inline">createIndex</code> などの DDL 操作を検知できなかった</li>
+          <li>インデックスオンリースキャンが利用できないケースがあり、count 系操作のパフォーマンスにも改善の余地があった</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>5 つの集計ステージが追加され、高度な分析・ファセット検索・階層クエリを MongoDB 互換の構文のままデータベース側で実行可能に</li>
+          <li>Retryable Writes により insert・update・delete が一時的エラー時に自動再試行され、フェイルオーバー中の回復力が向上</li>
+          <li><code class="inline">$changeStreamSplitLargeEvent</code> で 16 MB 超のイベントを分割処理でき、<code class="inline">createCollection</code> / <code class="inline">createIndex</code> のイベントも取得可能に</li>
+          <li>インデックスオンリースキャン、<code class="inline">$expr</code> のインデックススキャン、インクリメンタルソート、高速な count が利用可能に</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    App(["👤 アプリケーション"])
+
+    subgraph DocDB["🗄️ Amazon DocumentDB 8.0.2"]
+        direction TB
+        RW["🔁 Retryable Writes<br/>insert / update / delete の自動再試行"]
+        subgraph Agg["📊 新しい集計ステージ"]
+            direction LR
+            S1["$setWindowFields<br/>$bucketAuto"]
+            S2["$facet<br/>$graphLookup"]
+            S3["相関 $lookup"]
+            S1 ~~~ S2 ~~~ S3
+        end
+        QP["⚡ クエリプランナー強化<br/>インデックスオンリースキャン<br/>インクリメンタルソート"]
+        CS["📡 変更ストリーム強化<br/>$changeStreamSplitLargeEvent<br/>createCollection / createIndex イベント"]
+    end
+
+    Consumer["🔌 下流コンシューマー<br/>Lambda / EventBridge / 分析基盤"]
+
+    App -->|書き込み| RW
+    App -->|集計クエリ| Agg
+    Agg --> QP
+    CS -.->|変更イベント| Consumer
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class DocDB cloud
+    class Agg cloud
+    class RW,QP internal
+    class S1,S2,S3 process
+    class CS internal
+    class Consumer input
+    class App user
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      バージョン 8.0.2 で追加された主要機能の全体像です。アプリケーションからの書き込みは自動再試行され、高度な集計はデータベース側で処理され、変更ストリームのイベントは下流のコンシューマーへ確実に配信されます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <h4>🔁 1. Retryable Writes (再試行可能な書き込み)</h4>
+      <ul>
+        <li>insert、update、delete 操作が一時的なネットワークエラー発生時に自動的に再試行される</li>
+        <li>フェイルオーバー中のアプリケーションの回復力 (レジリエンス) が向上</li>
+        <li>アプリケーション側で独自の再試行ロジックを実装する必要性が低減</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>📊 2. 5 つの新しい集計ステージ</h4>
+      <ul>
+        <li><code class="inline">$setWindowFields</code>: ウィンドウ演算子のフルセットとともにサポートされ、移動平均やランキングなどのウィンドウ分析が可能</li>
+        <li><code class="inline">$bucketAuto</code>: ドキュメントを指定した数のバケットに自動的に均等分割</li>
+        <li><code class="inline">$facet</code>: 単一の集計パイプライン内で複数のサブパイプラインを並行実行し、ファセット検索を実現</li>
+        <li><code class="inline">$graphLookup</code>: コレクション内の再帰的な検索により、組織図やカテゴリツリーなどの階層クエリを実行</li>
+        <li>相関 <code class="inline">$lookup</code>: パイプライン内で外部コレクションと相関条件付きの結合が可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>📡 3. 変更ストリームの機能強化</h4>
+      <ul>
+        <li><code class="inline">$changeStreamSplitLargeEvent</code> ステージにより、16 MB の制限を超える変更イベントをフラグメントに分割して処理可能</li>
+        <li><code class="inline">createCollection</code> および <code class="inline">createIndex</code> 操作に対するイベント発行をサポートし、DDL 変更の検知が可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>⚡ 4. クエリパフォーマンスの改善</h4>
+      <ul>
+        <li><code class="inline">find</code> および集計クエリに対するインデックスオンリースキャンを追加</li>
+        <li><code class="inline">$expr</code> 述語に対するインデックススキャンをサポート</li>
+        <li>インクリメンタルソートに対応</li>
+        <li><code class="inline">count</code> および <code class="inline">countDocuments()</code> 操作が高速化</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🗂️ 5. インデックス管理</h4>
+      <ul>
+        <li>部分インデックス (partial index) に対する <code class="inline">reIndex</code> コマンドをサポート</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様: バージョン 8.0.2 の新機能一覧</h2>
+    <table class="spec-table">
+      <thead>
+        <tr><th>カテゴリ</th><th>機能</th><th>詳細</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>書き込み</td><td>Retryable Writes</td><td>insert / update / delete の一時的エラー時の自動再試行</td></tr>
+        <tr><td>集計</td><td><code class="inline">$setWindowFields</code></td><td>ウィンドウ演算子フルセット対応</td></tr>
+        <tr><td>集計</td><td><code class="inline">$bucketAuto</code></td><td>自動バケット分割</td></tr>
+        <tr><td>集計</td><td><code class="inline">$facet</code></td><td>複数サブパイプラインの並行実行</td></tr>
+        <tr><td>集計</td><td><code class="inline">$graphLookup</code></td><td>再帰的な階層検索</td></tr>
+        <tr><td>集計</td><td>相関 <code class="inline">$lookup</code></td><td>相関条件付きコレクション結合</td></tr>
+        <tr><td>変更ストリーム</td><td><code class="inline">$changeStreamSplitLargeEvent</code></td><td>16 MB 超のイベントを分割</td></tr>
+        <tr><td>変更ストリーム</td><td>DDL イベント</td><td><code class="inline">createCollection</code> / <code class="inline">createIndex</code> のイベント発行</td></tr>
+        <tr><td>クエリ</td><td>インデックスオンリースキャン</td><td><code class="inline">find</code> / 集計クエリで対応</td></tr>
+        <tr><td>クエリ</td><td><code class="inline">$expr</code> インデックススキャン</td><td><code class="inline">$expr</code> 述語でインデックス利用可能</td></tr>
+        <tr><td>クエリ</td><td>インクリメンタルソート</td><td>ソート処理の効率化</td></tr>
+        <tr><td>クエリ</td><td>count 高速化</td><td><code class="inline">count</code> / <code class="inline">countDocuments()</code> の性能向上</td></tr>
+        <tr><td>インデックス</td><td><code class="inline">reIndex</code></td><td>部分インデックスで利用可能</td></tr>
+      </tbody>
+    </table>
+    <div class="card">
+      <h4>ℹ️ API 変更履歴</h4>
+      <p>今回のアップデートはデータベースエンジンレベルの機能追加であり、AWS のコントロールプレーン API (SDK / CLI) の変更は伴いません。既存のクエリ API (MongoDB 互換 API) の互換性が拡大される形となります。</p>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon DocumentDB 8.0 系のクラスターを使用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>マイナーバージョン 8.0.2 以上へアップグレードすること (新規クラスター作成またはアップグレード)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Retryable Writes を利用する場合、接続文字列で <code class="inline">retryWrites=true</code> が設定されていること (MongoDB ドライバーの設定を確認)</span></div>
+
+    <h3>ステップ 1: クラスターのエンジンバージョンを確認</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">エンジンバージョンの確認</span>
+      </div>
+      <pre><code class="language-bash">aws docdb describe-db-clusters \
+  --db-cluster-identifier my-docdb-cluster \
+  --query "DBClusters[0].EngineVersion"</code></pre>
+    </div>
+    <p style="font-size: 14px;">既存クラスターのエンジンバージョンを確認します。8.0.2 未満の場合はアップグレードが必要です。</p>
+
+    <h3>ステップ 2: 新しい集計ステージを利用する</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JavaScript</span>
+        <span class="code-title">$facet を使用したファセット検索の例</span>
+      </div>
+      <pre><code class="language-javascript">// $facet を使用したファセット検索の例
+db.products.aggregate([
+  {
+    $facet: {
+      priceBuckets: [
+        { $bucketAuto: { groupBy: "$price", buckets: 5 } }
+      ],
+      byCategory: [
+        { $group: { _id: "$category", count: { $sum: 1 } } }
+      ]
+    }
+  }
+])</code></pre>
+    </div>
+    <p style="font-size: 14px;"><code class="inline">$facet</code> で価格帯の自動バケット分割とカテゴリ別集計を単一パイプラインで並行実行します。EC サイトの検索結果画面のように、複数の切り口の集計を 1 回のクエリで取得できます。</p>
+
+    <h3>ステップ 3: 大きな変更イベントの分割を有効にする</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JavaScript</span>
+        <span class="code-title">16 MB を超える変更イベントを分割して受信する例</span>
+      </div>
+      <pre><code class="language-javascript">// 16 MB を超える変更イベントを分割して受信する例
+db.collection.watch([
+  { $changeStreamSplitLargeEvent: {} }
+])</code></pre>
+    </div>
+    <p style="font-size: 14px;">変更ストリームのパイプラインに <code class="inline">$changeStreamSplitLargeEvent</code> を追加すると、16 MB の制限を超えるイベントがフラグメントに分割されて配信され、イベントの取りこぼしを防止できます。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div class="card">
+        <h4>💼 ビジネス面</h4>
+        <ul>
+          <li><strong>移行コストの削減</strong>: MongoDB API 互換性の拡大により、コード変更なしで移行できる範囲が広がり、移行プロジェクトの工数とリスクを削減</li>
+          <li><strong>開発生産性の向上</strong>: ウィンドウ分析やファセット検索をアプリ側で実装する必要がなくなり、開発期間を短縮</li>
+          <li><strong>サービス品質の向上</strong>: Retryable Writes によりフェイルオーバー時のエラーがユーザーに波及しにくくなり、可用性の体感品質が向上</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>🔧 技術面</h4>
+        <ul>
+          <li><strong>高度な分析のデータベース内実行</strong>: <code class="inline">$setWindowFields</code> や <code class="inline">$graphLookup</code> により、移動平均・ランキング・階層探索をデータベース側で完結でき、データ転送量とアプリの複雑さを削減</li>
+          <li><strong>CDC パイプラインの堅牢化</strong>: 16 MB 超イベントの分割と DDL イベントのサポートにより、レプリケーションやイベント駆動アーキテクチャの信頼性が向上</li>
+          <li><strong>クエリ性能の向上</strong>: インデックスオンリースキャンやインクリメンタルソートにより、既存クエリも書き換えなしで性能向上の恩恵を受けられる可能性がある</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚧 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>本機能はマイナーバージョン <span class="highlight">8.0.2 以降</span>でのみ利用可能であり、それ以前のバージョン (8.0.0 や 5.0、4.0 など) では利用できない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Retryable Writes の動作には MongoDB ドライバー側の対応と接続文字列の設定が必要</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span><code class="inline">$changeStreamSplitLargeEvent</code> を使用する場合、分割されたフラグメントを結合して処理するロジックがコンシューマー側で必要</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>既存クラスターで利用するにはマイナーバージョンアップグレードが必要なため、メンテナンスウィンドウやアップグレード手順の計画が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>新しい集計ステージ (特に <code class="inline">$graphLookup</code> や <code class="inline">$facet</code>) は処理コストが高くなる場合があるため、インスタンスサイズやインデックス設計を含めた性能検証を推奨</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span><code class="inline">createCollection</code> / <code class="inline">createIndex</code> イベントが新たに発行されるため、既存のコンシューマーが未知のイベントタイプを受け取っても問題なく動作するか確認が必要</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>🛒 ユースケース 1: EC サイトのファセット検索</h4>
+      <p><strong>シナリオ</strong>: EC サイトの商品検索画面で、検索結果と同時に価格帯・カテゴリ・ブランド別の件数を表示したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JavaScript</span>
+          <span class="code-title">実装例</span>
+        </div>
+        <pre><code class="language-javascript">db.products.aggregate([
+  { $match: { keyword: "camera" } },
+  {
+    $facet: {
+      byPrice: [{ $bucketAuto: { groupBy: "$price", buckets: 4 } }],
+      byBrand: [{ $group: { _id: "$brand", count: { $sum: 1 } } }],
+      topResults: [{ $sort: { rating: -1 } }, { $limit: 20 }]
+    }
+  }
+])</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: 従来は複数クエリの発行やアプリケーション側での集計が必要だったファセット表示を、単一の集計パイプラインで実現でき、レイテンシーとコードの複雑さを削減できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>🏢 ユースケース 2: 組織階層やカテゴリツリーの探索</h4>
+      <p><strong>シナリオ</strong>: 社員コレクションから、特定のマネージャー配下の全メンバーを再帰的に取得したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JavaScript</span>
+          <span class="code-title">実装例</span>
+        </div>
+        <pre><code class="language-javascript">db.employees.aggregate([
+  { $match: { name: "Sato" } },
+  {
+    $graphLookup: {
+      from: "employees",
+      startWith: "$_id",
+      connectFromField: "_id",
+      connectToField: "managerId",
+      as: "reports",
+      maxDepth: 10
+    }
+  }
+])</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: アプリケーション側の再帰処理や複数回のクエリ発行が不要になり、組織図・BOM・カテゴリツリーなどの階層データを効率的に扱える。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>📡 ユースケース 3: 変更ストリームによる堅牢な CDC パイプライン</h4>
+      <p><strong>シナリオ</strong>: DocumentDB の変更を AWS Lambda 経由で検索インデックスやデータレイクに同期しており、大きなドキュメントの更新イベントやインデックス作成などの DDL 変更も確実に捕捉したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JavaScript</span>
+          <span class="code-title">実装例</span>
+        </div>
+        <pre><code class="language-javascript">const stream = db.collection.watch(
+  [{ $changeStreamSplitLargeEvent: {} }],
+  { fullDocument: "updateLookup" }
+);
+// createCollection / createIndex イベントも受信し、
+// fragment フィールドを確認して分割イベントを結合して処理する</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: 16 MB 超のイベントによる CDC パイプラインの停止を回避でき、スキーマ変更 (コレクションやインデックスの作成) も検知して下流システムへ反映できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card">
+        <h4>💵 料金</h4>
+        <p>バージョン 8.0.2 の新機能自体に<span class="highlight">追加料金はありません</span>。Amazon DocumentDB の標準料金 (インスタンス時間、I/O、ストレージ、バックアップストレージ) が適用されます。変更ストリームを使用する場合、変更ストリームログの読み取りに伴う I/O 料金が発生する点は従来どおりです。</p>
+        <p style="margin-top: 8px;">詳細は <a class="aws-link" href="https://aws.amazon.com/documentdb/pricing/" target="_blank" rel="noopener noreferrer">Amazon DocumentDB 料金ページ</a> を参照してください。</p>
+      </div>
+      <div class="card">
+        <h4>🌏 利用可能リージョン</h4>
+        <p>Amazon DocumentDB が利用可能な<span class="highlight">すべてのリージョン</span>で、バージョン 8.0.2 以降から利用可能です (東京・大阪リージョンを含む)。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <h4>🚚 AWS Database Migration Service (DMS)</h4>
+      <p>MongoDB から DocumentDB への移行に使用。API 互換性の拡大により移行後のクエリ書き換えが減少。</p>
+    </div>
+    <div class="card">
+      <h4>⚡ AWS Lambda / Amazon EventBridge</h4>
+      <p>変更ストリームと組み合わせたイベント駆動アーキテクチャの構築に活用。</p>
+    </div>
+    <div class="card">
+      <h4>🔍 Amazon OpenSearch Service</h4>
+      <p>変更ストリームを利用した検索インデックスへのデータ同期先として利用可能。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      Amazon DocumentDB 8.0.2 は、<code class="inline">$setWindowFields</code> や <code class="inline">$facet</code> など要望の多かった 5 つの集計ステージと Retryable Writes、変更ストリームの強化により、<span class="highlight">MongoDB API 互換性を大きく前進</span>させたリリースです。
+    </p>
+    <div class="check-item"><span class="check-icon">✓</span><span>MongoDB からの移行を検討中のチーム → 互換性ギャップの再評価を推奨</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>既存の DocumentDB ユーザー → 8.0.2 へのアップグレード計画の策定を推奨</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>CDC パイプラインを運用中 → <code class="inline">$changeStreamSplitLargeEvent</code> の導入によりイベント欠損リスクを低減</span></div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-documentdb-8-0-2/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-documentdb-8-0-2/</a></li>
+      <li>ドキュメント: サポートされる MongoDB API、操作、データ型: <a class="aws-link" href="https://docs.aws.amazon.com/documentdb/latest/developerguide/mongo-apis.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/documentdb/latest/developerguide/mongo-apis.html</a></li>
+      <li>ドキュメント: Amazon DocumentDB リリースノート: <a class="aws-link" href="https://docs.aws.amazon.com/documentdb/latest/developerguide/release-notes.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/documentdb/latest/developerguide/release-notes.html</a></li>
+      <li>料金ページ: <a class="aws-link" href="https://aws.amazon.com/documentdb/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/documentdb/pricing/</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-09-28) を基に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
