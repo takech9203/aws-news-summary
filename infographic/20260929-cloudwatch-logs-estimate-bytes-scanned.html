@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon CloudWatch Logs - Logs Insights クエリ実行前のスキャンバイト数見積もり機能</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 2px solid rgba(209, 50, 18, 0.6);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 2px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 {
+  margin-top: 0;
+}
+
+.before-box h3 { color: #FF8A73; }
+.after-box h3 { color: #7FD661; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #7FD661; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* 機能カード */
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+
+.feature-card h3 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+}
+
+.feature-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.feature-card li { margin: 4px 0; }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 10px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-white);
+  line-height: 1.3;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 15px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  text-align: left;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+td code, li code, p code {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+}
+
+/* ユースケース */
+.usecase-card {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 10px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-card h3 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+}
+
+.usecase-label {
+  font-weight: 600;
+  color: var(--aws-white);
+}
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+
+.code-title {
+  color: var(--aws-light-gray);
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step-card {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+
+.step-content h3 { margin: 0 0 6px 0; }
+
+/* メリット 2 カラム */
+.merit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.merit-box {
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.merit-box h3 { margin-top: 0; }
+
+/* リンク */
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 関連サービス */
+.related-card {
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 10px 0;
+}
+
+.related-card .name {
+  color: var(--aws-teal);
+  font-weight: 600;
+}
+
+/* まとめ */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(0, 161, 201, 0.1));
+  border: 2px solid var(--aws-orange);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+footer li { margin: 4px 0; }
+
+@media (max-width: 600px) {
+  h1 { font-size: 24px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">Amazon CloudWatch Logs</span>
+    <h1>📊 Logs Insights クエリ実行前の<br>スキャンバイト数見積もり機能</h1>
+    <div class="subtitle">
+      <span class="date">リリース日: 2026 年 9 月 29 日</span> |
+      機能: クエリ実行前のスキャンデータ量見積もり (estimate コマンド)
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon CloudWatch Logs Insights で、クエリを実際に実行する前に、そのクエリがスキャンするログデータ量 (バイト数) を
+      <span class="highlight">事前に見積もる</span>ことができるようになりました。選択したロググループと時間範囲に対して、
+      クエリがどの程度のデータをスキャンするかを事前に把握できます。
+    </p>
+    <p>
+      Logs Insights のクエリ料金はスキャンしたデータ量に基づいて課金されるため、意図せず広範囲のロググループや長い時間範囲を対象にすると、
+      想定外のコストが発生する可能性がありました。本アップデートにより、クエリ実行前に見積もりを確認して調整できます。
+      <span class="highlight">見積もり自体にはクエリ料金が発生しません</span>。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">無料</div>
+        <div class="stat-label">estimate コマンドによる見積もりクエリの料金</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">実行前</div>
+        <div class="stat-label">スキャンデータ量 (バイト数) を事前に確認</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">自動更新</div>
+        <div class="stat-label">コンソールのクエリエディタで編集のたびに見積もりを更新</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>クエリを実行するまで、どの程度のデータ量がスキャンされるか把握できなかった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>広範囲のロググループや長い時間範囲を対象にしたクエリにより、想定外のスキャン料金が発生するリスクがあった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>コストを抑えるためのクエリ調整は、実際にクエリを実行して結果を確認する試行錯誤が必要だった</span></div>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span>クエリ実行前にスキャンされるデータ量 (バイト数) の見積もりを確認できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>コンソールではロググループ・時間範囲・クエリテキストを変更するたびに見積もりが自動更新</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>CLI / API ではクエリ末尾に <code>estimate</code> コマンドを追加して明示的にリクエスト可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>見積もりは無料のため、コストを気にせずクエリのチューニングを繰り返せる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ ワークフロー</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 ユーザー"]) --> Editor["📝 クエリ作成<br/>Logs Insights"]
+    Editor --> Estimate["🔍 estimate コマンド<br/>スキャン量を見積もり"]
+    Estimate --> Check{"💰 スキャン量は<br/>許容範囲か"}
+    Check -->|いいえ| Refine["🔧 クエリを調整<br/>ロググループ・時間範囲・フィルター"]
+    Refine --> Estimate
+    Check -->|はい| Run["⚡ クエリ実行<br/>スキャン量に応じて課金"]
+    Run --> Result["📊 クエリ結果"]
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef free fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef paid fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+
+    class User user
+    class Editor,Refine,Result process
+    class Estimate free
+    class Check decision
+    class Run paid
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      クエリ実行前に <code>estimate</code> コマンドで無料のスキャン量見積もりを取得し、許容範囲になるまでクエリを調整してから実行するワークフロー
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="feature-card">
+      <h3>1. スキャンバイト数の事前見積もり</h3>
+      <ul>
+        <li>クエリを実行せずに、選択したロググループと時間範囲でスキャンされるデータ量 (バイト数) の見積もりを返す</li>
+        <li>見積もり結果をもとに、ロググループの選択、時間範囲、フィルター条件をクエリ実行前に調整できる</li>
+        <li>見積もりは近似値であり、実際にクエリを実行した際のスキャン量とは異なる場合がある</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <h3>2. コンソールでの自動見積もり</h3>
+      <ul>
+        <li>CloudWatch コンソールのクエリエディタでは、見積もりが自動的に表示される</li>
+        <li>ロググループの選択、時間範囲、クエリテキストを変更するたびに見積もりが更新される</li>
+        <li>追加の操作なしでスキャン量を常に確認しながらクエリを作成できる</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <h3>3. CLI / API での明示的な見積もりリクエスト</h3>
+      <ul>
+        <li>クエリの末尾に <code>estimate</code> コマンドを追加することで、見積もりを明示的にリクエストできる</li>
+        <li><code>estimate</code> コマンドはクエリの最後のコマンドである必要がある</li>
+        <li><code>estimate</code> コマンドを使用したクエリには Logs Insights のクエリ料金が発生しない</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>estimate コマンドの仕様</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>構文</td><td><code>| estimate</code></td></tr>
+      <tr><td>配置</td><td>クエリの最後のコマンドとして記述する必要がある</td></tr>
+      <tr><td>返却値</td><td>選択したロググループと時間範囲でスキャンされる推定バイト数</td></tr>
+      <tr><td>精度</td><td>近似値 (実際のスキャン量と異なる場合がある)</td></tr>
+      <tr><td>料金</td><td>見積もりクエリにはクエリ料金が発生しない</td></tr>
+      <tr><td>コンソール</td><td>クエリエディタで自動的に見積もりが更新される</td></tr>
+      <tr><td>CLI / API</td><td>クエリに <code>estimate</code> コマンドを追加して明示的にリクエスト</td></tr>
+    </table>
+
+    <h3>クエリ例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Logs Insights</span>
+        <span class="code-title">スキャン量見積もりクエリ</span>
+      </div>
+      <pre><code class="language-sql">fields @timestamp, @message
+| filter @message like /error/
+| estimate</code></pre>
+    </div>
+    <p>このクエリは実際にログを検索せず、クエリがスキャンするデータ量の見積もり (バイト数) を返します。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🚀 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>CloudWatch Logs にログデータが保存されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Logs Insights のクエリ実行権限 (<code>logs:StartQuery</code>、<code>logs:GetQueryResults</code> など) があること</span></div>
+
+    <div class="step-card">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h3>コンソールで見積もりを確認する</h3>
+        <p>CloudWatch コンソールの [Logs Insights] を開き、ロググループと時間範囲を選択してクエリを入力します。クエリエディタ上で、ロググループの選択、時間範囲、クエリテキストを変更するたびにスキャン量の見積もりが自動的に更新されます。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h3>CLI で見積もりをリクエストする</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">estimate 付きクエリの開始</span>
+          </div>
+          <pre><code class="language-bash">aws logs start-query \
+  --log-group-names "/aws/lambda/my-function" \
+  --start-time 1790000000 \
+  --end-time 1790086400 \
+  --query-string 'fields @timestamp, @message | filter @message like /error/ | estimate'</code></pre>
+        </div>
+        <p><code>start-query</code> の <code>--query-string</code> の末尾に <code>| estimate</code> を追加して見積もりクエリを開始します。このコマンドはクエリ ID を返します。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h3>見積もり結果を取得する</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">見積もり結果の取得</span>
+          </div>
+          <pre><code class="language-bash">aws logs get-query-results --query-id &lt;クエリ ID&gt;</code></pre>
+        </div>
+        <p>推定スキャンバイト数を確認し、スキャン量が大きすぎる場合は時間範囲の短縮やロググループの絞り込みを行ってから、<code>estimate</code> を外した本番のクエリを実行します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コストの予測可能性向上</strong>: クエリ実行前にスキャン量を把握でき、想定外のクエリ料金の発生を防止</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト最適化の促進</strong>: 見積もりは無料のため、コストを気にせずクエリの絞り込みを試行錯誤できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ガバナンス強化</strong>: 高コストなクエリを実行する前に影響を確認する運用を定着させやすい</span></div>
+      </div>
+      <div class="merit-box">
+        <h3>🔧 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>クエリチューニングの効率化</strong>: ロググループ・時間範囲・フィルターの調整効果を実行前に確認</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンソールでの自動更新</strong>: クエリ編集中にリアルタイムで見積もりが更新され、追加操作が不要</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>CLI / API 対応</strong>: 自動化スクリプトやツールに見積もりステップを組み込める</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span><code>estimate</code> コマンドが返す値は近似値であり、実際にクエリを実行した際のスキャン量と異なる場合がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span><code>estimate</code> コマンドはクエリの最後のコマンドとして記述する必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>利用可能なのは AWS 商用リージョンのみ</span></div>
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>見積もりはスキャン量 (バイト数) を返すものであり、クエリ結果の件数や内容は確認できない</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>正確な課金額を保証するものではないため、コスト管理には AWS Cost Explorer や CloudWatch の課金メトリクスとの併用が推奨される</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase-card">
+      <h3>1. 障害調査時の広範囲ログ検索のコスト確認</h3>
+      <p><span class="usecase-label">シナリオ</span>: 障害調査で複数のロググループを横断して過去数週間のエラーログを検索したいが、スキャン量が大きくなりコストが懸念される。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Logs Insights</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-sql">fields @timestamp, @message, @logStream
+| filter @message like /error/
+| estimate</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 検索実行前にスキャン量を確認し、必要に応じて時間範囲を分割したり対象ロググループを絞り込むことで、調査コストをコントロールできる。</p>
+    </div>
+
+    <div class="usecase-card">
+      <h3>2. 定期実行クエリのコスト事前評価</h3>
+      <p><span class="usecase-label">シナリオ</span>: ダッシュボードや定期レポートに組み込むクエリを新規作成する際、繰り返し実行した場合の累積コストを事前に評価したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Logs Insights</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-sql">fields @timestamp, @message
+| filter statusCode >= 500
+| stats count(*) by bin(5m)
+| estimate</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 1 回あたりのスキャン量の見積もりから月間の累積スキャン量を試算し、クエリの時間範囲やフィルター設計を最適化してから定期実行を開始できる。</p>
+    </div>
+
+    <div class="usecase-card">
+      <h3>3. チームでのクエリレビュー運用</h3>
+      <p><span class="usecase-label">シナリオ</span>: 大規模なログデータを保持する環境で、チームメンバーが作成したクエリのコスト影響をレビューしてから実行する運用を整備したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">レビュー用スクリプト例</span></div>
+        <pre><code class="language-bash"># レビュー用スクリプトで estimate 付きクエリを実行し、見積もりを確認
+aws logs start-query \
+  --log-group-names "/app/production" \
+  --start-time 1790000000 \
+  --end-time 1790604800 \
+  --query-string 'fields @timestamp | filter level = "ERROR" | estimate'</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 見積もりは無料のため、本番クエリ実行前のコストチェックをコストゼロで運用プロセスに組み込める。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      <code>estimate</code> コマンドを使用した見積もりクエリには、CloudWatch Logs Insights の
+      <span class="highlight">クエリ料金は発生しません</span>。
+      通常の Logs Insights クエリは、スキャンしたデータ量に基づいて課金されます。
+    </p>
+    <table>
+      <tr><th>操作</th><th>料金</th></tr>
+      <tr><td><code>estimate</code> コマンドによる見積もりクエリ</td><td><strong style="color: #7FD661;">無料</strong></td></tr>
+      <tr><td>通常のクエリ実行</td><td>スキャンしたデータ量に応じた課金</td></tr>
+    </table>
+    <p>詳細は <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">CloudWatch 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>すべての <span class="highlight">AWS 商用リージョン</span>で利用可能です。</p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-card">
+      <span class="name">CloudWatch Logs Insights</span>: 本機能の対象となるログ分析サービス。クエリ言語を使用してログデータを検索・分析する
+    </div>
+    <div class="related-card">
+      <span class="name">AWS Cost Explorer</span>: Logs Insights のクエリコストを含む AWS 利用料金の分析に使用できる
+    </div>
+    <div class="related-card">
+      <span class="name">AWS Budgets</span>: スキャンコストの増加に対するアラート設定と組み合わせることで、コスト管理をさらに強化できる
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin: 0;">
+        CloudWatch Logs Insights の <code>estimate</code> コマンドにより、クエリ実行前にスキャンデータ量を
+        <span class="highlight">無料で見積もる</span>ことができるようになり、想定外のクエリコストを防止できます。
+        コンソールでは見積もりが自動更新されるため、まずは普段のログ分析ワークフローで見積もり表示を確認し、
+        CLI / API を使用する場合はクエリ末尾に <code>| estimate</code> を追加する運用を取り入れることを推奨します。
+      </p>
+    </div>
+  </div>
+
+  <footer>
+    <p>📎 出典</p>
+    <ul>
+      <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/09/cloudwatch-logs-estimate-bytes-scanned/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/09/cloudwatch-logs-estimate-bytes-scanned/</a></li>
+      <li>ドキュメント (estimate コマンド): <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CWL_QuerySyntax-Estimate.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CWL_QuerySyntax-Estimate.html</a></li>
+      <li>料金ページ: <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/cloudwatch/pricing/</a></li>
+    </ul>
+    <p style="margin-top: 12px;">AWS News Summary - 2026 年 9 月 29 日</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

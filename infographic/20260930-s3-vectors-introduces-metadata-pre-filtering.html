@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon S3 Vectors - メタデータ事前フィルタリング</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header { margin-bottom: 32px; }
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle { font-size: 16px; color: var(--aws-light-gray); }
+.release-date { color: var(--aws-smile-orange); font-weight: 600; }
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: var(--aws-smile-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.card p { margin: 6px 0; font-size: 14px; }
+.card ul { margin: 6px 0; padding-left: 20px; font-size: 14px; }
+.card li { margin: 4px 0; }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.1);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+
+.before-title { color: #FF8A75; font-weight: 700; margin-bottom: 10px; font-size: 16px; }
+.after-title { color: #7FC95E; font-weight: 700; margin-bottom: 10px; font-size: 16px; }
+
+.ba-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.ba-icon { flex-shrink: 0; }
+
+/* テーブル */
+.table-wrapper { overflow-x: auto; margin: 16px 0; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+
+td code, th code {
+  font-family: 'Courier New', monospace;
+  color: var(--aws-smile-orange);
+  font-size: 13px;
+}
+
+.new-badge {
+  display: inline-block;
+  background: var(--aws-green);
+  color: var(--aws-white);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 10px;
+  margin-left: 6px;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid { display: flex; justify-content: center; }
+
+.diagram-note { font-size: 14px; color: var(--aws-light-gray); margin-top: 8px; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.25);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.check-icon { color: var(--aws-green); flex-shrink: 0; }
+.cross-icon { color: var(--aws-red); flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.effect-box {
+  background: rgba(29, 129, 2, 0.12);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  margin-top: 10px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-content { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+/* まとめ */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(0, 161, 201, 0.1));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+  font-size: 15px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Amazon S3 Vectors</span>
+    <h1>🔍 メタデータ事前フィルタリングで<br>フィルター付き検索の再現率が最大 5 倍に</h1>
+    <div class="subtitle">📅 リリース日: <span class="release-date">2026 年 9 月 30 日</span> | 機能: メタデータ事前フィルタリング (Metadata Pre-Filtering)</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>Amazon S3 Vectors が、類似検索の実行前にメタデータフィルターを評価する<span class="highlight">事前フィルタリング (pre-filtering)</span> をサポートしました。選択性の高いフィルターにおいて、従来方式と比較して<span class="highlight">最大 5 倍多くの一致ベクトル</span>を返すことができ、フィルター付き検索の再現率 (recall) が大幅に向上します。あわせて、パスや URL をプレフィックスで照合する新演算子 <code class="inline">$startsWith</code> も追加されました。</p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">最大 5 倍</div>
+        <div class="stat-label">選択性の高いフィルターでの一致ベクトル取得数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">追加料金なしで利用可能</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">コード変更不要</div>
+        <div class="stat-label">PutVectors / QueryVectors はそのまま</div>
+      </div>
+    </div>
+
+    <p>事前フィルタリングは、インデックスモードが <code class="inline">ENHANCED</code> のベクトルインデックスに適用されます。2026 年 9 月 30 日以降に作成されたベクトルバケットでは、新規インデックスはデフォルトで <code class="inline">ENHANCED</code> モードとなります。既存の <code class="inline">CLASSIC</code> インデックスは、新しい <code class="inline">UpdateIndexMode</code> API により再取り込み不要でインプレースにアップグレードできます。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="before-title">❌ Before: CLASSIC モードの課題</div>
+        <div class="ba-item"><span class="ba-icon">⚠️</span><span>ベクトル検索とフィルター評価を同時並行で実行するため、一致ベクトルが少ないと上位 K 件未満の結果しか返らないことがあった</span></div>
+        <div class="ba-item"><span class="ba-icon">⚠️</span><span>800 万件のナレッジベースで特定顧客のデータが 400 件しかない場合、テナントスコープのクエリで十分な件数を得られないことがあった</span></div>
+        <div class="ba-item"><span class="ba-icon">⚠️</span><span>パスや URL のプレフィックスで絞り込む演算子が存在しなかった</span></div>
+      </div>
+      <div class="after-box">
+        <div class="after-title">✅ After: ENHANCED モードの改善</div>
+        <div class="ba-item"><span class="ba-icon">✨</span><span>フィルターに一致するベクトルを先に特定し、その中だけを類似検索。選択性の高いフィルターでも高い再現率を維持 (最大 5 倍)</span></div>
+        <div class="ba-item"><span class="ba-icon">✨</span><span>新演算子 <code class="inline">$startsWith</code> で階層的なパスや URL のプレフィックス照合が可能に</span></div>
+        <div class="ba-item"><span class="ba-icon">✨</span><span><code class="inline">UpdateIndexMode</code> API で再取り込みやクエリ変更なしにアップグレード可能</span></div>
+        <div class="ba-item"><span class="ba-icon">✨</span><span><code class="inline">queryMode</code> パラメータでアップグレード前に結果を比較検証できる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Q(["👤 QueryVectors<br/>フィルター付きクエリ"])
+
+    subgraph Classic["🗂️ CLASSIC インデックス 従来方式"]
+        direction TB
+        C1["🔍 インデックス全体から<br/>候補ベクトルを探索"]
+        C2{"✅ 候補ごとに<br/>フィルター条件を検証"}
+        C3["⚠️ 一致ベクトルが少ないと<br/>上位 K 件未満の結果"]
+        C1 --> C2 --> C3
+    end
+
+    subgraph Enhanced["🚀 ENHANCED インデックス 事前フィルタリング"]
+        direction TB
+        E1["🏷️ メタデータフィルターを<br/>先に評価"]
+        E2["🎯 一致ベクトルのみを<br/>類似検索"]
+        E3["✨ 高い再現率<br/>最大 5 倍の一致ベクトル"]
+        E1 --> E2 --> E3
+    end
+
+    Q --> Classic
+    Q --> Enhanced
+    Classic -.->|UpdateIndexMode API| Enhanced
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class Q user
+    class Classic,Enhanced layer
+    class C1,E1,E2 process
+    class C2 decision
+    class C3 warning
+    class E3 input
+      </pre>
+    </div>
+    <p class="diagram-note"><code class="inline">CLASSIC</code> モードは検索とフィルター評価を同時並行で行うのに対し、<code class="inline">ENHANCED</code> モードはフィルターで対象を絞り込んでから類似検索を実行するため、選択性の高いフィルターでも高い再現率を維持できます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🏷️ 1. メタデータ事前フィルタリング (ENHANCED インデックスモード)</div>
+      <ul>
+        <li>類似検索の実行前にメタデータフィルターを評価し、一致するベクトルのみを検索対象とする</li>
+        <li>選択性の高いフィルターにおいて、従来比<strong>最大 5 倍</strong>の一致ベクトルを取得可能</li>
+        <li>2026 年 9 月 30 日以降に作成されたベクトルバケットでは、新規インデックスがデフォルトで <code class="inline">ENHANCED</code> モードになる</li>
+        <li><code class="inline">PutVectors</code> や <code class="inline">QueryVectors</code> の既存コードを変更する必要はない</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔤 2. 新しいプレフィックス照合演算子 $startsWith</div>
+      <ul>
+        <li>指定した文字列で始まる値を照合 (例: <code class="inline">{"s3_path": {"$startsWith": "/marketing/"}}</code>)</li>
+        <li>S3 パス、URL、階層的なドキュメント ID などの絞り込みに有効</li>
+        <li><code class="inline">ENHANCED</code> クエリ動作が必要 (<code class="inline">ENHANCED</code> インデックス、または <code class="inline">queryMode</code> を <code class="inline">ENHANCED</code> にした <code class="inline">CLASSIC</code> インデックスへのクエリで利用可能)</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔄 3. 既存インデックスのインプレースアップグレード</div>
+      <ul>
+        <li>新しい <code class="inline">UpdateIndexMode</code> API で既存の <code class="inline">CLASSIC</code> インデックスを <code class="inline">ENHANCED</code> に変更可能</li>
+        <li>データの再取り込みは不要で、その場で切り替わる</li>
+        <li>新しい <code class="inline">PutVectorBucketDefaultIndexMode</code> API でバケット内の新規インデックスのデフォルトモードを設定できる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔬 4. クエリ単位でのモード比較</div>
+      <ul>
+        <li><code class="inline">QueryVectors</code> の新しい <code class="inline">queryMode</code> パラメータで、事前フィルタリング (<code class="inline">ENHANCED</code>) と現行方式 (<code class="inline">CLASSIC</code>) の結果をクエリ単位で比較できる</li>
+        <li>未指定の場合はインデックスに設定されたモードが使用される</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📊 インデックスモードの比較</h3>
+    <div class="table-wrapper">
+      <table>
+        <tr><th>項目</th><th>CLASSIC</th><th>ENHANCED</th></tr>
+        <tr>
+          <td>フィルター評価のタイミング</td>
+          <td>ベクトル検索と同時並行</td>
+          <td>ベクトル検索の前 (事前フィルタリング)</td>
+        </tr>
+        <tr>
+          <td>選択性の高いフィルターでの再現率</td>
+          <td>上位 K 件未満になる場合がある</td>
+          <td>高い再現率を維持 (最大 5 倍の一致ベクトル)</td>
+        </tr>
+        <tr>
+          <td><code>$startsWith</code> 演算子</td>
+          <td><code>queryMode</code> を <code>ENHANCED</code> にした場合のみ</td>
+          <td>利用可能</td>
+        </tr>
+        <tr>
+          <td>フィルター制約数の上限</td>
+          <td>制限の適用なし</td>
+          <td>1 クエリあたり 100 制約</td>
+        </tr>
+        <tr>
+          <td>デフォルト適用</td>
+          <td>2026 年 9 月 30 日より前に作成されたバケットのインデックス</td>
+          <td>2026 年 9 月 30 日以降に作成されたバケットのインデックス</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>🧮 利用可能なフィルター演算子</h3>
+    <div class="table-wrapper">
+      <table>
+        <tr><th>演算子</th><th>入力タイプ</th><th>説明</th></tr>
+        <tr><td><code>$eq</code> / <code>$ne</code></td><td>String、Number、Boolean</td><td>完全一致 / 不一致</td></tr>
+        <tr><td><code>$gt</code> / <code>$gte</code> / <code>$lt</code> / <code>$lte</code></td><td>Number</td><td>数値の大小比較</td></tr>
+        <tr><td><code>$startsWith</code><span class="new-badge">NEW</span></td><td>String</td><td>プレフィックス照合</td></tr>
+        <tr><td><code>$in</code> / <code>$nin</code></td><td>配列</td><td>配列内のいずれかに一致 / すべてに不一致</td></tr>
+        <tr><td><code>$exists</code></td><td>Boolean</td><td>メタデータキーの存在確認</td></tr>
+        <tr><td><code>$and</code> / <code>$or</code></td><td>フィルターの配列</td><td>複数条件の論理積 / 論理和</td></tr>
+      </table>
+    </div>
+
+    <h3>🔢 フィルター制約数のカウント方法</h3>
+    <p style="font-size: 14px;"><code class="inline">ENHANCED</code> インデックスでは、1 つのクエリフィルターで最大 100 制約まで使用できます。フィルターが評価する値 1 つが 1 制約としてカウントされます。</p>
+    <div class="table-wrapper">
+      <table>
+        <tr><th>フィルター例</th><th>制約数</th></tr>
+        <tr><td><code>{"category": "electronics"}</code></td><td>1</td></tr>
+        <tr><td><code>{"region": {"$in": ["us-east-1", "us-west-2", "eu-west-1"]}}</code></td><td>3</td></tr>
+        <tr><td><code>{"$and": [{"category": "electronics"}, {"price": {"$lte": 500}}]}</code></td><td>2</td></tr>
+      </table>
+    </div>
+
+    <h3>🛠️ API 変更履歴</h3>
+    <div class="table-wrapper">
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/09/30</td>
+          <td><a href="https://awsapichanges.com/archive/changes/ca596c-s3vectors.html" target="_blank" rel="noopener noreferrer" class="aws-link">s3vectors</a></td>
+          <td>2 new 3 updated api methods - <code>UpdateIndexMode</code> と <code>PutVectorBucketDefaultIndexMode</code> を新規追加。<code>GetIndex</code> (<code>indexMode</code> フィールド追加)、<code>GetVectorBucket</code> (<code>defaultIndexMode</code> フィールド追加)、<code>QueryVectors</code> (<code>queryMode</code> パラメータ追加) を更新</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>S3 Vectors のベクトルバケットとベクトルインデックスが作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS CLI または AWS SDK が最新バージョンに更新されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>IAM ポリシーで新しい API アクション (<code class="inline">UpdateIndexMode</code> など) が許可されていること</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">既存インデックスのモードを確認する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">GetIndex で indexMode を確認</span></div>
+          <pre><code class="language-bash">aws s3vectors get-index \
+  --vector-bucket-name my-vector-bucket \
+  --index-name product-catalog</code></pre>
+        </div>
+        <p>レスポンスの <code class="inline">indexMode</code> フィールドで、現在のモードが <code class="inline">CLASSIC</code> と <code class="inline">ENHANCED</code> のどちらであるかを確認できます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">クエリ単位で事前フィルタリングの結果を比較する (任意)</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">queryMode で結果を比較検証</span></div>
+          <pre><code class="language-bash">aws s3vectors query-vectors \
+  --vector-bucket-name my-vector-bucket \
+  --index-name product-catalog \
+  --query-vector '{"float32": [0.1, 0.2, 0.3]}' \
+  --top-k 10 \
+  --filter '{"category": "electronics"}' \
+  --query-mode ENHANCED</code></pre>
+        </div>
+        <p>インデックスモードを変更する前に、事前フィルタリングによる検索結果を現行方式の結果と比較検証します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">既存インデックスを ENHANCED モードに更新する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">UpdateIndexMode でインプレースアップグレード</span></div>
+          <pre><code class="language-bash">aws s3vectors update-index-mode \
+  --vector-bucket-name my-vector-bucket \
+  --index-name product-catalog \
+  --index-mode ENHANCED</code></pre>
+        </div>
+        <p>データの再取り込みやクエリコードの変更は不要で、変更後は事前フィルタリングと <code class="inline">$startsWith</code> 演算子が即座に利用可能になります。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">バケットのデフォルトインデックスモードを設定する (任意)</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">PutVectorBucketDefaultIndexMode でデフォルトを設定</span></div>
+          <pre><code class="language-bash">aws s3vectors put-vector-bucket-default-index-mode \
+  --vector-bucket-name my-vector-bucket \
+  --default-index-mode ENHANCED</code></pre>
+        </div>
+        <p>今後新規作成されるインデックスのデフォルトモードを <code class="inline">ENHANCED</code> に設定します。既存のインデックスには影響しません。2026 年 9 月 30 日より前に作成されたバケットでは、この設定を行わない限り新規インデックスも <code class="inline">CLASSIC</code> になる点に注意してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>回答品質の向上</strong>: RAG やエージェント型アプリケーションで、より完全な検索結果により回答の関連性と信頼性が向上</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: 追加料金なしで利用でき、S3 Vectors の低コストなベクトルストレージの利点をそのまま享受</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>マルチテナント対応の強化</strong>: テナント ID でスコープを絞った検索でも十分な件数の結果を返せ、マルチテナント型 SaaS の検索品質が安定</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">⚙️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>最大 5 倍の再現率向上</strong>: 選択性の高いフィルターで従来比最大 5 倍の一致ベクトルを取得</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>移行の容易さ</strong>: インプレースアップグレードで再取り込みやコード変更が不要</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>段階的な検証が可能</strong>: <code class="inline">queryMode</code> でモード変更前にクエリ単位で結果を比較検証</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟なフィルター表現</strong>: <code class="inline">$startsWith</code> で階層的なパスや URL ベースの絞り込みが可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3 style="margin-top: 0;">🚧 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span><code class="inline">ENHANCED</code> インデックスでは、1 クエリあたりのフィルター制約数が 100 に制限される (評価される値 1 つが 1 制約としてカウント)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span><code class="inline">ENHANCED</code> インデックスに対して <code class="inline">queryMode</code> を <code class="inline">CLASSIC</code> に指定したクエリは実行できない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span><code class="inline">UpdateIndexMode</code> で <code class="inline">CLASSIC</code> に変更できるのは、2026 年 9 月 30 日より前に作成されたバケット内のインデックスに限られる</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>非フィルター可能メタデータ (non-filterable metadata) はフィルターに使用できない (インデックス作成時に指定し、後から変更不可)</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>フィルターを先に評価するため、クエリのレイテンシーはインデックスのサイズ、一致ベクトルの割合、フィルター制約数に応じて増加する。代表的なデータとクエリでの事前テストが推奨される</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>2026 年 9 月 30 日より前に作成されたバケットでは、新規インデックスもデフォルトで <code class="inline">CLASSIC</code> になるため、<code class="inline">PutVectorBucketDefaultIndexMode</code> での明示的な設定が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>大量の値を持つ <code class="inline">$in</code> フィルター (例: 300 値) は制約数上限を超えるため、単一フィールドへの集約や、クエリの分割と距離によるマージなどの対応が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>展開は段階的に進行中であり、すべての対象リージョンで利用可能になるまで数日かかる場合がある (発表時点)</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🏢 ユースケース 1: マルチテナント型サポートナレッジベース</div>
+      <p><strong>シナリオ</strong>: 800 万件のサポートチケットを格納したナレッジベースで、特定の顧客 (チケット数 400 件) に限定したセマンティック検索を行う。従来の <code class="inline">CLASSIC</code> モードでは、上位 10 件を要求しても 2 件しか返らないことがあった。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">テナントスコープのクエリ</span></div>
+        <pre><code class="language-bash">aws s3vectors query-vectors \
+  --vector-bucket-name support-kb \
+  --index-name tickets \
+  --query-vector '{"float32": [...]}' \
+  --top-k 10 \
+  --filter '{"customer_id": "cust-12345"}'</code></pre>
+      </div>
+      <div class="effect-box">✨ <strong>効果</strong>: まず顧客の 400 件のチケットが特定され、その中だけで類似検索が実行されるため、要求した件数の結果を安定して取得できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📚 ユースケース 2: RAG アプリケーションでのドキュメント階層の絞り込み</div>
+      <p><strong>シナリオ</strong>: 法務ドキュメントの RAG システムで、特定案件の添付資料配下のドキュメントチャンクのみを検索対象にしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">$startsWith による階層絞り込み</span></div>
+        <pre><code class="language-bash">aws s3vectors query-vectors \
+  --vector-bucket-name legal-docs \
+  --index-name document-chunks \
+  --query-vector '{"float32": [...]}' \
+  --top-k 20 \
+  --filter '{"document_id": {"$startsWith": "matter-4417/exhibits/"}}'</code></pre>
+      </div>
+      <div class="effect-box">✨ <strong>効果</strong>: 新しい <code class="inline">$startsWith</code> 演算子により、階層的なドキュメント ID のプレフィックスで検索範囲を限定でき、該当案件に関連する完全な検索結果を取得できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔄 ユースケース 3: 既存インデックスの段階的アップグレード</div>
+      <p><strong>シナリオ</strong>: 本番運用中の <code class="inline">CLASSIC</code> インデックスを、検索品質への影響を検証しながら <code class="inline">ENHANCED</code> に移行したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">検証してからアップグレード</span></div>
+        <pre><code class="language-bash"># 1. queryMode で事前フィルタリングの結果を検証
+aws s3vectors query-vectors \
+  --vector-bucket-name prod-vectors \
+  --index-name embeddings \
+  --query-vector '{"float32": [...]}' \
+  --top-k 10 \
+  --filter '{"genre": "mystery"}' \
+  --query-mode ENHANCED
+
+# 2. 検証後にインデックスモードを更新
+aws s3vectors update-index-mode \
+  --vector-bucket-name prod-vectors \
+  --index-name embeddings \
+  --index-mode ENHANCED</code></pre>
+      </div>
+      <div class="effect-box">✨ <strong>効果</strong>: クエリ単位の <code class="inline">queryMode</code> パラメータで事前に結果を比較検証した上で、再取り込みやダウンタイムなしに本番インデックスをアップグレードできる。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="two-col">
+    <div class="section" style="margin-bottom: 24px;">
+      <h2>💰 料金</h2>
+      <p>メタデータ事前フィルタリングは<span class="highlight">追加料金なし</span>で利用できます。S3 Vectors の標準料金 (ストレージ、PUT リクエスト、クエリ) がそのまま適用されます。</p>
+      <p style="font-size: 14px;">詳細: <a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon S3 の料金ページ</a></p>
+    </div>
+    <div class="section" style="margin-bottom: 24px;">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>Amazon S3 Vectors が提供されている<span class="highlight">すべての AWS 商用リージョン</span>、および AWS 中国リージョンで利用可能です。</p>
+      <p style="font-size: 14px;">発表時点では展開が進行中であり、数日以内にすべての対象リージョンで利用可能になる見込みです。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🧠 Amazon Bedrock Knowledge Bases</div>
+      <p>S3 Vectors をベクトルストアとして使用する RAG アプリケーションで、フィルター付き検索の再現率向上の恩恵を受けられる</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔎 Amazon OpenSearch Service</div>
+      <p>より低レイテンシーが必要な場合の代替ベクトル検索エンジン。S3 Vectors からのエクスポートも可能</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🪣 Amazon S3</div>
+      <p>S3 Vectors の基盤となるオブジェクトストレージサービス</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin-top: 0;">S3 Vectors のメタデータ事前フィルタリングは、選択性の高いフィルター付き検索における再現率を<strong>最大 5 倍向上</strong>させる重要なアップデートであり、マルチテナント検索や RAG アプリケーションの品質に直結します。</p>
+      <p style="margin-bottom: 0;">既存コードの変更なしに <code class="inline">UpdateIndexMode</code> でインプレースにアップグレードでき、追加料金も発生しないため、まずは <code class="inline">queryMode</code> パラメータで結果を比較検証した上で、既存インデックスの <code class="inline">ENHANCED</code> モードへの移行を検討することを推奨します。</p>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/09/s3-vectors-introduces-metadata-pre-filtering/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/09/s3-vectors-introduces-metadata-pre-filtering/</a></li>
+      <li><a href="https://aws.amazon.com/blogs/aws/amazon-s3-vectors-now-supports-metadata-pre-filtering-for-higher-recall-on-filtered-searches" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: https://aws.amazon.com/blogs/aws/amazon-s3-vectors-now-supports-metadata-pre-filtering-for-higher-recall-on-filtered-searches</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-vectors-metadata-filtering.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント (Metadata filtering): https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-vectors-metadata-filtering.html</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/ca596c-s3vectors.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 (awsapichanges.com): https://awsapichanges.com/archive/changes/ca596c-s3vectors.html</a></li>
+      <li><a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ: https://aws.amazon.com/s3/pricing/</a></li>
+    </ul>
+    <p>ベース: reports/2026/2026-09-30-s3-vectors-introduces-metadata-pre-filtering.md | 生成日: 2026-10-01</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+    }
+});
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

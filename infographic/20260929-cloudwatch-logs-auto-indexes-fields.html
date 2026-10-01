@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon CloudWatch Logs - 頻繁にクエリされるフィールドの自動インデックス作成</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(255, 153, 0, 0.05));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 10px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.ba-card {
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.ba-card.before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 2px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-card.after {
+  background: rgba(29, 129, 2, 0.1);
+  border: 2px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-card.before .ba-title { color: #FF6B4A; }
+.ba-card.after .ba-title { color: #4CAF50; }
+
+.ba-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ba-card li { margin: 8px 0; font-size: 14px; }
+
+/* 機能カード */
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.feature-card ul {
+  margin: 6px 0 0 0;
+  padding-left: 20px;
+}
+
+.feature-card li { margin: 4px 0; font-size: 14px; }
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.spec-table td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+.spec-table tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ユースケース */
+.usecase-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(255, 153, 0, 0.04));
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 10px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase-label {
+  font-weight: 600;
+  color: var(--aws-white);
+}
+
+/* チェックリスト */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.col-card {
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.col-card h3 { margin-top: 0; }
+
+/* ステップ */
+.step-card {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+.step-content p { font-size: 14px; margin: 8px 0 0 0; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* リンク */
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* まとめ */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+  border: 2px solid var(--aws-orange);
+  border-radius: 10px;
+  padding: 20px;
+  margin-top: 8px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 600px) {
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+  body { padding: 12px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">☁️ Amazon CloudWatch Logs</span>
+    <h1>頻繁にクエリされるフィールドの自動インデックス作成</h1>
+    <div class="subtitle">
+      <span class="date">📅 リリース日: 2026 年 9 月 29 日</span> |
+      機能: Automatically indexed fields
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      CloudWatch Logs Insights クエリで <span class="highlight">= 演算子や IN 演算子</span>によるフィルタリングに使用されているフィールドをサービス側が自動的に識別し、<span class="highlight">手動設定なし</span>でフィールドインデックスを作成します。スキャンするデータ量が削減され、クエリの実行速度が向上します。
+    </p>
+    <p>
+      自動インデックスは既存のデフォルトフィールドインデックスやポリシーベースのインデックスに追加される形で機能し、クエリパターンの変化に応じて対象フィールドも自動更新されます。<span class="highlight">追加コストなし</span>でクエリパフォーマンスが改善される、価値の高いアップデートです。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">0 円</div>
+        <div class="stat-label">追加料金なしで自動有効化</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">30 日間</div>
+        <div class="stat-label">自動インデックスの保持期間</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">上限対象外</div>
+        <div class="stat-label">ポリシーの 20 フィールド上限を消費しない</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-card before">
+        <div class="ba-title">❌ Before: 手動でのインデックス運用</div>
+        <ul>
+          <li>クエリの利用状況を自分で分析し、インデックス化するフィールドを手動で選定</li>
+          <li>フィールドインデックスポリシーを事前に作成しないと、クエリ高速化の恩恵を受けられない</li>
+          <li>クエリパターンが変化するたびに、ポリシーの見直しとメンテナンスが継続的に発生</li>
+        </ul>
+      </div>
+      <div class="ba-card after">
+        <div class="ba-title">✅ After: インデックス管理を自動化</div>
+        <ul>
+          <li><code>=</code> や <code>IN</code> で頻繁に使用されるフィールドが自動的にインデックス化され、手動設定が不要に</li>
+          <li>クエリパターンの変化に応じて自動インデックスの対象が自動更新</li>
+          <li>コンソールまたは API からポリシーに昇格させて永続化が可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 ユーザー"]) --> Query["🔍 CloudWatch Logs Insights クエリ<br/>filter userId = 'abc' など"]
+
+    subgraph CWL["☁️ Amazon CloudWatch Logs"]
+        direction TB
+        Analyze["⚙️ クエリパターン分析<br/>= / IN フィルタの利用を識別"]
+        AutoIndex["⚡ 自動フィールドインデックス<br/>30 日間保持・自動更新"]
+        Policy["📋 フィールドインデックスポリシー<br/>最大 20 フィールド・永続化"]
+        Logs[("🗄️ ログデータ")]
+    end
+
+    Query --> Analyze
+    Analyze --> AutoIndex
+    AutoIndex -.->|昇格| Policy
+    AutoIndex --> Fast["🚀 スキャン量削減<br/>クエリ高速化"]
+    Policy --> Fast
+    Logs --> Fast
+    Fast --> User
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+
+    class CWL cloud
+    class User user
+    class Query input
+    class Analyze,AutoIndex internal
+    class Policy,Fast process
+    class Logs database
+      </pre>
+    </div>
+    <p class="diagram-note">
+      CloudWatch Logs がユーザーのクエリパターンを分析し、<code>=</code> や <code>IN</code> でフィルタリングされるフィールドを自動的にインデックス化する流れを示しています。自動インデックスはポリシーへ昇格させることで永続化できます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">1️⃣ クエリパターンに基づく自動インデックス作成</div>
+      <ul>
+        <li><code>=</code> 演算子または <code>IN</code> 演算子による等価フィルタで最近使用されたフィールドを自動的にインデックス化</li>
+        <li>デフォルトフィールドインデックスおよびポリシーで設定したインデックスに追加される形で動作</li>
+        <li>ポリシーの作成や設定変更は一切不要</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">2️⃣ 自動的なライフサイクル管理</div>
+      <ul>
+        <li>自動インデックスされたフィールドは CloudWatch Logs が管理し、30 日間保持</li>
+        <li>最近のクエリアクティビティに基づいて対象フィールドのセットが自動更新</li>
+        <li>フィールドがセットから削除されると、以降に取り込まれるログイベントのインデックス作成は停止</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">3️⃣ ポリシーへの昇格による永続化</div>
+      <ul>
+        <li>恒久的に維持したいフィールドはアカウントレベルまたはロググループレベルのポリシーに追加可能</li>
+        <li>コンソールのロググループの [Field indexes] タブ、または API から操作可能</li>
+        <li>自動インデックスはロググループあたり 20 フィールドというポリシー上限の対象外</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">4️⃣ API による自動インデックスの確認</div>
+      <ul>
+        <li><code>DescribeFieldIndexes</code> API の <code>indexCategories</code> に <code>AUTO</code> を含めることで一覧表示が可能</li>
+        <li>レスポンスでは自動インデックスされたフィールドの <code>indexCategory</code> が <code>AUTO</code> に設定される</li>
+        <li><code>indexCategories</code> を省略したリクエストでは自動インデックスフィールドは返されない</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📊 自動インデックスとポリシーベースインデックスの比較</h3>
+    <table class="spec-table">
+      <tr>
+        <th>項目</th>
+        <th>自動インデックス</th>
+        <th>フィールドインデックスポリシー</th>
+      </tr>
+      <tr>
+        <td>設定方法</td>
+        <td>不要 (クエリパターンから自動選定)</td>
+        <td>コンソール / API で手動設定</td>
+      </tr>
+      <tr>
+        <td>対象フィールドの選定</td>
+        <td><code>=</code> / <code>IN</code> フィルタの利用実績</td>
+        <td>ユーザーが指定</td>
+      </tr>
+      <tr>
+        <td>保持期間</td>
+        <td>30 日間</td>
+        <td>ポリシーが存在する限り継続</td>
+      </tr>
+      <tr>
+        <td>フィールド数の上限</td>
+        <td>20 フィールド上限の対象外</td>
+        <td>ポリシーあたり最大 20 フィールド</td>
+      </tr>
+      <tr>
+        <td>対象の更新</td>
+        <td>クエリアクティビティに応じて自動更新</td>
+        <td>ユーザーがポリシーを変更</td>
+      </tr>
+      <tr>
+        <td>追加料金</td>
+        <td>なし</td>
+        <td>なし</td>
+      </tr>
+    </table>
+
+    <h3>🔀 filter と filterIndex の使い分け</h3>
+    <p style="font-size: 14px;">自動インデックスされたフィールドに対しては、<span class="highlight">filterIndex ではなく filter コマンドの使用が推奨</span>されています。</p>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span><code>filterIndex</code> コマンドはインデックス化されたデータのみを返す</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>自動インデックスはクエリアクティビティに基づいて更新・削除されるため、<code>filterIndex</code> を使用すると、フィールドが自動インデックス対象になる前、または対象から外れた後に取り込まれたイベントは検索されない</span></div>
+    <div class="warn-item"><span class="warn-icon">💡</span><span><code>filterIndex</code> を使用する場合は、クエリアクティビティに関係なくインデックスが維持されるよう、対象フィールドをフィールドインデックスポリシーに追加することが推奨される</span></div>
+
+    <h3>📐 フィールドインデックスの主な制約</h3>
+    <table class="spec-table">
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>ポリシーあたりのフィールド数</td><td>最大 20 フィールド</td></tr>
+      <tr><td>フィールド名の長さ</td><td>最大 100 文字</td></tr>
+      <tr><td>フィールド名のマッチング</td><td>大文字と小文字を区別 (<code>RequestId</code> と <code>requestId</code> は別フィールド)</td></tr>
+      <tr><td>アカウントレベルポリシー数</td><td>最大 40 (ロググループ名プレフィックス指定 20、データソース指定 20)</td></tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>CloudWatch Logs でログを収集し、CloudWatch Logs Insights でクエリを実行していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>フィールドインデックスがサポートされているリージョンを使用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ポリシーへの昇格を行う場合は、フィールドインデックスポリシーを操作できる IAM 権限があること</span></div>
+
+    <div class="step-card">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">自動インデックスされたフィールドの確認</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">DescribeFieldIndexes API</span>
+          </div>
+          <pre><code class="language-bash">aws logs describe-field-indexes \
+  --log-group-identifiers "my-log-group" \
+  --index-categories AUTO</code></pre>
+        </div>
+        <p><code>--index-categories AUTO</code> を指定しない場合、自動インデックスされたフィールドは結果に含まれません。コンソールでは、ロググループの [Field indexes] タブでも確認できます。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">通常どおりクエリを実行</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">CloudWatch Logs Insights クエリ</span>
+          </div>
+          <pre><code class="language-sql">fields @timestamp, @message
+| filter userId = "user-12345"
+| sort @timestamp desc
+| limit 100</code></pre>
+        </div>
+        <p>頻繁に使用されるフィルタ対象フィールドは自動的にインデックス化され、以降の同様のクエリでスキャン量が削減されます。自動インデックスされたフィールドには <code>filterIndex</code> ではなく <code>filter</code> の使用が推奨されます。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">必要に応じてポリシーへ昇格</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">PutIndexPolicy API</span>
+          </div>
+          <pre><code class="language-bash">aws logs put-index-policy \
+  --log-group-identifier "my-log-group" \
+  --policy-document '{"Fields": ["userId", "requestId"]}'</code></pre>
+        </div>
+        <p>恒久的にインデックスを維持したいフィールドをポリシーに追加します。コンソールの場合は、ロググループの [Field indexes] タブから [Manage field indexes] を選択し、フィールドを追加して保存します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div class="col-card">
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の削減</strong>: インデックス対象の選定やポリシーのメンテナンスという継続的な作業が不要になり、運用チームの工数を削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: 追加料金なしで提供され、既存の CloudWatch Logs 利用者は何もせずに恩恵を受けられる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>障害調査の迅速化</strong>: 頻繁に使うフィールドでのクエリが高速化され、インシデント対応時のログ調査時間を短縮</span></div>
+      </div>
+      <div class="col-card">
+        <h3>🔧 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>スキャン量の削減によるクエリ高速化</strong>: インデックス活用でスキャンするログデータ量が減り、クエリ実行時間が短縮</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>クエリパターンへの自動追従</strong>: 利用状況の変化に応じてインデックス対象が自動更新され、手動対応が不要</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>既存ポリシーとの共存</strong>: デフォルトインデックスやポリシーベースのインデックスに追加される形で動作し、20 フィールドの上限を消費しない</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="two-col">
+      <div class="col-card">
+        <h3>🚧 制限事項</h3>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>自動インデックスの保持期間は 30 日間であり、恒久的な維持にはフィールドインデックスポリシーへの追加が必要</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>対象となるのは <code>=</code> および <code>IN</code> 演算子による等価フィルタのみで、範囲検索や部分一致は対象外</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>フィールドが自動インデックス対象から外れると、以降に取り込まれるイベントはそのフィールドでインデックス化されない</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>フィールドインデックスがサポートされているリージョンでのみ利用可能</span></div>
+      </div>
+      <div class="col-card">
+        <h3>🤔 考慮すべき点</h3>
+        <div class="warn-item"><span class="warn-icon">⚠️</span><span>自動インデックスされたフィールドに <code>filterIndex</code> を使用すると、インデックス化される前後のイベントが検索結果から漏れる可能性があるため、<code>filter</code> の使用が推奨される</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠️</span><span>インデックス対象の選定はサービス側の分析に依存するため、確実に維持したい重要フィールドはポリシーで明示的に管理するべき</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠️</span><span>フィールド名のマッチングは大文字と小文字を区別するため、ログ出力時のフィールド名の統一が重要</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase-card">
+      <div class="usecase-title">🔍 ユースケース 1: マイクロサービスの障害調査の高速化</div>
+      <p style="font-size: 14px;"><span class="usecase-label">シナリオ</span>: 複数のマイクロサービスのログを CloudWatch Logs に集約しており、障害発生時に <code>requestId</code> や <code>traceId</code> でログを横断検索。これまでインデックスポリシーを設定しておらず、クエリに時間がかかっていた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-sql">fields @timestamp, @message, serviceName
+| filter requestId = "req-abc-123"
+| sort @timestamp asc</code></pre>
+      </div>
+      <p style="font-size: 14px;"><span class="usecase-label">効果</span>: 日常的に <code>requestId</code> でのフィルタリングが行われているため、このフィールドが自動的にインデックス化され、設定作業なしで障害調査クエリが高速化されます。</p>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">🔄 ユースケース 2: 変化するクエリパターンへの自動追従</div>
+      <p style="font-size: 14px;"><span class="usecase-label">シナリオ</span>: 新機能のリリースに伴い、これまで検索対象でなかった <code>featureFlag</code> フィールドでのフィルタリングが頻繁に行われるようになった。従来はポリシーの見直しが必要だった。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-sql">fields @timestamp, userId, @message
+| filter featureFlag IN ["new-checkout", "new-checkout-v2"]
+| stats count(*) by bin(5m)</code></pre>
+      </div>
+      <p style="font-size: 14px;"><span class="usecase-label">効果</span>: クエリパターンの変化を CloudWatch Logs が検出し、<code>featureFlag</code> を自動的にインデックス化します。ポリシーのメンテナンスなしで、新しい分析ニーズにもクエリ高速化が追従します。</p>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">🔒 ユースケース 3: 重要フィールドのポリシーへの昇格</div>
+      <p style="font-size: 14px;"><span class="usecase-label">シナリオ</span>: 自動インデックスされたフィールドのうち、セキュリティ監査で常時使用する <code>sourceIp</code> フィールドは、クエリ頻度にかかわらず確実にインデックスを維持したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># 自動インデックスされたフィールドを確認
+aws logs describe-field-indexes \
+  --log-group-identifiers "security-audit-logs" \
+  --index-categories AUTO
+
+# ポリシーに昇格して永続化
+aws logs put-index-policy \
+  --log-group-identifier "security-audit-logs" \
+  --policy-document '{"Fields": ["sourceIp"]}'</code></pre>
+      </div>
+      <p style="font-size: 14px;"><span class="usecase-label">効果</span>: 自動インデックスの 30 日間の保持期間やクエリアクティビティへの依存から切り離し、監査業務に必要なインデックスを恒久的に維持できます。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="col-card">
+        <h3>💵 料金</h3>
+        <p style="font-size: 14px;">自動フィールドインデックス機能は<span class="highlight">追加料金なし</span>で提供されます。CloudWatch Logs Insights のクエリ料金 (スキャンされたデータ量に基づく課金) は従来どおり適用されますが、インデックスの活用によりスキャン量が削減されるため、<strong style="color: #4CAF50;">クエリコストの削減につながる可能性</strong>があります。</p>
+        <p style="font-size: 13px;">詳細: <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon CloudWatch 料金ページ</a></p>
+      </div>
+      <div class="col-card">
+        <h3>🌍 利用可能リージョン</h3>
+        <p style="font-size: 14px;">CloudWatch Logs の<span class="highlight">フィールドインデックス機能がサポートされているすべての AWS リージョン</span>で利用可能です。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">🔍 CloudWatch Logs Insights</div>
+      <p style="font-size: 14px; margin: 0;">本機能によりクエリが高速化される対象のログ分析サービス。<code>filter</code> コマンドでの等価フィルタが自動インデックスの選定対象となります。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">📋 フィールドインデックスポリシー</div>
+      <p style="font-size: 14px; margin: 0;">アカウントレベルまたはロググループレベルでインデックス対象フィールドを明示的に管理する既存機能。自動インデックスの昇格先となります。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🗄️ CloudWatch Logs 標準ログクラス</div>
+      <p style="font-size: 14px; margin: 0;"><code>@logStream</code> や <code>@aws.region</code> などのデフォルトフィールドインデックスが提供されており、自動インデックスはこれらに追加される形で機能します。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin-top: 0;">
+        CloudWatch Logs の自動フィールドインデックス機能により、<span class="highlight">手動設定なし</span>で CloudWatch Logs Insights クエリの高速化とスキャン量の削減が実現されます。<span class="highlight">追加料金なし</span>で自動的に有効化されるため、既存ユーザーは特別な対応をせずに恩恵を受けられます。
+      </p>
+      <p style="margin-bottom: 0;">
+        まずは <code>DescribeFieldIndexes</code> API やコンソールの [Field indexes] タブで自動インデックスされたフィールドを確認し、監査や定常運用で常時使用する重要なフィールドについては<strong style="color: var(--aws-smile-orange);">フィールドインデックスポリシーへの昇格</strong>を検討することを推奨します。
+      </p>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/09/cloudwatch-logs-auto-indexes-fields/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CloudWatchLogs-Field-Indexing-Automatic.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: 自動インデックスされたフィールド</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CloudWatchLogs-Field-Indexing.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: フィールドインデックスの作成</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CloudWatchLogs-Field-Indexing-Syntax.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: フィールドインデックスの構文とクォータ</a></li>
+      <li><a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-09-29-cloudwatch-logs-auto-indexes-fields.md) をもとに作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

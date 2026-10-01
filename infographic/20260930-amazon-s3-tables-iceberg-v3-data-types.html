@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon S3 Tables - Apache Iceberg V3 全データ型サポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.card p { margin: 6px 0; font-size: 14px; }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.1);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF6B4A; }
+.after-box h3 { color: #4CAF50; }
+
+.ba-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.cross-icon { color: var(--aws-red); flex-shrink: 0; }
+.check-icon { color: #4CAF50; flex-shrink: 0; }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.3;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* テーブル */
+.table-wrap { overflow-x: auto; margin: 12px 0; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+
+.tag-new {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.tag-existing {
+  display: inline-block;
+  background: rgba(0, 161, 201, 0.25);
+  color: var(--aws-teal);
+  border: 1px solid var(--aws-teal);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.ok { color: #4CAF50; font-weight: 600; }
+.ng { color: #FF6B4A; font-weight: 600; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid #4CAF50;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+}
+
+/* メリット・注意点 */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+
+.icon-text {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.arrow { color: var(--aws-orange); flex-shrink: 0; }
+
+.warn-box {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+ul.plain { padding-left: 20px; margin: 8px 0; }
+ul.plain li { margin: 6px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { padding-left: 20px; margin: 8px 0; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Amazon S3 Tables</span>
+    <h1>🧊 Apache Iceberg V3 全データ型サポート</h1>
+    <div class="subtitle">
+      geometry / geography、ナノ秒タイムスタンプ、unknown 型、列デフォルト値が追加 —
+      <span class="release-date">📅 リリース日: 2026 年 9 月 30 日</span>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      Amazon S3 Tables が <span class="highlight">Apache Iceberg V3 仕様の全データ型</span>をサポートしました。
+      空間データを格納する <span class="highlight">geometry / geography 型</span>、スキーマ進化のプレースホルダーとなる
+      <span class="highlight">unknown 型</span>、<span class="highlight">ナノ秒精度タイムスタンプ timestamp(9) / timestamptz(9)</span>、
+      および <span class="highlight">列のデフォルト値</span>が新たに追加され、既存の variant 型・削除ベクトル・行リネージと合わせて
+      V3 のデータ型を網羅的にカバーします。
+    </p>
+    <p>
+      車両管理や資産マッピングなどの位置情報ワークロード、テレメトリや金融取引のような高精度時刻を扱うワークロードを、
+      エンコードの工夫なしに単一のデータレイクへ統合できます。S3 Tables の自動メンテナンスは V3 テーブルにも適用されます。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">5 項目</div>
+        <div class="stat-label">今回追加された V3 機能 (geometry / geography / timestamp(9) / unknown / デフォルト値)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">ナノ秒精度</div>
+        <div class="stat-label">timestamp(9) / timestamptz(9) でソース精度のまま記録</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">バックフィル不要</div>
+        <div class="stat-label">列デフォルト値はメタデータに 1 回だけ保存され読み取り時に補完</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">S3 Tables の標準料金がそのまま適用</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>位置情報 (点、線、ポリゴン) は WKT 文字列や緯度・経度の double ペアとしてエンコードが必要</span></div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>ナノ秒精度のイベント時刻は整数型にエンコードし、読み取り時に変換が必要</span></div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>エンコード値では位置や時刻で直接フィルタリングできず、変換オーバーヘッドが発生</span></div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>列追加時、既存行への値設定にはバックフィル (データの書き直し) が必要</span></div>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <div class="ba-item"><span class="check-icon">✓</span><span>geometry / geography 型で空間データをネイティブ格納、クエリ時に位置で直接フィルタリング</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>timestamp(9) / timestamptz(9) でソース精度のままナノ秒タイムスタンプを記録</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>列デフォルト値により、バックフィルなしで既存行に値が反映</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>unknown 型で型未確定の列を定義でき、移行やスキーマ進化が容易に</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>V3 全データ型のサポートで、V3 への移行判断がシンプルに</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Sources["📡 データソース"]
+        direction LR
+        GPS["🚚 車両・位置情報"]
+        FIN["💹 金融・テレメトリ"]
+        JSON["📄 半構造化データ"]
+        GPS ~~~ FIN ~~~ JSON
+    end
+
+    subgraph S3T["🪣 Amazon S3 Tables - Iceberg V3 テーブル"]
+        direction LR
+        GEO["🌍 geometry / geography<br/>空間データをネイティブ格納"]
+        NANO["⏱️ timestamp 9 桁精度<br/>ナノ秒タイムスタンプ"]
+        VAR["🧩 variant / unknown<br/>柔軟なスキーマ"]
+        DEF["🏷️ 列デフォルト値<br/>バックフィル不要"]
+        GEO ~~~ NANO ~~~ VAR ~~~ DEF
+    end
+
+    MAINT["⚙️ 自動メンテナンス<br/>コンパクション・スナップショット管理"]
+
+    subgraph Engines["🔍 クエリエンジン"]
+        direction LR
+        EMR["🖥️ EMR Spark"]
+        GLUE["🔗 AWS Glue ETL"]
+        RS["📊 Amazon Redshift"]
+        EMR ~~~ GLUE ~~~ RS
+    end
+
+    Sources --> S3T
+    MAINT -.-> S3T
+    S3T --> Engines
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Sources,S3T,Engines layer
+    class GPS,FIN,JSON input
+    class GEO,NANO,VAR,DEF storage
+    class MAINT internal
+    class EMR,GLUE,RS process
+      </pre>
+    </div>
+    <p class="diagram-note">
+      位置情報や高精度時刻のデータをエンコードせずに V3 のネイティブデータ型として S3 Tables に格納し、
+      EMR Spark や AWS Glue ETL などの V3 対応エンジンから直接クエリできます。自動メンテナンスは V3 テーブルにも適用されます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🌍 1. 地理空間データ型 (geometry / geography)</div>
+      <p>→ 点、線、ポリゴンをエンコード文字列や緯度・経度ペアではなく、ネイティブ列として格納</p>
+      <p>→ geometry はデカルト平面、geography は回転楕円体上の球面座標として座標を扱う。両型とも SRID 0 と SRID 4326 を認識</p>
+      <p>→ <span class="highlight">ST_Intersects</span> などの空間述語により、クエリ時に位置で直接フィルタリング可能</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⏱️ 2. ナノ秒精度タイムスタンプ (timestamp(9) / timestamptz(9))</div>
+      <p>→ timestamp(9) はタイムゾーンなし、timestamptz(9) はタイムゾーンありのナノ秒精度タイムスタンプ</p>
+      <p>→ テレメトリ、センサーフュージョン、金融ワークロードでソース精度のまま時刻を記録でき、整数エンコードと読み取り時の変換が不要に</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🏷️ 3. 列のデフォルト値 (column default values)</div>
+      <p>→ initial-default (列追加前のレコード用) と write-default (書き込み時に列が省略された場合用) を設定可能</p>
+      <p>→ 値はスキーマメタデータに 1 回だけ保存され、読み取り時に補完されるため<span class="highlight">バックフィル不要</span></p>
+      <p>→ unknown、variant、geometry、geography 型の列は null デフォルトが必須</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">❓ 4. unknown 型</div>
+      <p>→ 型が未確定の列を表すプレースホルダー型。必ず optional で、常に null として読み取られ、データファイルには書き込まれない</p>
+      <p>→ 他のテーブルフォーマットからの移行やスキーマ進化の途中段階で有用。後から具体的な型に進化可能</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔗 5. 既存の V3 サポートとの統合</div>
+      <p>→ サポート済みの variant 型、削除ベクトル、行リネージと合わせて V3 仕様の全データ型をカバー</p>
+      <p>→ 自動メンテナンス (コンパクション、スナップショット管理、未参照ファイル削除) が V3 テーブルにも適用され、スケールしてもパフォーマンスとコスト効率を維持</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📊 Iceberg V3 の主な機能と S3 Tables でのサポート状況</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>V3 機能</th><th>説明</th><th>サポート状況</th></tr>
+        <tr><td>geometry 型</td><td>デカルト平面上の空間データ (点、線、ポリゴン)</td><td><span class="tag-new">今回追加</span></td></tr>
+        <tr><td>geography 型</td><td>球面座標として扱う空間データ</td><td><span class="tag-new">今回追加</span></td></tr>
+        <tr><td>timestamp(9) / timestamptz(9)</td><td>ナノ秒精度タイムスタンプ</td><td><span class="tag-new">今回追加</span></td></tr>
+        <tr><td>unknown 型</td><td>型未確定のプレースホルダー列</td><td><span class="tag-new">今回追加</span></td></tr>
+        <tr><td>列のデフォルト値</td><td>initial-default / write-default による補完</td><td><span class="tag-new">今回追加</span></td></tr>
+        <tr><td>variant 型</td><td>JSON などの半構造化データ</td><td><span class="tag-existing">サポート済み (一部リージョン)</span></td></tr>
+        <tr><td>削除ベクトル</td><td>Puffin ファイルによる効率的な削除管理</td><td><span class="tag-existing">サポート済み</span></td></tr>
+        <tr><td>行リネージ</td><td>行レベルの変更追跡 (_row_id など)</td><td><span class="tag-existing">サポート済み</span></td></tr>
+      </table>
+    </div>
+
+    <h3>🧩 AWS サービスの V3 対応状況</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>サービス</th><th>V3 サポート</th><th>V3 variant サポート</th></tr>
+        <tr><td>Amazon S3 Tables (Iceberg REST API、テーブルメンテナンス)</td><td class="ok">✓ 対応</td><td class="ok">✓ 対応 (一部リージョン)</td></tr>
+        <tr><td>EMR Spark</td><td class="ok">✓ リリース 7.12 以降</td><td class="ok">✓ リリース 8.0 以降</td></tr>
+        <tr><td>AWS Glue ETL</td><td class="ok">✓ バージョン 5.1 以降</td><td class="ok">✓ バージョン 6.0 以降</td></tr>
+        <tr><td>AWS Glue (Iceberg REST API、テーブルメンテナンス)</td><td class="ok">✓ 対応</td><td class="ng">✗ 非対応</td></tr>
+        <tr><td>Amazon SageMaker Unified Studio Notebooks</td><td class="ok">✓ 対応</td><td class="ng">✗ 非対応</td></tr>
+        <tr><td>Amazon Redshift</td><td class="ok">✓ Patch 204 以降</td><td class="ng">✗ 非対応</td></tr>
+        <tr><td>Amazon Athena (Trino)</td><td class="ng">✗ 非対応</td><td class="ng">✗ 非対応</td></tr>
+      </table>
+    </div>
+
+    <h3>⚠️ 制約条件</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>データファイル形式</td><td>V3 データ型は Parquet 形式のテーブルのみサポート (ORC、Avro は非対応)</td></tr>
+        <tr><td>コンパクション戦略</td><td>sort / Z-order コンパクションは variant、geometry、geography、ナノ秒タイムスタンプ型に非対応</td></tr>
+        <tr><td>デフォルト値の制約</td><td>unknown、variant、geometry、geography 型は null デフォルトが必須</td></tr>
+        <tr><td>バージョンアップグレード</td><td>V2 から V3 への移行は一方向 (ダウングレード不可)</td></tr>
+        <tr><td>Spark での地理空間型</td><td>spark.sql.geospatial.enabled=true の設定が必要</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <ul class="plain">
+      <li>✓ S3 Tables のテーブルバケットが作成済みで、AWS Glue Data Catalog との統合が構成済み</li>
+      <li>✓ V3 対応のクエリエンジンを使用 (EMR Spark 7.12 以降、AWS Glue ETL 5.1 以降など)</li>
+      <li>✓ geometry / geography 型を Spark で使う場合は <span class="highlight">spark.sql.geospatial.enabled=true</span> を有効化 (AWS Glue ではジョブの --conf 引数で設定)</li>
+      <li>✓ IAM で s3tables 名前空間に対する適切な権限が付与済み</li>
+    </ul>
+
+    <div class="flow-diagram" style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:24px 0;">
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 16px;text-align:center;font-size:14px;">1️⃣ V3 テーブル<br/>作成</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 16px;text-align:center;font-size:14px;">2️⃣ 空間データ挿入<br/>位置フィルタ</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 16px;text-align:center;font-size:14px;">3️⃣ ナノ秒精度<br/>テーブル作成</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 16px;text-align:center;font-size:14px;">4️⃣ デフォルト値付き<br/>列追加</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 16px;text-align:center;font-size:14px;">5️⃣ V2 → V3<br/>アップグレード</div>
+    </div>
+
+    <h3>ステップ 1: V3 テーブルを作成する</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">地理空間列を含む V3 テーブルの作成</span></div>
+      <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS myns.vehicle_telemetry (
+    vehicle_id     string,
+    event_time     timestamp,
+    position       geometry(4326),
+    service_area   geography(4326),
+    firmware       string
+)
+USING iceberg
+TBLPROPERTIES ('format-version' = '3')</code></pre>
+    </div>
+    <p style="font-size:14px;">format-version テーブルプロパティに 3 を指定して、地理空間列 (geometry / geography) を含む Iceberg V3 テーブルを作成します。SRID 4326 を空間参照系として指定しています。</p>
+
+    <h3>ステップ 2: 地理空間データを挿入し、位置でフィルタリングする</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">空間値の挿入と ST_Intersects による位置フィルタ</span></div>
+      <pre><code class="language-sql">INSERT INTO myns.vehicle_telemetry VALUES (
+    'v-1024',
+    TIMESTAMP '2026-09-18 14:22:31.123456',
+    ST_SetSrid(ST_GeomFromWKT('POINT (1 2)'), 4326),
+    ST_SetSrid(ST_GeogFromWKT('POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))'), 4326),
+    'fw-3.2.1'
+);
+
+SELECT vehicle_id, event_time
+FROM myns.vehicle_telemetry
+WHERE ST_Intersects(
+        position,
+        ST_SetSrid(ST_GeomFromWKT('POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))'), 4326)
+      );</code></pre>
+    </div>
+    <p style="font-size:14px;">ST_GeomFromWKT で WKT から空間値を生成して挿入し、ST_Intersects 述語で指定ポリゴンと交差する車両位置をクエリ時に直接フィルタリングします。</p>
+
+    <h3>ステップ 3: ナノ秒精度タイムスタンプのテーブルを作成する</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">timestamptz(9) 列を持つテーブル</span></div>
+      <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS myns.trades (
+    trade_id     bigint,
+    executed_at  timestamptz(9),
+    symbol       string,
+    price        decimal(18,8)
+)
+USING iceberg
+TBLPROPERTIES ('format-version' = '3')</code></pre>
+    </div>
+    <p style="font-size:14px;">timestamptz(9) 列により、タイムゾーン付きのナノ秒精度で約定時刻を記録するテーブルを作成します。タイムゾーンが不要な場合は timestamp(9) を使用します。</p>
+
+    <h3>ステップ 4: デフォルト値付きの列を追加する</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">バックフィル不要の列追加</span></div>
+      <pre><code class="language-sql">ALTER TABLE myns.orders
+ADD COLUMN currency string DEFAULT 'USD'</code></pre>
+    </div>
+    <p style="font-size:14px;">既存テーブルにデフォルト値 USD 付きの currency 列を追加します。列追加前に書き込まれた既存行も null ではなく USD を返し、データファイルの書き直し (バックフィル) は発生しません。</p>
+
+    <h3>ステップ 5: 既存の V2 テーブルを V3 にアップグレードする (必要な場合)</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">V2 から V3 へのアトミックなアップグレード</span></div>
+      <pre><code class="language-sql">ALTER TABLE myns.existing_table
+SET TBLPROPERTIES ('format-version' = '3')</code></pre>
+    </div>
+    <p style="font-size:14px;">既存の V2 テーブルを、データの書き直しなしでアトミックに V3 へアップグレードします。<span class="highlight">V3 へのアップグレードは一方向で V2 に戻せない</span>ため、テーブルを読み書きするすべてのエンジンが V3 に対応していることを事前に確認してください。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div>
+        <h3>💼 ビジネス面</h3>
+        <div class="icon-text"><span class="arrow">→</span><span><strong>データアーキテクチャの簡素化</strong>: エンコード・デコード処理や別システムの維持が不要になり、パイプラインの開発・運用コストを削減</span></div>
+        <div class="icon-text"><span class="arrow">→</span><span><strong>コンプライアンスとガバナンスの強化</strong>: 削除ベクトルや行リネージと組み合わせて、GDPR 対応の削除や行レベルの変更追跡を含むデータレイク全体を V3 に統一</span></div>
+        <div class="icon-text"><span class="arrow">→</span><span><strong>運用負荷の軽減</strong>: 自動メンテナンスが V3 テーブルにも適用され、データ増加時も手動管理なしでパフォーマンスとコスト効率を維持</span></div>
+      </div>
+      <div>
+        <h3>⚙️ 技術面</h3>
+        <div class="icon-text"><span class="arrow">→</span><span><strong>ネイティブ型による性能向上</strong>: クエリ時のフィルタリングが直接可能になり、変換オーバーヘッドが解消</span></div>
+        <div class="icon-text"><span class="arrow">→</span><span><strong>ソース精度の保持</strong>: テレメトリや金融データをナノ秒精度のまま格納</span></div>
+        <div class="icon-text"><span class="arrow">→</span><span><strong>バックフィル不要のスキーマ進化</strong>: 大規模テーブルでも低コストで列追加が可能</span></div>
+        <div class="icon-text"><span class="arrow">→</span><span><strong>移行の柔軟性</strong>: unknown 型により、他フォーマットからの段階的な移行やスキーマ設計の先行定義が可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>🚫 制限事項</h3>
+    <div class="ba-item"><span class="cross-icon">✗</span><span>V3 データ型は Parquet データファイル形式のテーブルのみサポート (ORC、Avro は非対応)</span></div>
+    <div class="ba-item"><span class="cross-icon">✗</span><span>sort / Z-order コンパクション戦略は variant、geometry、geography、ナノ秒タイムスタンプ型に非対応</span></div>
+    <div class="ba-item"><span class="cross-icon">✗</span><span>Amazon Athena (Trino) は V3 テーブルを読み取れないため、Athena 利用ワークロードでは V3 アップグレードに注意</span></div>
+    <div class="ba-item"><span class="cross-icon">✗</span><span>unknown、variant、geometry、geography 型の列には非 null のデフォルト値を設定できない</span></div>
+    <div class="ba-item"><span class="cross-icon">✗</span><span>variant 型は一部リージョンのみで利用可能 (東京リージョンを含む 15 リージョン)</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="warn-box">⚠️ <strong>一方向アップグレード</strong>: V2 から V3 へのアップグレードは標準操作ではダウングレード不可。事前にテーブルへアクセスする全エンジンとサードパーティツールの V3 対応を確認すること</div>
+    <div class="warn-box">⚠️ <strong>既存データは自動変換されない</strong>: エンコード済み座標列 (double ペアや WKT 文字列) は V3 アップグレード時に自動変換されず、地理空間型の採用には新しい列の追加とデータ移行が必要</div>
+    <div class="warn-box">⚠️ <strong>精度の切り捨て</strong>: マイクロ秒精度までのエンジンでナノ秒列を読み書きすると値が切り捨てられる。利用エンジンのナノ秒精度対応を事前に確認</div>
+    <div class="warn-box">⚠️ <strong>測地述語はエンジン依存</strong>: geography 型に対する測地空間述語はエンジン依存であり、Amazon EMR と AWS Glue の Apache Spark における空間述語は geometry 型を対象とする</div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🚚 ユースケース 1: フリートトラッキングと配送エリア分析</div>
+      <p><strong>シナリオ</strong>: 物流企業が数万台の車両の位置情報を収集し、特定の配送エリア内にいる車両をリアルタイムに特定したい。従来は緯度・経度を double 値のペアで格納し、アプリケーション側で距離計算を行っていた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">対象エリア内の車両を直接フィルタリング</span></div>
+        <pre><code class="language-sql">SELECT vehicle_id, event_time
+FROM myns.vehicle_telemetry
+WHERE ST_Intersects(
+        position,
+        ST_SetSrid(ST_GeomFromWKT('POLYGON ((139.6 35.5, 139.9 35.5, 139.9 35.8, 139.6 35.8, 139.6 35.5))'), 4326)
+      )</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: geometry 型と空間述語により、クエリ時に対象エリア内の車両を直接フィルタリング。アプリケーション側の距離計算ロジックが不要になり、分析パイプラインが簡素化される。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">💹 ユースケース 2: 金融取引データのナノ秒精度記録</div>
+      <p><strong>シナリオ</strong>: 証券取引システムの約定データを S3 Tables のデータレイクに格納し、取引の正確な順序を保持したまま監査や市場分析に利用したい。従来はナノ秒時刻を bigint にエンコードして格納していた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">timestamptz(9) による約定データテーブル</span></div>
+        <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS myns.trades (
+    trade_id     bigint,
+    executed_at  timestamptz(9),
+    symbol       string,
+    price        decimal(18,8)
+)
+USING iceberg
+TBLPROPERTIES ('format-version' = '3')</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: ソース精度のまま約定時刻を記録でき、読み取り時の変換処理が不要に。ナノ秒レベルの時刻順序が保持され、監査要件や高頻度取引の分析に対応できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📦 ユースケース 3: バックフィルなしの大規模テーブルへの列追加</div>
+      <p><strong>シナリオ</strong>: 数十億行の注文テーブルに通貨コード列を追加したい。従来は既存行に値を設定するために大規模なバックフィルジョブが必要で、コストと時間がかかっていた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">デフォルト値付きの列追加</span></div>
+        <pre><code class="language-sql">ALTER TABLE myns.orders
+ADD COLUMN currency string DEFAULT 'USD'</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: デフォルト値はスキーマメタデータに 1 回だけ保存され、読み取り時に補完されるため、データファイルの書き直しが発生しない。大規模テーブルでも即座に、追加コストなしでスキーマ進化が完了する。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      今回の V3 データ型サポートに伴う<span class="highlight">追加料金はありません</span>。
+      S3 Tables の標準料金 (ストレージ、リクエスト、自動メンテナンスに伴うモニタリング・コンパクション料金) がそのまま適用されます。
+      詳細は <a class="aws-link" href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer">Amazon S3 の料金ページ</a>を参照してください。
+    </p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>
+      列のデフォルト値、および geometry、geography、unknown、ナノ秒精度タイムスタンプの各データ型は、
+      <span class="highlight">S3 Tables が利用可能なすべての AWS リージョン</span>で利用できます。
+    </p>
+    <div class="warn-box">
+      ℹ️ <strong>variant データ型 (既存機能) の利用可能リージョン (15 リージョン)</strong>:
+      米国東部 (バージニア北部)、米国東部 (オハイオ)、米国西部 (オレゴン)、アジアパシフィック (ムンバイ)、アジアパシフィック (ソウル)、
+      アジアパシフィック (シンガポール)、アジアパシフィック (シドニー)、<strong>アジアパシフィック (東京)</strong>、カナダ (中部)、
+      欧州 (フランクフルト)、欧州 (アイルランド)、欧州 (ロンドン)、欧州 (パリ)、欧州 (ストックホルム)、南米 (サンパウロ)
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="icon-text"><span class="arrow">→</span><span><strong>Amazon EMR</strong>: EMR Spark リリース 7.12 以降で V3 テーブルの読み書きに対応。地理空間型の利用には Spark 設定の有効化が必要</span></div>
+    <div class="icon-text"><span class="arrow">→</span><span><strong>AWS Glue</strong>: Glue ETL バージョン 5.1 以降で V3 に対応。Glue Data Catalog との統合により、S3 Tables のテーブルを分析サービスから自動検出可能</span></div>
+    <div class="icon-text"><span class="arrow">→</span><span><strong>Amazon Redshift</strong>: Patch 204 以降で V3 テーブルのクエリに対応 (variant 型は非対応)</span></div>
+    <div class="icon-text"><span class="arrow">→</span><span><strong>Amazon Athena</strong>: 現時点で V3 テーブルの読み取りに非対応。Athena を利用する場合は V2 テーブルの維持を検討</span></div>
+    <div class="icon-text"><span class="arrow">→</span><span><strong>AWS Lake Formation</strong>: S3 Tables 上のデータに対するきめ細かなアクセス制御を提供</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      S3 Tables が Apache Iceberg V3 の全データ型をサポートしたことで、地理空間データやナノ秒精度の時刻データを含むワークロードを、
+      エンコードの工夫なしに<span class="highlight">単一のデータレイクへ統合</span>できるようになりました。
+      削除ベクトル・行リネージ・variant 型と合わせて V3 の主要機能が出揃ったため、更新頻度の高いテーブルや位置情報・テレメトリ系ワークロードでは
+      V3 の採用を検討する価値があります。
+    </p>
+    <p>
+      ただし <span class="highlight">V3 へのアップグレードは一方向</span>であり、Amazon Athena が V3 に未対応である点など、
+      テーブルにアクセスする全エンジンの対応状況を確認した上で移行計画を立てることを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-s3-tables-iceberg-v3-data-types" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/09/amazon-s3-tables-iceberg-v3-data-types</a></li>
+      <li>ドキュメント: Working with Apache Iceberg V3: <a class="aws-link" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/working-with-apache-iceberg-v3.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/AmazonS3/latest/userguide/working-with-apache-iceberg-v3.html</a></li>
+      <li>AWS Prescriptive Guidance: Apache Iceberg on AWS: <a class="aws-link" href="https://docs.aws.amazon.com/prescriptive-guidance/latest/apache-iceberg-on-aws/introduction.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/prescriptive-guidance/latest/apache-iceberg-on-aws/introduction.html</a></li>
+      <li>Amazon S3 Tables 製品ページ: <a class="aws-link" href="https://aws.amazon.com/s3/features/tables/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/s3/features/tables/</a></li>
+      <li>料金ページ: <a class="aws-link" href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/s3/pricing/</a></li>
+    </ul>
+    <p>リリース日: 2026 年 9 月 30 日 | AWS News Summary</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
