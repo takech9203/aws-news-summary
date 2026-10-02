@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Glue - Apache Iceberg マテリアライズドビューのシステム管理型書き込み保護</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+  margin-right: 8px;
+}
+
+.date-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--aws-light-gray);
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul { margin: 8px 0 0 0; padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 6px 0; font-size: 14px; }
+
+@media (max-width: 700px) {
+  .before-after { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+td code, li code, p code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label { font-weight: 700; color: var(--aws-white); }
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0 8px 0;
+  align-items: center;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+.step-title { font-weight: 700; color: var(--aws-white); font-size: 16px; }
+
+.note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin: 8px 0 16px 0;
+}
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.benefit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 700px) { .benefit-grid { grid-template-columns: 1fr; } }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS Glue</span>
+      <span class="service-badge" style="background: var(--aws-teal);">Amazon S3 Tables</span>
+      <span class="date-badge">📅 2026 年 9 月 30 日リリース</span>
+    </div>
+    <h1>🔒 Apache Iceberg マテリアライズドビューの<br>システム管理型書き込み保護</h1>
+    <div class="subtitle">書き込みを AWS Glue のみに限定し、計算結果を「計算されたとおりの状態」に保つ</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      マテリアライズドビューは、コストの高いクエリ結果を<span class="highlight">事前計算して保存</span>し、複数のクエリエンジンから再利用できる仕組みです。今回のアップデートにより、マテリアライズドビューのデータと定義への書き込みを <span class="highlight">AWS Glue のみに限定</span>し、他のエンジンやユーザーによる変更から保護できるようになりました。
+    </p>
+    <p>
+      ユーザーが SQL でビュー定義を記述すると、AWS Glue が結果を計算し、ユーザーアカウント内の Amazon S3 Tables バケットに<span class="highlight">標準の Apache Iceberg テーブル</span>として保存します。読み取りは AWS Glue Data Catalog を通じて、Iceberg 互換の任意のエンジンから直接行えます。データレイク上で信頼性の高いデータセットを複数チーム・複数エンジンで共有したいデータエンジニアやデータプラットフォーム管理者に特に有用です。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>書き込みアクセス権を持つユーザーであれば誰でも、カタログ経由でマテリアライズドビューの結果を変更できてしまった</li>
+          <li>S3 上のファイルを直接変更することでも、計算結果を書き換えることが可能だった</li>
+          <li>共有データセットとしての信頼性・一貫性を担保するには、アクセス権限の厳密な管理を利用者側で行う必要があった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>データと定義 (スキーマやストレージロケーションなどのメタデータ) への書き込みが AWS Glue のみに限定</li>
+          <li>他エンジンからの書き込み、<code>UpdateTable</code> API 直接呼び出し、基盤 Iceberg テーブルへの直接書き込みのいずれも拒否</li>
+          <li>誰が書き込み権限を持っていても結果が計算どおりに保たれ、信頼できるデータセットとして安心して共有可能</li>
+          <li>リフレッシュの実行、スケジュール変更、ビューの削除はこれまでどおり実行可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Definer["👤 ビュー作成者"]
+        SQL["📝 CREATE MANAGED<br/>MATERIALIZED VIEW"]
+    end
+
+    subgraph Glue["⚙️ AWS Glue"]
+        Compute["⚡ マネージドコンピュート<br/>計算とリフレッシュ"]
+        Catalog["📚 Glue Data Catalog<br/>ビュー定義とメタデータ"]
+    end
+
+    subgraph Storage["🗄️ Amazon S3 Tables"]
+        MV[("📋 マテリアライズドビュー<br/>Iceberg テーブル")]
+    end
+
+    subgraph Readers["🔍 読み取り側エンジン"]
+        direction LR
+        Athena["🔍 Athena"]
+        Redshift["📊 Redshift"]
+        Spark["⚡ Spark"]
+        Athena ~~~ Redshift ~~~ Spark
+    end
+
+    Other["🚫 他エンジン / ユーザー<br/>からの書き込み"]
+
+    SQL --> Catalog
+    Catalog --> Compute
+    Compute -->|書き込みは Glue のみ| MV
+    Readers -.->|読み取りのみ| MV
+    Other -.->|拒否| MV
+
+    classDef glue fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef blocked fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#B71C1C
+
+    class Compute,Catalog glue
+    class MV storage
+    class SQL,Athena,Redshift,Spark user
+    class Definer,Glue,Storage,Readers layer
+    class Other blocked
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      ビュー作成者が SQL で定義すると、AWS Glue が結果を計算して Amazon S3 Tables 内の Iceberg テーブルに書き込みます。書き込みは AWS Glue のみに許可され、他のエンジンやユーザーからの変更は拒否されます。読み取りは Iceberg 互換の任意のエンジンから可能です。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⭐ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🔒 1. システム管理型の書き込み保護</div>
+      <ul>
+        <li>データとメタデータ (スキーマ、ストレージロケーションなど) の書き込みが AWS Glue のみに限定される</li>
+        <li>他のクエリエンジン経由、<code>UpdateTable</code> API の直接呼び出し、基盤 Iceberg テーブルへの直接書き込みのいずれも拒否される</li>
+        <li>計算結果が「計算されたとおりの状態」に保たれ、信頼できるデータセットとして共有可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📝 2. MANAGED キーワードによる作成</div>
+      <ul>
+        <li>Spark セッション設定 <code>spark.sql.mv.managed.enabled=true</code> を有効化した上で、<code>CREATE MANAGED MATERIALIZED VIEW</code> 構文で作成する</li>
+        <li>AWS Glue がユーザーに代わって計算と書き込みを実行し、Spark セッションは直接書き込まない</li>
+        <li>作成ステートメントは AWS Glue の作成完了を待ってから返るため、通常より時間がかかる場合がある</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📊 3. 作成状況のトラッキング</div>
+      <ul>
+        <li>最初に空のテーブルを Amazon S3 Tables に作成し、その後に定義クエリを実行してデータを投入する</li>
+        <li><code>GetTable</code> API を <code>IncludeStatusDetails=true</code> で呼び出すことで、作成ジョブのステータスを確認できる</li>
+        <li>作成に失敗した場合、失敗理由がテーブルステータスのエラーメッセージに含まれる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔄 4. ユーザーが引き続き実行できる操作</div>
+      <ul>
+        <li>マテリアライズドビューのリフレッシュ (AWS Glue がリフレッシュを実行し、結果を書き込む)</li>
+        <li>リフレッシュスケジュールおよびテーブルプロパティの変更</li>
+        <li>マテリアライズドビューの削除 (削除権限を持つ場合)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>システム管理型マテリアライズドビューの要件</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>AWS Glue バージョン</td><td>6.0 以降 (通常のマテリアライズドビューは 5.1 以降)</td></tr>
+      <tr><td>有効化設定</td><td>Spark セッション設定 <code>spark.sql.mv.managed.enabled=true</code></td></tr>
+      <tr><td>作成構文</td><td><code>CREATE MANAGED MATERIALIZED VIEW</code></td></tr>
+      <tr><td>保存先</td><td>Amazon S3 Tables バケットのみ (S3 汎用バケットは非サポート)</td></tr>
+      <tr><td>保存形式</td><td>標準の Apache Iceberg テーブル</td></tr>
+      <tr><td>読み取り</td><td>AWS Glue Data Catalog 経由で Iceberg 互換エンジンから可能</td></tr>
+      <tr><td>最小自動リフレッシュ間隔</td><td>10 分 (AWS Glue 6.0 以降)</td></tr>
+      <tr><td>スキーマ進化</td><td>非サポート (定義変更にはビューの再作成が必要)</td></tr>
+    </table>
+
+    <h3>API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/09/29</td>
+        <td><a href="https://awsapichanges.com/archive/changes/e9bb16-glue.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Glue</a></td>
+        <td>8 updated api methods - Add support for Glue system-managed materialized views</td>
+      </tr>
+      <tr>
+        <td>2026/09/30</td>
+        <td><a href="https://awsapichanges.com/archive/changes/ca596c-glue.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Glue</a></td>
+        <td>11 updated api methods - Enable Catalog ID for crawler, column statistics and materialized views</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Glue 6.0 以降を使用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ソーステーブルが AWS Glue Data Catalog に登録された Apache Iceberg (または Apache Hive) テーブルであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>保存先となる Amazon S3 Tables バケットが同一アカウント・同一リージョンに存在すること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ビュー作成者ロールに Glue Data Catalog (<code>GetTable</code>、<code>GetTables</code>、<code>CreateTable</code> など) とソーステーブルの S3 ロケーションへの読み取りアクセスがあること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>自動リフレッシュを利用する場合、ロールに <code>glue.amazonaws.com</code> を信頼する信頼ポリシーと <code>iam:PassRole</code> 権限が設定されていること</span></div>
+
+    <div class="step"><div class="step-number">1</div><div class="step-title">Spark セッションの設定</div></div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Python</span>
+        <span class="code-title">AWS Glue ジョブパラメータ</span>
+      </div>
+      <pre><code class="language-python"># AWS Glue ジョブのジョブパラメータに Iceberg 拡張と S3 Tables カタログを設定
+# system-managed materialized view を有効化する設定を追加
+DefaultArguments={
+    '--enable-glue-datacatalog': 'true',
+    '--conf': 'spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions '
+              '--conf spark.sql.catalog.s3t_catalog=org.apache.iceberg.spark.SparkCatalog '
+              '--conf spark.sql.catalog.s3t_catalog.type=glue '
+              '--conf spark.sql.catalog.s3t_catalog.glue.id=111122223333:s3tablescatalog/my-table-bucket '
+              '--conf spark.sql.mv.managed.enabled=true'
+}</code></pre>
+    </div>
+    <p class="note">Iceberg Spark 拡張、Amazon S3 Tables バケットをカタログとして参照する設定、およびシステム管理型マテリアライズドビューを有効化する <code>spark.sql.mv.managed.enabled=true</code> を追加します。</p>
+
+    <div class="step"><div class="step-number">2</div><div class="step-title">システム管理型マテリアライズドビューの作成</div></div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Python</span>
+        <span class="code-title">CREATE MANAGED MATERIALIZED VIEW</span>
+      </div>
+      <pre><code class="language-python">spark.sql("""
+    CREATE MANAGED MATERIALIZED VIEW s3t_catalog.analytics.customer_summary
+    AS
+    SELECT
+        customer_name,
+        COUNT(*) as order_count,
+        SUM(amount) as total_amount
+    FROM glue_catalog.sales.orders
+    GROUP BY customer_name
+""")</code></pre>
+    </div>
+    <p class="note"><code>MANAGED</code> キーワード付きで作成すると、AWS Glue が結果を計算して Amazon S3 Tables 内の Iceberg テーブルに書き込みます。ソーステーブルの参照には 3 部構成の命名規則 (カタログ.データベース.テーブル) を使用します。</p>
+
+    <div class="step"><div class="step-number">3</div><div class="step-title">作成ステータスの確認</div></div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">AWS CLI でステータス確認</span>
+      </div>
+      <pre><code class="language-bash">aws glue get-table \
+    --database-name analytics \
+    --name customer_summary \
+    --include-status-details</code></pre>
+    </div>
+    <p class="note"><code>GetTable</code> API を <code>IncludeStatusDetails=true</code> で呼び出し、作成ジョブのステータスを確認します。作成に失敗した場合は、テーブルステータスのエラーメッセージに失敗理由が含まれます。</p>
+
+    <div class="step"><div class="step-number">4</div><div class="step-title">リフレッシュとスケジュール管理</div></div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Python</span>
+        <span class="code-title">リフレッシュとスケジュール変更</span>
+      </div>
+      <pre><code class="language-python"># 手動リフレッシュ (AWS Glue がリフレッシュを実行)
+spark.sql("REFRESH MATERIALIZED VIEW s3t_catalog.analytics.customer_summary")
+
+# リフレッシュスケジュールの変更
+spark.sql("""
+    ALTER MATERIALIZED VIEW s3t_catalog.analytics.customer_summary
+    ADD SCHEDULE REFRESH EVERY 1 HOUR
+""")</code></pre>
+    </div>
+    <p class="note">システム管理型であっても、リフレッシュの実行やスケジュール変更はユーザーが行えます。実際の書き込み処理は AWS Glue が代行します。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="benefit-grid">
+      <div class="card">
+        <div class="card-title">💼 ビジネス面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>データの信頼性向上</strong>: 共有データセットが意図しない変更から保護され、組織横断でのデータ共有を安心して行える</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ガバナンス強化</strong>: 書き込み主体が AWS Glue に一元化され、「誰がデータを変更できるか」の統制が明確になる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コスト削減</strong>: 改ざん・破損を防ぐための複雑なアクセス権限設計や監視の負担を軽減できる</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🔧 技術面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>多層的な書き込み保護</strong>: 他エンジン経由、<code>UpdateTable</code> API 直接呼び出し、S3 上の Iceberg ファイル直接変更のいずれの経路からの変更も拒否される</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>オープンフォーマットの維持</strong>: 保護されていても標準の Apache Iceberg テーブルであるため、Iceberg 互換の任意のエンジンから読み取れる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>マネージドな運用</strong>: 計算、書き込み、スケジュールに基づくリフレッシュを AWS Glue のマネージドコンピュートが実行する</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>AWS Glue 6.0 以降が必要 (通常のマテリアライズドビューは 5.1 以降)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>保存先は Amazon S3 Tables バケットのみで、S3 汎用バケットは非サポート</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>スキーマ進化は非サポートのため、SQL 定義を変更するにはビューを削除して再作成する必要がある</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ソーステーブルはマテリアライズドビューと同一リージョン・同一アカウントに存在する必要がある (クロスリージョン・クロスアカウントは非サポート)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ビュー定義では <code>SORT BY</code>、<code>LIMIT</code>、<code>OFFSET</code>、<code>CLUSTER BY</code>、<code>ORDER BY</code> 句や非決定的関数 (<code>rand()</code>、<code>current_timestamp()</code> など) は使用できない</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span><code>CREATE MANAGED MATERIALIZED VIEW</code> は AWS Glue の作成完了を待つため、通常のマテリアライズドビュー作成より時間がかかる場合がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>ソーステーブルと結果整合性であり、リフレッシュまでの間は古いデータが返る可能性がある (即時整合性が必要な場合は手動リフレッシュを実行)</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>AWS Lake Formation の細粒度アクセス制御 (行・列・セルレベル) はマテリアライズドビューに対して現時点で非サポート</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>インクリメンタルリフレッシュは単一の SELECT-FROM-WHERE-GROUP BY-HAVING ブロックなど、限定された SQL サブセットのみをサポートする</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🏢 ユースケース 1: 組織横断で共有する信頼済みデータマートの提供</div>
+      <p><span class="label">シナリオ</span>: データプラットフォームチームが売上集計データを複数の分析チームに提供。各チームは Athena、Redshift、Spark など異なるエンジンを使用しており、集計結果が誰かに書き換えられないことを保証したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">共有データマートの作成</span></div>
+        <pre><code class="language-sql">CREATE MANAGED MATERIALIZED VIEW s3t_catalog.shared_marts.daily_sales_summary
+SCHEDULE REFRESH EVERY 1 HOUR
+AS
+SELECT
+    order_date,
+    region,
+    SUM(amount) as total_sales,
+    COUNT(*) as order_count
+FROM glue_catalog.sales.orders
+GROUP BY order_date, region</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 書き込みが AWS Glue のみに限定されるため、集計結果の正確性を保証した「信頼済みデータマート」として各チームに提供できる。各チームは使い慣れたエンジンでそのまま読み取れる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📜 ユースケース 2: 監査・レポーティング用データの改ざん防止</div>
+      <p><span class="label">シナリオ</span>: コンプライアンス要件により、監査用レポートの元データが生成後に変更されていないことを担保する必要がある。従来はオープンな Iceberg テーブルのため、S3 への直接書き込みを含むあらゆる変更経路を権限設計で塞ぐ必要があった。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">監査用データの作成</span></div>
+        <pre><code class="language-sql">CREATE MANAGED MATERIALIZED VIEW s3t_catalog.audit.monthly_transactions
+AS
+SELECT
+    account_id,
+    transaction_month,
+    SUM(amount) as monthly_total,
+    COUNT(*) as transaction_count
+FROM glue_catalog.finance.transactions
+GROUP BY account_id, transaction_month</code></pre>
+      </div>
+      <p><span class="label">効果</span>: カタログ API 経由、他エンジン経由、S3 直接書き込みのすべての変更経路がサービス側で拒否されるため、複雑な権限設計なしに「計算されたとおりの結果」を監査証跡として維持できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📊 ユースケース 3: BI ダッシュボード向け事前集計の安定提供</div>
+      <p><span class="label">シナリオ</span>: BI ダッシュボードが参照する事前集計テーブルを AWS Glue で管理。ETL ジョブの誤設定や開発者の誤操作により集計テーブルが上書きされ、ダッシュボードに誤った数値が表示される事故を防ぎたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">BI 向け事前集計の作成</span></div>
+        <pre><code class="language-sql">CREATE MANAGED MATERIALIZED VIEW s3t_catalog.bi.product_kpi
+SCHEDULE REFRESH EVERY 10 MINUTES
+AS
+SELECT
+    product_id,
+    COUNT(*) as view_count,
+    SUM(revenue) as total_revenue
+FROM glue_catalog.app.events
+GROUP BY product_id</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 誤操作や誤設定による上書きがサービス側で拒否されるため、ダッシュボードの数値品質を安定して維持できる。AWS Glue 6.0 以降では最短 10 分間隔の自動リフレッシュにより鮮度も確保できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p>What's New 発表には料金に関する記載はありません。マテリアライズドビューの計算・リフレッシュには AWS Glue のマネージドコンピュートが使用され、結果の保存には Amazon S3 Tables が使用されるため、それぞれのサービスの料金が適用されると考えられます。詳細は各サービスの料金ページを確認してください。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 利用可能リージョン</div>
+      <p>Apache Iceberg マテリアライズドビューがサポートされているすべてのリージョンで利用可能です。具体的なリージョン一覧は AWS Glue のドキュメントを参照してください。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>AWS Glue Data Catalog</strong>: ビュー定義とメタデータを保存し、ソーステーブルの変更検知、リフレッシュのスケジューリング、書き込み保護の実施を担う</span></div>
+    <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>Amazon S3 Tables</strong>: システム管理型マテリアライズドビューの保存先となるマネージド Iceberg ストレージ。S3 汎用バケットは本機能では非サポート</span></div>
+    <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>Amazon Athena / Amazon Redshift</strong>: Iceberg 互換エンジンとして、Glue Data Catalog 経由でマテリアライズドビューを直接読み取り可能</span></div>
+    <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>AWS Lake Formation</strong>: データレイクのアクセス制御に利用可能 (ただしマテリアライズドビューへの細粒度アクセス制御は現時点で非サポート)</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      Apache Iceberg マテリアライズドビューのシステム管理型書き込み保護により、計算結果への書き込みを <span class="highlight">AWS Glue のみに限定</span>し、オープンテーブルフォーマットの相互運用性を維持しながら、<span class="highlight">信頼できる一貫したデータセット</span>として共有できるようになりました。
+    </p>
+    <p>
+      複数チーム・複数エンジンでデータマートや集計結果を共有している場合は、AWS Glue 6.0 以降で <code>CREATE MANAGED MATERIALIZED VIEW</code> の採用を検討することを推奨します。既存のマテリアライズドビューを移行する場合は、保存先が Amazon S3 Tables に限定される点とスキーマ進化が非サポートである点に注意してください。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/system-managed-iceberg-materialized-views" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li><a href="https://docs.aws.amazon.com/glue/latest/dg/materialized-views.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Using materialized views with AWS Glue</a></li>
+      <li><a href="https://docs.aws.amazon.com/glue/latest/dg/materialized-views.html#materialized-views-system-managed" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: System-managed materialized views</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/e9bb16-glue.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 (awsapichanges.com)</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-09-30-system-managed-iceberg-materialized-views.md) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

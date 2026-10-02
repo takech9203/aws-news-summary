@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Redshift - フェデレーテッドアクセス許可環境でのセキュアロギングへのアクセス簡素化</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 16px 20px;
+  margin: 14px 0;
+}
+
+.feature-card .feature-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+
+.feature-card ul { margin: 0; padding-left: 20px; }
+.feature-card li { margin: 4px 0; }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF8A73; font-weight: 700; margin-bottom: 10px; font-size: 16px; }
+.after-box .ba-title { color: #7FD95E; font-weight: 700; margin-bottom: 10px; font-size: 16px; }
+
+.before-after ul { margin: 0; padding-left: 20px; }
+.before-after li { margin: 6px 0; font-size: 14.5px; }
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+.check-icon { color: #7FD95E; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14.5px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+td code, li code, p code {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+  word-break: break-all;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-content .step-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin: 14px 0;
+}
+.usecase .uc-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase p { margin: 6px 0; font-size: 14.5px; }
+.usecase .uc-label { color: var(--aws-white); font-weight: 600; }
+
+/* 注意ボックス */
+.warning-box {
+  background: rgba(255, 173, 51, 0.1);
+  border: 1px solid rgba(255, 173, 51, 0.5);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 16px 0;
+}
+.warning-box .warn-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.danger-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 16px 0;
+}
+.danger-box .danger-title {
+  color: #FF8A73;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+ul.plain { padding-left: 22px; margin: 8px 0; }
+ul.plain li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12.5px;
+  color: var(--aws-light-gray);
+}
+footer ul { padding-left: 20px; margin: 8px 0; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 720px) {
+  .before-after, .two-col { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="service-badge">🗄️ Amazon Redshift</div>
+    <h1>フェデレーテッドアクセス許可環境での<br>セキュアロギングへのアクセス簡素化</h1>
+    <div class="subtitle">📅 リリース日: <span class="date">2026 年 9 月 30 日</span> | 機能: DEBUG 権限によるセキュアロギングレコードの非マスク表示</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>Amazon Redshift が、フェデレーテッドアクセス許可と細粒度アクセス制御 <span class="highlight">FGAC</span> で保護されたデータに関わるクエリのトラブルシューティングと監査を容易にする、新しい <span class="highlight">DEBUG 権限</span>を発表しました。データ所有者は、特定の ID に対して、複数の Redshift データウェアハウスにまたがる<span class="highlight">セキュアロギングレコードをマスクなしで閲覧</span>することを許可できるようになりました。</p>
+    <p>フェデレーテッドアクセス許可では、データ権限を一度定義すれば、AWS アカウント内のすべてのウェアハウスで Redshift が自動的に適用します。FGAC で保護されたデータにクエリがアクセスすると、セキュアロギングにより、システムテーブル内の機密情報 (書き換えられたクエリテキスト、エラーメッセージ、オブジェクト名など) が自動的にマスクされます。今回のアップデートにより、セキュアロギングを無効化することなく、<span class="highlight">「誰がログを閲覧できるか」を正確かつ監査可能な形で制御</span>できるようになりました。</p>
+    <p>データ共有やデータメッシュ構成を採用し、プロデューサー / コンシューマー間で厳格なデータ保護を維持しながら、運用上のログ可視性も確保したい組織が主な対象です。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>FGAC 保護データに関わるクエリのログは、クエリテキストやエラーメッセージなどがマスクされるため、クエリ失敗時の原因調査が困難だった</li>
+          <li>監査担当者や管理者がログの詳細を確認するには、データ保護とログ可視性のどちらかを犠牲にするトレードオフが発生していた</li>
+          <li>マスクされていないログを特定のユーザーだけに見せる、きめ細かな制御手段がなかった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>スーパーユーザーまたはデータベース所有者が、標準の GRANT コマンドで DEBUG 権限を付与し、特定の ID に自身のクエリのマスクなしログレコードの閲覧を許可できるようになった</li>
+          <li>IAM ユーザー、IAM ロール、IAM Identity Center のユーザー / グループに付与でき、複数ウェアハウスにまたがる一貫したログ可視性を実現</li>
+          <li>コンシューマーアカウントの管理者に付与するとログ全体の可視性が得られ、Amazon S3 Tables へのエクスポートでも該当レコードはマスクされない</li>
+          <li>セキュアロギングを有効にしたまま、トラブルシューティングと監査要件の両方を満たせるようになった</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Catalog["📚 AWS Glue Data Catalog"]
+        FP["🛡️ フェデレーテッドアクセス許可<br/>FGAC ポリシーを一元定義"]
+    end
+
+    subgraph Account["☁️ AWS アカウント"]
+        subgraph WH["🗄️ Redshift データウェアハウス群"]
+            direction LR
+            RS1["⚙️ ウェアハウス A"]
+            RS2["⚙️ ウェアハウス B"]
+            RS1 ~~~ RS2
+        end
+        SysLog["📋 システムテーブル<br/>セキュアロギングでマスク"]
+        S3T[("🪣 Amazon S3 Tables<br/>システムテーブルエクスポート")]
+    end
+
+    Owner(["👤 スーパーユーザー /<br/>データベース所有者"])
+    Normal(["👤 一般ユーザー"])
+    Debug(["🔍 DEBUG 付与済みユーザー"])
+    Admin(["👥 アカウント管理者<br/>DEBUG 付与済み"])
+
+    FP --> WH
+    WH --> SysLog
+    SysLog --> S3T
+    Owner -->|GRANT DEBUG| Debug
+    Owner -->|GRANT DEBUG<br/>TO ADMINS OF ACCOUNT| Admin
+    Normal -.->|マスク済みレコード| SysLog
+    Debug -->|自身のクエリは<br/>マスクなしで閲覧| SysLog
+    Admin -->|マスクなしで閲覧| SysLog
+    Admin -.->|エクスポートも<br/>マスクなし| S3T
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class Account cloud
+    class WH,Catalog layer
+    class RS1,RS2 compute
+    class S3T storage
+    class SysLog internal
+    class Owner,Normal,Debug,Admin user
+    class FP decision
+      </pre>
+    </div>
+    <p>フェデレーテッドアクセス許可環境では、FGAC 保護データへのクエリのログレコードがシステムテーブル上で自動的にマスクされます。DEBUG 権限を付与された ID は自身のクエリのレコードをマスクなしで閲覧でき、アカウント管理者へ付与した場合は S3 Tables へのエクスポートもマスクなしで出力されます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">1️⃣ DEBUG 権限の新設</div>
+      <ul>
+        <li>フェデレーテッドアクセス許可を使用する Redshift ウェアハウス内のデータベースを対象とした新しい権限</li>
+        <li>スーパーユーザーまたはデータベース所有者が、標準の <code>GRANT</code> / <code>REVOKE</code> コマンドで付与・取り消しを実行</li>
+        <li>付与された ID は、自身のクエリが生成したシステムログレコードをマスクなしで閲覧可能 (他のユーザーやスーパーユーザーでも閲覧不可)</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">2️⃣ 複数の付与対象をサポート</div>
+      <ul>
+        <li>グローバル ID への付与: IAM ユーザー (<code>IAM:</code> プレフィックス)、IAM ロール (<code>IAMR:</code> プレフィックス)、IAM Identity Center ユーザー (IdC 名前空間プレフィックス)</li>
+        <li>IdC グループへの付与: <code>TO ROLE</code> 構文でグループメンバー各自が自身のクエリのレコードを閲覧可能</li>
+        <li>アカウント管理者への付与: <code>TO ADMINS OF ACCOUNT</code> 構文で、指定したコンシューマーアカウントのすべてのスーパーユーザーがマスクなしレコードを閲覧可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">3️⃣ S3 Tables エクスポートとの連携</div>
+      <ul>
+        <li>アカウント管理者向けに許可されたレコードは、Redshift がシステムテーブルデータを Amazon S3 Tables にエクスポートする際もマスクされない</li>
+        <li>監査基盤やログ分析基盤へのエクスポート後も、必要な詳細情報を保持可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">4️⃣ 複数ウェアハウスにまたがる一貫した制御</div>
+      <ul>
+        <li>フェデレーテッドアクセス許可はアカウント内のすべてのウェアハウスに自動適用されるため、DEBUG によるログ可視性の制御も複数ウェアハウスにわたり一貫して機能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>🔒 セキュアロギングの動作</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>マスク対象</td><td>FGAC 保護データにアクセスしたクエリのシステムテーブルレコード</td></tr>
+      <tr><td>マスクされる情報</td><td>書き換え後のクエリテキスト、エラーメッセージ、オブジェクト名、行数 / バイト数などの統計情報</td></tr>
+      <tr><td>マスク形式</td><td>テキストは <code>******</code> (最大 6 文字分のアスタリスク)、数値は <code>-1</code></td></tr>
+      <tr><td>対象システムテーブル例</td><td><code>SYS_QUERY_HISTORY</code>、<code>SYS_QUERY_DETAIL</code>、<code>STL_QUERY</code>、<code>STL_QUERYTEXT</code>、<code>SVL_STATEMENTTEXT</code> など多数</td></tr>
+      <tr><td>付与可能者</td><td>スーパーユーザーまたはデータベース所有者</td></tr>
+      <tr><td>付与対象データベース</td><td>フェデレーテッドアクセス許可を使用するウェアハウス内のデータベースのみ (ローカルデータベースや Lake Formation / Glue Data Catalog 由来のデータベースは不可)</td></tr>
+    </table>
+
+    <h3>💻 GRANT DEBUG の構文例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">SQL</span>
+        <span class="code-title">GRANT / REVOKE DEBUG の構文例</span>
+      </div>
+      <pre><code class="language-sql">-- IAM ユーザーに DEBUG を付与 (自身のクエリのレコードをマスクなしで閲覧可能)
+GRANT DEBUG ON DATABASE sales_db TO "IAM:analyst_user";
+
+-- IAM ロールに DEBUG を付与
+GRANT DEBUG ON DATABASE sales_db TO "IAMR:AuditRole";
+
+-- IAM Identity Center のグループに DEBUG を付与
+GRANT DEBUG ON DATABASE sales_db TO ROLE "AWSIDC:audit-group";
+
+-- コンシューマーアカウントの管理者全員に DEBUG を付与
+GRANT DEBUG ON DATABASE sales_db TO ADMINS OF ACCOUNT '123456789012';
+
+-- DEBUG の取り消し
+REVOKE DEBUG ON DATABASE sales_db FROM "IAM:analyst_user";</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>📋 前提条件</h3>
+    <ul class="plain">
+      <li>Redshift ウェアハウス (クラスターまたは Serverless 名前空間) がフェデレーテッドアクセス許可を使用するよう AWS Glue Data Catalog に登録されていること</li>
+      <li>対象データベースで FGAC によるデータ保護とセキュアロギングが機能していること</li>
+      <li><code>GRANT DEBUG</code> を実行する ID がスーパーユーザーまたはデータベース所有者であること</li>
+    </ul>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">マスクされているログレコードの確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SQL</span></div>
+          <pre><code class="language-sql">SELECT query_id, query_text, status, error_message
+FROM sys_query_history
+WHERE status = 'failed'
+ORDER BY start_time DESC
+LIMIT 10;</code></pre>
+        </div>
+        <p>FGAC 保護データにアクセスしたクエリのレコードでは、<code>query_text</code> や <code>error_message</code> が <code>******</code> のようにマスクされていることを確認します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">DEBUG 権限の付与</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SQL</span></div>
+          <pre><code class="language-sql">GRANT DEBUG ON DATABASE sales_db TO "IAM:analyst_user";</code></pre>
+        </div>
+        <p>スーパーユーザーまたはデータベース所有者として実行し、指定した IAM ユーザーに <code>sales_db</code> データベースに対する DEBUG 権限を付与します。DEBUG は 1 ステートメントにつき 1 データベースのみ指定でき、他の権限と組み合わせることはできません。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">マスクなしレコードの閲覧</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SQL</span></div>
+          <pre><code class="language-sql">SELECT query_id, query_text, status, error_message
+FROM sys_query_history
+WHERE user_id = current_user_id
+ORDER BY start_time DESC
+LIMIT 10;</code></pre>
+        </div>
+        <p>DEBUG を付与された ID が、権限付与後に自身が実行したクエリのログレコードを照会すると、クエリテキストやエラーメッセージがマスクされずに表示されます。DEBUG は<span class="highlight">付与後に生成されたレコードにのみ適用</span>される点に注意してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div class="card">
+        <h3 style="margin-top: 0;">💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">監査とコンプライアンスの両立</strong>: データ保護 (セキュアロギング) を維持したまま、監査担当者に必要なログ可視性を提供でき、規制要件への対応が容易になる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">運用効率の向上</strong>: クエリ失敗時のトラブルシューティングに必要な情報へ迅速にアクセスでき、問題解決までの時間を短縮できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">ガバナンスの強化</strong>: 「誰がマスクなしログを閲覧できるか」を GRANT / REVOKE で明示的かつ監査可能な形で管理できる</span></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top: 0;">🔧 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">標準 SQL での制御</strong>: 既存の GRANT / REVOKE コマンド体系に統合されており、新しいツールや API を学習する必要がない</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">最小権限の原則に適合</strong>: 付与された ID は原則として自身のクエリのレコードのみ閲覧可能で、必要以上の情報開示を防げる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">マルチウェアハウス対応</strong>: フェデレーテッドアクセス許可の仕組みにより、アカウント内の複数ウェアハウスで一貫したログ可視性制御を実現できる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <div class="danger-box">
+      <div class="danger-title">🚫 制限事項</div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>DEBUG はフェデレーテッドアクセス許可を使用するウェアハウス内のデータベースにのみ付与可能 (ローカルデータベースや、AWS Lake Formation / AWS Glue Data Catalog のカタログから作成したデータベースには付与不可)</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>DEBUG は <code>GRANT ALL ON DATABASE</code> には含まれず、明示的に付与する必要がある</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>1 ステートメントで付与できるのは 1 データベースのみで、他の権限との同時付与は不可</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>PUBLIC、ローカルユーザー、ローカルグループには付与できない</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>DEBUG は将来のレコードにのみ有効 (付与前に生成されたレコードはマスクされたまま。取り消し後も、有効期間中に生成されたレコードはログの保持期間中閲覧可能)</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>複数のフェデレーテッドアクセス許可データベースを結合するクエリでは、FGAC 保護データを含むすべてのデータベースに対して DEBUG が必要</span></div>
+    </div>
+
+    <div class="warning-box">
+      <div class="warn-title">🤔 考慮すべき点</div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>IAM ロールに DEBUG を付与した場合、<code>ALTER USER SET GLOBAL IDENTITY</code> と <code>SET SESSION AUTHORIZATION</code> でそのロールを引き受けたローカルスーパーユーザーもマスクなしレコードを閲覧できる (IAM ユーザーと IdC ユーザーはこの方法では偽装できない)</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>クラスターや名前空間を AWS Glue Data Catalog から登録解除すると、既存の DEBUG 付与は保持されるが効果を持たなくなる (再登録すると再び有効化される。付与はデータベース削除時にのみ削除される)</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span><code>TO ADMINS OF ACCOUNT</code> で指定できるのはプロデューサーを所有するアカウントと同一のアカウントのみ</span></div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="uc-title">🧩 ユースケース 1: データメッシュ環境でのクエリトラブルシューティング</div>
+      <p><span class="uc-label">シナリオ</span>: プロデューサーチームが FGAC で保護した共有データを、コンシューマーチームのアナリストがクエリしているが、クエリ失敗時にエラーメッセージがマスクされており原因を特定できない。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-sql">-- データベース所有者がアナリストの IAM ユーザーに DEBUG を付与
+GRANT DEBUG ON DATABASE shared_sales_db TO "IAM:analyst_tanaka";</code></pre>
+      </div>
+      <p><span class="uc-label">効果</span>: アナリストは自身のクエリのエラーメッセージとクエリテキストをマスクなしで確認でき、プロデューサーチームへの問い合わせなしに自己解決が可能になる。他のユーザーのログは引き続き保護される。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">🏦 ユースケース 2: 監査チームによるコンプライアンス監査</div>
+      <p><span class="uc-label">シナリオ</span>: 金融機関の監査チームが、コンシューマーアカウント上のすべてのクエリアクティビティを定期的に監査する必要があるが、セキュアロギングは有効のまま維持したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-sql">-- コンシューマーアカウントの管理者全員にログ全体の可視性を付与
+GRANT DEBUG ON DATABASE regulated_data_db TO ADMINS OF ACCOUNT '123456789012';</code></pre>
+      </div>
+      <p><span class="uc-label">効果</span>: 指定アカウントのスーパーユーザーがマスクなしのログレコードを閲覧でき、S3 Tables へのエクスポート時もマスクされないため、既存の監査パイプラインで詳細な監査証跡を分析できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">👥 ユースケース 3: IAM Identity Center グループ単位での運用チームへの権限管理</div>
+      <p><span class="uc-label">シナリオ</span>: 複数の Redshift ウェアハウスを運用するプラットフォームチームのメンバーが入れ替わるため、個人単位ではなくグループ単位でログ可視性を管理したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-sql">-- IdC グループに DEBUG を付与
+GRANT DEBUG ON DATABASE platform_db TO ROLE "AWSIDC:platform-ops";</code></pre>
+      </div>
+      <p><span class="uc-label">効果</span>: グループメンバー各自が自身のクエリのマスクなしレコードを閲覧できる。メンバーの追加・削除は IAM Identity Center 側のグループ管理に集約され、Redshift 側での個別権限管理が不要になる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card">
+        <h3 style="margin-top: 0;">💵 料金</h3>
+        <p style="font-size: 14.5px;">DEBUG 権限およびセキュアロギングの利用自体に<span class="highlight">追加料金は発生しません</span>。Amazon Redshift の標準料金 (プロビジョニングされたクラスターまたは Serverless) が適用されます。システムテーブルデータを Amazon S3 Tables にエクスポートする場合は、S3 Tables の標準料金が別途発生します。</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top: 0;">🌏 利用可能リージョン</h3>
+        <p style="font-size: 14.5px;">Amazon Redshift が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます (東京・大阪リージョンを含む)。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="icon-text" style="display: flex; align-items: flex-start; gap: 8px; margin: 8px 0;"><span style="color: var(--aws-orange);">→</span><span><strong style="color: var(--aws-white);">AWS Glue Data Catalog</strong>: フェデレーテッドアクセス許可の基盤。ウェアハウスをカタログに登録することでアカウント全体のデータ権限を一元管理する</span></div>
+      <div class="icon-text" style="display: flex; align-items: flex-start; gap: 8px; margin: 8px 0;"><span style="color: var(--aws-orange);">→</span><span><strong style="color: var(--aws-white);">AWS Lake Formation</strong>: FGAC ポリシーの定義に使用され、行・列・セルレベルのアクセス制御を提供する</span></div>
+      <div class="icon-text" style="display: flex; align-items: flex-start; gap: 8px; margin: 8px 0;"><span style="color: var(--aws-orange);">→</span><span><strong style="color: var(--aws-white);">AWS IAM / IAM Identity Center</strong>: DEBUG の付与対象となるグローバル ID (IAM ユーザー、IAM ロール、IdC ユーザー / グループ) を管理する</span></div>
+      <div class="icon-text" style="display: flex; align-items: flex-start; gap: 8px; margin: 8px 0;"><span style="color: var(--aws-orange);">→</span><span><strong style="color: var(--aws-white);">Amazon S3 Tables</strong>: Redshift システムテーブルデータのエクスポート先。アカウント管理者向けに許可されたレコードはマスクなしでエクスポートされる</span></div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>このアップデートにより、フェデレーテッドアクセス許可と FGAC によるデータ保護を維持したまま、トラブルシューティングや監査に必要なログ可視性を<span class="highlight">特定の ID にだけ付与</span>できるようになりました。データ共有やデータメッシュ構成を採用している組織は、セキュアロギングを無効化する運用回避策が不要になるため、監査担当者や運用チーム向けの DEBUG 権限付与ポリシーの整備を検討することを推奨します。</p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/09/redshift-secure-logging-permissions/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/09/redshift-secure-logging-permissions/</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/redshift/latest/dg/federated-permissions.html" target="_blank" rel="noopener noreferrer">ドキュメント: フェデレーテッドアクセス許可</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/redshift/latest/dg/r_GRANT-usage-notes.html" target="_blank" rel="noopener noreferrer">ドキュメント: GRANT の使用に関する注意事項 (DEBUG 権限)</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/redshift/latest/mgmt/db-auditing-secure-logging.html" target="_blank" rel="noopener noreferrer">ドキュメント: セキュアロギング</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/redshift/pricing/" target="_blank" rel="noopener noreferrer">料金ページ: https://aws.amazon.com/redshift/pricing/</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-09-30-redshift-secure-logging-permissions.md) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

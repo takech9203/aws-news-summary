@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon DynamoDB - Amazon S3 へのフィルタ付きエクスポート</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 8px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 10px;
+    }
+
+    .date-badge {
+      background: var(--aws-dark-squid);
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 8px 16px;
+      color: var(--aws-smile-orange);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+
+    /* Before / After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3 { color: #FF6B4A; margin-top: 0; }
+    .after-box h3 { color: #4CAF50; margin-top: 0; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .before-box li, .after-box li {
+      margin: 8px 0;
+      padding-left: 24px;
+      position: relative;
+      font-size: 14px;
+    }
+
+    .before-box li::before {
+      content: "✗";
+      position: absolute;
+      left: 0;
+      color: #FF6B4A;
+      font-weight: 700;
+    }
+
+    .after-box li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #4CAF50;
+      font-weight: 700;
+    }
+
+    /* Stat cards */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.3;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-smile-orange);
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code blocks */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: 700;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    code.inline {
+      background: rgba(255, 153, 0, 0.12);
+      color: var(--aws-smile-orange);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+    }
+
+    /* Steps */
+    .step {
+      display: flex;
+      gap: 14px;
+      margin: 16px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .step-content { flex: 1; min-width: 0; }
+    .step-content h3 { margin-top: 2px; }
+
+    /* Merit / Demerit */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .merit-box {
+      background: rgba(29, 129, 2, 0.08);
+      border: 1px solid rgba(29, 129, 2, 0.5);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .merit-box h3 { margin-top: 0; color: #4CAF50; }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: #4CAF50; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); flex-shrink: 0; }
+    .cross-icon { color: #FF6B4A; flex-shrink: 0; }
+
+    /* Use cases */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 14px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .effect-label {
+      display: inline-block;
+      background: rgba(29, 129, 2, 0.25);
+      color: #4CAF50;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 2px 10px;
+      border-radius: 12px;
+      margin-right: 6px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    ul.plain {
+      padding-left: 20px;
+      margin: 8px 0;
+    }
+
+    ul.plain li { margin: 6px 0; }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a { word-break: break-all; }
+
+    @media (max-width: 700px) {
+      .before-after, .merit-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- ヘッダー -->
+    <div class="header">
+      <div>
+        <span class="service-badge">Amazon DynamoDB</span>
+        <h1>🗄️ Amazon S3 へのフィルタ付きエクスポート</h1>
+        <div class="subtitle">キー条件式・フィルタ式・射影式で、必要な項目と属性だけを S3 へ直接出力</div>
+      </div>
+      <div class="date-badge">📅 2026 年 10 月 1 日</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📝 概要</h2>
+      <p>
+        Amazon DynamoDB が、Amazon S3 へのテーブルデータエクスポートで<span class="highlight">フィルタリング機能</span>をサポートしました。
+        <code class="inline">Query</code> / <code class="inline">Scan</code> と同じ構文の<strong>キー条件式</strong>・<strong>フィルタ式</strong>・<strong>射影式</strong>を使い、
+        エクスポート対象の項目と属性を絞り込めます。エクスポートはポイントインタイムリカバリ (PITR) のバックアップデータから読み取るため、
+        テーブルのキャパシティを消費せず、<span class="highlight">本番トラフィックに影響しません</span>。
+      </p>
+      <p>
+        特定テナントのデータ復旧、機密属性を除外したデータ共有、コンプライアンス要件に沿った分析など、
+        テーブルの一部データだけが必要なユースケースに適しており、マルチテナント構成の大規模テーブルを運用する SaaS 事業者に特に有用です。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before: アップデート前の課題</h3>
+          <ul>
+            <li>エクスポートはテーブル全体または期間内の全変更分のみで、特定の項目・属性だけを取り出せなかった</li>
+            <li>一部データのみ必要でも、全体エクスポート後に Athena や Glue で後処理が必要となり、追加コストと手間が発生</li>
+            <li>機密属性を含むテーブルの外部共有では、エクスポート後に別途マスキングや属性除去が必要だった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ After: アップデート後の改善</h3>
+          <ul>
+            <li>キー条件式・フィルタ式・射影式の組み合わせで、必要な項目と属性のみを直接 S3 にエクスポート</li>
+            <li>キー条件式でパーティションキーを指定すると、一致データのみ読み取られ、処理データ量と課金額を削減</li>
+            <li>射影式で機密属性を除外した状態でエクスポートでき、データ共有時の後処理が不要</li>
+            <li>フルエクスポートと増分エクスポートの両方でフィルタリングを利用可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph DDB["🗄️ Amazon DynamoDB"]
+        Table[("📋 テーブル<br/>PITR 有効")]
+        PITR["🕐 ポイントインタイム<br/>リカバリデータ"]
+    end
+
+    subgraph Export["⚙️ フィルタ付きエクスポート"]
+        KCE{"🔑 キー条件式<br/>読み取りデータを削減"}
+        FE{"🔍 フィルタ式<br/>読み取り後に適用"}
+        PE{"✂️ 射影式<br/>属性を選択"}
+    end
+
+    subgraph S3Side["☁️ Amazon S3"]
+        Bucket[("🪣 S3 バケット<br/>DynamoDB JSON / Ion")]
+    end
+
+    User(["👤 ユーザー"]) -->|ExportTableToPointInTime<br/>FilterSpecification| Export
+    Table --> PITR
+    PITR --> KCE
+    KCE --> FE
+    FE --> PE
+    PE --> Bucket
+    Bucket -.-> Athena["📊 Amazon Athena<br/>分析"]
+    Bucket -.-> Import["📥 DynamoDB<br/>Import from S3"]
+
+    classDef ddb fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class DDB ddb
+    class Export,S3Side layer
+    class Table database
+    class Bucket storage
+    class KCE,FE,PE decision
+    class User user
+    class PITR,Athena,Import internal
+        </pre>
+      </div>
+      <p style="font-size: 14px;">
+        PITR データからの読み取り時に<strong>キー条件式</strong>でデータ量を削減し、その後<strong>フィルタ式</strong>と<strong>射影式</strong>で項目・属性を絞り込んで S3 に出力します。
+        出力データは Athena での分析や DynamoDB Import from S3 による別テーブルへの取り込みに利用できます。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="card">
+        <div class="card-title">🔑 キー条件式 (KeyConditionExpression)</div>
+        <p style="margin: 0; font-size: 14px;">
+          プライマリキーに基づいて項目を選択。<code class="inline">Query</code> 操作と同じ構文で、単一のパーティションキー値を等価比較で指定し、オプションでソートキー条件を追加できます。
+          一致するパーティションのみが読み取られるため、<span class="highlight">読み取りデータ量と課金額を削減</span>できます。非キー属性の参照や複数パーティションキー値の指定は不可。
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔍 フィルタ式 (FilterExpression)</div>
+        <p style="margin: 0; font-size: 14px;">
+          キー属性・非キー属性の両方に条件を適用可能。<code class="inline">Scan</code> 操作と同じ構文で、等価・不等価・<code class="inline">OR</code> に加え、
+          <code class="inline">contains</code>、<code class="inline">IN</code>、<code class="inline">begins_with</code>、<code class="inline">BETWEEN</code>、<code class="inline">attribute_exists</code>、<code class="inline">size</code> をサポート。
+          データの<strong>読み取り後</strong>に適用されるため、処理データ量は削減されません。キー条件式で使用したキー属性の再参照は不可。
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">✂️ 射影式 (ProjectionExpression)</div>
+        <p style="margin: 0; font-size: 14px;">
+          エクスポート出力に含める属性を指定。他の DynamoDB 操作の射影式と同じ構文で、メールアドレスや電話番号などの<span class="highlight">機密属性を除外したエクスポート</span>が可能です。
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔄 フル / 増分エクスポートの両対応</div>
+        <p style="margin: 0; font-size: 14px;">
+          フィルタリングはフルエクスポートと増分エクスポートの両方で動作します。増分エクスポートでは変更された各項目の<strong>最新イメージ</strong>に対してフィルタを評価し、
+          削除された項目は新イメージが存在しないため<strong>旧イメージ</strong>に対して評価します。
+        </p>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>📏 式の制限</h3>
+      <table>
+        <tr><th>項目</th><th>制限</th></tr>
+        <tr><td>式のサイズ</td><td>最大 4 KB</td></tr>
+        <tr><td>属性名</td><td>最大 250 バイト</td></tr>
+        <tr><td>属性値</td><td>最大 2 MB</td></tr>
+        <tr><td>式に含められる演算子数</td><td>最大 300 個</td></tr>
+        <tr><td>キー条件式</td><td>単一のパーティションキー値のみ (等価比較)、ソートキー条件はオプション</td></tr>
+        <tr><td>エクスポート形式</td><td>DynamoDB JSON または Amazon Ion</td></tr>
+      </table>
+
+      <h3>📋 API 変更履歴</h3>
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/09/30</td>
+          <td><a href="https://awsapichanges.com/archive/changes/ca596c-dynamodb.html" target="_blank" rel="noopener noreferrer" class="aws-link">dynamodb</a></td>
+          <td><code class="inline">ExportTableToPointInTime</code> に <code class="inline">FilterSpecification</code> パラメータを追加、<code class="inline">DescribeExport</code> のレスポンスに <code class="inline">FilterSpecification</code> を追加</td>
+        </tr>
+      </table>
+
+      <h3>🧩 FilterSpecification の構造</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">FilterSpecification パラメータ</span>
+        </div>
+        <pre><code class="language-json">{
+  "FilterSpecification": {
+    "KeyConditionExpression": "string",
+    "FilterExpression": "string",
+    "ProjectionExpression": "string",
+    "ExpressionAttributeNames": {
+      "#name": "AttributeName"
+    },
+    "ExpressionAttributeValues": {
+      ":value": { "S": "string" }
+    }
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>✅ 前提条件</h3>
+      <ul class="plain">
+        <li>エクスポート元の DynamoDB テーブルで<span class="highlight">PITR が有効</span>になっていること</li>
+        <li>エクスポート先の S3 バケットが存在し、適切な書き込み権限があること (クロスアカウント・クロスリージョンの宛先もサポート)</li>
+        <li><code class="inline">dynamodb:ExportTableToPointInTime</code> および S3 への書き込みに必要な IAM 権限があること</li>
+      </ul>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>PITR の有効化を確認</h3>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">継続バックアップ設定の確認</span>
+            </div>
+            <pre><code class="language-bash">aws dynamodb describe-continuous-backups \
+  --table-name MyTable</code></pre>
+          </div>
+          <p style="font-size: 14px; margin: 8px 0 0 0;">
+            <code class="inline">PointInTimeRecoveryStatus</code> が <code class="inline">ENABLED</code> であることを確認。無効の場合は <code class="inline">update-continuous-backups</code> で有効化します。
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>フィルタ付きエクスポートの実行</h3>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">特定テナントのみをエクスポート</span>
+            </div>
+            <pre><code class="language-bash">aws dynamodb export-table-to-point-in-time \
+  --table-arn arn:aws:dynamodb:ap-northeast-1:123456789012:table/MyTable \
+  --s3-bucket my-export-bucket \
+  --s3-prefix exports/tenant-4213 \
+  --export-format DYNAMODB_JSON \
+  --export-type FULL_EXPORT \
+  --filter-specification '{
+    "KeyConditionExpression": "#tid = :tid",
+    "ExpressionAttributeNames": {"#tid": "TenantId"},
+    "ExpressionAttributeValues": {":tid": {"S": "tenant-4213"}}
+  }'</code></pre>
+          </div>
+          <p style="font-size: 14px; margin: 8px 0 0 0;">
+            パーティションキー <code class="inline">TenantId</code> が <code class="inline">tenant-4213</code> に一致する項目のみをエクスポート。キー条件式により一致するパーティションのみが読み取られます。
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>エクスポートステータスの確認</h3>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">進行状況の確認</span>
+            </div>
+            <pre><code class="language-bash">aws dynamodb describe-export \
+  --export-arn arn:aws:dynamodb:ap-northeast-1:123456789012:table/MyTable/export/01234567890123-abcdefgh</code></pre>
+          </div>
+          <p style="font-size: 14px; margin: 8px 0 0 0;">
+            <code class="inline">ExportStatus</code> が <code class="inline">COMPLETED</code> で完了。レスポンスには指定した <code class="inline">FilterSpecification</code> も含まれ、エクスポート条件を後から確認できます。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <div class="merit-grid">
+        <div class="merit-box">
+          <h3>💼 ビジネス面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト削減</strong>: キー条件式の使用時は一致したデータ量のみ課金。フィルタリングによる追加料金なし</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>データ共有の安全性向上</strong>: 射影式で機密属性を除外でき、外部提供時のリスクと後処理コストを低減</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>障害復旧の迅速化</strong>: 影響を受けた特定テナント・キー範囲のみを抽出でき、復旧時間を短縮</span></div>
+        </div>
+        <div class="merit-box">
+          <h3>⚙️ 技術面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>本番環境への無影響</strong>: PITR データから読み取るため、テーブルのキャパシティを消費しない</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>既存スキルの活用</strong>: <code class="inline">Query</code> / <code class="inline">Scan</code> と同じ式構文で、新しい構文の学習が不要</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>パイプラインの簡素化</strong>: Athena / Glue による後処理工程を削減</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>🚧 制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>エクスポート元テーブルで PITR の有効化が必須 (エクスポート可能な期間は最大 35 日間)</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>キー条件式は単一のパーティションキー値の等価比較のみ。複数値や不等価条件はフィルタ式で指定が必要</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>フィルタ式は読み取り後に適用されるため、非キー属性のフィルタでは課金対象データ量は削減されない</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>セカンダリインデックスに対するエクスポートはサポートされない</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>式のサイズは最大 4 KB、演算子は最大 300 個までの制限</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>AWS GovCloud (US) リージョンでは利用不可</span></div>
+
+      <h3>🤔 考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>エクスポートはパーティション間で結果整合性となり、トランザクションを考慮しない</span></div>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>射影式は属性値の中身を検査しない。フリーテキスト属性内の個人情報は属性ごと除外しない限り出力される</span></div>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>エクスポートごとに 10 MB の最低課金データ量がある</span></div>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>エクスポート出力の S3 ライフサイクル管理はユーザー側で実施。エクスポートのメタデータは 90 日で期限切れ</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">1️⃣ マルチテナントテーブルにおける特定テナントの復旧</div>
+        <p style="font-size: 14px; margin: 0 0 8px 0;">
+          不具合のあるデプロイにより、4 TB のマルチテナントテーブルのうち 1 テナントの約 48,000 項目が破損。該当テナントのデータのみを障害発生前の状態に復旧したいケース。
+        </p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">障害期間の増分エクスポート + テナントフィルタ</span>
+          </div>
+          <pre><code class="language-bash">aws dynamodb export-table-to-point-in-time \
+  --table-arn arn:aws:dynamodb:ap-northeast-1:123456789012:table/MultiTenantTable \
+  --export-type INCREMENTAL_EXPORT \
+  --incremental-export-specification '{
+    "ExportFromTime": "2026-09-30T00:00:00Z",
+    "ExportToTime": "2026-09-30T06:00:00Z",
+    "ExportViewType": "NEW_AND_OLD_IMAGES"
+  }' \
+  --s3-bucket my-recovery-bucket \
+  --export-format DYNAMODB_JSON \
+  --filter-specification '{
+    "KeyConditionExpression": "#tid = :tid",
+    "ExpressionAttributeNames": {"#tid": "TenantId"},
+    "ExpressionAttributeValues": {":tid": {"S": "tenant-4213"}}
+  }'</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">
+          <span class="effect-label">効果</span><code class="inline">NEW_AND_OLD_IMAGES</code> で影響項目と障害前イメージの両方を抽出。Athena で破損レコードを特定し、条件付き <code class="inline">PutItem</code> で旧イメージを書き戻すことで、テーブル全体を復元せずに特定テナントのみを復旧できます。
+        </p>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">2️⃣ 機密属性を除外したパートナーへのデータ共有</div>
+        <p style="font-size: 14px; margin: 0 0 8px 0;">
+          特定テナントの注文履歴をパートナー企業に提供したいが、顧客のメールアドレスや電話番号などの個人情報は除外する必要があるケース。
+        </p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <span class="code-title">射影式で必要な属性のみを指定</span>
+          </div>
+          <pre><code class="language-json">{
+  "KeyConditionExpression": "#tid = :tid",
+  "ProjectionExpression": "TenantId, OrderId, OrderDate, OrderAmount, OrderStatus",
+  "ExpressionAttributeNames": {"#tid": "TenantId"},
+  "ExpressionAttributeValues": {":tid": {"S": "tenant-100"}}
+}</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">
+          <span class="effect-label">効果</span><code class="inline">CustomerEmail</code> や <code class="inline">CustomerPhone</code> などの機密属性を含まないエクスポートを直接生成。エクスポート後のマスキング処理が不要になり、情報漏えいリスクを低減できます。
+        </p>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">3️⃣ テナントの別リージョンへの移行</div>
+        <p style="font-size: 14px; margin: 0 0 8px 0;">
+          特定テナントのデータレジデンシー要件に対応するため、該当テナントのデータのみを別リージョンの新しいテーブルに移行したいケース。
+        </p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">クロスリージョン S3 へのフィルタ付きエクスポート</span>
+          </div>
+          <pre><code class="language-bash"># 1. 移行先リージョンの S3 バケットへフィルタ付きフルエクスポート
+aws dynamodb export-table-to-point-in-time \
+  --table-arn arn:aws:dynamodb:ap-northeast-1:123456789012:table/MultiTenantTable \
+  --export-type FULL_EXPORT \
+  --s3-bucket my-eu-bucket \
+  --export-format DYNAMODB_JSON \
+  --filter-specification '{
+    "KeyConditionExpression": "#tid = :tid",
+    "ExpressionAttributeNames": {"#tid": "TenantId"},
+    "ExpressionAttributeValues": {":tid": {"S": "tenant-eu-55"}}
+  }'
+
+# 2. 移行先リージョンで DynamoDB Import from S3 を実行して新テーブルを作成</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">
+          <span class="effect-label">効果</span>クロスリージョンの S3 を宛先にしたフィルタ付きエクスポートと DynamoDB Import from S3 の組み合わせで、特定テナントのみを別リージョンへ移行。中間処理用の ETL ジョブが不要になります。
+        </p>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p style="font-size: 14px;">
+        既存のフルエクスポート / 増分エクスポートと同じ <strong>GB 単位の料金体系</strong>で、<span class="highlight">フィルタリングに対する追加料金はありません</span>。
+      </p>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-value">追加料金 0 円</div>
+          <div class="stat-label">フィルタリング機能自体は無料。既存のエクスポート料金のみ</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">一致分のみ課金</div>
+          <div class="stat-label">キー条件式の使用時は一致したデータ量に基づいて課金 (最低 10 MB / エクスポート)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">削減なし</div>
+          <div class="stat-label">フィルタ式のみの場合は読み取り後の適用のため、課金対象データ量は変わらない</div>
+        </div>
+      </div>
+      <p style="font-size: 13px;">
+        その他、S3 のストレージ / リクエスト料金、Athena のスキャン料金、PITR の継続バックアップ料金が別途発生します。
+        詳細は <a href="https://aws.amazon.com/dynamodb/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">DynamoDB 料金ページ</a> を参照してください。
+      </p>
+    </div>
+
+    <!-- リージョン -->
+    <div class="section">
+      <h2>🌏 利用可能リージョン</h2>
+      <p style="margin: 0;">
+        <span class="highlight">AWS GovCloud (US) リージョンを除くすべての AWS リージョン</span>で利用可能です (東京・大阪リージョンを含む)。
+      </p>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <div class="card-title">🪣 Amazon S3</div>
+        <p style="margin: 0; font-size: 14px;">エクスポートの出力先。クロスアカウント・クロスリージョンのバケットも指定可能。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🕐 DynamoDB ポイントインタイムリカバリ (PITR)</div>
+        <p style="margin: 0; font-size: 14px;">エクスポートのデータソース。フィルタ付きエクスポートの利用には PITR の有効化が必須。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 Amazon Athena</div>
+        <p style="margin: 0; font-size: 14px;">エクスポートされた DynamoDB JSON / Ion データを S3 上で直接クエリして分析可能。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">📥 DynamoDB Import from S3</div>
+        <p style="margin: 0; font-size: 14px;">エクスポートしたデータから新しいテーブルを作成でき、テナント移行などに活用可能。</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📌 まとめ</h2>
+      <p>
+        DynamoDB のフィルタ付きエクスポートにより、テーブル全体をエクスポートせずに<span class="highlight">必要な項目と属性のみを S3 に出力</span>できるようになり、
+        特定テナントの復旧、安全なデータ共有、コンプライアンス対応の分析が大幅に簡素化されました。
+        特にキー条件式を使用した場合はエクスポートコストの削減効果も大きいため、マルチテナントテーブルを運用しているユーザーは、
+        既存のエクスポートパイプラインへのフィルタ適用を検討することを推奨します。
+        利用には <strong>PITR の有効化が前提</strong>となるため、対象テーブルの PITR 設定を事前に確認してください。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul class="plain">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-dynamodb-introduces-filtered-export/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon DynamoDB introduces filtered export</a></li>
+        <li><a href="https://aws.amazon.com/blogs/database/introducing-filtered-export-from-amazon-dynamodb-to-amazon-s3/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: Introducing filtered export from Amazon DynamoDB to Amazon S3</a></li>
+        <li><a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/S3DataExport.HowItWorks.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: DynamoDB data export to Amazon S3</a></li>
+        <li><a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/S3DataExport.Filtered.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Filtering a table export</a></li>
+        <li><a href="https://aws.amazon.com/dynamodb/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">DynamoDB 料金ページ</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-10-01-amazon-dynamodb-introduces-filtered-export.md) に基づいて作成されています。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

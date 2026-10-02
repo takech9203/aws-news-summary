@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Glue Data Catalog - Apache Iceberg V3 テーブル最適化・統計・クローラーサポート</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 16px 0 8px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 10px;
+    }
+
+    .date-badge {
+      background: var(--aws-dark-squid);
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 8px 16px;
+      color: var(--aws-smile-orange);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card h3 { margin-top: 0; }
+    .card p { margin: 8px 0 0 0; }
+    .card ul { margin: 8px 0 0 0; padding-left: 20px; }
+    .card li { margin: 4px 0; }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    /* 3 機能サマリーカード */
+    .feature-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .feature-summary-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 20px 16px;
+      text-align: center;
+    }
+
+    .feature-summary-card .icon {
+      font-size: 32px;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .feature-summary-card .name {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+    }
+
+    .feature-summary-card .desc {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3 { color: #FF8A75; margin-top: 0; }
+    .after-box h3 { color: #6BCB4F; margin-top: 0; }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon { color: #6BCB4F; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF8A75; font-size: 16px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--aws-light-gray);
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.25);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    .code-note {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin: 8px 0 20px 0;
+    }
+
+    /* ステップ */
+    .step-label {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 2px 12px;
+      border-radius: 12px;
+      margin-right: 8px;
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .usecase h3 { margin-top: 0; color: var(--aws-smile-orange); }
+
+    .usecase .scenario { margin: 8px 0; }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 4px solid var(--aws-green);
+      border-radius: 4px;
+      padding: 8px 12px;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    .usecase ol {
+      margin: 8px 0;
+      padding-left: 22px;
+      font-size: 14px;
+    }
+
+    .usecase li { margin: 4px 0; }
+
+    /* メリットグリッド */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .merit-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .merit-box h3 { margin-top: 0; color: var(--aws-teal); }
+
+    /* 関連サービス */
+    .related-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .related-card {
+      background: rgba(140, 79, 255, 0.1);
+      border: 1px solid rgba(140, 79, 255, 0.4);
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 14px;
+    }
+
+    .related-card .name {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+    }
+
+    ul.plain { margin: 8px 0; padding-left: 20px; }
+    ul.plain li { margin: 6px 0; }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a { word-break: break-all; }
+
+    @media (max-width: 600px) {
+      h1 { font-size: 24px; }
+      h2 { font-size: 20px; }
+      body { padding: 12px; }
+      .section { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div>
+        <span class="service-badge">AWS Glue (Glue Data Catalog)</span>
+        <h1>🧩 Apache Iceberg V3 のテーブル最適化・統計・クローラーサポート</h1>
+        <div class="subtitle">Glue Data Catalog のマネージド運用 3 機能が Iceberg V3 テーブルに対応</div>
+      </div>
+      <div class="date-badge">📅 2026 年 10 月 1 日</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📝 概要</h2>
+      <p>
+        AWS Glue Data Catalog が、Apache Iceberg Version 3 (V3) テーブルに対する
+        <span class="highlight">テーブル最適化</span>、<span class="highlight">統計</span>、
+        <span class="highlight">クローラー</span>の 3 つのマネージド機能をサポートしました。
+        V3 で導入された <span class="highlight">variant 型</span>、<span class="highlight">地理空間型</span>、
+        <span class="highlight">ナノ秒精度タイムスタンプ</span>などの新データ型を含むテーブルでも、
+        Data Catalog のマネージド運用機能をフル活用できます。
+      </p>
+
+      <div class="feature-summary-grid">
+        <div class="feature-summary-card">
+          <span class="icon">⚙️</span>
+          <div class="name">テーブル最適化</div>
+          <div class="desc">binpack / sort / z-order コンパクション、スナップショット保持、孤立ファイル削除</div>
+        </div>
+        <div class="feature-summary-card">
+          <span class="icon">📊</span>
+          <div class="name">統計生成</div>
+          <div class="desc">NDV (個別値数) 統計を生成し、分析エンジンのクエリプランニングを支援</div>
+        </div>
+        <div class="feature-summary-card">
+          <span class="icon">🔍</span>
+          <div class="name">クローラー</div>
+          <div class="desc">S3 上の V3 テーブルを自動検出して Data Catalog に登録</div>
+        </div>
+      </div>
+
+      <p>
+        データレイクを Iceberg V3 へ移行したい、または削除ベクトルや新データ型などの V3 新機能を採用したい
+        データエンジニアや分析基盤の運用チームにとって、<span class="highlight">V3 移行の障壁が大きく下がる</span>アップデートです。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ アップデート前の課題</h3>
+          <div class="check-item"><span class="cross-icon">✗</span><span>テーブル最適化 (コンパクション、スナップショット保持、孤立ファイル削除) が V3 非対応で、Spark ジョブなどで自前実装が必要</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>V3 テーブルの NDV 統計をマネージド機能で生成できず、コストベース最適化の恩恵を十分に受けられない</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>クローラーが S3 上の V3 テーブルを検出・登録できず、カタログ登録は手動作業</span></div>
+        </div>
+        <div class="after-box">
+          <h3>✅ アップデート後の改善</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span>binpack / sort / z-order 戦略のコンパクションをマネージドで実行でき、クエリパフォーマンスが向上</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>期限切れスナップショットと孤立ファイルの自動削除でストレージコストを削減</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>NDV 統計を生成でき、分析エンジンが効率的なクエリプランを立てられる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>クローラーが V3 テーブルを自動検出・登録し、V3 対応エンジンからすぐに利用可能</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph S3["🪣 Amazon S3"]
+        V3[("📄 Iceberg V3 テーブル<br/>variant / geospatial / ns timestamp")]
+    end
+
+    subgraph Glue["🧩 AWS Glue Data Catalog"]
+        direction LR
+        Crawler["🔍 クローラー<br/>V3 テーブルを検出・登録"]
+        Optimizer["⚙️ テーブル最適化<br/>binpack / sort / z-order<br/>スナップショット保持<br/>孤立ファイル削除"]
+        Stats["📊 統計生成<br/>NDV 統計"]
+        Crawler ~~~ Optimizer ~~~ Stats
+    end
+
+    Engine["🔌 クエリエンジン<br/>Athena / Redshift / EMR など<br/>V3 対応エンジン"]
+
+    Crawler --> V3
+    Optimizer --> V3
+    Stats --> V3
+    Crawler --> Engine
+    Stats -.->|統計を利用した<br/>クエリプランニング| Engine
+    Engine --> V3
+
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class V3 storage
+    class Crawler,Optimizer,Stats internal
+    class Engine process
+    class S3,Glue layer
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        Glue Data Catalog の 3 つのマネージド機能 (クローラー、テーブル最適化、統計生成) が Iceberg V3 テーブルに対応し、
+        V3 対応クエリエンジンからの効率的なアクセスを支える構成です。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>🚀 主要機能</h2>
+
+      <div class="card">
+        <h3>⚙️ 1. Iceberg V3 テーブルのテーブル最適化</h3>
+        <ul>
+          <li><strong>コンパクション</strong>: binpack (デフォルト)、sort、z-order の 3 戦略で小さなデータファイルを統合し、クエリエンジンのスキャンデータ量を削減</li>
+          <li><strong>スナップショット保持</strong>: 期限切れスナップショットと関連ファイルを自動削除</li>
+          <li><strong>孤立ファイル削除</strong>: メタデータから参照されなくなったファイルを定期的に削除し、ストレージを解放</li>
+          <li>variant 型、地理空間型、ナノ秒精度タイムスタンプを含む V3 のデータ型をサポート</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>📊 2. Iceberg V3 テーブルの統計生成</h3>
+        <ul>
+          <li>V3 テーブルのカラムに対する <span class="highlight">NDV (number of distinct values)</span> 統計を生成</li>
+          <li>分析エンジンがコストベース最適化で効率的なクエリプランを立てるために統計を活用し、クエリパフォーマンスを向上</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>🔍 3. Iceberg V3 テーブルのクローラーサポート</h3>
+        <ul>
+          <li>Amazon S3 に保存された Iceberg V3 テーブルをクローラーが検出し、Glue Data Catalog に登録</li>
+          <li>登録されたテーブルは、Iceberg V3 をサポートする任意のクエリエンジンから利用可能</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>Apache Iceberg V3 の主な特徴</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>新データ型</td><td>variant 型 (半構造化データ)、地理空間型、ナノ秒精度タイムスタンプ</td></tr>
+        <tr><td>コンパクション戦略</td><td>binpack (デフォルト)、sort、z-order</td></tr>
+        <tr><td>ストレージ管理</td><td>スナップショット保持、孤立ファイル削除</td></tr>
+        <tr><td>統計</td><td>NDV (個別値数) 統計の生成</td></tr>
+        <tr><td>カタログ登録</td><td>クローラーによる S3 上の V3 テーブルの自動検出・登録</td></tr>
+      </table>
+
+      <h3>最適化の設定レベル</h3>
+      <table>
+        <tr><th>設定レベル</th><th>設定方法</th></tr>
+        <tr><td>カタログレベル</td><td>Lake Formation コンソール、Glue <code>UpdateCatalog</code> API</td></tr>
+        <tr><td>テーブルレベル</td><td>Glue コンソール、AWS CLI、Glue API</td></tr>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <ul class="plain">
+        <li>Amazon S3 に Apache Iceberg V3 形式のテーブルが保存されていること</li>
+        <li>テーブル最適化の実行に必要な IAM ロール (S3 および Glue Data Catalog へのアクセス権限) が用意されていること</li>
+        <li>利用するリージョンで Glue Data Catalog のテーブル最適化・統計・クローラーが提供されていること</li>
+      </ul>
+
+      <h3><span class="step-label">STEP 1</span>クローラーで V3 テーブルを Data Catalog に登録</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">クローラーの作成と実行</span>
+        </div>
+        <pre><code class="language-bash">aws glue create-crawler \
+  --name iceberg-v3-crawler \
+  --role arn:aws:iam::123456789012:role/GlueCrawlerRole \
+  --database-name analytics_db \
+  --targets '{"IcebergTargets": [{"Paths": ["s3://my-datalake/iceberg-v3-tables/"]}]}'
+
+aws glue start-crawler --name iceberg-v3-crawler</code></pre>
+      </div>
+      <p class="code-note">クローラーが S3 上の V3 テーブルを検出し、Glue Data Catalog の <code>analytics_db</code> データベースに登録します。</p>
+
+      <h3><span class="step-label">STEP 2</span>テーブル最適化 (コンパクション) を有効化</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">コンパクション最適化の有効化</span>
+        </div>
+        <pre><code class="language-bash">aws glue create-table-optimizer \
+  --catalog-id 123456789012 \
+  --database-name analytics_db \
+  --table-name sales_v3 \
+  --type compaction \
+  --table-optimizer-configuration '{
+    "roleArn": "arn:aws:iam::123456789012:role/GlueOptimizerRole",
+    "enabled": true
+  }'</code></pre>
+      </div>
+      <p class="code-note">小さなデータファイルが自動的に統合され、クエリパフォーマンスが向上します。スナップショット保持 (<code>retention</code>) や孤立ファイル削除 (<code>orphan_file_deletion</code>) も <code>--type</code> を変更して同様に設定できます。</p>
+
+      <h3><span class="step-label">STEP 3</span>カラム統計の生成を設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">カラム統計生成タスクの開始</span>
+        </div>
+        <pre><code class="language-bash">aws glue start-column-statistics-task-run \
+  --database-name analytics_db \
+  --table-name sales_v3 \
+  --role arn:aws:iam::123456789012:role/GlueStatsRole</code></pre>
+      </div>
+      <p class="code-note">生成された統計 (NDV 統計を含む) は Athena や Redshift などの分析エンジンがクエリプランニングに利用します。</p>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <div class="merit-grid">
+        <div class="merit-box">
+          <h3>💼 ビジネス面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>ストレージコストの削減</strong>: 期限切れスナップショットと孤立ファイルの自動削除で不要なストレージ使用を抑制</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>クエリコストの削減</strong>: コンパクションでスキャンデータ量が減り、スキャン量ベース課金 (Athena など) のコストを削減</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>V3 移行の加速</strong>: variant 型や地理空間型などの新機能を安心して採用でき、データ基盤のモダナイゼーションを推進</span></div>
+        </div>
+        <div class="merit-box">
+          <h3>⚙️ 技術面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>運用の自動化</strong>: コンパクションやファイルクリーンアップを自前の Spark ジョブで実装・運用する必要がない</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>クエリパフォーマンスの向上</strong>: binpack / sort / z-order 戦略と NDV 統計の組み合わせで実行効率が向上</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>カタログ登録の自動化</strong>: クローラーの自動検出により手動でのテーブル定義が不要</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>制限事項</h3>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>対象は Glue Data Catalog のテーブル最適化・統計・クローラーが提供されているリージョンに限られる</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>クエリ側で V3 の新データ型を活用するには、クエリエンジン自体が Iceberg V3 に対応している必要がある</span></div>
+
+      <h3>考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>テーブル最適化や統計生成の実行には Glue の料金 (DPU 時間ベース) が発生するため、テーブル数や実行頻度に応じたコストを見積もる必要がある</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>スナップショット保持の設定によっては過去バージョンへのタイムトラベルができなくなるため、保持期間はデータ利用要件に合わせて設計する必要がある</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h3>📦 1. 半構造化データを含むデータレイクの V3 移行</h3>
+        <p class="scenario"><strong>シナリオ</strong>: JSON 形式のイベントデータを variant 型で保持する Iceberg V3 テーブルへ移行し、ストリーミング書き込みで発生する小さなファイルを自動的に最適化したい。</p>
+        <ol>
+          <li>ストリーミングジョブで S3 上の Iceberg V3 テーブル (variant 型カラムを含む) に書き込み</li>
+          <li>対象テーブルにコンパクション最適化 (binpack) を有効化</li>
+          <li>スナップショット保持と孤立ファイル削除を有効化してストレージを自動クリーンアップ</li>
+        </ol>
+        <p class="effect">✅ <strong>効果</strong>: 小さなファイルの蓄積によるクエリ性能劣化を防ぎつつ、variant 型による柔軟なスキーマ運用とストレージコスト削減を両立できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h3>🗺️ 2. 地理空間分析基盤のクエリ高速化</h3>
+        <p class="scenario"><strong>シナリオ</strong>: 地理空間型カラムを持つ V3 テーブルに対し、位置情報と時間帯の複合条件で頻繁にクエリを実行する分析基盤を運用している。</p>
+        <ol>
+          <li>対象テーブルに z-order 戦略のコンパクションを設定 (位置情報カラムと時刻カラムを指定)</li>
+          <li>NDV 統計の生成タスクを定期実行</li>
+          <li>Athena などの V3 対応エンジンからクエリを実行</li>
+        </ol>
+        <p class="effect">✅ <strong>効果</strong>: 複数カラムでの絞り込みクエリのスキャン量が削減され、クエリの応答時間とコストが改善する。</p>
+      </div>
+
+      <div class="usecase">
+        <h3>🗂️ 3. 既存 S3 上の V3 テーブルのカタログ統合</h3>
+        <p class="scenario"><strong>シナリオ</strong>: 外部ツールや別チームが作成した Iceberg V3 テーブルが S3 上に散在しており、全社の分析基盤から統一的にアクセスできるようにしたい。</p>
+        <ol>
+          <li>V3 テーブルが保存されている S3 パスを対象にクローラーを作成</li>
+          <li>スケジュール実行で新規テーブルや変更を定期的に検出・登録</li>
+          <li>Data Catalog 経由で各種クエリエンジンからアクセス</li>
+        </ol>
+        <p class="effect">✅ <strong>効果</strong>: 手動のテーブル登録作業が不要になり、V3 テーブルを含むデータレイク全体を単一のカタログで統合管理できる。</p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金・利用可能リージョン</h2>
+      <div class="card">
+        <h3>💵 料金</h3>
+        <p>
+          テーブル最適化、統計生成、クローラーは、それぞれ実行時間 (<span class="highlight">DPU 時間</span>) に基づく既存の AWS Glue 料金体系で課金されます。
+          Iceberg V3 テーブルを対象とする場合の<span class="highlight">追加料金はありません</span>。
+          詳細は <a href="https://aws.amazon.com/glue/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Glue の料金ページ</a>を参照してください。
+        </p>
+      </div>
+      <div class="card">
+        <h3>🌍 利用可能リージョン</h3>
+        <p>Glue Data Catalog のテーブル最適化、統計、クローラーが利用可能なすべての AWS リージョンで、Iceberg V3 テーブル向けに提供されます。</p>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="related-grid">
+        <div class="related-card">
+          <div class="name">🔎 Amazon Athena</div>
+          Data Catalog に登録された Iceberg テーブルへのサーバーレスクエリ。NDV 統計をコストベース最適化に活用
+        </div>
+        <div class="related-card">
+          <div class="name">🗄️ Amazon Redshift</div>
+          データレイク上の Iceberg テーブルへのクエリで Data Catalog と統計を利用
+        </div>
+        <div class="related-card">
+          <div class="name">⚡ Amazon EMR / AWS Glue ETL</div>
+          Iceberg テーブルへの書き込み・変換処理を実行し、最適化機能と組み合わせて運用
+        </div>
+        <div class="related-card">
+          <div class="name">🔐 AWS Lake Formation</div>
+          カタログレベルの最適化設定ときめ細かなアクセス制御を提供
+        </div>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>✅ まとめ</h2>
+      <p>
+        Glue Data Catalog のマネージド運用機能 (テーブル最適化、統計、クローラー) が Apache Iceberg V3 に対応し、
+        variant 型や地理空間型などの新データ型を採用しながら<span class="highlight">運用を自動化</span>できるようになりました。
+      </p>
+      <div class="card">
+        <p>
+          <strong>推奨アクション</strong>: Iceberg V3 への移行を検討しているデータ基盤チームは、まず既存の V3 テーブルを
+          クローラーで登録し、コンパクションと統計生成を有効化して、クエリパフォーマンスとストレージコストの改善効果を確認することを推奨します。
+        </p>
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul class="plain">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/aws-glue-iceberg-v3-optimization/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): AWS Glue Data Catalog supports optimization, statistics, and crawlers for Apache Iceberg V3</a></li>
+        <li><a href="https://docs.aws.amazon.com/glue/latest/dg/table-optimizers.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Optimizing Iceberg tables</a></li>
+        <li><a href="https://docs.aws.amazon.com/glue/latest/dg/iceberg-column-statistics.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Column statistics for Iceberg tables</a></li>
+        <li><a href="https://docs.aws.amazon.com/glue/latest/dg/crawler-data-stores.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Crawler data stores</a></li>
+        <li><a href="https://aws.amazon.com/glue/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Glue 料金ページ</a></li>
+      </ul>
+      <p>このインフォグラフィックは AWS News レポート (2026-10-01-aws-glue-iceberg-v3-optimization.md) を基に作成されました。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
