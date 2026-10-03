@@ -5,6 +5,16 @@
 
 ## 2026 年
 
+- [2026-10-02 - AWS MCP Server - 6 つの追加リージョンで利用可能に](2026/2026-10-02-aws-mcp-server-six-additional-regions.md)
+- [2026-10-02 - Amazon ElastiCache - Valkey 向け OpenTelemetry メトリクスと詳細モニタリングのサポート](2026/2026-10-02-amazon-elasticache-valkey-opentelemetry-metrics-detailed-monitoring.md)
+- [2026-10-02 - AWS Security Hub - GuardDuty Runtime Monitoring の Threat Analytics プランへの統合](2026/2026-10-02-aws-security-hub-runtime-monitoring.md)
+- [2026-10-02 - Amazon Bedrock AgentCore Gateway - VPC エンドポイント向けプライベート TLS 証明書サポート](2026/2026-10-02-agentcore-gateway-private-tls-vpc.md)
+- [2026-10-02 - AWS Marketplace - AWS Brazil 2P Distribution Program による非ブラジル製ソフトウェアライセンスの自動配布](2026/2026-10-02-aws-brazil-software-license-distribution.md)
+- [2026-10-02 - Amazon Aurora DSQL - 部分インデックスのサポート](2026/2026-10-02-aurora-dsql-partial-indexes.md)
+- [2026-10-02 - Amazon EKS - Kubernetes バージョン 1.37 サポート](2026/2026-10-02-amazon-eks-distro-kubernetes-version-1-37.md)
+- [2026-10-02 - Amazon ECS - VPC Lattice での blue/green、linear、canary デプロイサポート](2026/2026-10-02-amazon-ecs-vpc-lattice-blue-green-deployments.md)
+- [2026-10-02 - Kiro - Claude Sonnet 5.5 の提供開始](2026/2026-10-02-kiro-changelog-2026-10-02.md)
+- [2026-10-02 - AWS Health - バージョンカタログによるソフトウェアライフサイクル管理](2026/2026-10-02-aws-health-introduces-version-catalog-software-lifecycle-management.md)
 - [2026-10-01 - Amazon DynamoDB Accelerator (DAX) - 追加リージョンでの提供開始](2026/2026-10-01-amazon-dynamodb-accelerator.md)
 - [2026-10-01 - AWS Secrets Manager - コンソールでの実用的なセキュリティ推奨アクションの表示](2026/2026-10-01-aws-secrets-manager-security-posture-recommendations.md)
 - [2026-10-01 - AWS IAM Identity Center - マルチリージョンサポートの対象リージョン拡大](2026/2026-10-01-aws-iam-identity-center-extends-multi-region-support-to-more-aws-regions.md)
@@ -13,6 +23,7 @@
 - [2026-10-01 - AWS Budgets - 通知サブスクライバーのメール検証サポート](2026/2026-10-01-aws-budgets.md)
 - [2026-10-01 - Amazon DynamoDB - Amazon S3 へのフィルタ付きエクスポート](2026/2026-10-01-amazon-dynamodb-introduces-filtered-export.md)
 - [2026-10-01 - Amazon S3 Tables - テーブルバケット数の上限を 100 に引き上げ](2026/2026-10-01-amazon-s3-tables-table-bucket-increase.md)
+- [2026-10-01 - Kiro - Workflow 委任制御、Steering ライブコンテキスト、保存プロンプトのスラッシュコマンド化](2026/2026-10-01-kiro-changelog-2026-10-01.md)
 - [2026-10-01 - Amazon GuardDuty - AWS Organizations 宣言型ポリシーによる一元管理](2026/2026-10-01-guardduty-org-enablement-policies.md)
 - [2026-10-01 - Amazon Redshift - データレイクに対するクロスリージョンクエリのサポート](2026/2026-10-01-redshift-cross-Region-queries-for-data-lake.md)
 - [2026-10-01 - AWS Well-Architected Agent - プレビュー提供開始](2026/2026-10-01-aws-well-architected-agent.md)
@@ -45,6 +56,7 @@
 - [2026-09-30 - Amazon S3 Vectors - メタデータ事前フィルタリング](2026/2026-09-30-s3-vectors-introduces-metadata-pre-filtering.md)
 - [2026-09-30 - Amazon Bedrock - OpenAI GPT-6 Astra UltraFast モード](2026/2026-09-30-openai-gpt-6-astra-ultrafast-on-amazon-bedrock.md)
 - [2026-09-30 - Amazon Aurora - Aurora Serverless の高速スケーリング (瞬時に最大 16 ACU)](2026/2026-09-30-aurora-serverless-instant-16-acu-scaling.md)
+- [2026-09-30 - Amazon Quick - アプリでのデータセットライブデータ対応](2026/2026-09-30-live-data-in-apps.md)
 - [2026-09-30 - Amazon Redshift - フェデレーテッドアクセス許可環境でのセキュアロギングへのアクセス簡素化](2026/2026-09-30-redshift-secure-logging-permissions.md)
 - [2026-09-30 - Amazon Managed Grafana - Grafana 13.2 ワークスペース作成サポート](2026/2026-09-30-amazon-managed-grafana-now-supports-creating-grafana-13-2-workspaces.md)
 - [2026-09-29 - Amazon Bedrock - OpenAI GPT-6.1 Sol の一般提供開始](2026/2026-09-29-openai-gpt-6-1-sol-on-amazon-bedrock.md)

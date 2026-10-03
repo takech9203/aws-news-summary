@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon ECS - VPC Lattice での blue/green、linear、canary デプロイサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  margin-right: 8px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 12px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .ba-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+.ba-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+/* 戦略カード */
+.strategy-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 760px) {
+  .strategy-grid { grid-template-columns: 1fr; }
+}
+.strategy-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.strategy-card .st-icon { font-size: 28px; }
+.strategy-card .st-name {
+  font-weight: 700;
+  color: var(--aws-orange);
+  font-size: 17px;
+  margin: 8px 0 4px 0;
+  font-family: 'Courier New', monospace;
+}
+.strategy-card .st-desc { font-size: 13px; }
+.strategy-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+.strategy-bar .blue { background: #4A90E2; }
+.strategy-bar .green { background: #4CAF50; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+td code, li code, p code {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-content .step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.usecase .uc-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase .uc-label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* メリット 2 カラム */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 760px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+.merit-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 16px;
+}
+.merit-box .mb-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 10px;
+}
+
+ul { margin: 8px 0; padding-left: 22px; }
+li { margin: 6px 0; }
+p { margin: 10px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { list-style: none; padding-left: 0; }
+footer li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">Amazon ECS</span>
+      <span class="service-badge">Amazon VPC Lattice</span>
+    </div>
+    <h1>🚀 Amazon ECS - VPC Lattice での blue/green、linear、canary デプロイサポート</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 10 月 2 日 | 🧩 機能: VPC Lattice を使用する ECS サービスでの組み込みデプロイ戦略</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>Amazon ECS が、<span class="highlight">Amazon VPC Lattice を使用する ECS サービス</span>に対して、組み込みの blue/green、linear、canary デプロイ戦略をサポートしました。これまで Application Load Balancer (ALB) や Service Connect で利用できた ECS ネイティブの高度なデプロイ戦略が、VPC Lattice を利用するサービスにも拡張されました。</p>
+    <p>VPC Lattice は、VPC やアカウントをまたいだサービス間通信を実現するアプリケーションネットワーキングサービスです。クロス VPC・クロスアカウント通信を行うアプリケーションでも、<span class="highlight">外部のデプロイツールなし</span>で ECS によるマネージドなトラフィックシフトを利用し、安全にサービスを更新できます。マイクロサービスアーキテクチャを VPC Lattice で構築しているチームや、デプロイリスクを最小化したい運用チームが主な対象です。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>VPC Lattice を使用する ECS サービスではローリングデプロイのみで、新旧バージョンが混在する期間が発生</span></div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>blue/green の実現にはリスナールールの重み変更を自前スクリプトや外部ツールで制御する必要があった</span></div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>本番前検証の仕組みや、問題検出時の即時ロールバックを独自に構築する必要があった</span></div>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>ECS のサービス設定でターゲットグループ、リスナールール、デプロイ戦略を指定するだけでマネージドなトラフィックシフトが利用可能</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>blue/green、linear、canary の 3 つの戦略から、リリースへの確信度に応じて選択可能</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>テストリスナールール検証、Lambda / pause フック、CloudWatch アラームによる自動ロールバック、ベイクタイムが組み込みで利用可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Client(["👤 クライアント"]) --> SN["🌐 VPC Lattice サービスネットワーク"]
+    SN --> Svc["🔌 VPC Lattice サービス&lt;br/&gt;リスナー"]
+
+    subgraph Rules["📋 リスナールール"]
+        direction LR
+        TestRule{"🧪 テストルール&lt;br/&gt;優先度 10"}
+        ProdRule{"🚦 本番ルール&lt;br/&gt;優先度 100"}
+        TestRule ~~~ ProdRule
+    end
+
+    Svc --> TestRule
+    Svc --> ProdRule
+
+    subgraph TGs["🎯 ターゲットグループ"]
+        direction LR
+        BlueTG[("🔵 Blue TG&lt;br/&gt;重み 100 → 0")]
+        GreenTG[("🟢 Green TG&lt;br/&gt;重み 0 → 100")]
+        BlueTG ~~~ GreenTG
+    end
+
+    ProdRule -->|重みを段階的に変更| BlueTG
+    ProdRule --> GreenTG
+    TestRule -.->|テストトラフィック| GreenTG
+
+    subgraph ECS["⚙️ Amazon ECS サービス"]
+        direction LR
+        Blue["🔵 Blue タスク&lt;br/&gt;現行リビジョン"]
+        Green["🟢 Green タスク&lt;br/&gt;新リビジョン"]
+        Blue ~~~ Green
+    end
+
+    BlueTG --> Blue
+    GreenTG --> Green
+
+    Controller["🚀 ECS デプロイコントローラー"] -.->|重みの更新| ProdRule
+    CW["📈 CloudWatch アラーム&lt;br/&gt;サーキットブレーカー"] -.->|自動ロールバック| Controller
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef network fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+
+    class Rules,TGs,ECS boundary
+    class Client user
+    class SN,Svc network
+    class TestRule,ProdRule decision
+    class BlueTG,GreenTG storage
+    class Blue,Green compute
+    class Controller internal
+    class CW warning
+      </pre>
+    </div>
+    <p>VPC Lattice のリスナールールが Blue と Green の 2 つのターゲットグループへの重み付きフォワードを持ち、<span class="highlight">ECS デプロイコントローラーが選択された戦略に従って重みを書き換える</span>ことでトラフィックを移行します。テストルールを設定すると、本番トラフィック移行前に新リビジョンへテストトラフィックを流して検証できます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <h3>1️⃣ 3 種類のデプロイ戦略</h3>
+    <div class="strategy-grid">
+      <div class="strategy-card">
+        <div class="st-icon">🔄</div>
+        <div class="st-name">BLUE_GREEN</div>
+        <div class="st-desc">本番トラフィックを一括で新リビジョンに切り替える</div>
+        <div class="strategy-bar"><div class="green" style="width:100%"></div></div>
+      </div>
+      <div class="strategy-card">
+        <div class="st-icon">📶</div>
+        <div class="st-name">LINEAR</div>
+        <div class="st-desc">均等な増分でトラフィックを段階的に移行する (ステップごとに重みを変更)</div>
+        <div class="strategy-bar"><div class="green" style="width:25%"></div><div class="green" style="width:25%; opacity:0.7"></div><div class="green" style="width:25%; opacity:0.45"></div><div class="blue" style="width:25%"></div></div>
+      </div>
+      <div class="strategy-card">
+        <div class="st-icon">🐤</div>
+        <div class="st-name">CANARY</div>
+        <div class="st-desc">少量のトラフィックから開始し、問題がなければ残りを移行する (重みの変更は 2 回)</div>
+        <div class="strategy-bar"><div class="green" style="width:10%"></div><div class="blue" style="width:90%"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ 🧪 テストリスナールールによる本番前検証</div>
+      <ul>
+        <li>本番ルールとは別のリクエスト条件 (特定ヘッダーやパスなど) にマッチするテストルールを任意で設定可能</li>
+        <li><code>TEST_TRAFFIC_SHIFT</code> ステージで ECS がテストルールを新リビジョンに向け、本番トラフィック移行前に動作検証</li>
+        <li>テストルールは本番ルールより先に評価されるよう、小さい優先度番号を設定</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 🪝 デプロイライフサイクルフック</div>
+      <ul>
+        <li>Lambda フックによるカスタム検証 (スモークテスト、外部システム連携など) を組み込み可能</li>
+        <li>pause フックにより手動承認ステップを挟むことが可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ ⏪ 自動ロールバックとベイクタイム</div>
+      <ul>
+        <li>CloudWatch アラームと ECS デプロイサーキットブレーカーを組み合わせ、問題検出時に自動でロールバック</li>
+        <li>ベイクタイム中は旧リビジョンを稼働させたまま維持するため、ダウンタイムなしで迅速にロールバック可能</li>
+        <li>ロールバック時は ECS がリスナールールの重みを旧リビジョンに戻し、新タスクを停止</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📦 必要な VPC Lattice リソース</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>ターゲットグループ</td><td>2 つ (Blue 用と Green 用)。タイプは <code>IP</code> 必須、ECS タスクと同じ VPC、<code>ACTIVE</code> 状態であること</td></tr>
+      <tr><td>VPC Lattice サービス</td><td>リスナーを持つサービス。サービスネットワーク経由または VPC 関連付け経由でクライアントが到達</td></tr>
+      <tr><td>本番リスナールール</td><td>必須。アクションは <code>forward</code> で、両方のターゲットグループに重み 100 と 0 を設定</td></tr>
+      <tr><td>テストリスナールール</td><td>任意。本番ルールと異なるマッチ条件で、先に評価される優先度を設定</td></tr>
+      <tr><td>インフラストラクチャロール</td><td>ECS が VPC Lattice リソースを操作するための IAM ロール (<code>roleArn</code>)</td></tr>
+      <tr><td>セキュリティグループ</td><td>タスクのセキュリティグループで VPC Lattice マネージドプレフィックスリストからのインバウンドを許可</td></tr>
+    </table>
+
+    <h3>⏱️ デプロイ時の待機時間</h3>
+    <p>ECS はターゲット登録や重み変更が VPC Lattice データプレーンに伝播するまで、以下のステージで待機します。</p>
+    <table>
+      <tr><th>ステージ</th><th>待機時間</th></tr>
+      <tr><td><code>POST_SCALE_UP</code></td><td>約 3 分 (新タスクがヘルシーになるのを待機)</td></tr>
+      <tr><td><code>TEST_TRAFFIC_SHIFT</code> / <code>PRODUCTION_TRAFFIC_SHIFT</code> / <code>RECONCILE_SERVICE</code></td><td>各重み変更後に約 90 秒</td></tr>
+    </table>
+
+    <h3>📄 サービス設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">ECS サービス設定</span>
+      </div>
+      <pre><code class="language-json">{
+    "vpcLatticeConfigurations": [
+        {
+            "roleArn": "arn:aws:iam::111122223333:role/ecsInfrastructureRoleVpcLattice",
+            "targetGroupArn": "arn:aws:vpc-lattice:region:111122223333:targetgroup/tg-0123456789abcdef0",
+            "portName": "web",
+            "advancedConfiguration": {
+                "alternateTargetGroupArn": "arn:aws:vpc-lattice:region:111122223333:targetgroup/tg-0fedcba9876543210",
+                "productionListenerRule": "arn:aws:vpc-lattice:region:111122223333:service/svc-0123456789abcdef0/listener/listener-0123456789abcdef0/rule/rule-0123456789abcdef0",
+                "testListenerRule": "arn:aws:vpc-lattice:region:111122223333:service/svc-0123456789abcdef0/listener/listener-0123456789abcdef0/rule/rule-0fedcba9876543210"
+            }
+        }
+    ],
+    "deploymentController": {
+        "type": "ECS"
+    },
+    "deploymentConfiguration": {
+        "strategy": "BLUE_GREEN",
+        "maximumPercent": 200,
+        "minimumHealthyPercent": 100,
+        "bakeTimeInMinutes": 5
+    }
+}</code></pre>
+    </div>
+    <p><code>strategy</code> には <code>BLUE_GREEN</code>、<code>LINEAR</code>、<code>CANARY</code> のいずれかを指定し、<code>bakeTimeInMinutes</code> で本番トラフィック移行後に新旧リビジョンを並行稼働させる時間を設定します。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>VPC Lattice を使用する ECS サービス (新規または既存)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ECS が VPC Lattice リソースを管理するための ECS インフラストラクチャ IAM ロール</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>タスクのセキュリティグループで VPC Lattice マネージドプレフィックスリスト (<code>com.amazonaws.region.vpc-lattice</code>) からのインバウンド許可</span></div>
+
+    <h3>📋 手順</h3>
+
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">ターゲットグループを 2 つ作成する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">Blue 用ターゲットグループの作成</span>
+          </div>
+          <pre><code class="language-bash">aws vpc-lattice create-target-group \
+    --name blue-target-group \
+    --type IP \
+    --config '{
+        "port": 80,
+        "protocol": "HTTP",
+        "ipAddressType": "IPV4",
+        "vpcIdentifier": "vpc-abcd1234",
+        "healthCheck": {
+            "enabled": true,
+            "protocol": "HTTP",
+            "path": "/",
+            "healthCheckIntervalSeconds": 30,
+            "healthCheckTimeoutSeconds": 5,
+            "healthyThresholdCount": 2,
+            "unhealthyThresholdCount": 2
+        }
+    }'</code></pre>
+        </div>
+        <p>同じ設定で <code>green-target-group</code> も作成し、合計 2 つを用意します。ECS タスクを登録するため、ターゲットタイプは <code>IP</code> を指定します。2 つのターゲットグループはデプロイのたびに役割が入れ替わります。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">VPC Lattice サービスとリスナー、ルールを作成する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">本番リスナールールの作成</span>
+          </div>
+          <pre><code class="language-bash">aws vpc-lattice create-rule \
+    --service-identifier svc-0123456789abcdef0 \
+    --listener-identifier listener-0123456789abcdef0 \
+    --name production \
+    --priority 100 \
+    --match '{"httpMatch": {"pathMatch": {"match": {"prefix": "/"}}}}' \
+    --action '{
+        "forward": {
+            "targetGroups": [
+                {"targetGroupIdentifier": "tg-0123456789abcdef0", "weight": 100},
+                {"targetGroupIdentifier": "tg-0fedcba9876543210", "weight": 0}
+            ]
+        }
+    }'</code></pre>
+        </div>
+        <p>本番リスナールールで全トラフィックを Blue ターゲットグループ (重み 100) に転送します。<span class="highlight">両方のターゲットグループをルールに含めることが必須</span>です。本番前検証を行う場合は、特定ヘッダー (例: <code>X-Environment: test</code>) にマッチするテストルールを、より小さい優先度番号で追加作成します。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">ECS サービスにデプロイ戦略を設定する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">デプロイ戦略の設定</span>
+          </div>
+          <pre><code class="language-bash">aws ecs update-service \
+    --cluster my-cluster \
+    --service my-service \
+    --vpc-lattice-configurations file://vpc-lattice-config.json \
+    --deployment-configuration '{
+        "strategy": "CANARY",
+        "bakeTimeInMinutes": 10
+    }'</code></pre>
+        </div>
+        <p>既存のローリングデプロイのサービスからの切り替えは、<code>advancedConfiguration</code> ブロックを追加して戦略を変更するだけで可能です。マネジメントコンソール、AWS CLI、SDK、IaC ツールのいずれからも設定できます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <div class="mb-title">💼 ビジネス面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>デプロイリスクの低減</strong>: canary や linear 戦略により、問題のあるリリースの影響範囲を一部のトラフィックに限定し、顧客影響を最小化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ダウンタイムなしのリリース</strong>: ベイクタイム中は旧バージョンが待機しているため、問題発生時も即座に切り戻し可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: 外部デプロイツールや自前のトラフィック制御スクリプトの構築・保守が不要</span></div>
+      </div>
+      <div class="merit-box">
+        <div class="mb-title">🔬 技術面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ECS ネイティブの統合</strong>: ALB や Service Connect と同じデプロイ戦略の仕組みを VPC Lattice でも利用でき、デプロイ手法を統一可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な検証フロー</strong>: テストリスナールール、Lambda フック、pause フックを組み合わせて、組織の要件に合わせた検証・承認プロセスを構築可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>自動ロールバック</strong>: CloudWatch アラームとサーキットブレーカーにより、メトリクス異常を検出して人手を介さずロールバック</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <div class="mb-title">🚧 制限事項</div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ターゲットグループのターゲットタイプは <code>IP</code> のみサポート (ECS タスク登録のため)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>VPC Lattice のターゲットグループ、サービス、リスナールールは ECS サービスと同一アカウントに存在する必要がある</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>リスナールールのアクションは <code>forward</code> のみで、両方のターゲットグループ (重み 100 と 0) を含む必要がある</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>各リスナールールは ECS サービス上の 1 つの VPC Lattice 設定でのみ使用可能</span></div>
+      </div>
+      <div class="merit-box">
+        <div class="mb-title">🤔 考慮すべき点</div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>初期設定後に本番・テストリスナールールの forward アクションを ECS の外部から変更すると、デプロイが失敗する</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>VPC Lattice データプレーンへの伝播待機のため、ローリングデプロイより時間が長くなる (<code>POST_SCALE_UP</code> で約 3 分、各重み変更後に約 90 秒)</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>複数の VPC Lattice 設定を持つサービスでは、設定ごとに独自のターゲットグループペアと本番リスナールールが必要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span><code>TLS_PASSTHROUGH</code> リスナーなどルール非対応のリスナーでは、リスナーのデフォルトルールを本番ルールとして使用 (ルール ARN の代わりにリスナー ARN を指定)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="uc-title">1. 🐤 クロスアカウントマイクロサービスの canary リリース</div>
+      <p><span class="uc-label">シナリオ</span>: 複数アカウントに分散したマイクロサービスを VPC Lattice のサービスネットワークで接続している環境で、決済サービスの新バージョンを慎重にリリースしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-json">{
+    "deploymentConfiguration": {
+        "strategy": "CANARY",
+        "bakeTimeInMinutes": 15
+    }
+}</code></pre>
+      </div>
+      <p><span class="uc-label">効果</span>: まず少量のトラフィックのみを新バージョンに流し、CloudWatch アラームでエラー率を監視しながら残りを移行することで、障害時の影響を最小限に抑えられる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">2. 🧪 テストトラフィックによる本番前検証</div>
+      <p><span class="uc-label">シナリオ</span>: 本番トラフィックを一切流す前に、QA チームが新バージョンの動作を本番環境と同じ構成で検証したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># X-Environment: test ヘッダー付きリクエストを新リビジョンへ転送
+curl -H "X-Environment: test" https://my-service.example.vpc-lattice-svcs.amazonaws.com/</code></pre>
+      </div>
+      <p><span class="uc-label">効果</span>: テストリスナールール経由で新リビジョンのみにテストトラフィックを流し、検証完了後に本番トラフィックを移行する安全なリリースフローを実現できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">3. ✋ 手動承認付きの blue/green デプロイ</div>
+      <p><span class="uc-label">シナリオ</span>: コンプライアンス要件により、本番トラフィック切り替え前に責任者の承認が必要な金融系ワークロード。</p>
+      <p><span class="uc-label">実装例</span>: デプロイライフサイクルフックに pause フックを設定し、本番トラフィックシフト前のステージでデプロイを一時停止。承認後に再開し、blue/green 戦略で一括切替。</p>
+      <p><span class="uc-label">効果</span>: 承認プロセスをデプロイパイプラインに組み込みつつ、切り替え自体は一括で行い、ベイクタイムで即時ロールバック可能な状態を維持できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>What's New の発表には、この機能に対する<span class="highlight">追加料金の記載はありません</span>。Amazon ECS のタスク実行 (Fargate または EC2) と Amazon VPC Lattice の標準料金が適用されます。</p>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>ベイクタイム中は新旧両方のリビジョンのタスクが並行稼働するため、その間のコンピューティング料金が発生する点に留意してください。</span></div>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>Amazon VPC Lattice が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。最新のリージョン対応状況は <a class="aws-link" href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer">AWS リージョン別サービス一覧</a> を参照してください。</p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card"><div class="card-title">🌐 Amazon VPC Lattice</div>クロス VPC・クロスアカウントのサービス間通信を提供するアプリケーションネットワーキングサービス。本機能のトラフィックシフトの基盤</div>
+    <div class="card"><div class="card-title">⚖️ Elastic Load Balancing (ALB/NLB)</div>ECS の blue/green デプロイは ALB/NLB を使用するサービスでも利用可能。今回 VPC Lattice に対象が拡大</div>
+    <div class="card"><div class="card-title">🔌 Amazon ECS Service Connect</div>ECS ネイティブのサービスディスカバリとメッシュ機能。こちらも高度なデプロイ戦略に対応</div>
+    <div class="card"><div class="card-title">📈 Amazon CloudWatch</div>アラームをデプロイに関連付けることで、メトリクス異常時の自動ロールバックを実現</div>
+    <div class="card"><div class="card-title">⚡ AWS Lambda</div>デプロイライフサイクルフックとしてカスタム検証ロジックを実行</div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>VPC Lattice を利用する ECS サービスでも、<span class="highlight">追加ツールなしで blue/green、linear、canary デプロイ</span>が利用可能になり、クロス VPC・クロスアカウント構成のマイクロサービスでも安全なリリースプロセスを標準機能で実現できるようになりました。</p>
+    <p>VPC Lattice 上で ECS サービスを運用しているチームは、既存サービスへの <code>advancedConfiguration</code> の追加だけで移行できるため、CloudWatch アラームと組み合わせた自動ロールバックを含むデプロイ戦略の導入を検討することを推奨します。</p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>🔗 <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-ecs-vpc-lattice-blue-green-deployments" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-ecs-vpc-lattice-blue-green-deployments</a></li>
+      <li>📖 <a class="aws-link" href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/vpc-lattice-resources-for-blue-green.html" target="_blank" rel="noopener noreferrer">ドキュメント: VPC Lattice resources for blue/green, linear, and canary deployments</a></li>
+      <li>📦 <a class="aws-link" href="https://aws.amazon.com/ecs/" target="_blank" rel="noopener noreferrer">Amazon ECS 製品ページ</a></li>
+      <li>🌐 <a class="aws-link" href="https://aws.amazon.com/vpc/lattice/" target="_blank" rel="noopener noreferrer">Amazon VPC Lattice 製品ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-10-02) を基に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon ElastiCache - Valkey 向け OpenTelemetry メトリクスと詳細モニタリング</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .release-date {
+      color: var(--aws-smile-orange);
+      font-weight: 600;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 14px 0;
+    }
+
+    .feature-card h3 {
+      margin: 0 0 8px 0;
+      color: var(--aws-smile-orange);
+      font-size: 17px;
+    }
+
+    .feature-card ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .feature-card li {
+      margin: 4px 0;
+      font-size: 15px;
+    }
+
+    /* Before / After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px 20px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 { color: #FF6B52; }
+    .after-box h3 { color: #4CAF50; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li { margin: 6px 0; }
+
+    @media (max-width: 700px) {
+      .before-after { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+    }
+
+    /* 統計カード */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-smile-orange);
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      vertical-align: top;
+    }
+
+    tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+    /* チェックリスト */
+    .check-item, .cross-item, .warn-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 15px;
+    }
+
+    .check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B52; font-size: 16px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    .code-note {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin: -8px 0 16px 0;
+      padding-left: 4px;
+    }
+
+    code.inline {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin: 16px 0;
+    }
+
+    .usecase h3 {
+      margin: 0 0 10px 0;
+      color: var(--aws-smile-orange);
+      font-size: 17px;
+    }
+
+    .usecase p { margin: 8px 0; font-size: 15px; }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 3px solid #4CAF50;
+      padding: 8px 12px;
+      border-radius: 0 6px 6px 0;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 14px;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    .step-title {
+      display: flex;
+      align-items: center;
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 24px 0 10px 0;
+    }
+
+    ul.plain { margin: 8px 0; padding-left: 22px; }
+    ul.plain li { margin: 6px 0; font-size: 15px; }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { margin: 8px 0; padding-left: 20px; }
+    footer li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <span class="service-badge">Amazon ElastiCache</span>
+      <h1>🗄️ ElastiCache for Valkey が OpenTelemetry メトリクスと詳細モニタリングをサポート</h1>
+      <div class="subtitle">
+        <span class="release-date">📅 リリース日: 2026 年 10 月 2 日</span> | 機能: OpenTelemetry (OTLP) メトリクス発行 + 15 秒間隔の詳細モニタリング
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📝 概要</h2>
+      <p>
+        Amazon ElastiCache for Valkey が、ノードベースのクラスターに対して <span class="highlight">OpenTelemetry (OTLP) メトリクス</span>を Amazon CloudWatch に発行する機能をサポートしました。各メトリクスにはアカウント、リージョン、アベイラビリティゾーン、レプリケーショングループ、シャード、ノードを識別する属性が付与され、<span class="highlight">PromQL</span> 式でフィルタリングや集計を実行できます。
+      </p>
+      <p>
+        モニタリングには 2 つのモードがあります。<strong>標準モニタリング</strong>では、従来の CloudWatch メトリクス (Classic) に加えてコアセットの OpenTelemetry メトリクスが 60 秒間隔・追加料金なしで発行されます。新しい<strong>詳細モニタリング</strong>では、完全なメトリクスセットから必要なメトリクスを選択し、<span class="highlight">15 秒間隔</span>で発行できます。コアメトリクスセットは事前構築ダッシュボードの ElastiCache Insights にも活用されています。
+      </p>
+      <p>
+        接続数上限に近づいているノードの検出、インシデント時のエラー種別ごとの分析、メモリ枯渇予測など、Valkey クラスターの詳細な可観測性を必要とする運用チームや SRE チーム向けのアップデートです。
+      </p>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value">15 秒</div>
+          <div class="stat-label">詳細モニタリングの発行間隔<br>(標準は 60 秒)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">¥0</div>
+          <div class="stat-label">コアメトリクスセットは<br>追加料金なしで自動発行</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">PromQL</div>
+          <div class="stat-label">Query Studio・アラーム・<br>Grafana からクエリ可能</div>
+        </div>
+      </div>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before: アップデート前の課題</h3>
+          <ul>
+            <li>CloudWatch メトリクス (Classic) は 60 秒間隔のため、短時間のレイテンシースパイクなど瞬間的なイベントを捉えにくかった</li>
+            <li>メトリクスの次元が限られ、コマンド名やエラー種別などの属性で柔軟にフィルタリング・集計することが難しかった</li>
+            <li>Prometheus や Grafana に慣れたチームが PromQL のスキルを活かして ElastiCache のメトリクスを分析できなかった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ After: アップデート後の改善</h3>
+          <ul>
+            <li>詳細モニタリングにより 15 秒間隔の発行が可能になり、瞬間的なイベントを検出できるようになった</li>
+            <li>豊富な属性 (レプリケーショングループ、シャード、ノード、コマンド名、ネットワーク方向など) でクエリ時に柔軟なフィルタリングと集計が可能になった</li>
+            <li>CloudWatch の Query Studio や Amazon Managed Grafana から PromQL でクエリでき、既存のチームスキルを活用できるようになった</li>
+            <li>PromQL クエリから CloudWatch アラームを作成でき、メモリ使用率などクエリ時に計算した値へのアラーム設定が可能になった</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph EC["🗄️ Amazon ElastiCache for Valkey ノードベースクラスター"]
+        direction LR
+        N1["⚙️ ノード 1<br/>エンジン + ホストテレメトリ"]
+        N2["⚙️ ノード 2<br/>エンジン + ホストテレメトリ"]
+        N1 ~~~ N2
+    end
+
+    subgraph CW["☁️ Amazon CloudWatch"]
+        direction LR
+        STD["📊 標準モニタリング<br/>コアメトリクス 60 秒間隔<br/>無料"]
+        DET["📈 詳細モニタリング<br/>選択したメトリクス 15 秒間隔<br/>有料"]
+        STD ~~~ DET
+    end
+
+    subgraph Consume["🔍 分析・可視化"]
+        direction LR
+        QS["🖥️ Query Studio<br/>PromQL クエリ"]
+        AL["🔔 CloudWatch アラーム<br/>PromQL ベース"]
+        INS["📋 ElastiCache Insights<br/>事前構築ダッシュボード"]
+        GF["📊 Amazon Managed Grafana"]
+        QS ~~~ AL ~~~ INS ~~~ GF
+    end
+
+    CFG["🛠️ リソースメトリクス設定<br/>メトリクス選択"]
+
+    EC -->|OpenTelemetry メトリクス発行| CW
+    CFG -.->|詳細メトリクスを有効化| DET
+    CW --> Consume
+
+    classDef cluster fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef node fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef cw fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef consume fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+    classDef config fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class EC,CW,Consume cluster
+    class N1,N2 node
+    class STD,DET cw
+    class QS,AL,INS,GF consume
+    class CFG config
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        各ノードがキャッシュエンジンとホストからテレメトリを収集して CloudWatch に OpenTelemetry メトリクスとして発行し、PromQL クエリ、アラーム、ダッシュボード、Grafana から活用できる構成
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <h3>1️⃣ OpenTelemetry メトリクスの自動発行 (標準モニタリング)</h3>
+        <ul>
+          <li>コアセットのベンディッドメトリクスが <strong>60 秒間隔</strong>で自動的に発行される</li>
+          <li>レプリケーショングループが稼働を開始すると<strong>設定不要</strong>で発行され、追加料金は発生しない</li>
+          <li>従来の CloudWatch メトリクス (Classic) の 60 秒間隔での発行も継続される</li>
+          <li>コアメトリクスセットは事前構築ダッシュボードの ElastiCache Insights にも活用される</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>2️⃣ 詳細モニタリング (15 秒間隔)</h3>
+        <ul>
+          <li>完全な OpenTelemetry メトリクスセットから必要なメトリクスを選択可能</li>
+          <li>選択したメトリクスは <strong>15 秒間隔</strong>で発行され、短時間のイベント検出に有効</li>
+          <li>CloudWatch のリソースメトリクス設定で管理し、レプリケーショングループごとに 1 つの設定を保持</li>
+          <li>すでにベンディッドされているメトリクスを選択すると、粒度が 60 秒から 15 秒に向上する (選択中は課金対象)</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>3️⃣ 豊富なメトリクス属性</h3>
+        <ul>
+          <li><strong>リソース属性</strong>: AWS アカウント、リージョン、アベイラビリティゾーン、レプリケーショングループ、シャード、ノードを識別</li>
+          <li><strong>データポイント属性</strong>: ノードのレプリケーションロールに加え、コマンド名やネットワーク方向などメトリクス固有の次元を提供</li>
+          <li>クエリ時にこれらの属性でフィルタリング・集計が可能</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>4️⃣ PromQL によるクエリとアラーム</h3>
+        <ul>
+          <li>CloudWatch の Query Studio でインタラクティブにクエリを実行可能</li>
+          <li>PromQL クエリから CloudWatch アラームを作成でき、1 つのアラームで全ノードを監視可能</li>
+          <li>Amazon Managed Grafana から CloudWatch の PromQL エンドポイントを Prometheus データソースとして追加してクエリ可能</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>📊 モニタリングモードの比較</h3>
+      <table>
+        <tr>
+          <th>項目</th>
+          <th>標準モニタリング</th>
+          <th>詳細モニタリング</th>
+        </tr>
+        <tr>
+          <td>メトリクスセット</td>
+          <td>コアセット (自動発行)</td>
+          <td>完全なセットから選択</td>
+        </tr>
+        <tr>
+          <td>発行間隔</td>
+          <td>60 秒</td>
+          <td><strong>15 秒</strong></td>
+        </tr>
+        <tr>
+          <td>料金</td>
+          <td>追加料金なし</td>
+          <td>CloudWatch によるデータポイント量ベースの課金</td>
+        </tr>
+        <tr>
+          <td>設定</td>
+          <td>不要</td>
+          <td>リソースメトリクス設定の作成が必要</td>
+        </tr>
+      </table>
+
+      <h3>🖥️ サポート対象の構成</h3>
+      <table>
+        <tr>
+          <th>項目</th>
+          <th>詳細</th>
+        </tr>
+        <tr>
+          <td>対象</td>
+          <td>ノードベースの Valkey レプリケーショングループ (全 Valkey バージョン)</td>
+        </tr>
+        <tr>
+          <td>対象外</td>
+          <td>AWS Outposts 上のレプリケーショングループ、サーバーレスキャッシュ、Redis OSS、Memcached</td>
+        </tr>
+        <tr>
+          <td>グローバルデータストア</td>
+          <td>リージョンごとのレプリケーショングループで個別にメトリクスを選択</td>
+        </tr>
+        <tr>
+          <td>クエリ制限</td>
+          <td>1 クエリあたり最大 500 時系列、範囲関数のレンジは最大 7 日</td>
+        </tr>
+      </table>
+
+      <h3>🔑 必要な IAM 権限</h3>
+      <p style="font-size: 15px;">
+        リソースメトリクス設定の作成・取得・更新・削除には、対応する <code class="inline">cloudwatch:*ResourceMetricsConfiguration</code> 権限が必要です。これらの操作はリソースレベルの権限をサポートしないため、IAM ポリシーでは <code class="inline">"Resource": "*"</code> を指定し、<code class="inline">cloudwatch:ResourceArn</code> 条件キーでアクセスをスコープします。これらは ElastiCache API ではなく <strong>Amazon CloudWatch API</strong> の操作です。
+      </p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">IAM ポリシー例</span>
+        </div>
+        <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:CreateResourceMetricsConfiguration",
+        "cloudwatch:GetResourceMetricsConfiguration",
+        "cloudwatch:UpdateResourceMetricsConfiguration",
+        "cloudwatch:DeleteResourceMetricsConfiguration"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "cloudwatch:ResourceArn": "arn:aws:elasticache:*:123456789012:replicationgroup:*"
+        }
+      }
+    }
+  ]
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>✅ 前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>ノードベースの Valkey レプリケーショングループが稼働していること (AWS Outposts 上は対象外)</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><code class="inline">cloudwatch:*ResourceMetricsConfiguration</code> 権限を持つ IAM プリンシパルを使用すること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>Amazon CloudWatch が OpenTelemetry メトリクスをサポートするリージョンであること</span></div>
+
+      <div class="step-title"><span class="step-number">1</span>コンソールで詳細モニタリングを有効化</div>
+      <div class="flow-diagram" style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 16px 0;">
+        <div style="background: var(--aws-squid-ink); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 16px; text-align: center;">🖱️ レプリケーション<br>グループを選択</div>
+        <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div style="background: var(--aws-squid-ink); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 16px; text-align: center;">📊 [Metrics] タブで<br>[Detailed] を選択</div>
+        <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div style="background: var(--aws-squid-ink); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 16px; text-align: center;">⚙️ [Configure<br>detailed metrics]</div>
+        <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div style="background: var(--aws-squid-ink); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 16px; text-align: center;">✅ メトリクスを<br>選択して保存</div>
+      </div>
+      <p class="code-note">レプリケーショングループの作成時に [Monitoring] セクションで [Detailed monitoring] を選択して設定することも可能です。メトリクスを選択するまでは、[Detailed] ビューに「No detailed metrics configured」と表示されます。</p>
+
+      <div class="step-title"><span class="step-number">2</span>AWS CLI で詳細モニタリングを設定</div>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">リソースメトリクス設定の作成</span>
+        </div>
+        <pre><code class="language-bash">aws cloudwatch create-resource-metrics-configuration \
+    --resource-arn arn:aws:elasticache:us-east-1:123456789012:replicationgroup:my-cluster \
+    --metric-selections '[{"IncludeMetrics": ["valkey.memory.used", "valkey.commands.processed"]}]'</code></pre>
+      </div>
+      <p class="code-note">
+        <code class="inline">--metric-selections</code> を省略すると利用可能な全メトリクスが選択され、ベンディッドメトリクスも 15 秒間隔に移行して課金対象になるため、必要なメトリクスのみを選択することが推奨されます。
+      </p>
+
+      <div class="step-title"><span class="step-number">3</span>設定の確認・更新・削除</div>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">設定の管理</span>
+        </div>
+        <pre><code class="language-bash"># 現在発行中のメトリクスを確認
+aws cloudwatch get-resource-metrics-configuration \
+    --resource-arn arn:aws:elasticache:us-east-1:123456789012:replicationgroup:my-cluster
+
+# 選択するメトリクスを変更
+aws cloudwatch update-resource-metrics-configuration \
+    --resource-arn arn:aws:elasticache:us-east-1:123456789012:replicationgroup:my-cluster \
+    --metric-selections '[{"IncludeMetrics": ["valkey.memory.used", "valkey.keyspace.hits"]}]'
+
+# メトリクスの発行を停止
+aws cloudwatch delete-resource-metrics-configuration \
+    --resource-arn arn:aws:elasticache:us-east-1:123456789012:replicationgroup:my-cluster</code></pre>
+      </div>
+      <p class="code-note">
+        <code class="inline">--metric-selections</code> は以前の値を完全に置き換えるため、メトリクスを追加する場合は発行したいすべてのメトリクスを列挙する必要があります。設定の変更が反映されるまで数分かかります。
+      </p>
+
+      <div class="step-title"><span class="step-number">4</span>PromQL でメトリクスをクエリ</div>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">PromQL</span>
+          <span class="code-title">シャードごとの TPS を計算</span>
+        </div>
+        <pre><code class="language-promql">sum by ("@resource.aws.elasticache.shard.id") (
+  rate({"valkey.commands.processed",
+        "@resource.aws.elasticache.replication_group.id"="my-cluster"}[5m]))</code></pre>
+      </div>
+      <p class="code-note">
+        <code class="inline">rate</code> 関数が累積カウンターを秒間レートに変換し、<code class="inline">sum by</code> がシャード単位で各ノードの値を集計します。Query Studio でのインタラクティブな実行、ダッシュボードへの追加、アラームの作成に使用できます。
+      </p>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+
+      <h3>💼 ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: 接続数上限への接近やメモリ枯渇の予兆を早期に検出でき、インシデントの未然防止と MTTR の短縮につながる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>既存スキルの活用</strong>: Prometheus や Grafana に慣れたチームが PromQL スキルをそのまま活用でき、学習コストを抑えられる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>無料で始められる可観測性向上</strong>: コアメトリクスセットと ElastiCache Insights ダッシュボードは追加料金なしで利用可能</span></div>
+
+      <h3>⚙️ 技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>15 秒粒度の高解像度モニタリング</strong>: 短時間のレイテンシースパイクなど、60 秒間隔では平均化されて見逃していたイベントを検出可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>属性ベースの柔軟な分析</strong>: コマンド名、エラー種別、ネットワーク方向などの属性により、インシデント時の詳細な切り分けが可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>クエリ時計算に基づくアラーム</strong>: メモリ使用率 (使用量 / 上限) のようなクエリ時に計算した値でアラームを設定でき、1 つのアラームで全ノードのコントリビューターを独立して追跡可能</span></div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>🚧 制限事項</h3>
+      <div class="cross-item"><span class="cross-icon">✗</span><span>対象はノードベースの Valkey レプリケーショングループのみで、サーバーレスキャッシュ、Redis OSS、Memcached は OpenTelemetry メトリクスを発行しない</span></div>
+      <div class="cross-item"><span class="cross-icon">✗</span><span>AWS Outposts 上のレプリケーショングループは対象外</span></div>
+      <div class="cross-item"><span class="cross-icon">✗</span><span>1 つのレプリケーショングループに保持できるリソースメトリクス設定は 1 つのみ</span></div>
+      <div class="cross-item"><span class="cross-icon">✗</span><span>PromQL クエリが返せる時系列は最大 500 で、ノードとコマンドの両方で分解するクエリは大規模クラスターで上限を超える可能性がある</span></div>
+      <div class="cross-item"><span class="cross-icon">✗</span><span><code class="inline">avg_over_time</code> や <code class="inline">max_over_time</code> などの範囲関数のレンジは最大 7 日</span></div>
+
+      <h3>🤔 考慮すべき点</h3>
+      <div class="warn-item"><span class="warn-icon">⚠</span><span>詳細モニタリングの課金は選択したメトリクス数ではなく発行されるデータポイント量に基づくため、<code class="inline">valkey.command.calls</code> のように属性で分解される高カーディナリティメトリクスはワークロードによってコストが変動する</span></div>
+      <div class="warn-item"><span class="warn-icon">⚠</span><span><code class="inline">--metric-selections</code> を省略して全メトリクスを選択すると、ベンディッドメトリクスも 15 秒間隔に移行して課金対象になる</span></div>
+      <div class="warn-item"><span class="warn-icon">⚠</span><span>PromQL クエリには複数のデータポイントを含む時間範囲が必要で、60 秒間隔のメトリクスには <code class="inline">[5m]</code> 以上、15 秒間隔のメトリクスには <code class="inline">[1m]</code> 以上のレンジが推奨される</span></div>
+      <div class="warn-item"><span class="warn-icon">⚠</span><span>アラームの評価間隔はメトリクスの発行間隔以上に設定する必要がある</span></div>
+      <div class="warn-item"><span class="warn-icon">⚠</span><span>リソースメトリクス設定の変更が反映されるまで数分かかる</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h3>📌 ユースケース 1: メモリ枯渇の予兆検出とアラート</h3>
+        <p><strong>シナリオ</strong>: 本番環境の Valkey クラスターで、ノードのメモリ使用量が上限に近づいた際に自動的に通知を受けたい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">PromQL</span>
+            <span class="code-title">メモリ使用率 90% 超を検出</span>
+          </div>
+          <pre><code class="language-promql">100 * {"valkey.memory.used",  "@resource.aws.elasticache.replication_group.id"="my-cluster"}
+    / {"valkey.memory.max",   "@resource.aws.elasticache.replication_group.id"="my-cluster"}
+    > 90</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">PromQL ベースのアラーム作成</span>
+          </div>
+          <pre><code class="language-bash">aws cloudwatch put-metric-alarm \
+    --alarm-name my-cluster-memory-high \
+    --evaluation-criteria '{"PromQLCriteria":{"Query":"&lt;query&gt;","PendingPeriod":300,"RecoveryPeriod":600}}' \
+    --evaluation-interval 60</code></pre>
+        </div>
+        <div class="effect">
+          <strong>✨ 効果</strong>: メモリ使用率 90% 超のノードを 1 つのアラームで全ノード分監視できる。ブリーチした系列の属性からどのノードが原因かを特定でき、ペンディング期間 300 秒により一時的なスパイクでの誤報を防止できる。
+        </div>
+      </div>
+
+      <div class="usecase">
+        <h3>📌 ユースケース 2: インシデント時のコマンドレベル分析</h3>
+        <p><strong>シナリオ</strong>: レイテンシー悪化のインシデント発生時に、どのコマンドが遅延の原因かを特定したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">PromQL</span>
+            <span class="code-title">コマンドごとの平均レイテンシーを計算</span>
+          </div>
+          <pre><code class="language-promql">1e6 * sum by ("valkey.command") (
+        rate({"valkey.command.duration",
+              "@resource.aws.elasticache.replication_group.id"="my-cluster"}[5m]))
+    / (sum by ("valkey.command") (
+        rate({"valkey.command.calls",
+              "@resource.aws.elasticache.replication_group.id"="my-cluster"}[5m])) > 0)</code></pre>
+        </div>
+        <div class="effect">
+          <strong>✨ 効果</strong>: コマンドごとの平均レイテンシー (マイクロ秒単位) をクエリ時に計算でき、問題のあるコマンドを迅速に特定できる。詳細モニタリングの 15 秒粒度により、短時間のスパイクも捉えられる。
+        </div>
+      </div>
+
+      <div class="usecase">
+        <h3>📌 ユースケース 3: Grafana を使用した統合ダッシュボード</h3>
+        <p><strong>シナリオ</strong>: 既存の Prometheus / Grafana ベースの監視基盤に ElastiCache のメトリクスを統合し、複数のレプリケーショングループを横断して最も負荷の高いノードを可視化したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">PromQL</span>
+            <span class="code-title">CPU 負荷の高い上位 5 ノードを抽出</span>
+          </div>
+          <pre><code class="language-promql">topk(5,
+  sum without ("cpu.mode") (
+    rate({"process.cpu.time", "thread.type"="main"}[5m])))</code></pre>
+        </div>
+        <div class="effect">
+          <strong>✨ 効果</strong>: Amazon Managed Grafana に CloudWatch の PromQL エンドポイントを Prometheus データソースとして追加するだけで、既存のダッシュボード運用に ElastiCache を統合できる。<code class="inline">topk</code> により全レプリケーショングループを横断して CPU 負荷の高い上位 5 ノードを一覧できる。
+        </div>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>詳細モニタリングに対する <span class="highlight">ElastiCache 側の追加料金はありません</span>。</p>
+      <div class="card">
+        <div class="icon-text" style="display: flex; align-items: flex-start; gap: 8px; margin: 8px 0;">
+          <span style="color: var(--aws-orange);">→</span>
+          <span><strong>標準モニタリング</strong>: コアセットのベンディッドメトリクスは 60 秒間隔で追加料金なしで発行される</span>
+        </div>
+        <div class="icon-text" style="display: flex; align-items: flex-start; gap: 8px; margin: 8px 0;">
+          <span style="color: var(--aws-orange);">→</span>
+          <span><strong>詳細モニタリング</strong>: 選択したメトリクスは、発行されるデータポイント量に基づいて Amazon CloudWatch により課金される。作成したアラームや実行した PromQL API クエリにも CloudWatch の OpenTelemetry 料金が適用される</span>
+        </div>
+      </div>
+      <p style="font-size: 14px;">
+        課金は選択したメトリクスの数ではなくデータポイント量に基づくため、属性で分解される高カーディナリティメトリクスのコストはワークロードに依存します。詳細は <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon CloudWatch の料金ページ</a> を参照してください。
+      </p>
+    </div>
+
+    <!-- 利用可能リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>Amazon CloudWatch が OpenTelemetry メトリクスをサポートする<span class="highlight">すべての AWS リージョン</span>で利用可能です。</p>
+    </div>
+
+    <!-- 関連サービス・機能 -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <ul class="plain">
+        <li><strong>Amazon CloudWatch</strong>: OpenTelemetry メトリクスの受け取り先。Query Studio での PromQL クエリ、アラーム、ダッシュボード、リソースメトリクス設定を提供</li>
+        <li><strong>Amazon Managed Grafana</strong>: CloudWatch の PromQL エンドポイントを Prometheus データソースとして追加し、ElastiCache メトリクスを可視化可能</li>
+        <li><strong>ElastiCache Insights</strong>: コアメトリクスセットを活用した事前構築の CloudWatch ダッシュボード</li>
+        <li><strong>ElastiCache グローバルデータストア</strong>: リージョンごとのレプリケーショングループで個別に詳細メトリクスを選択する必要がある</li>
+      </ul>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        Amazon ElastiCache for Valkey の OpenTelemetry メトリクス対応により、豊富な属性と PromQL を活用した柔軟なメトリクス分析、15 秒粒度の詳細モニタリング、クエリ時計算に基づくアラームが可能になりました。
+      </p>
+      <div class="card">
+        <strong style="color: var(--aws-smile-orange);">🚀 推奨アクション</strong>
+        <p style="margin: 8px 0 0 0; font-size: 15px;">
+          コアメトリクスセットは追加料金なしで自動発行されるため、まずは ElastiCache Insights ダッシュボードと PromQL クエリを試し、より高い粒度や追加メトリクスが必要なワークロードに対して詳細モニタリングを選択的に有効化することを推奨します。
+        </p>
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典・参考リンク</p>
+      <ul>
+        <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-elasticache-valkey-opentelemetry-metrics-detailed-monitoring" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-elasticache-valkey-opentelemetry-metrics-detailed-monitoring</a></li>
+        <li>ドキュメント: Monitoring ElastiCache with OpenTelemetry metrics: <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/otel-metrics.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/otel-metrics.html</a></li>
+        <li>ドキュメント: CloudWatch detailed monitoring for OpenTelemetry metrics: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/resource-metrics-configuration.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/resource-metrics-configuration.html</a></li>
+        <li>ドキュメント: Query metrics with PromQL: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-PromQL.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-PromQL.html</a></li>
+        <li>料金ページ: Amazon CloudWatch: <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/cloudwatch/pricing/</a></li>
+      </ul>
+      <p>このインフォグラフィックは AWS News レポート (2026-10-02-amazon-elasticache-valkey-opentelemetry-metrics-detailed-monitoring.md) を基に生成されました。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
