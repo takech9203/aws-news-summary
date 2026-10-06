@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Redshift - Apache Iceberg マテリアライズドビューの作成・リフレッシュサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header { margin-bottom: 32px; }
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: var(--aws-smile-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.4);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+.before-box .ba-title { color: #FF8A70; }
+.after-box .ba-title { color: #6FCF4F; }
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.ba-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+.ba-icon { flex-shrink: 0; }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.14));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-white);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.spec-table td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+.spec-table tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #6FCF4F; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A70; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* ステップ */
+.step-list { counter-reset: step; }
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+.step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+.usecase .effect {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(29, 129, 2, 0.14);
+  border-left: 3px solid var(--aws-green);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 14px 0;
+  border: 1px solid rgba(255, 153, 0, 0.25);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 110px;
+  font-size: 14px;
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+ul { padding-left: 22px; margin: 8px 0; }
+li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+footer ul { list-style: none; padding-left: 0; }
+footer li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Amazon Redshift</span>
+    <h1>🧊 Apache Iceberg マテリアライズドビューの作成・リフレッシュサポート</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 10 月 5 日 | 機能: Apache Iceberg マテリアライズドビュー</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon Redshift が、<span class="highlight">Apache Iceberg テーブルとして保存されるマテリアライズドビュー</span>の作成とリフレッシュをサポートしました。
+      <code class="inline">CREATE MATERIALIZED VIEW ... USING ICEBERG</code> という標準 SQL 構文で、コストの高い結合や集計の事前計算結果を
+      Amazon S3 または S3 Table Buckets 上の Iceberg テーブルとして保存し、AWS Glue Data Catalog に自動登録できます。
+    </p>
+    <p>
+      結果が標準の Iceberg テーブルとなるため、Amazon Athena、Amazon EMR や AWS Glue 上の Apache Spark、Trino や Snowflake などのサードパーティエンジンからも追加設定なしで即座にクエリ可能です。
+      <span class="highlight">「Materialize once, query anywhere」</span> — 一度マテリアライズすれば、どこからでもクエリできるコンセプトを実現します。
+    </p>
+
+    <div class="flow-diagram">
+      <div class="flow-step">🏭 Redshift で<br/>一度だけ集計</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🪣 S3 に Iceberg<br/>テーブルとして保存</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📚 Glue Data Catalog<br/>に自動登録</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔍 全エンジンから<br/>即クエリ可能</div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ アップデート前の課題</div>
+        <div class="ba-item"><span class="ba-icon">🔒</span><span>マテリアライズドビューは RMS に保存され、Redshift 以外のエンジンからアクセス不可</span></div>
+        <div class="ba-item"><span class="ba-icon">💸</span><span>Athena、Spark、Trino など、エンジンごとに同じ結合・集計処理を繰り返し実行し、計算コストが重複</span></div>
+        <div class="ba-item"><span class="ba-icon">🔀</span><span>エンジンごとの個別パイプライン運用による負荷と、集計結果の不一致 (セマンティックドリフト) のリスク</span></div>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <div class="ba-item"><span class="ba-icon">🧊</span><span><code class="inline">USING ICEBERG</code> 句の追加だけで、結果を S3 上のオープンな Iceberg テーブルとして保存</span></div>
+        <div class="ba-item"><span class="ba-icon">📚</span><span>Glue Data Catalog に登録され、Iceberg 互換の任意のエンジンから追加設定なしでクエリ可能</span></div>
+        <div class="ba-item"><span class="ba-icon">⚡</span><span>手動インクリメンタルリフレッシュで、変更されたデータのみを差分計算して効率的に最新化</span></div>
+        <div class="ba-item"><span class="ba-icon">🎯</span><span>高価な計算は Redshift で一度だけ実行し、下流の全コンシューマーが単一の結果を共有</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 統計情報 -->
+  <div class="section">
+    <h2>📊 数字で見るアップデート効果</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">約 80% 削減</div>
+        <div class="stat-label">AWS Blog 試算例: 4 エンジン個別集計 約 7,500 USD/月 → 単一リフレッシュ 約 1,500 USD/月</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">最大 2.4 倍</div>
+        <div class="stat-label">RG インスタンスの Iceberg クエリ性能 (RA3 比)、vCPU あたり 30% 低コスト</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加設定 0</div>
+        <div class="stat-label">Athena / Spark / Trino / Snowflake から標準 Iceberg テーブルとして即クエリ可能</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Redshift["🏭 Amazon Redshift"]
+        direction LR
+        SQL["📝 CREATE MATERIALIZED VIEW<br/>USING ICEBERG"]
+        Refresh["🔄 REFRESH<br/>インクリメンタル差分計算"]
+        SQL ~~~ Refresh
+    end
+
+    subgraph Source["📥 ソースデータ"]
+        SrcIceberg[("🧊 Iceberg テーブル<br/>S3 / S3 Table Buckets")]
+    end
+
+    subgraph Storage["🗄️ ストレージ・カタログ層"]
+        direction LR
+        S3MV[("🪣 Iceberg MV<br/>Parquet on S3")]
+        Glue["📚 AWS Glue<br/>Data Catalog"]
+        S3MV ~~~ Glue
+    end
+
+    subgraph Consumers["🔍 Iceberg 互換エンジン"]
+        direction LR
+        Athena["🔎 Athena"]
+        Spark["⚡ Spark<br/>EMR / Glue"]
+        Trino["🚀 Trino"]
+        Snowflake["❄️ Snowflake"]
+        Athena ~~~ Spark ~~~ Trino ~~~ Snowflake
+    end
+
+    SrcIceberg --> SQL
+    SrcIceberg -.->|スナップショット差分| Refresh
+    SQL --> S3MV
+    SQL --> Glue
+    Refresh --> S3MV
+    Glue -.->|メタデータ参照| Consumers
+    S3MV --> Consumers
+
+    classDef redshift fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef catalog fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef consumer fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class SQL,Refresh redshift
+    class S3MV,SrcIceberg storage
+    class Glue catalog
+    class Athena,Spark,Trino,Snowflake consumer
+    class Redshift,Source,Storage,Consumers layer
+      </pre>
+    </div>
+    <p>
+      Redshift が Iceberg ソーステーブルに対する集計・結合結果を S3 上の Iceberg テーブルとして書き出し、Glue Data Catalog に登録します。
+      Athena、Spark、Trino、Snowflake などの Iceberg 互換エンジンは、この結果を標準の Iceberg テーブルとして直接読み取れます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">🧊 Iceberg 形式でのマテリアライズドビュー作成</div>
+      <ul>
+        <li><code class="inline">CREATE MATERIALIZED VIEW ... USING ICEBERG</code> 構文で作成し、結果を Parquet データファイルとして S3 に書き込み</li>
+        <li>保存先は汎用 S3 バケット (<code class="inline">LOCATION</code> 句で指定) または S3 Table Buckets (<code class="inline">LOCATION</code> 省略時は S3 Tables が管理)</li>
+        <li><code class="inline">PARTITIONED BY</code> 句によるパーティショニングもサポート</li>
+        <li>AWS Glue Data Catalog に Iceberg メタデータ付きで登録され、他エンジンから発見・ガバナンス可能</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🔄 手動インクリメンタルリフレッシュ</div>
+      <ul>
+        <li><code class="inline">REFRESH MATERIALIZED VIEW</code> コマンドで手動リフレッシュを実行</li>
+        <li>前回リフレッシュ時の Iceberg スナップショット ID を追跡し、変更されたデータのみを差分計算</li>
+        <li>COUNT・SUM 集計を含む GROUP BY クエリ、Iceberg テーブル間の内部結合、非集計クエリでインクリメンタルリフレッシュをサポート</li>
+        <li>DISTINCT や外部結合、ウィンドウ関数などの構文では自動的にフルリフレッシュにフォールバック</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🔗 クロスエンジン相互運用性</div>
+      <ul>
+        <li>Glue Data Catalog 上の標準 Iceberg テーブルとして表示され、Athena、Spark、Trino、Snowflake 等から追加設定なしで読み取り可能</li>
+        <li>コンシューマー側は S3 の標準読み取りコストのみで、追加のコンピューティング料金は不要</li>
+        <li>リフレッシュとドロップは作成元の Redshift のみ実行可能 (他エンジンが作成した Iceberg マテリアライズドビューは Redshift から読み取り専用)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🛡️ クラスター非依存の管理と同時リフレッシュ制御</div>
+      <ul>
+        <li>ビュー定義とリフレッシュ状態は AWS Glue に保存され、特定のクラスターに紐付かない</li>
+        <li>適切な IAM ロールを持つ任意のワークグループ・クラスターからリフレッシュ可能</li>
+        <li>Glue Data Catalog の条件付き更新による楽観的同時実行制御 (OCC) で、同時リフレッシュ時も 1 つのみ成功することを保証</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+    <table class="spec-table">
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>作成構文</td><td><code class="inline">CREATE MATERIALIZED VIEW ... USING ICEBERG</code></td></tr>
+      <tr><td>保存形式</td><td>Apache Iceberg テーブル (Parquet データファイル)</td></tr>
+      <tr><td>保存先</td><td>汎用 S3 バケットまたは S3 Table Buckets</td></tr>
+      <tr><td>カタログ</td><td>AWS Glue Data Catalog に自動登録</td></tr>
+      <tr><td>リフレッシュ方式</td><td>手動のみ (<code class="inline">REFRESH MATERIALIZED VIEW</code>)、自動リフレッシュは非サポート</td></tr>
+      <tr><td>インクリメンタルリフレッシュ対象</td><td>COUNT / SUM + GROUP BY、Iceberg テーブル間の内部結合、非集計クエリ</td></tr>
+      <tr><td>ソーステーブル要件</td><td>Iceberg 形式のみ、同一リージョン・同一アカウント</td></tr>
+      <tr><td>対応コンピューティング</td><td>Redshift Serverless、RG (Graviton) プロビジョンドインスタンス</td></tr>
+      <tr><td>非対応コンピューティング</td><td>RA3、DC2 インスタンスタイプ</td></tr>
+      <tr><td>コンパクション</td><td>S3 Table Buckets は自動管理、汎用 S3 バケットは外部ツール (Spark の <code class="inline">rewrite_data_files</code> 等) で実施</td></tr>
+    </table>
+
+    <h3>💻 SQL 構文例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">SQL</span>
+        <span class="code-title">Iceberg マテリアライズドビューの作成とリフレッシュ</span>
+      </div>
+      <pre><code class="language-sql">-- Iceberg マテリアライズドビューの作成
+CREATE MATERIALIZED VIEW awsdatacatalog.analytics.daily_revenue
+USING ICEBERG
+LOCATION 's3://amzn-s3-demo-analytics/daily_revenue/'
+PARTITIONED BY (day(order_date))
+AS
+SELECT order_date, region,
+       SUM(amount) AS total_revenue, COUNT(*) AS transaction_count
+FROM awsdatacatalog.source.transactions
+GROUP BY 1, 2;
+
+-- 手動インクリメンタルリフレッシュ
+REFRESH MATERIALIZED VIEW awsdatacatalog.analytics.daily_revenue;</code></pre>
+    </div>
+
+    <h3>🔑 必要な権限</h3>
+    <table class="spec-table">
+      <tr><th>操作</th><th>必要な権限</th></tr>
+      <tr><td>CREATE</td><td>対象 Glue データベースへの CREATE TABLE 権限 + 定義者 IAM ロールの全ソーステーブルへの SELECT 権限</td></tr>
+      <tr><td>REFRESH</td><td>マテリアライズドビューへの ALTER 権限 + 定義者ロールのソーステーブルへの SELECT 権限</td></tr>
+      <tr><td>DROP</td><td>マテリアライズドビューへの DROP 権限</td></tr>
+      <tr><td>QUERY</td><td>Lake Formation または Glue リソースポリシーで付与された SELECT 権限</td></tr>
+    </table>
+    <p>定義者 IAM ロールには、<code class="inline">redshift.amazonaws.com</code> と <code class="inline">glue.amazonaws.com</code> の 2 つのサービスプリンシパルを信頼するトラストポリシーが必要です。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>📋 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Redshift Serverless ワークグループまたは RG インスタンスのプロビジョンドクラスター</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Iceberg 形式のソーステーブル (同一リージョン・同一アカウント内)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>S3 アクセス権限、Glue Data Catalog アクセス権限、<code class="inline">iam:PassRole</code> を持つ定義者 IAM ロール</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>セッション設定 <code class="inline">enable_case_sensitive_identifier</code> が <code class="inline">false</code> であること</span></div>
+
+    <div class="step-list">
+      <div class="step-item">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <div class="step-title">IAM ロールの準備と関連付け</div>
+          <p>Redshift と Glue が引き受け可能なトラストポリシーを持つ IAM ロールを作成し、S3 の読み書き権限と Glue Data Catalog のテーブル操作権限を付与したうえで、クラスターまたは Serverless 名前空間に関連付けます。</p>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">IAM ロールの関連付け</span></div>
+            <pre><code class="language-bash"># IAM ロールをクラスター / 名前空間に関連付け
+aws redshift modify-cluster-iam-roles \
+    --cluster-identifier my-cluster \
+    --add-iam-roles arn:aws:iam::123456789012:role/IcebergMvDefiner</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <div class="step-title">外部スキーマの作成</div>
+          <p>大文字小文字を区別する識別子設定を無効化したうえで、Glue データベースを指す外部スキーマを定義者 IAM ロールとともに作成します。</p>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">外部スキーマ作成</span></div>
+            <pre><code class="language-sql">SET enable_case_sensitive_identifier TO FALSE;
+
+CREATE EXTERNAL SCHEMA iceberg_schema
+FROM DATA CATALOG
+DATABASE 'analytics'
+IAM_ROLE 'arn:aws:iam::123456789012:role/IcebergMvDefiner';</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <div class="step-title">Iceberg マテリアライズドビューの作成とリフレッシュ</div>
+          <p><code class="inline">USING ICEBERG</code> 句付きで作成すると、クエリ結果が S3 に Iceberg テーブルとして書き出され、Glue Data Catalog に登録されます。リフレッシュ時はソーステーブルのスナップショット差分のみが再計算されます。</p>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">ビュー作成とリフレッシュ</span></div>
+            <pre><code class="language-sql">CREATE MATERIALIZED VIEW iceberg_schema.sales_by_region
+USING ICEBERG
+LOCATION 's3://amzn-s3-demo-analytics/sales_by_region/'
+AS
+SELECT region, SUM(amount) AS total_sales, COUNT(*) AS order_count
+FROM awsdatacatalog.source.orders
+GROUP BY region;
+
+-- ソースデータ更新後に差分リフレッシュ
+REFRESH MATERIALIZED VIEW iceberg_schema.sales_by_region;</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <div class="step-title">他エンジンからのクエリ</div>
+          <p>Glue Data Catalog に登録された Iceberg テーブルとして、Athena や Spark などから追加設定なしでクエリできます。</p>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">Athena から直接クエリ</span></div>
+            <pre><code class="language-sql">SELECT * FROM analytics.sales_by_region WHERE region = 'us-east';</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div>
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンピューティングコストの削減</strong>: 高価な集計を Redshift で一度だけ実行し、全エンジンで結果を共有。AWS Blog の試算例では 4 エンジン個別集計 (約 7,500 USD/月) が単一リフレッシュ (約 1,500 USD/月) に削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>単一の信頼できる情報源</strong>: 全エンジンが同一スナップショットを参照し、セマンティックドリフトを防止</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の軽減</strong>: エンジンごとの個別パイプラインやマルチエンジンオーケストレーションが不要</span></div>
+      </div>
+      <div>
+        <h3>🔧 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>オープンフォーマットによる相互運用性</strong>: ベンダーロックインなしに Athena、Spark、Trino、Snowflake 等から利用可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>効率的なインクリメンタルリフレッシュ</strong>: スナップショット差分の追跡により変更分のみ再計算し、時間とコストを最小化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>クラスター非依存の管理</strong>: ビュー状態が Glue に保存され、任意のワークグループからリフレッシュ可能。OCC により同時実行も安全</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>RMS マテリアライズドビューとの併用</strong>: レイテンシー重視のダッシュボード向けに、Iceberg MV の結果を RMS MV としてロードする組み合わせも可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>RA3 および DC2 インスタンスタイプは非サポート (Redshift Serverless と RG インスタンスのみ)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>自動リフレッシュ (autorefresh)、自動マテリアライズドビュー、クエリの自動書き換え (automatic query rewriting) は非サポート</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ソーステーブルは Iceberg 形式のみ (Redshift ネイティブテーブル、Hive、Parquet、Delta Lake、Hudi は不可)、同一リージョン・同一アカウント内に限定</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Iceberg フォーマットバージョン 3 のソーステーブル、UDF、ミュータブル関数 (GETDATE、RANDOM 等)、ORDER BY / LIMIT / OFFSET、大文字の識別子は定義に使用不可</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>DISTINCT、外部結合、ウィンドウ関数、サブクエリ、集合演算、COUNT / SUM 以外の集計関数はフルリフレッシュにフォールバック</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>細かい粒度のアクセス制御 (FGAC) は非サポート。Lake Formation のガバナンスはデータベース / テーブルレベルの粗粒度のみ (行・列フィルターは不可)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>CASCADE リフレッシュは非サポート</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span><code class="inline">DROP MATERIALIZED VIEW</code> は Glue カタログエントリを削除するが、S3 上のデータは削除されないため、手動での削除 (<code class="inline">aws s3 rm --recursive</code> 等) が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>汎用 S3 バケット保存時は小さなファイルが蓄積するため、Spark の <code class="inline">rewrite_data_files</code> 等による定期的なコンパクションとスナップショット有効期限の設定が必要 (S3 Table Buckets では自動管理)</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>ソーステーブルのスナップショット保持期間はリフレッシュ間隔より長く設定する必要がある。期限切れになるとフルリフレッシュにフォールバック</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>Iceberg テーブルはスナップショット履歴を持つため、基盤ファイルにアクセスできる読み取り者はリフレッシュ間の行の増減を観察可能。機密データでは Lake Formation 権限や S3 バケットポリシーによるアクセス制御を検討</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🥇 ユースケース 1: メダリオンアーキテクチャの Gold レイヤー構築</div>
+      <p><strong>シナリオ</strong>: Bronze → Silver → Gold のメダリオンアーキテクチャを採用しており、Gold レイヤーの集計テーブルを Athena のアドホック分析、Spark の ML パイプライン、BI ツールの全てから利用したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">Gold レイヤーの集計ビュー</span></div>
+        <pre><code class="language-sql">CREATE MATERIALIZED VIEW awsdatacatalog.gold.customer_metrics
+USING ICEBERG
+LOCATION 's3://amzn-s3-demo-lakehouse/gold/customer_metrics/'
+AS
+SELECT customer_id, COUNT(*) AS order_count, SUM(amount) AS lifetime_value
+FROM awsdatacatalog.silver.orders
+GROUP BY customer_id;</code></pre>
+      </div>
+      <div class="effect">✨ <strong>効果</strong>: Redshift の最適化されたクエリエンジンで Gold レイヤーを一度計算し、全エンジンが同一の結果を共有。エンジンごとの重複パイプラインを排除できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🤖 ユースケース 2: ML / 生成 AI 向け特徴量ストア</div>
+      <p><strong>シナリオ</strong>: SageMaker のモデル学習、Bedrock エージェント、Spark ML パイプラインが同じ顧客特徴量を必要としているが、JDBC 経由での Redshift アクセスを避けたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Python</span><span class="code-title">PyIceberg から特徴量を直接読み取り</span></div>
+        <pre><code class="language-python"># PyIceberg から特徴量を直接読み取り
+from pyiceberg.catalog import load_catalog
+catalog = load_catalog("glue", **{"type": "glue"})
+table = catalog.load_table("gold.customer_metrics")
+df = table.scan().to_pandas()</code></pre>
+      </div>
+      <div class="effect">✨ <strong>効果</strong>: 特徴量が S3 上のオープンな Iceberg テーブルとして提供されるため、JDBC 接続やデータコピーなしに、各 ML ワークロードが S3 読み取りコストのみで最新の特徴量にアクセスできる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📈 ユースケース 3: 複数エンジンでの日次売上ダッシュボード共有</div>
+      <p><strong>シナリオ</strong>: 日次売上集計を Athena ベースの社内ダッシュボードと Snowflake を利用するパートナー分析チームの両方に提供しており、集計結果の一貫性維持が課題になっている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">日次バッチの最後にリフレッシュを実行</span></div>
+        <pre><code class="language-sql">-- 日次バッチの最後にリフレッシュを実行
+REFRESH MATERIALIZED VIEW awsdatacatalog.analytics.daily_revenue;</code></pre>
+      </div>
+      <div class="effect">✨ <strong>効果</strong>: 1 回のインクリメンタルリフレッシュで両チームが同一スナップショットの集計値を参照。エンジン間での数値の不一致を解消し、集計コンピューティングコストを一本化できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>Iceberg マテリアライズドビュー自体に<span class="highlight">追加料金はありません</span>。以下の標準料金が適用されます。</p>
+    <div class="card">
+      <ul>
+        <li><strong>Redshift コンピューティング</strong>: ビューの作成・リフレッシュ時の Redshift Serverless (RPU 時間) または RG プロビジョンドインスタンスの料金</li>
+        <li><strong>Amazon S3</strong>: マテリアライズドビューデータのストレージ料金とリクエスト料金 (S3 Table Buckets 使用時は S3 Tables の料金)</li>
+        <li><strong>AWS Glue Data Catalog</strong>: カタログのストレージおよびリクエスト料金</li>
+        <li><strong>コンシューマー側</strong>: 各エンジンからの読み取りは標準の S3 読み取りコストのみで、Redshift 側に追加コンピューティング料金は発生しない</li>
+      </ul>
+    </div>
+    <p>なお、AWS Blog によると、RG インスタンスは RA3 と比較して最大 2.4 倍高速な Iceberg クエリ性能を vCPU あたり 30% 低いコストで提供し、データレイクスキャンに対する TB あたりの課金もありません。</p>
+  </div>
+
+  <!-- リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>Amazon Redshift Serverless および Graviton ベース (RG) プロビジョンドインスタンスがサポートされる全ての AWS リージョンで利用可能です。</p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">📚 AWS Glue Data Catalog</div>
+      <p>マテリアライズドビューの登録先であり、ビュー定義・リフレッシュ状態の保存と同時リフレッシュの調整 (OCC) を担う。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🪣 Amazon S3 / S3 Table Buckets</div>
+      <p>Iceberg テーブルデータの保存先。S3 Table Buckets ではコンパクションとスナップショット管理が自動化される。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔍 Amazon Athena / Apache Spark (EMR、AWS Glue) / Trino / Snowflake</div>
+      <p>作成された Iceberg マテリアライズドビューを直接クエリできる Iceberg 互換エンジン。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🛡️ AWS Lake Formation</div>
+      <p>データベース / テーブルレベルの粗粒度アクセス制御をオプションで適用可能。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🗄️ Redshift マテリアライズドビュー (RMS)</div>
+      <p>従来の内部保存型マテリアライズドビュー。サブ秒レイテンシーが必要なダッシュボード向けに Iceberg マテリアライズドビューと併用可能。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      Amazon Redshift の Iceberg マテリアライズドビューは、高価な集計・結合処理を一度だけ実行し、その結果をオープンな Iceberg テーブルとして全ての互換エンジンで共有できるようにする、<span class="highlight">レイクハウスアーキテクチャの中核となるアップデート</span>です。
+      複数の分析エンジンで重複した集計パイプラインを運用している場合は、コスト削減と結果の一貫性確保の観点から導入を検討する価値があります。
+    </p>
+    <p>
+      利用には Redshift Serverless または RG インスタンスが必要であり、リフレッシュは手動のみである点に留意して、既存の RMS マテリアライズドビューとの使い分けを設計することを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li>・<a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/10/redshift-iceberg-materialized-views" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/redshift-iceberg-materialized-views</a></li>
+      <li>・<a class="aws-link" href="https://aws.amazon.com/blogs/big-data/materialize-once-query-anywhere-introducing-iceberg-materialized-views-in-amazon-redshift/" target="_blank" rel="noopener noreferrer">AWS Blog: Materialize once, query anywhere - Introducing Iceberg materialized views in Amazon Redshift</a></li>
+      <li>・<a class="aws-link" href="https://docs.aws.amazon.com/redshift/latest/dg/materialized-view-iceberg.html" target="_blank" rel="noopener noreferrer">ドキュメント: Materialized views stored as Apache Iceberg tables</a></li>
+      <li>・<a class="aws-link" href="https://aws.amazon.com/redshift/pricing/" target="_blank" rel="noopener noreferrer">料金ページ: Amazon Redshift の料金</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-10-05-redshift-iceberg-materialized-views.md) を基に作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -5,6 +5,16 @@
 
 ## 2026 年
 
+- [2026-10-05 - Amazon Bedrock - Z.ai GLM 5.3 の一般提供開始](2026/2026-10-05-amazon-bedrock-glm-5-3.md)
+- [2026-10-05 - Kiro - Workflows、Untrusted Workspace の安全性強化、エンタープライズサインイン制御 (IDE 1.2)](2026/2026-10-05-kiro-changelog-2026-10-05.md)
+- [2026-10-05 - AWS Private CA - 詳細な証明書発行ログの提供開始](2026/2026-10-05-aws-private-ca-certificate-issuance-logs.md)
+- [2026-10-05 - AWS Advanced Ruby Driver Wrapper - 一般提供開始](2026/2026-10-05-aws-ruby-driver-wrapper-available.md)
+- [2026-10-05 - AWS IAM Identity Center - Identity Store のネットワークアクセスコントロール](2026/2026-10-05-aws-identity-store-network-controls.md)
+- [2026-10-05 - Amazon Redshift - Apache Iceberg マテリアライズドビューの作成・リフレッシュサポート](2026/2026-10-05-redshift-iceberg-materialized-views.md)
+- [2026-10-05 - AWS Continuum for Penetration Testing - CI/CD パイプライン統合による継続的ペネトレーションテスト](2026/2026-10-05-aws-continuum-penetration-testing.md)
+- [2026-10-05 - Amazon Bedrock - Amazon Nova 2.5 Sonic (音声エージェント向け speech-to-speech モデル)](2026/2026-10-05-amazon-nova-2.5-sonic.md)
+- [2026-10-05 - AWS Batch - Amazon EKS アクセスエントリ認証のサポート](2026/2026-10-05-aws-batch-access-entries.md)
+- [2026-10-05 - AWS Client VPN - デバイスポスチャ評価のサポート](2026/2026-10-05-aws-client-vpn-device-posture.md)
 - [2026-10-02 - AWS MCP Server - 6 つの追加リージョンで利用可能に](2026/2026-10-02-aws-mcp-server-six-additional-regions.md)
 - [2026-10-02 - Amazon ElastiCache - Valkey 向け OpenTelemetry メトリクスと詳細モニタリングのサポート](2026/2026-10-02-amazon-elasticache-valkey-opentelemetry-metrics-detailed-monitoring.md)
 - [2026-10-02 - AWS Security Hub - GuardDuty Runtime Monitoring の Threat Analytics プランへの統合](2026/2026-10-02-aws-security-hub-runtime-monitoring.md)
