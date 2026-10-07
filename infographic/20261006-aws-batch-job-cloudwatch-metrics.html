@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Batch - Amazon CloudWatch へのジョブメトリクス発行</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  background: linear-gradient(135deg, var(--aws-dark-squid) 0%, #2d3e50 100%);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+.date-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--aws-light-gray);
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+  margin-left: 8px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 12px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+  margin: 0;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+code.inline {
+  background: rgba(0, 161, 201, 0.15);
+  color: var(--aws-teal);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+}
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF6B6B; }
+.after-box .ba-title { color: #6BCB77; }
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* 統計カード */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18) 0%, rgba(140, 79, 255, 0.12) 100%);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.feature-card ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.feature-card li { margin: 4px 0; }
+
+/* テーブル */
+.table-wrap { overflow-x: auto; margin: 12px 0; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+td {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  vertical-align: top;
+}
+
+td code, th code {
+  background: rgba(0, 161, 201, 0.15);
+  color: var(--aws-teal);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+tr:nth-child(even) { background: rgba(255, 255, 255, 0.02); }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* チェックリスト */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.check-icon { color: #6BCB77; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B6B; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* メリットグリッド */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.merit-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.merit-box h3 { margin-top: 0; font-size: 16px; }
+
+/* ユースケース */
+.usecase-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.1) 0%, rgba(255, 173, 51, 0.05) 100%);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase-label {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.usecase-card p { font-size: 14px; margin: 4px 0; }
+
+.effect-box {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  margin-top: 10px;
+  border-radius: 0 6px 6px 0;
+  font-size: 14px;
+}
+
+/* ステップ */
+.step-card {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+.step-body { flex: 1; min-width: 0; }
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+.step-body p { font-size: 14px; margin: 6px 0; }
+.step-body ol { font-size: 14px; margin: 6px 0; padding-left: 20px; }
+.step-body ol li { margin: 4px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+ul.plain { margin: 8px 0; padding-left: 20px; font-size: 14px; }
+ul.plain li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .before-after, .merit-grid { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">⚙️ AWS Batch</span>
+      <span class="date-badge">📅 2026 年 10 月 6 日リリース</span>
+    </div>
+    <h1>📊 AWS Batch ジョブメトリクスの<br>Amazon CloudWatch ネイティブ発行</h1>
+    <p class="subtitle">バッチワークロードのオブザーバビリティが、追加実装なし・設定不要・追加料金なしで手に入る</p>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>💡 概要</h2>
+    <p>AWS Batch がジョブメトリクスを Amazon CloudWatch に発行するようになり、バッチワークロードの<span class="highlight">ネイティブなオブザーバビリティ</span>が提供されるようになりました。ジョブのライフサイクル全体を通じてメトリクスが発行され、ジョブキューの健全性、失敗率、ジョブの所要時間を可視化できます。</p>
+    <p>状態遷移メトリクスと所要時間メトリクスは、CloudWatch の <code class="inline">AWS/Batch</code> 名前空間に <code class="inline">JobQueueName</code> ディメンション付きで<span class="highlight">自動発行</span>されます。AWS Batch コンソール、CloudWatch コンソール、AWS CLI、AWS SDK から参照可能です。</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">0 円</div>
+        <div class="stat-label">メトリクス発行の追加料金</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">設定不要</div>
+        <div class="stat-label">有効化の操作なしで自動発行</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">21 種類</div>
+        <div class="stat-label">発行されるメトリクスの合計数</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>ジョブに関するネイティブな CloudWatch メトリクスが存在しなかった</li>
+          <li>EventBridge + Lambda でカスタムメトリクスを発行する独自基盤の構築が必要だった</li>
+          <li>RUNNABLE 滞留や実行時間を定量追跡する標準手段がなく、キャパシティ不足や性能劣化の検知が遅れがちだった</li>
+          <li>失敗率アラームの設定にカスタム実装と運用コストが必要だった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>状態遷移数と所要時間が <code class="inline">AWS/Batch</code> 名前空間へ自動発行され、カスタム実装なしで可視化</li>
+          <li><code class="inline">JobQueueName</code> ディメンションでキュー単位の健全性監視・失敗率アラーム・ダッシュボード作成が可能に</li>
+          <li>所要時間メトリクスでスケジューリング遅延や実行時間のベースライン確立とリグレッション検知が容易に</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 ユーザー"]) -->|ジョブ送信| JQ["📬 ジョブキュー"]
+
+    subgraph Batch["⚙️ AWS Batch ジョブライフサイクル"]
+        direction LR
+        S1["📥 SUBMITTED"] --> S2["📋 RUNNABLE"] --> S3["🚀 STARTING"] --> S4["▶️ RUNNING"]
+        S4 --> S5["✅ SUCCEEDED"]
+        S4 --> S6["❌ FAILED"]
+    end
+
+    JQ --> Batch
+    Batch -->|状態遷移ごとに自動発行| NS["📊 CloudWatch<br/>AWS/Batch 名前空間<br/>ディメンション JobQueueName"]
+
+    NS --> V1["🖥️ AWS Batch コンソール<br/>メトリクスダッシュボード"]
+    NS --> V2["📈 CloudWatch<br/>ダッシュボード"]
+    NS --> V3["🔔 CloudWatch アラーム"]
+    V3 -.-> SNS["📣 Amazon SNS 通知"]
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef error fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+
+    class Batch layer
+    class JQ,S1,S2,S3,S4 process
+    class NS,V1,V2 internal
+    class User,S5 input
+    class V3,SNS warning
+    class S6 error
+      </pre>
+    </div>
+    <p class="diagram-caption">ジョブがライフサイクルの各状態を遷移するたびに、AWS Batch が状態遷移メトリクスと所要時間メトリクスを <code class="inline">AWS/Batch</code> 名前空間へ自動発行し、コンソールでの可視化やアラーム通知に活用できる構成です。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🚀 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">1️⃣ 状態遷移メトリクスの自動発行</div>
+      <ul>
+        <li>SUBMITTED、PENDING、RUNNABLE、STARTING、RUNNING、SUCCEEDED、FAILED の各状態に遷移した件数を Count 単位で発行</li>
+        <li>キャンセル (<code class="inline">JobsCancelled</code>)、強制終了 (<code class="inline">JobsTerminated</code>)、リトライ (<code class="inline">JobsRetried</code>) も個別メトリクスとして追跡可能</li>
+        <li>ジョブキューに送信されたジョブが対象で、有効化の設定は不要</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">2️⃣ 所要時間メトリクスの自動発行</div>
+      <ul>
+        <li>状態間の遷移に要した時間を Milliseconds 単位で発行</li>
+        <li><code class="inline">JobSubmittedToRunnableDuration</code> (送信から RUNNABLE まで) や <code class="inline">JobAttemptExecutionDuration</code> (実行時間) など、スケジューリング遅延と実行性能の両方を計測</li>
+        <li>リトライが発生した場合、試行 (attempt) 単位のメトリクスは到達した試行ごとにデータポイントを発行</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">3️⃣ JobQueueName ディメンションによるグループ化</div>
+      <ul>
+        <li>すべてのメトリクスは <code class="inline">JobQueueName</code> ディメンション付きで発行され、ジョブキュー単位でのフィルタリングと集計が可能</li>
+        <li>優先度やワークロード種別ごとにジョブキューを分けている場合、キューごとの健全性を個別に監視できる</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">4️⃣ AWS Batch コンソールのメトリクスダッシュボード</div>
+      <ul>
+        <li>Batch コンソールの [Dashboard] - [Batch metrics] タブで、最大 5 つのジョブキューとメトリクスを選択してグラフ表示が可能</li>
+        <li>フィルタセットを最大 5 つまで保存でき、ユーザー設定としてセッションをまたいで保持される</li>
+        <li>ジョブキュー詳細画面の [Monitoring] タブでは、そのキューにスコープしたメトリクスを表示可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- メトリクス一覧 -->
+  <div class="section">
+    <h2>📋 メトリクス一覧</h2>
+
+    <h3>🔄 すべてのジョブタイプに適用されるメトリクス</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>メトリクス</th><th>説明</th><th>単位</th></tr>
+        <tr><td><code>JobsSubmitted</code></td><td>ジョブキューに送信されたジョブ数 (アレイジョブはアレイサイズが値になる)</td><td>Count</td></tr>
+        <tr><td><code>JobsMovedToPending</code></td><td>PENDING 状態に移行したジョブ数 (依存関係の待機中など)</td><td>Count</td></tr>
+        <tr><td><code>JobsMovedToRunnable</code></td><td>RUNNABLE 状態に移行したジョブ数 (初回およびリトライ時)</td><td>Count</td></tr>
+        <tr><td><code>JobsMovedToStarting</code></td><td>STARTING 状態に移行したジョブ数</td><td>Count</td></tr>
+        <tr><td><code>JobsMovedToRunning</code></td><td>RUNNING 状態に移行したジョブ数</td><td>Count</td></tr>
+        <tr><td><code>JobsMovedToSucceeded</code></td><td>正常に完了したジョブ数</td><td>Count</td></tr>
+        <tr><td><code>JobsMovedToFailed</code></td><td>FAILED 状態に移行したジョブ数 (キャンセル・強制終了を含む)</td><td>Count</td></tr>
+        <tr><td><code>JobsCancelled</code></td><td>キャンセルされたジョブ数 (実行開始前のキャンセルリクエストによる)</td><td>Count</td></tr>
+        <tr><td><code>JobsTerminated</code></td><td>強制終了されたジョブ数 (終了リクエストによる)</td><td>Count</td></tr>
+        <tr><td><code>JobsRetried</code></td><td>リトライされたジョブ試行数</td><td>Count</td></tr>
+        <tr><td><code>JobSubmittedToRunnableDuration</code></td><td>SUBMITTED から RUNNABLE までの所要時間</td><td>Milliseconds</td></tr>
+        <tr><td><code>JobAttemptStartingToRunningDuration</code></td><td>試行が STARTING で費やした時間</td><td>Milliseconds</td></tr>
+        <tr><td><code>JobAttemptExecutionDuration</code></td><td>試行の実行時間 (実行開始から停止まで)</td><td>Milliseconds</td></tr>
+        <tr><td><code>JobAttemptDuration</code></td><td>試行の合計時間 (STARTING 開始から試行終了まで)</td><td>Milliseconds</td></tr>
+      </table>
+    </div>
+
+    <h3>💻 コンピュートジョブのみに適用されるメトリクス</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>メトリクス</th><th>説明</th><th>単位</th></tr>
+        <tr><td><code>JobSubmittedToFirstStartingDuration</code></td><td>SUBMITTED から最初の STARTING までの所要時間</td><td>Milliseconds</td></tr>
+        <tr><td><code>JobAttemptRunnableToStartingDuration</code></td><td>試行が RUNNABLE で費やした時間</td><td>Milliseconds</td></tr>
+      </table>
+    </div>
+
+    <h3>🛠️ サービスジョブのみに適用されるメトリクス</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>メトリクス</th><th>説明</th><th>単位</th></tr>
+        <tr><td><code>JobsMovedToScheduled</code></td><td>SCHEDULED 状態に移行したジョブ数 (プリエンプション後の再スケジュールを含む)</td><td>Count</td></tr>
+        <tr><td><code>JobSubmittedToFirstScheduledDuration</code></td><td>SUBMITTED から最初の SCHEDULED までの所要時間</td><td>Milliseconds</td></tr>
+        <tr><td><code>JobAttemptRunnableToScheduledDuration</code></td><td>試行が RUNNABLE から SCHEDULED に移行するまでの時間</td><td>Milliseconds</td></tr>
+        <tr><td><code>JobAttemptScheduledToStartingDuration</code></td><td>最初の SCHEDULED から STARTING までの時間</td><td>Milliseconds</td></tr>
+        <tr><td><code>JobsPreempted</code></td><td>プリエンプトされたジョブ数 (クォータ管理ジョブが対象)</td><td>Count</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📐 メトリクスの基本仕様</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>名前空間</td><td><code>AWS/Batch</code></td></tr>
+        <tr><td>ディメンション</td><td><code>JobQueueName</code> (単一ディメンション)</td></tr>
+        <tr><td>単位</td><td>状態遷移メトリクス: Count、所要時間メトリクス: Milliseconds</td></tr>
+        <tr><td>発行タイミング</td><td>ジョブの状態遷移時およびジョブ試行の完了時 (イベント駆動)</td></tr>
+        <tr><td>有効化設定</td><td>不要 (自動発行)</td></tr>
+        <tr><td>メトリクス発行の料金</td><td>追加料金なし</td></tr>
+        <tr><td>発行の信頼性</td><td>ベストエフォート (まれにデータポイントが欠落する可能性あり)</td></tr>
+      </table>
+    </div>
+
+    <h3>🧮 アレイジョブとマルチノード並列ジョブの計上動作</h3>
+    <p style="font-size: 14px;">二重カウントを防ぐため、親ジョブと子ジョブの<span class="highlight">どちらか一方からのみ</span>メトリクスが発行されます。</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>ジョブタイプ</th><th>動作</th></tr>
+        <tr><td>アレイジョブ</td><td>親ジョブは <code>JobsSubmitted</code> のみ発行 (値はアレイサイズ)。その他のメトリクスは各子ジョブが個別に発行。たとえば子ジョブ 1,000 件のアレイジョブを 1 件送信すると、<code>JobsSubmitted</code> は値 <code>1000</code> の単一データポイントとして発行される</td></tr>
+        <tr><td>マルチノード並列 (MNP) ジョブ</td><td>親ジョブからのみ発行。ノード数にかかわらずジョブ全体として 1 回カウントされる</td></tr>
+      </table>
+    </div>
+
+    <h3>🔀 API 変更履歴</h3>
+    <p style="font-size: 14px;">本アップデートはサービス側で自動発行されるメトリクスの追加であり、関連する AWS Batch API の変更はありません。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+
+    <h3>📝 前提条件</h3>
+    <ul class="plain">
+      <li>✓ AWS Batch のジョブキューが作成済みで、ジョブを送信していること</li>
+      <li>✓ メトリクスを参照する IAM ユーザー/ロールに CloudWatch の読み取り権限 (<code class="inline">cloudwatch:GetMetricData</code>、<code class="inline">cloudwatch:ListMetrics</code> など) があること</li>
+      <li>✓ アラーム通知を行う場合は Amazon SNS トピックが作成済みであること</li>
+    </ul>
+
+    <div class="step-card">
+      <div class="step-number">1</div>
+      <div class="step-body">
+        <div class="step-title">AWS Batch コンソールでメトリクスを表示する</div>
+        <ol>
+          <li>AWS Batch コンソールのナビゲーションペインで [Dashboard] を選択し、[Batch metrics] タブを開く</li>
+          <li>[Display CloudWatch metrics] をオンにする</li>
+          <li>[Filter metrics] で最大 5 つのジョブキューと表示したいメトリクスを選択し、[Apply filters] を選択する</li>
+        </ol>
+        <p>メトリクスごとに 1 つのグラフが表示され、ジョブキューごとに 1 本の線が描画されます。選択内容はフィルタセットとして最大 5 つまで保存できます。なお、コンソールでのメトリクス表示には標準の CloudWatch 料金が発生します。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">2</div>
+      <div class="step-body">
+        <div class="step-title">AWS CLI でメトリクスを取得する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">失敗ジョブ数の取得</span>
+          </div>
+          <pre><code class="language-bash">aws cloudwatch get-metric-statistics \
+  --namespace AWS/Batch \
+  --metric-name JobsMovedToFailed \
+  --dimensions Name=JobQueueName,Value=my-job-queue \
+  --start-time 2026-10-06T00:00:00Z \
+  --end-time 2026-10-07T00:00:00Z \
+  --period 3600 \
+  --statistics Sum</code></pre>
+        </div>
+        <p>ジョブキュー <code class="inline">my-job-queue</code> で FAILED 状態に移行したジョブ数を 1 時間ごとの合計値として取得します。<code class="inline">JobQueueName</code> ディメンションを指定することで、特定のジョブキューにスコープしたデータを取得できます。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">3</div>
+      <div class="step-body">
+        <div class="step-title">失敗ジョブ数に対する CloudWatch アラームを作成する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">失敗ジョブアラームの作成</span>
+          </div>
+          <pre><code class="language-bash">aws cloudwatch put-metric-alarm \
+  --alarm-name batch-job-failures-my-job-queue \
+  --namespace AWS/Batch \
+  --metric-name JobsMovedToFailed \
+  --dimensions Name=JobQueueName,Value=my-job-queue \
+  --statistic Sum \
+  --period 300 \
+  --evaluation-periods 1 \
+  --threshold 10 \
+  --comparison-operator GreaterThanOrEqualToThreshold \
+  --treat-missing-data notBreaching \
+  --alarm-actions arn:aws:sns:ap-northeast-1:123456789012:batch-alerts</code></pre>
+        </div>
+        <p>5 分間に失敗ジョブが 10 件以上発生した場合に SNS トピックへ通知するアラームを作成します。メトリクスはジョブの失敗が発生したときのみ発行されるため、<code class="inline">--treat-missing-data notBreaching</code> を指定してデータポイントがない期間を正常として扱います。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>✨ メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: EventBridge と Lambda によるカスタムメトリクス基盤の構築・保守が不要になり、モニタリングの実装と運用にかかる工数を削減できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>障害検知の迅速化</strong>: 失敗率や滞留時間の増加をアラームで即座に検知でき、バッチ処理の遅延がビジネスに影響する前に対処できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加料金なしのメトリクス発行</strong>: メトリクスの発行自体は無料であり、既存ワークロードに対して追加費用なしで可視性が向上する</span></div>
+      </div>
+      <div class="merit-box">
+        <h3>🔬 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>CloudWatch エコシステムとの統合</strong>: ダッシュボード、アラーム、メトリクス演算、異常検知など CloudWatch の標準機能をそのまま適用できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>スケジューリング遅延の定量化</strong>: <code class="inline">JobSubmittedToRunnableDuration</code> などにより、依存関係待ちやキャパシティ不足によるボトルネックを状態ごとに切り分けられる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>パフォーマンスベースラインの確立</strong>: <code class="inline">JobAttemptExecutionDuration</code> の推移を追跡することで、ジョブ実行時間のリグレッションをデータに基づいて検知できる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>🚫 制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>メトリクスは<strong>ベストエフォート</strong>で発行される。ジョブの状態遷移はイベント駆動であるため、まれにメトリクスが欠落する可能性がある (例: RUNNING への遷移直後に終了したジョブでは RUNNING 関連メトリクスが発行されないことがある)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>課金、監査、突合 (リコンシリエーション) 用途には適さず、正確な件数のソースとしては利用できない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>ディメンションは <code class="inline">JobQueueName</code> のみで、ジョブ定義やコンピュート環境単位での集計はネイティブにはできない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>メトリクスの対象はジョブキューに送信されたジョブのみ</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>アラームやダッシュボードは、まれなデータ欠落を許容する設計 (欠落データの扱いの明示的な指定、適切な評価期間の設定など) にする必要がある</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>アレイジョブでは親ジョブが <code class="inline">JobsSubmitted</code> のみを発行し、その他は子ジョブ単位で計上されるため、「送信数」と「状態遷移数」の母数が異なる点に注意が必要</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>コンソールでのメトリクス表示には標準の CloudWatch 料金が発生する (表示をオフにすれば課金は停止)</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase-card">
+      <div class="usecase-title">🔔 ユースケース 1: ジョブ失敗率の監視とアラート</div>
+      <p><strong>シナリオ</strong>: 夜間バッチで大量のジョブを処理しており、コンテナイメージの不具合やデータ異常によるジョブ失敗の多発を早期に検知したい。</p>
+      <div class="usecase-label">実装例</div>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Plaintext</span><span class="code-title">メトリクス演算による失敗率アラーム</span></div>
+        <pre><code class="language-plaintext">CloudWatch メトリクス演算で失敗率を定義してアラームを設定
+  失敗率 e1 = (m1 / (m1 + m2)) * 100
+  m1: JobsMovedToFailed (Sum, 15 分)
+  m2: JobsMovedToSucceeded (Sum, 15 分)
+  条件: e1 >= 5 で SNS 通知</code></pre>
+      </div>
+      <div class="effect-box">💡 <strong>効果</strong>: カスタム実装なしでジョブキューごとの失敗率を常時監視でき、障害の影響範囲が拡大する前にオンコール担当へ通知できる。</div>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">⏳ ユースケース 2: キャパシティ不足によるジョブ滞留の検知</div>
+      <p><strong>シナリオ</strong>: スポットインスタンスベースのコンピュート環境でコスト最適化しているが、キャパシティ不足時にジョブが RUNNABLE 状態で長時間滞留し、SLA に影響することがある。</p>
+      <div class="usecase-label">実装例</div>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Plaintext</span><span class="code-title">滞留時間アラーム</span></div>
+        <pre><code class="language-plaintext">JobAttemptRunnableToStartingDuration (Average または p90) にアラームを設定
+  ディメンション: JobQueueName = spot-queue
+  条件: 10 分間の平均が 600000 ミリ秒 (10 分) を超えたら通知
+対応アクション: オンデマンドのフォールバックキューへの切り替えや
+allocationStrategy の見直しを検討</code></pre>
+      </div>
+      <div class="effect-box">💡 <strong>効果</strong>: スケジューリング遅延を定量的に検知でき、キャパシティ戦略の見直しやフォールバック運用の判断をデータに基づいて行える。</div>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">📈 ユースケース 3: ジョブ実行時間のベースライン管理</div>
+      <p><strong>シナリオ</strong>: ゲノム解析やレンダリングなどの長時間ジョブを運用しており、アプリケーション更新後の処理時間の悪化 (リグレッション) を検知したい。</p>
+      <div class="usecase-label">実装例</div>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Plaintext</span><span class="code-title">ベースライン監視ダッシュボード</span></div>
+        <pre><code class="language-plaintext">CloudWatch ダッシュボードに以下を配置
+  - JobAttemptExecutionDuration (Average, p50, p90) の時系列グラフ
+  - JobsMovedToSucceeded / JobsMovedToFailed の Sum
+  - JobsRetried の Sum (リトライ増加はアプリ品質劣化のシグナル)
+CloudWatch 異常検知 (Anomaly Detection) を JobAttemptExecutionDuration に適用</code></pre>
+      </div>
+      <div class="effect-box">💡 <strong>効果</strong>: 実行時間のベースラインが自動的に学習され、リリース後の性能劣化やリトライ増加を早期に発見できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>AWS Batch によるメトリクスの発行自体は<span class="highlight">追加料金なし</span>で利用できます。ただし、以下には標準の CloudWatch 料金が適用されます。</p>
+    <ul class="plain">
+      <li>AWS Batch コンソールまたは CloudWatch コンソールでのメトリクス表示 (<code class="inline">GetMetricData</code> などの API リクエスト料金)</li>
+      <li>CloudWatch アラーム、ダッシュボードの作成・利用</li>
+    </ul>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>料金</th></tr>
+        <tr><td>メトリクスの発行 (<code>AWS/Batch</code> 名前空間)</td><td>追加料金なし</td></tr>
+        <tr><td>コンソールでのメトリクス表示</td><td>標準の CloudWatch 料金 (API リクエスト課金)</td></tr>
+        <tr><td>アラーム・ダッシュボード</td><td>標準の CloudWatch 料金</td></tr>
+      </table>
+    </div>
+    <p style="font-size: 14px;">詳細は <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon CloudWatch の料金ページ</a> を参照してください。</p>
+  </div>
+
+  <!-- リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>AWS Batch が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます (東京・大阪リージョンを含む)。</p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">📊 Amazon CloudWatch</div>
+      <p style="font-size: 14px; margin: 0;">メトリクスの保存・可視化・アラーム・異常検知を担う。本アップデートで AWS Batch が <code class="inline">AWS/Batch</code> 名前空間へのネイティブ発行元となった。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🚌 Amazon EventBridge</div>
+      <p style="font-size: 14px; margin: 0;">AWS Batch のジョブ状態変更イベントを配信する。個々のジョブ単位でのイベント駆動処理には引き続き EventBridge が適しており、集計ベースの監視は CloudWatch メトリクスで代替できる。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">📦 CloudWatch Container Insights</div>
+      <p style="font-size: 14px; margin: 0;">AWS Batch コンピュート環境 (ECS/EKS) のリソース使用率 (CPU、メモリなど) を収集する。ジョブライフサイクルメトリクスと組み合わせることで、ジョブとインフラの両面から監視できる。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">📣 Amazon SNS</div>
+      <p style="font-size: 14px; margin: 0;">CloudWatch アラームの通知先として、ジョブ失敗や滞留の検知を運用チームへ通知できる。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>AWS Batch のジョブメトリクスが CloudWatch にネイティブ発行されるようになり、これまでカスタム実装が必要だったバッチワークロードの監視が<span class="highlight">追加料金なし・設定不要</span>で実現できるようになりました。</p>
+    <div class="card" style="background: rgba(255, 153, 0, 0.08); border: 1px solid rgba(255, 153, 0, 0.4); border-radius: 8px; padding: 16px; margin: 12px 0;">
+      <div class="check-item"><span class="check-icon">✓</span><span>まずコンソールの Batch metrics ダッシュボードでメトリクスを確認する</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>失敗数 (<code class="inline">JobsMovedToFailed</code>) と滞留時間 (<code class="inline">JobAttemptRunnableToStartingDuration</code>) に対するアラームの整備から着手する</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>既存の EventBridge ベースのカスタムメトリクス基盤がある場合は、本機能への移行による運用の簡素化を検討する</span></div>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/10/aws-batch-job-cloudwatch-metrics/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/10/aws-batch-job-cloudwatch-metrics/</a></li>
+      <li>ドキュメント: Using CloudWatch Metrics with AWS Batch: <a href="https://docs.aws.amazon.com/batch/latest/userguide/using_cloudwatch_metrics.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/batch/latest/userguide/using_cloudwatch_metrics.html</a></li>
+      <li>Amazon CloudWatch 料金ページ: <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/cloudwatch/pricing/</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-10-06-aws-batch-job-cloudwatch-metrics.md) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

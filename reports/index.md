@@ -5,6 +5,9 @@
 
 ## 2026 年
 
+- [2026-10-06 - AWS Batch - Amazon CloudWatch へのジョブメトリクス発行](2026/2026-10-06-aws-batch-job-cloudwatch-metrics.md)
+- [2026-10-06 - AWS Certificate Manager - AWS PrivateLink 経由の ACME 証明書発行サポート](2026/2026-10-06-AWS-Certificate-Manager-ACME-Privatelink.md)
+- [2026-10-05 - Amazon EC2 - AMI 共有タグ (Shared Tags for Amazon Machine Images)](2026/2026-10-05-ec2-ami-shared-tags.md)
 - [2026-10-05 - Amazon Bedrock - Z.ai GLM 5.3 の一般提供開始](2026/2026-10-05-amazon-bedrock-glm-5-3.md)
 - [2026-10-05 - Kiro - Workflows、Untrusted Workspace の安全性強化、エンタープライズサインイン制御 (IDE 1.2)](2026/2026-10-05-kiro-changelog-2026-10-05.md)
 - [2026-10-05 - AWS Private CA - 詳細な証明書発行ログの提供開始](2026/2026-10-05-aws-private-ca-certificate-issuance-logs.md)
@@ -14,6 +17,7 @@
 - [2026-10-05 - AWS Continuum for Penetration Testing - CI/CD パイプライン統合による継続的ペネトレーションテスト](2026/2026-10-05-aws-continuum-penetration-testing.md)
 - [2026-10-05 - Amazon Bedrock - Amazon Nova 2.5 Sonic (音声エージェント向け speech-to-speech モデル)](2026/2026-10-05-amazon-nova-2.5-sonic.md)
 - [2026-10-05 - AWS Batch - Amazon EKS アクセスエントリ認証のサポート](2026/2026-10-05-aws-batch-access-entries.md)
+- [2026-10-05 - AWS Control Tower - Account Factory for Terraform (AFT) の plan-only カスタマイズ実行サポート](2026/2026-10-05-aws-control-tower-aft.md)
 - [2026-10-05 - AWS Client VPN - デバイスポスチャ評価のサポート](2026/2026-10-05-aws-client-vpn-device-posture.md)
 - [2026-10-02 - AWS MCP Server - 6 つの追加リージョンで利用可能に](2026/2026-10-02-aws-mcp-server-six-additional-regions.md)
 - [2026-10-02 - Amazon ElastiCache - Valkey 向け OpenTelemetry メトリクスと詳細モニタリングのサポート](2026/2026-10-02-amazon-elasticache-valkey-opentelemetry-metrics-detailed-monitoring.md)
