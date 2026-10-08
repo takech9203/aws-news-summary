@@ -5,6 +5,9 @@
 
 ## 2026 年
 
+- [2026-10-07 - AWS - Anthropic Claude Haiku 5.5 の提供開始](2026/2026-10-07-claude-haiku-5-5-aws.md)
+- [2026-10-07 - AWS Config - 77 の新しいリソースタイプのサポート](2026/2026-10-07-aws-config-new-resource-types.md)
+- [2026-10-07 - AWS Builder Center - AWS Capabilities by Region の機能単位の利用可能通知と高度なフィルタ機能](2026/2026-10-07-awscapabilities-enhancements.md)
 - [2026-10-06 - AWS Batch - Amazon CloudWatch へのジョブメトリクス発行](2026/2026-10-06-aws-batch-job-cloudwatch-metrics.md)
 - [2026-10-06 - AWS Certificate Manager - AWS PrivateLink 経由の ACME 証明書発行サポート](2026/2026-10-06-AWS-Certificate-Manager-ACME-Privatelink.md)
 - [2026-10-05 - Amazon EC2 - AMI 共有タグ (Shared Tags for Amazon Machine Images)](2026/2026-10-05-ec2-ami-shared-tags.md)
@@ -17,6 +20,7 @@
 - [2026-10-05 - AWS Continuum for Penetration Testing - CI/CD パイプライン統合による継続的ペネトレーションテスト](2026/2026-10-05-aws-continuum-penetration-testing.md)
 - [2026-10-05 - Amazon Bedrock - Amazon Nova 2.5 Sonic (音声エージェント向け speech-to-speech モデル)](2026/2026-10-05-amazon-nova-2.5-sonic.md)
 - [2026-10-05 - AWS Batch - Amazon EKS アクセスエントリ認証のサポート](2026/2026-10-05-aws-batch-access-entries.md)
+- [2026-10-05 - Amazon EC2 - Hpc8a インスタンスがアジアパシフィック (シンガポール) リージョンで利用可能に](2026/2026-10-05-amazon-ec2-hpc8a-asia-pacific.md)
 - [2026-10-05 - AWS Control Tower - Account Factory for Terraform (AFT) の plan-only カスタマイズ実行サポート](2026/2026-10-05-aws-control-tower-aft.md)
 - [2026-10-05 - AWS Client VPN - デバイスポスチャ評価のサポート](2026/2026-10-05-aws-client-vpn-device-posture.md)
 - [2026-10-02 - AWS MCP Server - 6 つの追加リージョンで利用可能に](2026/2026-10-02-aws-mcp-server-six-additional-regions.md)
