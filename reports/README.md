@@ -5,6 +5,10 @@
 
 ## 2026 年
 
+- [2026-10-08 - Amazon RDS for Oracle - マイナーバージョンアップグレードのプリチェックと新しい RDS イベントによるパッチ適用ダウンタイムの削減](2026/2026-10-08-amazon-rds-oracle-minor-version-upgrade-precheck-new-patching-rds-event.md)
+- [2026-10-08 - AWS Network Firewall - コンテナ属性フィルタのワイルドカードサポート](2026/2026-10-08-aws-network-firewall-container-attributes-wildcard.md)
+- [2026-10-08 - Amazon Bedrock - OpenAI GPT-6.1 Sol の Ultrafast モード対応](2026/2026-10-08-openai-gpt-sol-ultrafast-amazon.md)
+- [2026-10-07 - Amazon EC2 - C8gb インスタンスの利用可能リージョン拡大](2026/2026-10-07-amazon-ec2-c8gb.md)
 - [2026-10-07 - AWS - Anthropic Claude Haiku 5.5 の提供開始](2026/2026-10-07-claude-haiku-5-5-aws.md)
 - [2026-10-07 - AWS Config - 77 の新しいリソースタイプのサポート](2026/2026-10-07-aws-config-new-resource-types.md)
 - [2026-10-07 - AWS Builder Center - AWS Capabilities by Region の機能単位の利用可能通知と高度なフィルタ機能](2026/2026-10-07-awscapabilities-enhancements.md)
