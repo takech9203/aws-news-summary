@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon GuardDuty - RDS Protection によるデータ流出・データ破壊の検出</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.release-info {
+  margin-bottom: 28px;
+  font-size: 14px;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.icon-text {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  color: var(--aws-light-gray);
+}
+
+.arrow { color: var(--aws-orange); font-size: 18px; flex-shrink: 0; }
+
+.aws-link { color: var(--aws-teal); text-decoration: none; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 768px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+.before-box .box-title { color: #FF7A66; font-weight: 700; margin-bottom: 8px; }
+.after-box .box-title { color: #6FCF55; font-weight: 700; margin-bottom: 8px; }
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+.check-icon { color: #6FCF55; flex-shrink: 0; }
+.cross-icon { color: #FF7A66; flex-shrink: 0; }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* テーブル */
+.table-wrap { overflow-x: auto; margin: 12px 0; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+td code, li code, p code {
+  background: rgba(0, 161, 201, 0.15);
+  color: var(--aws-teal);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+}
+.sev-high { color: #FF7A66; font-weight: 700; }
+.sev-mid { color: var(--aws-smile-orange); font-weight: 700; }
+.sev-var { color: var(--aws-teal); font-weight: 700; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 16px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase-label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+.flow-arrow { color: var(--aws-orange); font-size: 24px; font-weight: bold; }
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 768px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+.note-box {
+  background: rgba(0, 161, 201, 0.1);
+  border-left: 4px solid var(--aws-teal);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.warn-box {
+  background: rgba(209, 50, 18, 0.1);
+  border-left: 4px solid var(--aws-red);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+ul.plain { padding-left: 20px; margin: 8px 0; }
+ul.plain li { margin: 6px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer a { word-break: break-all; }
+footer ul { padding-left: 20px; margin: 8px 0; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <h1>🛡️ Amazon GuardDuty<br>RDS Protection によるデータ流出・データ破壊の検出</h1>
+  </div>
+  <div class="release-info">
+    <span class="service-badge">Amazon GuardDuty</span>
+    <span class="service-badge">RDS Protection for data activity</span>
+    <div class="subtitle">📅 リリース日: 2026 年 10 月 8 日 | 🏷️ データアクティビティモニタリング</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon GuardDuty は、RDS Protection の機能拡張として
+      <span class="highlight">RDS Protection for data activity</span> を発表。従来のログイン異常検出に加えて、
+      <span class="highlight">Aurora PostgreSQL</span> と <span class="highlight">RDS for PostgreSQL</span> を標的とした
+      <span class="highlight">データ流出 (Exfiltration)</span> 攻撃と <span class="highlight">データ破壊 (Destruction)</span> 攻撃を検出できるようになりました。
+    </p>
+    <p>
+      ML ベースの異常検出と GuardDuty の統合脅威インテリジェンスを組み合わせ、データベースのクエリパターンを継続的に監視。正常なクエリパターンの行動ベースラインを確立し、通常より大幅に多い行数の読み取り、異常な DELETE や DROP ステートメント、悪意ある IP アドレスや Tor 出口ノードからのアクセスなど、従来のツールでは見逃しがちな脅威を検出します。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">0</div>
+        <div class="stat-label">エージェント・追加インフラ・DB 設定変更 (すべて不要)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">7 種類</div>
+        <div class="stat-label">新しい検出タイプ (Exfiltration 3 + Impact 4)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">30 日間</div>
+        <div class="stat-label">無料トライアル (アカウント・リージョンごと)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">1 クリック</div>
+        <div class="stat-label">組織全体への有効化 (GuardDuty コンソール)</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ Before: アップデート前の課題</div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>RDS Protection はログインアクティビティの監視のみで、認証後のデータベース内の活動は監視できなかった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>窃取された有効な認証情報によるデータ流出・破壊は、正規アプリケーションの動作と区別がつかず検出困難</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>クエリパターンの監視にはサードパーティ製ツールやエージェントの導入が必要</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>大量データ読み取りや破壊的 SQL をリアルタイム検出する AWS ネイティブな仕組みがなかった</span></div>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ After: アップデート後の改善</div>
+        <div class="check-item"><span class="check-icon">✓</span><span>クエリパターンの ML ベース異常検出により、データ流出・破壊の兆候を自動検出</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>正常なクエリパターンの行動ベースラインを確立し、ユーザーや DB ごとの異常行動を特定</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>エージェント・追加インフラ・DB 設定変更なしで、ワンクリックで組織全体に有効化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>悪意ある IP や Tor 出口ノードからのデータ抽出・破壊クエリを脅威インテリジェンスで検出</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Sources["🌐 アクセス元"]
+        direction LR
+        App["💻 正規アプリケーション"]
+        Attacker["🕵️ 攻撃者<br/>窃取した認証情報"]
+        App ~~~ Attacker
+    end
+
+    subgraph AWS["☁️ AWS"]
+        subgraph DBLayer["🗄️ データベース"]
+            direction LR
+            Aurora[("🐘 Aurora PostgreSQL")]
+            RDS[("🐘 RDS for PostgreSQL")]
+            Aurora ~~~ RDS
+        end
+
+        subgraph GD["🛡️ Amazon GuardDuty RDS Protection"]
+            Login["🔑 ログインアクティビティ監視<br/>既存機能"]
+            Data["📊 データアクティビティ監視<br/>New アドオン"]
+            ML["🤖 ML 異常検出<br/>行動ベースライン学習"]
+            TI["🌍 統合脅威インテリジェンス<br/>悪意ある IP や Tor を照合"]
+        end
+
+        Findings["🚨 検出結果<br/>Exfiltration と Impact"]
+    end
+
+    SecOps(["👤 セキュリティチーム"])
+
+    App -->|通常のクエリ| Aurora
+    Attacker -.->|大量 SELECT や DROP| Aurora
+    Attacker -.-> RDS
+    Aurora -.->|ログインイベント| Login
+    Aurora -.->|クエリパターン| Data
+    RDS -.->|クエリパターン| Data
+    Data --> ML
+    Data --> TI
+    Login --> ML
+    ML --> Findings
+    TI --> Findings
+    Findings --> SecOps
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef newfeature fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef critical fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class AWS cloud
+    class Sources,DBLayer,GD layer
+    class Aurora,RDS database
+    class Login,ML,TI internal
+    class Data newfeature
+    class Attacker warning
+    class Findings critical
+    class App,SecOps user
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      GuardDuty RDS Protection for data activity は、Aurora PostgreSQL と RDS for PostgreSQL のクエリパターンを
+      <span class="highlight">エージェントレス</span>で継続的に監視し、ML による行動ベースラインと脅威インテリジェンスを組み合わせて、
+      データ流出 (Exfiltration) やデータ破壊 (Impact) の検出結果を生成します。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">📤 1. データ流出 (Exfiltration) の検出</div>
+      <div class="icon-text"><span class="arrow">→</span><span>ユーザーや DB ごとの正常なクエリパターンをベースラインとして学習し、通常より大幅に多い行数を返す SELECT の実行を異常として検出</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span>未知のユーザー、IP アドレス、データベース名などの新しい属性を伴う大量データ読み取りを特定</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span>既知の悪意ある IP や Tor 出口ノードからのデータ抽出クエリを脅威インテリジェンスで検出</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">💥 2. データ破壊 (Destruction) の検出</div>
+      <div class="icon-text"><span class="arrow">→</span><span>テーブルや DB オブジェクトを削除する異常な DROP ステートメントの実行を検出</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span>通常より大幅に多い行数に影響する異常な DELETE ステートメントの実行を検出</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span>悪意ある IP や Tor 出口ノードからの破壊的ステートメントの実行を検出</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🪶 3. エージェントレス・設定変更不要の監視</div>
+      <div class="icon-text"><span class="arrow">→</span><span>エージェントのインストール、追加インフラ、DB 設定変更が一切不要</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span>データベースインスタンスのパフォーマンスに影響を与えない設計</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span>有効化後、最大 2 週間の学習期間で正常な行動のベースラインを確立</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🎛️ 4. 柔軟な有効化オプション</div>
+      <div class="icon-text"><span class="arrow">→</span><span>RDS Protection for login activity のアドオンとして提供</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span>GuardDuty コンソールからワンクリックで組織全体に有効化可能</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span>API、SDK、CLI、AWS CloudFormation によるプログラムでの有効化にも対応</span></div>
+    </div>
+  </div>
+
+  <!-- 新しい検出タイプ -->
+  <div class="section">
+    <h2>🚨 新しい検出タイプ</h2>
+    <p style="font-size: 14px;">データアクティビティモニタリングにより、以下の 7 つの検出タイプが追加されました。</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>検出タイプ</th><th>デフォルト重要度</th><th>内容</th></tr>
+        <tr><td><code>Exfiltration:RDS/AnomalousBehavior</code></td><td><span class="sev-var">低〜高 (変動)</span></td><td>通常より大幅に多い行数を抽出する異常な SELECT 活動</td></tr>
+        <tr><td><code>Exfiltration:RDS/MaliciousIPCaller</code></td><td><span class="sev-high">高</span></td><td>既知の悪意ある IP アドレスからのデータ抽出クエリの実行</td></tr>
+        <tr><td><code>Exfiltration:RDS/TorIPCaller</code></td><td><span class="sev-high">高</span></td><td>Tor 出口ノード IP アドレスからのデータ抽出クエリの実行</td></tr>
+        <tr><td><code>Impact:RDS/AnomalousBehavior.Drop</code></td><td><span class="sev-mid">中〜高 (変動)</span></td><td>テーブルやオブジェクトを削除する異常な DROP ステートメントの実行</td></tr>
+        <tr><td><code>Impact:RDS/AnomalousBehavior.Delete</code></td><td><span class="sev-var">低〜高 (変動)</span></td><td>通常より大幅に多い行に影響する異常な DELETE ステートメントの実行</td></tr>
+        <tr><td><code>Impact:RDS/MaliciousIPCaller</code></td><td><span class="sev-high">高</span></td><td>既知の悪意ある IP アドレスからの破壊的ステートメントの実行</td></tr>
+        <tr><td><code>Impact:RDS/TorIPCaller</code></td><td><span class="sev-high">高</span></td><td>Tor 出口ノード IP アドレスからの破壊的ステートメントの実行</td></tr>
+      </table>
+    </div>
+    <div class="note-box">
+      💡 重要度が変動する検出タイプでは、プライベートネットワークからのアクセスは<span class="sev-var">低</span>、パブリック IP アドレスからのアクセスは<span class="sev-mid">中</span>、未知のパブリックネットワークや高権限ロールによる大量操作は<span class="sev-high">高</span>と判定されます。
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>🐘 サポート対象データベースエンジン (データアクティビティモニタリング)</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>データベースエンジン</th><th>サポートバージョン</th></tr>
+        <tr><td>Aurora PostgreSQL</td><td>11.19 以降、12.14 以降、13.10 以降、14.7 以降、15.2 以降、以降のメジャーバージョン</td></tr>
+        <tr><td>RDS for PostgreSQL</td><td>11.20 以降、12.15 以降、13.11 以降、14.8 以降、15.3 以降、以降のメジャーバージョン</td></tr>
+      </table>
+    </div>
+    <div class="warn-box">
+      ⚠️ Aurora MySQL、RDS for MySQL、RDS for MariaDB、Aurora PostgreSQL Limitless Database はログインアクティビティモニタリングのみの対応で、データアクティビティモニタリングは現時点で未対応です。
+    </div>
+
+    <h3>📋 機能の位置づけ</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>機能名</td><td>RDS Protection for data activity (データアクティビティモニタリング)</td></tr>
+        <tr><td>提供形態</td><td>RDS Protection for login activity のアドオン (API 上は <code>RDS_LOGIN_EVENTS</code> 機能の追加設定 <code>RDS_DATA_RISK</code>)</td></tr>
+        <tr><td>検出方式</td><td>ML ベースの異常検出 + 統合脅威インテリジェンス</td></tr>
+        <tr><td>学習期間</td><td>有効化後または新規データベース作成後、最大 2 週間</td></tr>
+        <tr><td>エージェント</td><td>不要</td></tr>
+        <tr><td>データベース設定変更</td><td>不要</td></tr>
+        <tr><td>パフォーマンス影響</td><td>なし (データベースインスタンスに影響しない設計)</td></tr>
+      </table>
+    </div>
+
+    <h3>🔄 API 変更履歴</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/10/08</td>
+          <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/6b8067-guardduty.html" target="_blank" rel="noopener noreferrer">guardduty</a></td>
+          <td>9 updated api methods - GuardDuty RDS Data Activity Monitoring のサポートを追加。<code>CreateDetector</code>、<code>UpdateDetector</code>、<code>UpdateMemberDetectors</code>、<code>UpdateOrganizationConfiguration</code> などに追加設定 <code>RDS_DATA_RISK</code> が追加され、<code>GetUsageStatistics</code> に <code>RDS_DATA_ACTIVITY_DBI_PROTECTION_PROVISIONED</code> などの使用量タイプが追加</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <ul class="plain">
+      <li>GuardDuty が有効化されていること</li>
+      <li>対象データベースが Aurora PostgreSQL または RDS for PostgreSQL のサポート対象バージョンであること</li>
+      <li>組織全体で有効化する場合は、GuardDuty 委任管理者アカウントであること</li>
+    </ul>
+
+    <div class="flow-diagram">
+      <div class="flow-step">1️⃣ RDS Protection と<br>データ監視の有効化</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">2️⃣ 組織全体への<br>自動有効化の設定</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">3️⃣ 有効化状態と<br>検出結果の確認</div>
+    </div>
+
+    <h3>ステップ 1: RDS Protection とデータアクティビティモニタリングの有効化</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI でディテクターを更新</span></div>
+      <pre><code class="language-bash">aws guardduty update-detector \
+  --detector-id &lt;detector-id&gt; \
+  --features '[
+    {
+      "Name": "RDS_LOGIN_EVENTS",
+      "Status": "ENABLED",
+      "AdditionalConfiguration": [
+        {
+          "Name": "RDS_DATA_RISK",
+          "Status": "ENABLED"
+        }
+      ]
+    }
+  ]'</code></pre>
+    </div>
+    <p style="font-size: 14px;">データアクティビティモニタリング (<code>RDS_DATA_RISK</code>) はログインアクティビティモニタリング (<code>RDS_LOGIN_EVENTS</code>) のアドオンであるため、両方を有効化する必要があります。</p>
+
+    <h3>ステップ 2: 組織全体への自動有効化の設定</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">委任管理者アカウントから組織全体に自動有効化</span></div>
+      <pre><code class="language-bash">aws guardduty update-organization-configuration \
+  --detector-id &lt;detector-id&gt; \
+  --auto-enable-organization-members ALL \
+  --features '[
+    {
+      "Name": "RDS_LOGIN_EVENTS",
+      "AutoEnable": "ALL",
+      "AdditionalConfiguration": [
+        {
+          "Name": "RDS_DATA_RISK",
+          "AutoEnable": "ALL"
+        }
+      ]
+    }
+  ]'</code></pre>
+    </div>
+    <p style="font-size: 14px;"><code>AutoEnable</code> に <code>NEW</code> を指定すると、新規参加アカウントのみに自動有効化されます。</p>
+
+    <h3>ステップ 3: 有効化状態と検出結果の確認</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">有効化状態と検出結果の確認</span></div>
+      <pre><code class="language-bash"># 機能の有効化状態を確認
+aws guardduty get-detector --detector-id &lt;detector-id&gt;
+
+# RDS Protection の検出結果を確認
+aws guardduty list-findings \
+  --detector-id &lt;detector-id&gt; \
+  --finding-criteria '{
+    "Criterion": {
+      "type": {
+        "Equals": ["Exfiltration:RDS/AnomalousBehavior"]
+      }
+    }
+  }'</code></pre>
+    </div>
+    <div class="note-box">
+      💡 有効化直後は最大 2 週間の学習期間があるため、この期間中は異常検出の結果が生成されない場合があります。
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>👍 メリット</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>データ侵害リスクの低減</strong>: 窃取された認証情報による内部からのデータ流出・破壊を早期に検出し、情報漏えいによる事業影響や信頼失墜のリスクを低減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: サードパーティ製 DB アクティビティ監視ツールやエージェントの導入・運用が不要になり、監視体制の構築コストを削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス対応の強化</strong>: 異常アクセスの継続的な監視により、個人情報や機密データを扱うワークロードのセキュリティ要件対応を強化</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">🛠️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>エージェントレスで即時導入可能</strong>: 既存ワークロードに影響を与えずワンクリックで有効化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ML による行動ベースライン</strong>: 正常なクエリパターンを自動学習し、シグネチャベースのツールでは検出できない異常を特定</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>脅威インテリジェンスとの統合</strong>: 悪意ある IP や Tor 出口ノードからのクエリ実行を自動検出</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>組織全体での一元管理</strong>: AWS Organizations 統合により、委任管理者アカウントから全メンバーアカウントへ一括で有効化・管理</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">🚧 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>データアクティビティモニタリングの対象は Aurora PostgreSQL と RDS for PostgreSQL のみ (Aurora MySQL、RDS for MySQL、RDS for MariaDB、Aurora PostgreSQL Limitless Database は対象外)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>サポート対象のエンジンバージョンに制限がある (例: Aurora PostgreSQL 11.19 以降、RDS for PostgreSQL 11.20 以降)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>有効化後または新規 DB 作成後、最大 2 週間の学習期間中は異常検出の結果が生成されない場合がある</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>GuardDuty は RDS データアクティビティのログ自体をユーザーに提供しない (検出結果のみ提供)</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="arrow">→</span><span>データアクティビティモニタリングは RDS Protection for login activity のアドオンであり、単独では有効化できない</span></div>
+        <div class="check-item"><span class="arrow">→</span><span>30 日間の無料トライアル終了後は自動的に無効化されず、使用量に応じた課金が開始されるため、トライアル中にコスト見積もりを確認する必要がある</span></div>
+        <div class="check-item"><span class="arrow">→</span><span>RDS for PostgreSQL のリードレプリカは、プライマリインスタンスがサポート対象バージョンであり、正常にレプリケーションされている必要がある</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🎣 ユースケース 1: 窃取された認証情報によるデータ流出の検出</div>
+      <p style="font-size: 14px; margin: 8px 0;"><span class="usecase-label">シナリオ</span>: フィッシング攻撃により開発者のデータベース認証情報が窃取され、攻撃者が正規の認証情報を使用して顧客データベースから大量のレコードを抽出しようとしている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">EventBridge ルールで Exfiltration 検出結果を通知</span></div>
+        <pre><code class="language-bash">aws events put-rule \
+  --name guardduty-rds-exfiltration-alert \
+  --event-pattern '{
+    "source": ["aws.guardduty"],
+    "detail-type": ["GuardDuty Finding"],
+    "detail": {
+      "type": [{"prefix": "Exfiltration:RDS/"}]
+    }
+  }'</code></pre>
+      </div>
+      <p style="font-size: 14px; margin: 8px 0;"><span class="usecase-label">効果</span>: 正規の認証情報を使用した攻撃でも、通常のクエリパターンから逸脱した大量の SELECT 実行を ML が異常として検出し、<code>Exfiltration:RDS/AnomalousBehavior</code> 検出結果を生成。EventBridge 経由で即時通知を受け、パスワード変更やアクセス遮断などの初動対応を迅速化できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">💣 ユースケース 2: ランサムウェアや内部不正によるデータ破壊の検出</div>
+      <p style="font-size: 14px; margin: 8px 0;"><span class="usecase-label">シナリオ</span>: 攻撃者または悪意ある内部関係者が、データベース内のテーブルを DROP したり、大量の行を DELETE したりしてデータを破壊しようとしている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">Impact 検出結果の確認</span></div>
+        <pre><code class="language-bash">aws guardduty list-findings \
+  --detector-id &lt;detector-id&gt; \
+  --finding-criteria '{
+    "Criterion": {
+      "type": {
+        "Equals": [
+          "Impact:RDS/AnomalousBehavior.Drop",
+          "Impact:RDS/AnomalousBehavior.Delete"
+        ]
+      }
+    }
+  }'</code></pre>
+      </div>
+      <p style="font-size: 14px; margin: 8px 0;"><span class="usecase-label">効果</span>: 異常な DROP や DELETE ステートメントの実行を検出し、影響を受けたデータベースの詳細を含む検出結果を生成。被害範囲を監査ログで特定し、ポイントインタイムリカバリやバックアップからの復旧を早期に開始できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🏢 ユースケース 3: マルチアカウント環境での組織全体のデータベース保護</div>
+      <p style="font-size: 14px; margin: 8px 0;"><span class="usecase-label">シナリオ</span>: 数百の AWS アカウントを運用する企業が、全アカウントの Aurora PostgreSQL と RDS for PostgreSQL データベースに対して統一的なデータアクティビティ監視を導入したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">委任管理者アカウントから組織全体に自動有効化</span></div>
+        <pre><code class="language-bash">aws guardduty update-organization-configuration \
+  --detector-id &lt;detector-id&gt; \
+  --features '[
+    {
+      "Name": "RDS_LOGIN_EVENTS",
+      "AutoEnable": "ALL",
+      "AdditionalConfiguration": [
+        {"Name": "RDS_DATA_RISK", "AutoEnable": "ALL"}
+      ]
+    }
+  ]'</code></pre>
+      </div>
+      <p style="font-size: 14px; margin: 8px 0;"><span class="usecase-label">効果</span>: エージェント導入や DB 設定変更なしに、既存および新規のすべてのメンバーアカウントでデータアクティビティ監視を一括有効化。セキュリティチームは委任管理者アカウントの GuardDuty コンソールで組織全体の検出結果を一元的に確認できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <div class="icon-text"><span class="arrow">→</span><span>初めて有効化すると、アカウント・リージョンごとに <span class="highlight">30 日間の無料トライアル</span>が提供される</span></div>
+    <div class="icon-text"><span class="arrow">→</span><span>既に RDS Protection for login activity を使用しているアカウントがデータアクティビティモニタリングを初めて有効化した場合も、データアクティビティモニタリングに対して 30 日間の無料トライアルが適用される</span></div>
+    <div class="icon-text"><span class="arrow">→</span><span>トライアル期間中は、GuardDuty コンソールの使用状況ページで対象アカウント・リージョンのコスト見積もりを確認可能</span></div>
+    <div class="warn-box">
+      ⚠️ トライアル終了後は自動的に無効化されず、使用量に応じた課金が開始されます。最新の料金詳細は <a class="aws-link" href="https://aws.amazon.com/guardduty/pricing/" target="_blank" rel="noopener noreferrer">Amazon GuardDuty 料金ページ</a>を参照してください。
+    </div>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>
+      GuardDuty RDS Protection が Aurora PostgreSQL および RDS for PostgreSQL をサポートする
+      <span class="highlight">すべての AWS 商用リージョン</span>と <span class="highlight">AWS GovCloud (US) リージョン</span>で利用可能です。
+    </p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="icon-text"><span class="arrow">→</span><span><strong>RDS Protection for login activity</strong>: 既存のログイン異常検出機能。データアクティビティモニタリングはこの機能のアドオンとして提供される</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span><strong>Amazon Aurora PostgreSQL / Amazon RDS for PostgreSQL</strong>: データアクティビティモニタリングの監視対象となるデータベースサービス</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span><strong>AWS Organizations</strong>: GuardDuty 委任管理者アカウントから組織全体への一括有効化・自動有効化が可能</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span><strong>Amazon EventBridge</strong>: GuardDuty 検出結果をトリガーとした通知や自動修復ワークフローの構築に利用可能</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span><strong>AWS Security Hub / Amazon Detective</strong>: 検出結果の集約や、侵害の根本原因調査との連携が可能</span></div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      GuardDuty RDS Protection for data activity により、窃取された認証情報を使用した正規アクセスを装う
+      <span class="highlight">データ流出・破壊攻撃</span>を、<span class="highlight">エージェントレス</span>かつ
+      <span class="highlight">データベース設定変更なし</span>で検出できるようになりました。
+      Aurora PostgreSQL または RDS for PostgreSQL で機密データを扱うワークロードを運用している場合は、
+      30 日間の無料トライアルを活用してデータアクティビティモニタリングの有効化を検討することを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/10/guardduty-rds-data-exfiltration/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/10/guardduty-rds-data-exfiltration/</a></li>
+      <li>ドキュメント: GuardDuty RDS Protection: <a class="aws-link" href="https://docs.aws.amazon.com/guardduty/latest/ug/rds-protection.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/guardduty/latest/ug/rds-protection.html</a></li>
+      <li>ドキュメント: RDS Protection の検出タイプ: <a class="aws-link" href="https://docs.aws.amazon.com/guardduty/latest/ug/findings-rds-protection.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/guardduty/latest/ug/findings-rds-protection.html</a></li>
+      <li>製品ページ: Amazon GuardDuty: <a class="aws-link" href="https://aws.amazon.com/guardduty/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/guardduty/</a></li>
+      <li>料金ページ: Amazon GuardDuty: <a class="aws-link" href="https://aws.amazon.com/guardduty/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/guardduty/pricing/</a></li>
+      <li>API 変更: <a class="aws-link" href="https://awsapichanges.com/archive/changes/6b8067-guardduty.html" target="_blank" rel="noopener noreferrer">https://awsapichanges.com/archive/changes/6b8067-guardduty.html</a></li>
+    </ul>
+    <p>レポート: reports/2026/2026-10-08-guardduty-rds-data-exfiltration.md | 生成日: 2026-10-10</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

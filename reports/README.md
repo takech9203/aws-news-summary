@@ -5,6 +5,19 @@
 
 ## 2026 年
 
+- [2026-10-09 - Amazon Quick - ブランドテンプレート対応によるオンブランドなプレゼンテーション・ドキュメント作成](2026/2026-10-09-amazon-quick-brand-templates-on-brand-presentations-documents.md)
+- [2026-10-09 - Amazon EC2 - R8gd インスタンスの提供リージョン拡大](2026/2026-10-09-amazon-ec2-r8gd-thf.md)
+- [2026-10-09 - Amazon EC2 R8g インスタンス - AWS European Sovereign Cloud (ドイツ) での提供開始](2026/2026-10-09-amazon-ec2-r8g-instances-thf.md)
+- [2026-10-09 - AWS Security Hub - 検出結果の Amazon S3 エクスポート (CSV / JSON 形式)](2026/2026-10-09-security-hub-exports-s3-csv-json.md)
+- [2026-10-09 - AWS Lambda - セルフマネージド Apache Kafka イベントソースの OAuth 認証サポート](2026/2026-10-09-aws-Lambda-supports-oauth-kafka-esm.md)
+- [2026-10-09 - Amazon Connect Customer - パフォーマンス評価フォームの自動チェック機能](2026/2026-10-09-amazon-connect-customer-automated-checks-evaluation-forms.md)
+- [2026-10-09 - Amazon Bedrock - TwelveLabs Pegasus 1.5 モデルの提供開始](2026/2026-10-09-twelve-labs-pegasus-1-5-aws.md)
+- [2026-10-09 - Amazon Bedrock - OpenAI モデルの推論サマリー (Reasoning Summaries) サポート](2026/2026-10-09-amazon-bedrock-reasoning-summaries-openai.md)
+- [2026-10-09 - Amazon SageMaker Unified Studio - カスタム Tooling blueprint のサポート](2026/2026-10-09-sagemaker-custom-tooling-blueprints.md)
+- [2026-10-09 - Kiro - チャットセッションをまたぐ Memory 機能 (CLI 2.29.0)](2026/2026-10-09-kiro-changelog-2026-10-09.md)
+- [2026-10-08 - Amazon GuardDuty - RDS Protection によるデータ流出・データ破壊の検出](2026/2026-10-08-guardduty-rds-data-exfiltration.md)
+- [2026-10-08 - Kiro - Workflows フィードバック、Powers 検索、柔軟な Hook マッチング (IDE 1.2.56)](2026/2026-10-08-kiro-changelog-2026-10-08.md)
+- [2026-10-08 - AWS Cost Management - Amazon Bedrock 製品属性によるコスト分析サポート](2026/2026-10-08-aws-bedrock-attributes-in-cost-explorer.md)
 - [2026-10-08 - Amazon RDS for Oracle - マイナーバージョンアップグレードのプリチェックと新しい RDS イベントによるパッチ適用ダウンタイムの削減](2026/2026-10-08-amazon-rds-oracle-minor-version-upgrade-precheck-new-patching-rds-event.md)
 - [2026-10-08 - AWS Network Firewall - コンテナ属性フィルタのワイルドカードサポート](2026/2026-10-08-aws-network-firewall-container-attributes-wildcard.md)
 - [2026-10-08 - Amazon Bedrock - OpenAI GPT-6.1 Sol の Ultrafast モード対応](2026/2026-10-08-openai-gpt-sol-ultrafast-amazon.md)

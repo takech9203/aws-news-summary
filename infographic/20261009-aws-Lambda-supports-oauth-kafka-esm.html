@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Lambda - セルフマネージド Kafka ESM の OAuth 認証サポート</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.35;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .card p { margin: 0; font-size: 14px; }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.5);
+    }
+
+    .before-box h3, .after-box h3 { margin-top: 0; }
+    .before-box h3 { color: #FF6B4A; }
+    .after-box h3 { color: #4CAF50; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li { margin: 6px 0; }
+
+    @media (max-width: 700px) {
+      .before-after { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--aws-light-gray);
+    }
+
+    tr.new-row td {
+      background: rgba(29, 129, 2, 0.12);
+    }
+
+    .table-wrapper { overflow-x: auto; }
+
+    code.inline {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Check / cross */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 15px;
+    }
+
+    .check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code blocks */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* Use case */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 16px 0;
+    }
+
+    .usecase h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-smile-orange);
+      font-size: 16px;
+    }
+
+    .usecase p { margin: 6px 0; font-size: 14px; }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 3px solid #4CAF50;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+
+    /* Steps */
+    .step {
+      display: flex;
+      gap: 14px;
+      margin: 20px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .step-content { flex: 1; min-width: 0; }
+    .step-content h4 { margin: 0 0 6px 0; color: var(--aws-white); font-size: 16px; }
+    .step-content p { margin: 6px 0; font-size: 14px; }
+
+    .note-box {
+      background: rgba(0, 161, 201, 0.1);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { margin: 8px 0; padding-left: 20px; }
+    footer li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <span class="service-badge">⚡ AWS Lambda</span>
+      <h1>セルフマネージド Apache Kafka イベントソースの<br>OAuth 認証サポート</h1>
+      <div class="subtitle">📅 リリース日: 2026 年 10 月 9 日 | 対象: セルフマネージド Kafka イベントソースマッピング (ESM)</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        AWS Lambda が、セルフマネージド Apache Kafka イベントソースマッピング (ESM) における
+        <span class="highlight">OAuth 認証のサポート</span>を発表。お客様自身が運用する Kafka クラスターに加え、
+        <strong>Confluent Cloud、Aiven、Redpanda</strong> などのマネージドサービスも対象です。
+        <strong>Amazon Cognito や Okta</strong> といったエンタープライズ ID プロバイダーで Lambda の Kafka コンシューマーを認証できます。
+      </p>
+      <p>
+        Kafka ESM は決済処理、不正検出、リアルタイムデータパイプラインなどのイベント駆動型ワークロードで広く利用されており、
+        今回の OAuth 対応により Kafka クラスターと Lambda コンシューマーの両方に
+        <span class="highlight">同一の ID 統制とアクセスポリシー</span>を適用でき、セキュリティ・コンプライアンス要件を満たしやすくなります。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ アップデート前</h3>
+          <ul>
+            <li>認証方式は SASL/PLAIN、SASL/SCRAM、mTLS の 3 種類に限定</li>
+            <li>OAuth 認証が必須の規制業界では Kafka ESM を利用できなかった</li>
+            <li>Kafka 側で OAuth 統制があっても、Lambda コンシューマーだけ別の認証方式・認証情報を管理する必要があった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ アップデート後</h3>
+          <ul>
+            <li>SASL/OAUTHBEARER (TLS 暗号化付き) による OAuth 2.0 認証が利用可能</li>
+            <li>Amazon Cognito、Okta などで Lambda Kafka コンシューマーを一元認証</li>
+            <li>トークンの取得・有効期限前の自動更新を Lambda が代行</li>
+            <li>Secrets Manager の認証情報ローテーションも ESM 再作成なしで自動反映</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph AWS["☁️ AWS"]
+        SM[("🔐 Secrets Manager<br/>OAuth シークレット")]
+        ESM["🔄 Lambda ESM<br/>Kafka コンシューマー"]
+        Fn["⚡ Lambda 関数"]
+    end
+
+    subgraph External["🌐 外部システム"]
+        direction LR
+        IdP{{"🪪 OAuth 2.0 ID プロバイダー<br/>Amazon Cognito / Okta など"}}
+        Kafka{{"📨 セルフマネージド Kafka<br/>Confluent Cloud / Aiven / Redpanda"}}
+        IdP ~~~ Kafka
+    end
+
+    ESM -->|1 シークレット取得| SM
+    ESM -->|2 アクセストークン要求| IdP
+    IdP -.->|3 トークン発行と自動更新| ESM
+    ESM -->|4 SASL/OAUTHBEARER でトークン提示| Kafka
+    Kafka -->|5 メッセージポーリング| ESM
+    ESM -->|6 バッチで関数を呼び出し| Fn
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef external fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class AWS,External cloud
+    class ESM,Fn internal
+    class SM storage
+    class IdP,Kafka external
+        </pre>
+      </div>
+      <p style="font-size: 14px;">
+        Lambda の ESM が Secrets Manager から OAuth 認証情報を取得して ID プロバイダーにアクセストークンを要求し、
+        取得したトークンを SASL/OAUTHBEARER で Kafka ブローカーに提示して認証します。
+        トークンの有効期限前の更新は Lambda が自動的に行います。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>🔧 主要機能</h2>
+
+      <div class="card">
+        <h4>1️⃣ SASL/OAUTHBEARER による OAuth 2.0 認証</h4>
+        <p>
+          TLS 暗号化 (<code class="inline">SASL_SSL</code>) 付きの SASL/OAUTHBEARER 認証をサポート。
+          Lambda が ID プロバイダーのトークンエンドポイントからアクセストークンを取得して Kafka ブローカーに提示し、
+          有効期限が切れる前に自動更新します。<code class="inline">SourceAccessConfiguration</code> の
+          <code class="inline">Type</code> に <code class="inline">OAUTHBEARER_AUTH</code> を指定し、
+          <code class="inline">URI</code> に OAuth シークレットの Secrets Manager ARN を設定します。
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>2️⃣ 2 種類のグラントタイプをサポート</h4>
+        <p>
+          <strong>クライアントクレデンシャル</strong>: クライアント ID とクライアントシークレットをトークンエンドポイントに送信。<br>
+          <strong>JWT ベアラー</strong>: 秘密鍵で署名した JWT アサーションをトークンエンドポイントに送信。<br>
+          Secrets Manager シークレットに格納するフィールドによって、使用されるグラントタイプが決まります。
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>3️⃣ 追加の OAuth パラメーター</h4>
+        <p>
+          <code class="inline">OAUTHBEARER_SCOPE</code> (スコープ)、<code class="inline">OAUTHBEARER_AUDIENCE</code> (オーディエンス)、
+          <code class="inline">OAUTHBEARER_LOGICAL_CLUSTER</code> (論理クラスター ID、Confluent Cloud などで使用)、
+          <code class="inline">OAUTHBEARER_IDENTITY_POOL</code> (ID プール ID) を指定可能。
+          これらは <code class="inline">URI</code> フィールドにシークレット ARN ではなくリテラル値を直接指定します。
+        </p>
+      </div>
+
+      <div class="card">
+        <h4>4️⃣ IAM 認証との組み合わせ IAM_OAUTHBEARER_AUTH</h4>
+        <p>
+          ブローカーが OAuth 2.0 トークンを受け入れる場合、AWS 自体を ID プロバイダーとして使用可能。
+          Lambda が <code class="inline">sts:GetWebIdentityToken</code> で実行ロールの短期トークンを取得し、SASL/OAUTHBEARER でブローカーに提示します。
+          Secrets Manager への認証情報保存は不要 (<code class="inline">OAUTHBEARER_AUDIENCE</code> の指定が必須)。
+          ブローカー側で AWS を OpenID Connect (OIDC) の ID プロバイダーとして信頼する事前設定が必要です。
+        </p>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>📐 技術仕様</h2>
+
+      <h3>セルフマネージド Kafka ESM の認証方式一覧</h3>
+      <div class="table-wrapper">
+        <table>
+          <tr><th>認証方式</th><th>Type 値</th><th>認証情報の保存先</th></tr>
+          <tr><td>SASL/PLAIN</td><td><code class="inline">BASIC_AUTH</code></td><td>Secrets Manager</td></tr>
+          <tr><td>SASL/SCRAM</td><td><code class="inline">SASL_SCRAM_256_AUTH</code> / <code class="inline">SASL_SCRAM_512_AUTH</code></td><td>Secrets Manager</td></tr>
+          <tr><td>mTLS</td><td><code class="inline">CLIENT_CERTIFICATE_TLS_AUTH</code></td><td>Secrets Manager</td></tr>
+          <tr class="new-row"><td><strong>OAuth 2.0 🆕</strong></td><td><code class="inline">OAUTHBEARER_AUTH</code></td><td>Secrets Manager</td></tr>
+          <tr class="new-row"><td><strong>IAM 🆕</strong></td><td><code class="inline">IAM_AUTH</code></td><td>不要 (実行ロールを使用)</td></tr>
+          <tr class="new-row"><td><strong>IAM + SASL/OAUTHBEARER 🆕</strong></td><td><code class="inline">IAM_OAUTHBEARER_AUTH</code></td><td>不要 (実行ロールを使用)</td></tr>
+        </table>
+      </div>
+
+      <h3>OAuth シークレットのフィールド</h3>
+      <div class="table-wrapper">
+        <table>
+          <tr><th>フィールド</th><th>必須</th><th>説明</th></tr>
+          <tr><td><code class="inline">oauthTokenEndpointUrl</code></td><td>必須</td><td>ID プロバイダーのトークンエンドポイント (HTTPS URL)</td></tr>
+          <tr><td><code class="inline">oauthClientId</code></td><td>必須</td><td>ID プロバイダーが発行したクライアント ID</td></tr>
+          <tr><td><code class="inline">oauthClientSecret</code></td><td>クライアントクレデンシャルのみ</td><td>ID プロバイダーが発行したクライアントシークレット</td></tr>
+          <tr><td><code class="inline">oauthClientEmail</code></td><td>JWT ベアラーのみ</td><td>JWT アサーションに含めるサービスアカウント ID</td></tr>
+          <tr><td><code class="inline">oauthPrivateKey</code></td><td>JWT ベアラーのみ</td><td>JWT アサーションの署名に使用する秘密鍵 (PEM 形式)</td></tr>
+          <tr><td><code class="inline">oauthTokenExpirationSeconds</code></td><td>任意</td><td>Lambda が署名する JWT アサーションの有効期間 (JWT ベアラーのみ)</td></tr>
+          <tr><td><code class="inline">oauthIdpCaCertificate</code></td><td>任意</td><td>ID プロバイダーのルート CA 証明書 (プライベート CA の場合、PEM 形式)</td></tr>
+        </table>
+      </div>
+      <div class="note-box">
+        ⚠️ 両方のグラントタイプのフィールドを同時に指定すると、Lambda は検証エラーを返します。
+      </div>
+
+      <h3>シークレットの例 (クライアントクレデンシャルグラント)</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">Secrets Manager シークレット</span>
+        </div>
+        <pre><code class="language-json">{
+  "oauthTokenEndpointUrl": "https://idp.example.com/oauth2/token",
+  "oauthClientId": "my-client-id",
+  "oauthClientSecret": "my-client-secret"
+}</code></pre>
+      </div>
+
+      <h3>API 変更履歴</h3>
+      <div class="table-wrapper">
+        <table>
+          <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+          <tr>
+            <td>2026/10/08</td>
+            <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/6b8067-lambda.html" target="_blank" rel="noopener noreferrer">AWS Lambda</a></td>
+            <td>5 updated api methods - セルフマネージド Kafka ESM 向けの OAuth 2.0 (OAUTHBEARER)、IAM、IAM + OAUTHBEARER 認証のサポート追加。OAuth のスコープ、オーディエンス、論理クラスター、ID プールのオプションパラメーターを含む。Confluent Schema Registry でも OAuth 2.0 が利用可能に</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>セルフマネージド Apache Kafka クラスター (または Confluent Cloud、Aiven、Redpanda などのマネージドサービス) が稼働していること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>Kafka ブローカーが OAuth 2.0 トークンを検証するように設定され、Lambda が使用するものと同じ ID プロバイダーを信頼していること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>OAuth シークレットが Lambda 関数と同じ AWS リージョンの Secrets Manager に存在すること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>実行ロールにシークレットへの <code class="inline">secretsmanager:GetSecretValue</code> 権限があること</span></div>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h4>OAuth シークレットの作成</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">Secrets Manager にシークレットを作成</span>
+            </div>
+            <pre><code class="language-bash">aws secretsmanager create-secret \
+  --name kafka-oauth-credentials \
+  --secret-string '{
+    "oauthTokenEndpointUrl": "https://idp.example.com/oauth2/token",
+    "oauthClientId": "my-client-id",
+    "oauthClientSecret": "my-client-secret"
+  }'</code></pre>
+          </div>
+          <p>
+            ID プロバイダーのトークンエンドポイント、クライアント ID、クライアントシークレットを含む OAuth シークレットを作成します。
+            JWT ベアラーグラントを使用する場合は、<code class="inline">oauthClientSecret</code> の代わりに
+            <code class="inline">oauthClientEmail</code> と <code class="inline">oauthPrivateKey</code> を指定します。
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h4>イベントソースマッピングの作成</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">OAUTHBEARER_AUTH で ESM を作成</span>
+            </div>
+            <pre><code class="language-bash">aws lambda create-event-source-mapping \
+  --function-name my-kafka-consumer \
+  --topics payment-events \
+  --self-managed-event-source '{"Endpoints":{"KAFKA_BOOTSTRAP_SERVERS":["broker1.example.com:9092","broker2.example.com:9092"]}}' \
+  --source-access-configurations '[
+    {"Type":"OAUTHBEARER_AUTH","URI":"arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:kafka-oauth-credentials"},
+    {"Type":"OAUTHBEARER_SCOPE","URI":"kafka:read"}
+  ]'</code></pre>
+          </div>
+          <p>
+            <code class="inline">OAUTHBEARER_AUTH</code> タイプでシークレットの ARN を指定して ESM を作成します。
+            ID プロバイダーやブローカーが追加の値を要求する場合は、<code class="inline">OAUTHBEARER_SCOPE</code> や
+            <code class="inline">OAUTHBEARER_AUDIENCE</code> などをリテラル値として追加します。
+            コンソール、CloudFormation、AWS SAM でも同様に設定できます。
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h4>動作確認</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">ESM の状態を確認</span>
+            </div>
+            <pre><code class="language-bash">aws lambda get-event-source-mapping \
+  --uuid &lt;event-source-mapping-uuid&gt; \
+  --query '{State: State, LastProcessingResult: LastProcessingResult}'</code></pre>
+          </div>
+          <p>
+            <code class="inline">State</code> が <code class="inline">Enabled</code> になっていること、認証エラーが発生していないことを確認します。
+            その後、Kafka トピックにテストメッセージを送信し、Lambda 関数が呼び出されることを確認します。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+
+      <h3>💼 ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス対応</strong>: OAuth 認証が必須の規制業界 (金融、ヘルスケアなど) でも Kafka ESM を利用可能になり、監査要件を満たしやすくなる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>ID 統制の一元化</strong>: Kafka クラスターと Lambda コンシューマーに同一の ID プロバイダーとアクセスポリシーを適用でき、ガバナンスが向上する</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: トークンの取得・更新・ローテーション対応を Lambda が代行するため、認証管理の運用負荷が軽減される</span></div>
+
+      <h3>🔧 技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>トークン管理の自動化</strong>: アクセストークンの取得と有効期限前の自動更新を Lambda が行うため、カスタム実装が不要</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟なグラントタイプ</strong>: クライアントクレデンシャルと JWT ベアラーの 2 種類に対応し、Okta、Amazon Cognito など幅広い ID プロバイダーと統合できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>ダウンタイムなしの認証情報ローテーション</strong>: シークレットの値を更新するだけで、ESM を再作成せずに新しい認証情報が反映される</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>Confluent Cloud 固有の拡張に対応</strong>: 論理クラスター ID や ID プール ID を SASL 拡張として送信でき、Confluent Cloud の OAuth 構成とそのまま統合できる</span></div>
+    </div>
+
+    <!-- 制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>OAuth 認証はプレーンテキスト接続では利用できず、TLS 暗号化 (<code class="inline">SASL_SSL</code>) が必須</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>シークレットは Lambda 関数と同じ AWS リージョンに保存する必要がある</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>1 つのシークレットに両方のグラントタイプのフィールドを含めると検証エラーになる</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span><code class="inline">OAUTHBEARER_SCOPE</code>、<code class="inline">OAUTHBEARER_LOGICAL_CLUSTER</code>、<code class="inline">OAUTHBEARER_IDENTITY_POOL</code> は <code class="inline">OAUTHBEARER_AUTH</code> と組み合わせる必要があり、<code class="inline">IAM_OAUTHBEARER_AUTH</code> では <code class="inline">OAUTHBEARER_AUDIENCE</code> のみ指定可能</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>本機能はセルフマネージド Kafka ESM が対象であり、提供範囲は AWS 商用リージョンに限られる</span></div>
+
+      <h3>考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>Kafka ブローカー側で、Lambda が使用する ID プロバイダーのトークンを検証するよう事前に設定が必要</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>ブローカーがプライベート CA により署名された証明書を提示する場合は、<code class="inline">SERVER_ROOT_CA_CERTIFICATE</code> の設定も必要</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>ID プロバイダーのトークンエンドポイントがプライベート CA の証明書を使用する場合は、シークレットに <code class="inline">oauthIdpCaCertificate</code> を含める必要がある</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>実行ロールに <code class="inline">secretsmanager:GetSecretValue</code> 権限 (IAM + OAUTHBEARER の場合は <code class="inline">sts:GetWebIdentityToken</code> 権限) を付与する必要がある</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h4>💳 ユースケース 1: Confluent Cloud と Okta を利用した決済イベント処理</h4>
+        <p>
+          <strong>シナリオ</strong>: 金融企業が Confluent Cloud 上の Kafka トピックで決済イベントを管理しており、
+          社内標準の ID プロバイダーである Okta による OAuth 認証が必須。Lambda で決済イベントをリアルタイム処理したい。
+        </p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">SourceAccessConfigurations</span></div>
+          <pre><code class="language-json">[
+  {"Type": "OAUTHBEARER_AUTH", "URI": "arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:confluent-oauth"},
+  {"Type": "OAUTHBEARER_LOGICAL_CLUSTER", "URI": "lkc-abc123"},
+  {"Type": "OAUTHBEARER_IDENTITY_POOL", "URI": "pool-xyz789"}
+]</code></pre>
+        </div>
+        <p class="effect">
+          ✅ <strong>効果</strong>: 社内のセキュリティポリシーに準拠したまま、Kafka クラスターと Lambda コンシューマーの認証を Okta で一元管理し、サーバーレスで決済処理パイプラインを構築できる。
+        </p>
+      </div>
+
+      <div class="usecase">
+        <h4>🔍 ユースケース 2: Amazon Cognito を利用した不正検出パイプライン</h4>
+        <p>
+          <strong>シナリオ</strong>: EC サイト運営企業が、セルフマネージド Kafka クラスターに流れるトランザクションイベントを Lambda で消費し、
+          不正検出モデルで評価したい。追加の ID プロバイダーを導入せず、Amazon Cognito で認証を統一したい。
+        </p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">OAuth シークレット</span></div>
+          <pre><code class="language-json">{
+  "oauthTokenEndpointUrl": "https://my-domain.auth.ap-northeast-1.amazoncognito.com/oauth2/token",
+  "oauthClientId": "cognito-app-client-id",
+  "oauthClientSecret": "cognito-app-client-secret"
+}</code></pre>
+        </div>
+        <p class="effect">
+          ✅ <strong>効果</strong>: Cognito のクライアントクレデンシャルグラントを利用して、追加の ID 基盤を構築することなく OAuth 認証付きのリアルタイム不正検出パイプラインを実現できる。
+        </p>
+      </div>
+
+      <div class="usecase">
+        <h4>🔑 ユースケース 3: JWT ベアラーグラントによるレガシー認証からの移行</h4>
+        <p>
+          <strong>シナリオ</strong>: クライアントシークレットの配布を禁止し、署名付き JWT アサーションのみを受け付ける ID プロバイダーを採用している企業が、
+          SASL/SCRAM で運用していた Lambda の Kafka コンシューマーを OAuth 認証へ移行したい。
+        </p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">OAuth シークレット (JWT ベアラー)</span></div>
+          <pre><code class="language-json">{
+  "oauthTokenEndpointUrl": "https://idp.example.com/oauth2/token",
+  "oauthClientId": "my-client-id",
+  "oauthClientEmail": "lambda-consumer@example.com",
+  "oauthPrivateKey": "-----BEGIN PRIVATE KEY-----\n&lt;private key contents&gt;\n-----END PRIVATE KEY-----"
+}</code></pre>
+        </div>
+        <p class="effect">
+          ✅ <strong>効果</strong>: 共有パスワード方式の SASL/SCRAM から、秘密鍵による署名ベースの JWT ベアラーグラントに移行し、認証情報漏えいリスクを低減できる。
+        </p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>
+        本アップデートに伴う<span class="highlight">追加料金は発表されていません</span>。
+        AWS Lambda の通常の料金体系 (関数の実行時間、リクエスト数、イベントソースマッピングの料金) が適用されます。
+        また、OAuth シークレットの保存には AWS Secrets Manager の料金が別途発生します。
+        詳細は <a class="aws-link" href="https://aws.amazon.com/lambda/pricing/" target="_blank" rel="noopener noreferrer">AWS Lambda 料金ページ</a> を参照してください。
+      </p>
+
+      <h2 style="margin-top: 24px;">🌍 利用可能リージョン</h2>
+      <p>セルフマネージド Apache Kafka イベントソースマッピングが利用可能なすべての AWS 商用リージョンで利用できます。</p>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <h4>🔐 AWS Secrets Manager</h4>
+        <p>OAuth 認証情報 (トークンエンドポイント、クライアント ID など) をシークレットとして安全に保存。ローテーションにも対応。</p>
+      </div>
+      <div class="card">
+        <h4>🪪 Amazon Cognito</h4>
+        <p>AWS ネイティブの OAuth 2.0 対応 ID プロバイダーとして、Lambda Kafka コンシューマーの認証に利用可能。</p>
+      </div>
+      <div class="card">
+        <h4>📨 Amazon MSK</h4>
+        <p>AWS マネージドの Kafka サービス。カスタムネットワーク構成の MSK クラスターをセルフマネージド Kafka ESM として登録し、IAM 認証で接続することも可能。</p>
+      </div>
+      <div class="card">
+        <h4>🏗️ AWS CloudFormation / AWS SAM</h4>
+        <p>本機能の認証設定を Infrastructure as Code で管理可能。</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        AWS Lambda のセルフマネージド Kafka イベントソースマッピングが OAuth 認証に対応したことで、
+        <span class="highlight">OAuth が必須の規制業界でもサーバーレスな Kafka コンシューマー</span>を構築できるようになりました。
+        Confluent Cloud をはじめとするマネージド Kafka サービスとエンタープライズ ID プロバイダーを組み合わせている場合、
+        既存の ID 統制をそのまま Lambda に適用できます。
+        現在 SASL/SCRAM などで認証情報を個別管理している場合は、OAuth 認証への移行を検討することを推奨します。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典・参考リンク:</p>
+      <ul>
+        <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/10/aws-Lambda-supports-oauth-kafka-esm/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+        <li><a class="aws-link" href="https://docs.aws.amazon.com/lambda/latest/dg/with-kafka.html" target="_blank" rel="noopener noreferrer">ドキュメント: Apache Kafka イベントソースマッピング</a></li>
+        <li><a class="aws-link" href="https://docs.aws.amazon.com/lambda/latest/dg/kafka-cluster-auth.html" target="_blank" rel="noopener noreferrer">ドキュメント: Kafka クラスター認証方式の設定</a></li>
+        <li><a class="aws-link" href="https://docs.aws.amazon.com/lambda/latest/api/API_SourceAccessConfiguration.html" target="_blank" rel="noopener noreferrer">API リファレンス: SourceAccessConfiguration</a></li>
+        <li><a class="aws-link" href="https://awsapichanges.com/archive/changes/6b8067-lambda.html" target="_blank" rel="noopener noreferrer">AWS API Changes: Lambda (2026/10/08)</a></li>
+        <li><a class="aws-link" href="https://aws.amazon.com/lambda/pricing/" target="_blank" rel="noopener noreferrer">AWS Lambda 料金ページ</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-10-09-aws-Lambda-supports-oauth-kafka-esm.md) を基に作成されました。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

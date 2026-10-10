@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Security Hub - 検出結果の S3 エクスポート (CSV / JSON)</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+.card li {
+  margin: 4px 0;
+}
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.1);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .box-title {
+  color: #FF6B4A;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.after-box .box-title {
+  color: #4CAF50;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.before-box li, .after-box li {
+  margin: 6px 0;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase-label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+  background: transparent;
+  color: var(--aws-light-gray);
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* ステップ */
+.step-list { counter-reset: step; }
+
+.step-item {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-content { flex: 1; }
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+
+footer ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .before-after, .two-col { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">🛡️ AWS Security Hub</span>
+    <h1>検出結果を Amazon S3 へ CSV / JSON (OCSF) 形式でエクスポート</h1>
+    <div class="subtitle">📅 リリース日: <span class="release-date">2026 年 10 月 9 日</span> | 検出結果 (findings) のオンデマンドエクスポート機能</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>AWS Security Hub が、検出結果 (findings) を <span class="highlight">Amazon S3 バケット</span>に <span class="highlight">CSV</span> または <span class="highlight">JSON (OCSF: Open Cybersecurity Schema Framework)</span> 形式でエクスポートする機能を発表。コンソールの各検出結果ページ (All Findings、Exposure、Threats、Vulnerabilities、Sensitive Data、Posture Management) からオンデマンドで開始できます。</p>
+    <p>エクスポートは<span class="highlight">ページに適用中のフィルターをそのままスコープとして引き継ぎ</span>、出力ファイルは自アカウントの S3 バケットに配信され、指定した AWS KMS キーで暗号化されます。コンプライアンスレポート作成、監査証跡の保持、BI ツールへの取り込みなど、コンソール外での活用に最適です。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>S3 への出力には EventBridge や API を使った<strong>独自の抽出パイプラインの構築・維持</strong>が必要</li>
+          <li>コンソールを使用しないチーム (監査担当、経営層など) への共有に手間がかかった</li>
+          <li>特定時点のスナップショットを監査証跡として残す簡易な手段がなかった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>検出結果ページから<strong>数クリックでオンデマンドエクスポート</strong>を開始可能</li>
+          <li>独自の抽出パイプラインの構築・維持が不要に</li>
+          <li>CSV (共有向け) と JSON (OCSF 形式) を用途に応じて選択可能</li>
+          <li>ページ上のフィルターがスコープとして引き継がれ、必要な検出結果だけを出力</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 セキュリティ担当者"])
+
+    subgraph Console["🖥️ Security Hub コンソール"]
+        direction LR
+        Pages["📋 検出結果ページ<br/>Threats / Exposure<br/>Vulnerabilities など"]
+        Filter["🔍 フィルター適用"]
+        Pages ~~~ Filter
+    end
+
+    subgraph SH["🛡️ AWS Security Hub"]
+        Export["⚙️ エクスポートジョブ<br/>バックグラウンド実行"]
+        Track["📊 Exports ページ<br/>ジョブの追跡・キャンセル"]
+    end
+
+    subgraph Storage["☁️ ユーザーの AWS アカウント"]
+        direction LR
+        S3[("🪣 Amazon S3 バケット<br/>CSV / JSON OCSF")]
+        KMS["🔑 AWS KMS キー<br/>オブジェクト暗号化"]
+        S3 ~~~ KMS
+    end
+
+    Downstream{{"📈 ダウンストリーム活用<br/>監査 / BI / DWH"}}
+
+    User --> Pages
+    Pages --> Filter
+    Filter -->|エクスポート開始| Export
+    Export -->|暗号化して書き込み| S3
+    KMS -.-> S3
+    Export -.-> Track
+    S3 --> Downstream
+
+    classDef console fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef service fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef external fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class User user
+    class Pages,Filter console
+    class Export,Track service
+    class S3 storage
+    class KMS service
+    class Downstream external
+    class Console,SH,Storage boundary
+      </pre>
+    </div>
+    <p class="diagram-caption">💡 コンソールの検出結果ページで適用したフィルターがエクスポートのスコープとなり、Security Hub がバックグラウンドでジョブを実行して、KMS キーで暗号化した CSV または JSON ファイルをユーザー所有の S3 バケットに書き込む流れです。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ 検出結果ページからのオンデマンドエクスポート</div>
+      <ul>
+        <li>All Findings、Exposure、Threats、Vulnerabilities、Sensitive Data、Posture Management の各ページから開始可能</li>
+        <li>エクスポート元のページがスコープとなり、<strong>適用中のフィルターがそのまま引き継がれる</strong></li>
+        <li>フィルターは OCSF フィールドに対して適用され、引き継げないフィルターがある場合はコンソールに警告が表示される</li>
+        <li>エクスポートはバックグラウンドで実行され、完了すると S3 バケットにファイルが出力される</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ CSV と JSON (OCSF) の 2 形式をサポート</div>
+      <ul>
+        <li><strong>CSV</strong>: スプレッドシートでの確認やチームへの共有向け。出力する列を選択でき、各列は OCSF フィールドパス (例: <code>cloud.account.uid</code>) に対応</li>
+        <li>CSV のデフォルト列は 9 列: Finding title、Severity、Resource ID、Created at、Status、Finding account、Finding region、Product vendor name、Finding type</li>
+        <li><strong>JSON (OCSF)</strong>: 検出結果の完全な内容を常に含むため列選択は不要。OCSF 形式でのデータ連携が必要な場合に使用</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 暗号化とエクスポートの追跡</div>
+      <ul>
+        <li>出力されるすべてのオブジェクトは、ユーザーが指定した <strong>AWS KMS キーで暗号化</strong>される</li>
+        <li>Security Hub コンソールの <strong>Exports ページ</strong>からすべてのエクスポートジョブを追跡できる</li>
+        <li>実行中のエクスポートはキャンセル可能で、キャンセルして新しいエクスポートを開始することもできる</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📋 エクスポート機能の仕様</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>エクスポート元</td><td>All Findings、Exposure、Threats、Vulnerabilities、Sensitive Data、Posture Management の各ページ</td></tr>
+      <tr><td>出力形式</td><td>CSV または JSON (OCSF)</td></tr>
+      <tr><td>スコープ</td><td>エクスポート元ページと、そのページに適用中のフィルター</td></tr>
+      <tr><td>出力先</td><td>ユーザー所有の Amazon S3 バケット (バケットとプレフィックスを指定)</td></tr>
+      <tr><td>暗号化</td><td>ユーザー指定の AWS KMS キーによるオブジェクト暗号化</td></tr>
+      <tr><td>同時実行</td><td>1 アカウントにつき同時に実行できるエクスポートは 1 件</td></tr>
+      <tr><td>追跡</td><td>Security Hub コンソールの Exports ページで確認・キャンセル可能</td></tr>
+    </table>
+
+    <h3>🔌 API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/10/08</td>
+        <td><a href="https://awsapichanges.com/archive/changes/6b8067-securityhub.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS SecurityHub</a></td>
+        <td>4 new api methods - エクスポート用 API として <code>StartExportJobV2</code>、<code>GetExportJobV2</code>、<code>ListExportJobsV2</code>、<code>CancelExportJobV2</code> を追加</td>
+      </tr>
+    </table>
+    <p>コンソールだけでなく、これらの API を使用してエクスポートジョブの開始、状態取得、一覧表示、キャンセルをプログラムから実行できます。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>出力先となる Amazon S3 バケット</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>オブジェクト暗号化に使用する AWS KMS キー</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>S3 バケットと KMS キーの両方に、Security Hub からの書き込みを許可するポリシー</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>エクスポートを作成する IAM アイデンティティへの権限付与</span></div>
+
+    <h3>📝 手順</h3>
+    <div class="flow-diagram">
+      <div class="flow-step">🔍 フィルター<br/>適用</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📤 エクスポート<br/>作成</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">⚙️ バックグラウンド<br/>実行</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🪣 S3 に<br/>ファイル出力</div>
+    </div>
+
+    <div class="step-list">
+      <div class="step-item">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <div class="step-title">検出結果ページでフィルターを適用</div>
+          <p style="margin: 0;">Security Hub コンソールを開き、エクスポートしたい検出結果ページ (All Findings、Exposure、Threats、Vulnerabilities、Sensitive Data、Posture Management のいずれか) を選択し、エクスポートに使用するフィルターを適用します。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <div class="step-title">エクスポートを作成</div>
+          <p style="margin: 0 0 8px 0;">ページ上の [Export] を選択すると、Create export ページが開きます。以下を設定します。</p>
+          <ul style="margin: 0; padding-left: 20px;">
+            <li><strong>Scope</strong>: 引き継がれたページとフィルターを確認する (変更する場合は検出結果ページに戻って調整)</li>
+            <li><strong>Export name</strong>: 後から見つけやすい名前を入力 (コンソールは <code>vulnerabilities-202610081601</code> のような名前を提案)</li>
+            <li><strong>Export format</strong>: CSV または JSON (OCSF) を選択</li>
+            <li><strong>CSV columns</strong>: CSV の場合のみ、出力する列を選択 (デフォルトは 9 列)</li>
+            <li><strong>Export location</strong>: S3 バケットを選択し、暗号化用の KMS キーを追加</li>
+          </ul>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <div class="step-title">エクスポートの実行と追跡</div>
+          <p style="margin: 0;">[Create export] を選択するとエクスポートがバックグラウンドで実行され、完了すると S3 バケットにファイルが出力されます。既にエクスポートが実行中の場合は Export in progress ダイアログが表示され、完了を待つか、キャンセルして新しいエクスポートを開始するかを選択できます。進行状況は Exports ページから確認できます。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">💼 ビジネス面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンスレポートの効率化</strong>: 監査・コンプライアンス報告に必要な検出結果を、特定時点のスナップショットとして簡単に取得・保管</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>関係者への共有が容易</strong>: コンソールを使用しないチームにも CSV ファイルで検出結果を共有</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: 独自の抽出パイプラインの構築・維持が不要になり、開発・運用の工数を削減</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">⚙️ 技術面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>フィルター連動のスコープ指定</strong>: コンソール上のフィルターがそのままエクスポート条件になり、必要なデータだけを正確に出力</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>OCSF 準拠の JSON 出力</strong>: 標準スキーマ出力により、データウェアハウスや BI ツール、SIEM との連携が容易</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>KMS によるセキュアな保管</strong>: ユーザー指定の KMS キーで暗号化され、機密性の高いセキュリティデータを安全に保管</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚧 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>1 アカウントで同時に実行できるエクスポートは <strong>1 件のみ</strong> (別のエクスポートを開始するには、実行中のエクスポートの完了を待つかキャンセルする必要がある)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>CSV の列選択は可能だが、JSON (OCSF) は常に検出結果の完全な内容を含むため<strong>列選択はできない</strong></span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>エクスポート元ページのフィルターのうち、<strong>OCSF フィールドに適用できないものは引き継がれない</strong> (コンソールに警告が表示される)</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>オンデマンド実行の機能であり、定期的な自動エクスポートが必要な場合は <code>StartExportJobV2</code> API をスケジュール実行する仕組み (EventBridge Scheduler など) との組み合わせを検討する</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>S3 バケットポリシーと KMS キーポリシーの両方で Security Hub からの書き込みを許可する事前設定が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>エクスポートされたファイルには機密性の高いセキュリティ情報が含まれるため、出力先バケットのアクセス制御を適切に設計する必要がある</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📊 ユースケース 1: 月次コンプライアンスレポートの作成</div>
+      <p style="margin: 4px 0;"><span class="usecase-label">シナリオ</span>: 社内の監査チームに対して、毎月の重大な検出結果の一覧をスプレッドシートで提出する必要がある。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">手順</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-plaintext">1. Posture Management ページで「重要度: Critical / High」「ステータス: New」でフィルター
+2. [Export] から CSV 形式を選択し、必要な列 (Finding title、Severity、Resource ID、Status など) を指定
+3. 監査用 S3 バケットにエクスポートし、ファイルを監査チームに共有</code></pre>
+      </div>
+      <p style="margin: 4px 0;"><span class="usecase-label">効果</span>: パイプライン開発なしで、監査要件に合わせた検出結果レポートを数分で作成できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🗄️ ユースケース 2: 監査証跡としての特定時点スナップショット保持</div>
+      <p style="margin: 4px 0;"><span class="usecase-label">シナリオ</span>: セキュリティ監査に備えて、四半期ごとの検出結果の状態を証跡として長期保管したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">手順</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-plaintext">1. All Findings ページから JSON (OCSF) 形式でエクスポート
+2. 出力先 S3 バケットにライフサイクルルールと S3 オブジェクトロックを設定し、
+   改ざん防止と長期保管を実現</code></pre>
+      </div>
+      <p style="margin: 4px 0;"><span class="usecase-label">効果</span>: 特定時点の検出結果の完全な記録を OCSF 形式で保持でき、監査時のエビデンスとして活用できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📈 ユースケース 3: BI ツール・データウェアハウスへの取り込み</div>
+      <p style="margin: 4px 0;"><span class="usecase-label">シナリオ</span>: セキュリティ検出結果の傾向を Amazon QuickSight などの BI ツールで可視化し、経営層へ報告したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">手順</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-plaintext">1. 検出結果を JSON (OCSF) 形式で S3 にエクスポート
+2. Amazon Athena で S3 上の OCSF データにクエリを実行
+3. QuickSight でダッシュボードを作成し、重要度別・アカウント別の傾向を可視化</code></pre>
+      </div>
+      <p style="margin: 4px 0;"><span class="usecase-label">効果</span>: OCSF の標準スキーマを活用して、検出結果の分析基盤を迅速に構築できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>What's New およびユーザーガイドには、本エクスポート機能自体の<span class="highlight">追加料金に関する記載はありません</span>。ただし、以下の関連コストが発生する点に留意してください。</p>
+    <div class="check-item"><span class="warn-icon">💵</span><span>Amazon S3 のストレージ料金およびリクエスト料金</span></div>
+    <div class="check-item"><span class="warn-icon">💵</span><span>AWS KMS のキー管理およびリクエスト料金</span></div>
+    <p>詳細は <a href="https://aws.amazon.com/security-hub/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Security Hub 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>AWS Security Hub が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。</p>
+  </div>
+
+  <!-- 関連サービス・機能 -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="icon-text"><span style="color: var(--aws-orange);">🪣</span><span><strong>Amazon S3</strong>: エクスポートの出力先。バケットポリシーで Security Hub からの書き込みを許可する必要がある</span></div>
+      <div class="icon-text"><span style="color: var(--aws-orange);">🔑</span><span><strong>AWS KMS</strong>: エクスポートされたオブジェクトの暗号化に使用。キーポリシーで Security Hub からの利用を許可する必要がある</span></div>
+      <div class="icon-text"><span style="color: var(--aws-orange);">📊</span><span><strong>Amazon Athena / Amazon QuickSight</strong>: S3 に出力した OCSF 形式の検出結果に対するクエリ・可視化に活用できる</span></div>
+      <div class="icon-text"><span style="color: var(--aws-orange);">📐</span><span><strong>Open Cybersecurity Schema Framework (OCSF)</strong>: JSON エクスポートで採用されている、セキュリティデータのオープン標準スキーマ</span></div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>Security Hub の検出結果を、<span class="highlight">独自パイプラインなし</span>で CSV または JSON (OCSF) 形式として S3 にエクスポートできるようになり、コンプライアンスレポート作成や監査証跡の保持、BI ツール連携が大幅に簡素化されました。</p>
+    <div class="check-item"><span class="check-icon">✓</span><span>コンソール外で検出結果を活用しているチームは、既存の抽出パイプラインを本機能で置き換えられないか検討することを推奨</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>利用開始にあたっては、出力先 S3 バケットと KMS キーのポリシー設定を事前に確認</span></div>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/security-hub-exports-s3-csv-json/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/security-hub-exports-s3-csv-json/</a></li>
+      <li><a href="https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-v2-findings-export.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Exporting findings from Security Hub to Amazon S3</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/6b8067-securityhub.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 (awsapichanges.com)</a></li>
+      <li><a href="https://aws.amazon.com/security-hub/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-10-09) をもとに生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
