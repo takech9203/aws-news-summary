@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon EMR - Apache Spark ジョブでのネイティブデータ品質チェック</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* 統計カード */
+.stat-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0 8px 0;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 180px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After 比較 */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  flex: 1;
+  min-width: 300px;
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3 { color: #FF6B4A; margin-top: 0; }
+.after-box h3 { color: #4CAF50; margin-top: 0; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.before-box li, .after-box li {
+  margin: 10px 0;
+  padding-left: 24px;
+  position: relative;
+  font-size: 14px;
+}
+
+.before-box li::before {
+  content: "✗";
+  position: absolute;
+  left: 0;
+  color: #FF6B4A;
+  font-weight: 700;
+}
+
+.after-box li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #4CAF50;
+  font-weight: 700;
+}
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.feature-card ul {
+  margin: 6px 0 0 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.feature-card li { margin: 4px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.02); }
+
+code.inline {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 90%;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+
+.code-title {
+  color: var(--aws-light-gray);
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  background: rgba(0, 161, 201, 0.1);
+  border-left: 3px solid var(--aws-teal);
+  padding: 10px 14px;
+  border-radius: 0 6px 6px 0;
+}
+
+/* ステップ */
+.step-card {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  margin-top: 2px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.step-content p {
+  font-size: 14px;
+  margin: 6px 0;
+}
+
+/* メリット・デメリット */
+.merit-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.merit-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+.caution-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+.limit-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+
+.merit-item strong { color: var(--aws-white); }
+
+/* ユースケース */
+.usecase-card {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 16px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase-card p { font-size: 14px; margin: 8px 0; }
+.usecase-label { color: var(--aws-white); font-weight: 600; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0 8px 0;
+}
+
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* リンク */
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.link-list { list-style: none; padding-left: 0; margin: 8px 0; }
+.link-list li { margin: 8px 0; padding-left: 24px; position: relative; font-size: 14px; }
+.link-list li::before { content: "🔗"; position: absolute; left: 0; }
+
+/* 関連サービス */
+.related-card {
+  background: rgba(140, 79, 255, 0.08);
+  border: 1px solid rgba(140, 79, 255, 0.35);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.related-card strong { color: #B794FF; }
+
+/* まとめ */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(0, 161, 201, 0.1));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px 24px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer p { margin: 4px 0; }
+
+@media (max-width: 640px) {
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+  .section { padding: 16px; }
+  .before-box, .after-box { min-width: 100%; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- タイトルエリア -->
+  <div class="header">
+    <div class="service-badge">Amazon EMR</div>
+    <h1>⚡ Apache Spark ジョブでのネイティブデータ品質チェック</h1>
+    <div class="subtitle">Amazon EMR Data Quality | リリース日: <span class="date">2026 年 10 月 12 日</span></div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Amazon EMR が、Apache Spark ジョブ内でデータ品質をネイティブに検証できる <span class="highlight">Amazon EMR Data Quality</span> を発表。AWS Glue Data Quality を基盤とし、別途の検証インフラストラクチャを構築することなく、Spark アプリケーションの中で直接データ品質の問題を<span class="highlight">インラインで検出</span>し、不正なデータが下流へ流れる前に対処できます。<span class="highlight">追加料金なし</span>で利用可能です。</p>
+    <p>AWS Glue と同じ宣言型ルール言語 <span class="highlight">DQDL</span> (Data Quality Definition Language) と同じ API を使用するため、AWS Glue と Amazon EMR の両エンジンにわたって一貫したデータ品質管理の体験が得られます。評価結果は AWS Glue Data Quality サービスにも自動発行され、実行履歴の確認やアラート設定が可能です。</p>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-value">30+</div>
+        <div class="stat-label">ルールタイプ (動的ルール / ML 異常検知含む)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">追加料金 (通常の EMR 料金のみ)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">3</div>
+        <div class="stat-label">デプロイモード対応 (EC2 / EKS / Serverless)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">8.1.0</div>
+        <div class="stat-label">emr-spark-8.1.0 以降で利用可能</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Before/After -->
+  <div class="section">
+    <h2>🔄 アップデート前後の比較</h2>
+    <div class="before-after">
+      <div class="before-box">
+        <h3>😓 Before: アップデート前の課題</h3>
+        <ul>
+          <li>Spark ジョブでの品質検証には、独自ロジックの実装、Deequ の直接組み込み、または AWS Glue Data Quality など別の検証基盤が必要だった</li>
+          <li>検証を別ジョブ・別サービスで行うと、パイプライン途中のインライン品質チェックと同一アプリケーション内での処理分岐が難しかった</li>
+          <li>AWS Glue と Amazon EMR でルールの記述方法や結果の管理方法が異なり、両エンジン併用環境では品質管理が分断されていた</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>🎉 After: アップデート後の改善</h3>
+        <ul>
+          <li>Spark スクリプトに <code class="inline">EvaluateDataQuality</code> トランスフォームを追加するだけで、アプリケーション内で直接品質評価が可能に</li>
+          <li>評価結果が Spark DataFrame としてインプロセスで返却され、パイプライン停止・不正レコードのフィルタリング・隔離を同一アプリケーション内で実行可能に</li>
+          <li>AWS Glue と同じ DQDL と API により、AWS Glue ETL / Data Catalog / Amazon EMR をまたいだ一貫した品質管理と実行履歴の比較が可能に</li>
+          <li>動的ルールや ML ベースの異常検知を含む 30 以上のルールタイプを追加料金なしで利用可能に</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Source[("🪣 データソース<br/>Apache Iceberg / Hudi / Delta Lake")]
+    Ruleset["📜 DQDL ルールセット<br/>30 以上のルールタイプ"]
+
+    subgraph EMR["☁️ Amazon EMR emr-spark-8.1.0 - EC2 / EKS / Serverless"]
+        Spark["⚡ Apache Spark ジョブ"]
+        Eval["✅ EvaluateDataQuality<br/>トランスフォーム"]
+        Spark --> Eval
+    end
+
+    Source --> Spark
+    Ruleset --> Eval
+
+    Eval --> Decision{"評価結果<br/>Passed / Failed"}
+    Decision -->|Passed| Sink[("📥 下流への書き込み")]
+    Decision -->|Failed| Action["🚨 パイプライン停止<br/>不正レコードの隔離"]
+
+    Eval -.->|結果を自動発行| Glue["🗄️ AWS Glue Data Quality<br/>実行履歴 / 異常検知 / アラート"]
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef error fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class EMR cloud
+    class Spark,Eval compute
+    class Source,Sink storage
+    class Glue database
+    class Decision decision
+    class Action error
+    class Ruleset input
+      </pre>
+    </div>
+    <p class="diagram-note">💡 Spark ジョブ内の <code class="inline">EvaluateDataQuality</code> トランスフォームが DQDL ルールセットを DataFrame に対して評価し、その結果に応じて書き込みの実行や不正レコードの隔離を同一アプリケーション内で分岐します。評価結果は AWS Glue Data Quality にも自動発行され、履歴管理や異常検知に活用できます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⭐ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">1️⃣ Spark スクリプト内でのインライン品質評価</div>
+      <ul>
+        <li><code class="inline">EvaluateDataQuality</code> トランスフォームに DataFrame と DQDL ルールセットを渡すだけで評価を実行</li>
+        <li>各ルールの結果 (<code class="inline">Passed</code> / <code class="inline">Failed</code> / <code class="inline">Error</code>) が Spark DataFrame としてインプロセスで返却され、アプリケーション内で分岐・ログ記録・永続化が可能</li>
+        <li>失敗したルールには観測値が含まれるため、再実行せずに原因を特定可能</li>
+        <li>ルールはスクリプト内への直接記述のほか、AWS Glue Data Catalog 保存済みルールの参照も可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">2️⃣ AWS Glue と共通の DQDL と API</div>
+      <ul>
+        <li>AWS Glue Data Quality と同じ宣言型ルール言語 DQDL と同じ API で、両エンジンで一貫した体験を提供</li>
+        <li>同じオープンソースの Deequ エンジンで評価を実行</li>
+        <li><code class="inline">EvaluationContext</code> の共有により、Amazon EMR と AWS Glue ETL の実行を 1 つの論理データセットとして比較・管理可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">3️⃣ 30 以上のルールタイプ</div>
+      <ul>
+        <li><code class="inline">RowCount</code>、<code class="inline">IsComplete</code>、<code class="inline">IsUnique</code>、<code class="inline">ColumnValues</code> などの基本ルールに加え、過去の実行結果と比較する動的ルールをサポート</li>
+        <li>固定しきい値なしで時系列ドリフトを追跡する ML ベースの異常検知に対応</li>
+        <li>合否判定なしで統計値のみを収集するアナライザーにより、しきい値設定や異常検知モデルの学習が可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">4️⃣ パイプラインの任意のステージで検証可能</div>
+      <ul>
+        <li><strong>事前検証</strong>: 読み込み直後に評価し、上流の問題 (ファイル欠落、スキーマドリフト、空テーブル) を早期検出</li>
+        <li><strong>インライン検証</strong>: 結合や集計など特定の変換ステップの出力を途中で検証</li>
+        <li><strong>事後検証</strong>: 書き込み前の最終 DataFrame を評価し、違反時には下流への書き込みを中止</li>
+      </ul>
+      <div class="flow-diagram">
+        <div class="flow-step">📥 事前検証<br/>読み込み直後</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">⚙️ インライン検証<br/>変換ステップ出力</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📤 事後検証<br/>書き込み前</div>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">5️⃣ 評価結果に基づくアクション</div>
+      <ul>
+        <li>パイプラインの失敗、不正レコードのフィルタリング、隔離先へのルーティングなどを選択可能</li>
+        <li>結果はデータセットレベル、ルールレベル、行レベルで報告され、失敗の原因を特定しやすい</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">6️⃣ オープンテーブルフォーマットと全デプロイモードに対応</div>
+      <ul>
+        <li>Apache Iceberg、Apache Hudi、Delta Lake をサポート</li>
+        <li>Amazon EMR on EC2、Amazon EMR on EKS、Amazon EMR Serverless のすべてのデプロイモードで利用可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>主要仕様</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対応リリース</td><td>AWS runtime for Apache Spark (emr-spark-8.1.0) 以降</td></tr>
+      <tr><td>デプロイモード</td><td>Amazon EMR on EC2 / Amazon EMR on EKS / Amazon EMR Serverless</td></tr>
+      <tr><td>対応エンジン</td><td>Apache Spark のみ (Hive、Trino、Flink などは非対応)</td></tr>
+      <tr><td>ルール言語</td><td>DQDL (AWS Glue Data Quality と共通)</td></tr>
+      <tr><td>評価エンジン</td><td>オープンソースの Deequ (AWS Glue Data Quality と共通)</td></tr>
+      <tr><td>ルールタイプ</td><td>30 以上 (動的ルール、ML ベース異常検知を含む)</td></tr>
+      <tr><td>対応テーブルフォーマット</td><td>Apache Iceberg / Apache Hudi / Delta Lake</td></tr>
+      <tr><td>結果の確認</td><td>AWS Glue Data Quality API (<code class="inline">GetDataQualityResultV2</code> など)、AWS CLI、AWS Glue コンソール</td></tr>
+    </table>
+
+    <h3>制限値</h3>
+    <table>
+      <tr><th>項目</th><th>制限</th></tr>
+      <tr><td>1 ルールセットあたりのルール数</td><td>最大 2,000 ルール</td></tr>
+      <tr><td>DQDL ソースのサイズ</td><td>最大 65 KB</td></tr>
+      <tr><td>統計値の保存数</td><td>アカウントあたり 100,000 (保存は無料)</td></tr>
+      <tr><td>統計値の保持期間</td><td>最大 2 年間</td></tr>
+    </table>
+
+    <h3>DQDL ルールセットの例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">DQDL</span>
+        <span class="code-title">ルールセットの例</span>
+      </div>
+      <pre><code class="language-text">Rules = [
+    RowCount > 100,
+    IsComplete "customer_id",
+    IsUnique "customer_id",
+    ColumnValues "country" in ["US", "CA", "MX"]
+]</code></pre>
+    </div>
+    <p style="font-size: 14px;">テーブルの行数が 100 を超えること、<code class="inline">customer_id</code> 列が欠損なく一意であること、<code class="inline">country</code> 列が固定の値セットに含まれることを宣言的に検証するルールセットです。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <ul style="font-size: 14px;">
+      <li>AWS runtime for Apache Spark (emr-spark-8.1.0) 以降を使用する Amazon EMR 環境 (EC2 / EKS / Serverless のいずれか)</li>
+      <li>検証対象の Spark アプリケーション</li>
+      <li>結果を AWS Glue Data Quality に発行するための IAM 権限</li>
+    </ul>
+
+    <div class="step-card">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">DQDL ルールセットの定義</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <span class="code-title">ルールセットの定義</span>
+          </div>
+          <pre><code class="language-python">ruleset = """
+Rules = [
+    RowCount > 100,
+    IsComplete "customer_id",
+    IsUnique "customer_id"
+]
+"""</code></pre>
+        </div>
+        <p>Spark スクリプト内に DQDL でルールセットを定義します。AWS Glue Data Catalog に保存済みのルールセットを参照することも可能です。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">EvaluateDataQuality トランスフォームの適用</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <span class="code-title">トランスフォームの適用</span>
+          </div>
+          <pre><code class="language-python">results = EvaluateDataQuality.apply(
+    frame=final_df,
+    ruleset=ruleset,
+    publishing_options={
+        "dataQualityEvaluationContext": "orders_daily",
+        "enableDataQualityResultsPublishing": True,
+    },
+)</code></pre>
+        </div>
+        <p>最終 DataFrame に対してルールセットを評価します。<code class="inline">dataQualityEvaluationContext</code> で指定した識別子により、AWS Glue ETL など他エンジンの実行と同一の論理データセットとしてグループ化され、結果が AWS Glue Data Quality に発行されます。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">評価結果に基づく分岐</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <span class="code-title">違反時に書き込みを中止</span>
+          </div>
+          <pre><code class="language-python">failed = results.filter("Outcome in ('Failed', 'Error')").count()
+if failed > 0:
+    raise RuntimeError(f"{failed} data quality rules failed; aborting write")
+
+final_df.write.mode("overwrite").parquet("s3://amzn-s3-demo-bucket/orders_curated/")</code></pre>
+        </div>
+        <p>評価結果の DataFrame から失敗またはエラーのルール数を集計し、違反がある場合は書き込みを中止します。これにより不正なデータが下流へ流れることを防ぎます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>👍 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="merit-item"><span class="merit-icon">✓</span><span><strong>追加コストなしの品質保証</strong>: 追加料金なしで利用でき、別途の検証インフラストラクチャの構築・運用コストが不要</span></div>
+    <div class="merit-item"><span class="merit-icon">✓</span><span><strong>データ信頼性の向上</strong>: 不正なデータが下流の分析や ML パイプラインへ流れる前にインラインで検出・遮断でき、データ起因の意思決定ミスを防止</span></div>
+    <div class="merit-item"><span class="merit-icon">✓</span><span><strong>ガバナンスの一元化</strong>: AWS Glue ETL、AWS Glue Data Catalog、Amazon EMR の品質評価結果を同じストアで一元管理し、組織全体のデータ品質を可視化</span></div>
+
+    <h3>⚙️ 技術面</h3>
+    <div class="merit-item"><span class="merit-icon">✓</span><span><strong>既存ワークフローへの最小限の変更</strong>: <code class="inline">EvaluateDataQuality</code> トランスフォームを追加するだけで導入でき、DQDL ルールセット以外の追加プログラミングは不要</span></div>
+    <div class="merit-item"><span class="merit-icon">✓</span><span><strong>インプロセスでの結果ハンドリング</strong>: 評価結果が Spark DataFrame として返却され、同一アプリケーション内で書き込み中止やレコード隔離を柔軟に制御可能</span></div>
+    <div class="merit-item"><span class="merit-icon">✓</span><span><strong>AWS Glue とのスキル・資産の共通化</strong>: DQDL ルールと API が AWS Glue と共通のため、既存のルール資産や運用ノウハウをそのまま活用可能</span></div>
+    <div class="merit-item"><span class="merit-icon">✓</span><span><strong>ML ベースの異常検知</strong>: 固定しきい値なしで、実行ごとの統計値の時系列からドリフトを自動検出可能</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="merit-item"><span class="limit-icon">✗</span><span>Apache Spark アプリケーションのみ対応 (Hive、Trino、Flink など他のエンジンでは利用不可)</span></div>
+    <div class="merit-item"><span class="limit-icon">✗</span><span>AWS runtime for Apache Spark (emr-spark-8.1.0) 以降が必要で、既存の古いリリースでは利用不可</span></div>
+    <div class="merit-item"><span class="limit-icon">✗</span><span>1 ルールセットあたり最大 2,000 ルール、DQDL ソースは最大 65 KB</span></div>
+    <div class="merit-item"><span class="limit-icon">✗</span><span>統計値はアカウントあたり 100,000 までで、保持期間は最大 2 年間</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="merit-item"><span class="caution-icon">!</span><span>品質評価は Spark ジョブ内で実行されるため、ルール数やデータ量に応じてジョブの実行時間とクラスターリソース消費が増加する可能性がある</span></div>
+    <div class="merit-item"><span class="caution-icon">!</span><span>異常検知や動的ルールを有効に機能させるには、<code class="inline">EvaluationContext</code> を一貫して設定し、十分な実行履歴を蓄積する必要がある</span></div>
+    <div class="merit-item"><span class="caution-icon">!</span><span>結果の履歴確認やアラートは AWS Glue Data Quality 側の API / コンソールを使用するため、AWS Glue 側の権限設計も合わせて検討が必要</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase-card">
+      <div class="usecase-title">🚪 ユースケース 1: データレイクへの書き込み前のゲートチェック</div>
+      <p><span class="usecase-label">シナリオ</span>: Apache Iceberg ベースのデータレイクに日次で注文データを書き込む EMR Serverless の Spark パイプラインで、欠損や重複を含むデータが本番テーブルに混入する事故を防ぎたい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">書き込み前のゲートチェック</span>
+        </div>
+        <pre><code class="language-python">results = EvaluateDataQuality.apply(
+    frame=orders_df,
+    ruleset='Rules = [RowCount > 1000, IsUnique "order_id", IsComplete "order_date"]',
+    publishing_options={"dataQualityEvaluationContext": "orders_daily"},
+)
+if results.filter("Outcome = 'Failed'").count() > 0:
+    raise RuntimeError("Data quality check failed")
+orders_df.writeTo("glue_catalog.sales.orders").append()</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: ルール違反時には Iceberg テーブルへの書き込みが中止されるため、下流の BI やレポートに不正データが波及することを防げる。</p>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">🔗 ユースケース 2: AWS Glue と Amazon EMR をまたいだ品質管理の統一</div>
+      <p><span class="usecase-label">シナリオ</span>: 軽量な ETL は AWS Glue、大規模な変換処理は Amazon EMR で実行している組織で、同じデータセットに対する品質ルールと実行履歴を一元管理したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">EvaluationContext の共有</span>
+        </div>
+        <pre><code class="language-python"># AWS Glue ETL と同じ EvaluationContext を指定して評価
+results = EvaluateDataQuality.apply(
+    frame=df,
+    ruleset=shared_ruleset,
+    publishing_options={
+        "dataQualityEvaluationContext": "customer_master",
+        "enableDataQualityResultsPublishing": True,
+    },
+)</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 同じ <code class="inline">EvaluationContext</code> を共有する実行は AWS Glue コンソール上で 1 つの論理データセットとして表示され、エンジンをまたいだ品質スコアの比較と異常検知モデルの共有が可能になる。</p>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">📈 ユースケース 3: ML ベース異常検知によるデータドリフトの監視</div>
+      <p><span class="usecase-label">シナリオ</span>: 上流システムの仕様変更によるデータ分布の変化 (平均値のずれ、行数の急減など) を、固定しきい値を設定せずに自動検出したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">アナライザーによる統計値収集</span>
+        </div>
+        <pre><code class="language-python"># アナライザーで統計値を収集し、異常検知モデルを学習
+analyzers = 'Analyzers = [RowCount, Mean "order_total", Completeness "customer_id"]'
+EvaluateDataQuality.apply(
+    frame=df,
+    ruleset=analyzers,
+    publishing_options={"dataQualityEvaluationContext": "orders_daily"},
+)</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 実行ごとの統計値の時系列から ML モデルが予測範囲を学習し、範囲外の値を Observation としてフラグする。しきい値のメンテナンスなしでドリフトを早期に発見できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>Amazon EMR Data Quality は<span class="highlight">追加料金なし</span>で利用できます。通常の Amazon EMR の料金 (EC2 / EKS / Serverless の各デプロイモードに応じたコンピューティング料金) のみが発生します。</p>
+    <div class="merit-item"><span class="merit-icon">✓</span><span>ルールやアナライザーの作成時に収集される統計値の保存にもコストは発生しません (アカウントあたり 100,000 統計値まで、保持期間は最大 2 年間)</span></div>
+    <div class="merit-item"><span class="caution-icon">!</span><span>品質評価は Spark ジョブ内で実行されるため、評価処理の分だけジョブの実行時間が延びる場合があります</span></div>
+    <p style="font-size: 14px;">詳細は <a href="https://aws.amazon.com/emr/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon EMR 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>AWS runtime for Apache Spark (emr-spark-8.1.0) が利用可能な、以下のすべてのリージョンで利用できます。</p>
+    <div class="merit-item"><span class="merit-icon">✓</span><span>すべての AWS 商用リージョン</span></div>
+    <div class="merit-item"><span class="merit-icon">✓</span><span>AWS GovCloud (US) リージョン</span></div>
+    <div class="merit-item"><span class="merit-icon">✓</span><span>AWS 中国リージョン</span></div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🧩 関連サービス・機能</h2>
+    <div class="related-card"><strong>AWS Glue Data Quality</strong>: 本機能の基盤となるサービス。DQDL、API、Deequ エンジン、結果ストアを共有しており、評価結果は AWS Glue Data Quality に発行される</div>
+    <div class="related-card"><strong>AWS Glue Data Catalog</strong>: ルールセットの保存先として参照できるほか、<code class="inline">publishToDataCatalogTarget</code> を設定するとカタログテーブルの Data quality タブに実行結果が表示される</div>
+    <div class="related-card"><strong>Apache Iceberg / Apache Hudi / Delta Lake</strong>: 本機能がサポートするオープンテーブルフォーマット。データレイクのテーブルに対する品質検証に利用可能</div>
+    <div class="related-card"><strong>Amazon EMR on EC2 / EMR on EKS / EMR Serverless</strong>: 本機能が利用可能な 3 つのデプロイモード</div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section summary-box">
+    <h2>🎯 まとめ</h2>
+    <p>Amazon EMR Data Quality により、Spark ジョブ内でのインラインなデータ品質検証が<span class="highlight">追加料金なし</span>で可能になり、別途の検証基盤なしに不正データの下流への流出を防げるようになりました。AWS Glue と共通の DQDL と API を採用しているため、両エンジンを併用する環境でも品質管理を一元化できます。</p>
+    <p><strong style="color: var(--aws-white);">推奨アクション</strong>: emr-spark-8.1.0 以降へのアップグレードと、重要なパイプラインの書き込み前への <code class="inline">EvaluateDataQuality</code> の組み込みから始めることを推奨します。</p>
+  </div>
+
+  <!-- 参考リンク -->
+  <div class="section">
+    <h2>📚 参考リンク</h2>
+    <ul class="link-list">
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-emr-data-quality-spark/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li><a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-data-quality.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント - Amazon EMR Data Quality</a></li>
+      <li><a href="https://docs.aws.amazon.com/glue/latest/dg/glue-data-quality.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント - AWS Glue Data Quality</a></li>
+      <li><a href="https://docs.aws.amazon.com/glue/latest/dg/dqdl.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント - DQDL リファレンス</a></li>
+      <li><a href="https://aws.amazon.com/emr/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon EMR 料金ページ</a></li>
+    </ul>
+  </div>
+
+  <footer>
+    <p>📎 出典: <a href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-emr-data-quality-spark/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-emr-data-quality-spark/</a></p>
+    <p>📄 レポート: reports/2026/2026-10-12-amazon-emr-data-quality-spark.md | 作成日: 2026 年 10 月 13 日</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -5,6 +5,20 @@
 
 ## 2026 年
 
+- [2026-10-13 - Kiro - エンタープライズ向けサインインコントロールの強化](2026/2026-10-13-kiro-sign-in-controls.md)
+- [2026-10-12 - AWS Transfer Family - パブリック SFTP サーバーのカスタムポートサポート](2026/2026-10-12-transfer-family-custom-ports-sftp.md)
+- [2026-10-12 - Amazon OpenSearch Service - インデックスレベル暗号化のサポート](2026/2026-10-12-opensearch-index-level-encryption.md)
+- [2026-10-12 - Amazon CloudFront - AWS Lambda Web Functions オリジンサポート](2026/2026-10-12-cloudfront-lambda-web-functions-origin.md)
+- [2026-10-12 - Amazon S3 - S3 Express One Zone が 4 つの追加リージョンで利用可能に](2026/2026-10-12-s3-express-one-zone-4-additional-regions.md)
+- [2026-10-12 - AWS Secrets Manager - マネージド外部シークレットの Databricks / Twilio 対応](2026/2026-10-12-secrets-manager-managed-external-secrets-databricks-twilio.md)
+- [2026-10-12 - Amazon EMR - Apache Spark ジョブでのネイティブデータ品質チェック](2026/2026-10-12-amazon-emr-data-quality-spark.md)
+- [2026-10-12 - Amazon ElastiCache for Valkey - ElastiCache Insights の発表](2026/2026-10-12-amazon-elasticache-valkey-elasticache-insights.md)
+- [2026-10-12 - Kiro - チャット開始時の V3 切り替えプロンプトとモデルフォールバック通知 (CLI 2.30.0)](2026/2026-10-12-kiro-changelog-2026-10-12.md)
+- [2026-10-12 - Amazon Bedrock AgentCore - 短期メモリの従量課金制の発表](2026/2026-10-12-agentcore-memory-consumption-based-pricing.md)
+- [2026-10-12 - Amazon Connect Customer - コンタクト後作業向けステップバイステップガイドの自動入力](2026/2026-10-12-connect-customer-prefills-guides-acw.md)
+- [2026-10-12 - Amazon EC2 - G7 インスタンスが欧州 (フランクフルト) および欧州 (ストックホルム) リージョンで利用可能に](2026/2026-10-12-amazon-g7-european-regions.md)
+- [2026-10-12 - AWS Lambda - Lambda Web Functions](2026/2026-10-12-aws-lambda-web-functions.md)
+- [2026-10-11 - AWS Billing and Cost Management - ACH ダイレクトデビットによるサインアップと請求書支払い](2026/2026-10-11-aws-sign-up-invoices-ach-direct-debit.md)
 - [2026-10-09 - Amazon Quick - ブランドテンプレート対応によるオンブランドなプレゼンテーション・ドキュメント作成](2026/2026-10-09-amazon-quick-brand-templates-on-brand-presentations-documents.md)
 - [2026-10-09 - Kiro - CLI V3 がデフォルトエクスペリエンスとしてロールアウト](2026/2026-10-09-kiro-cli-3.md)
 - [2026-10-09 - Amazon EC2 - R8gd インスタンスの提供リージョン拡大](2026/2026-10-09-amazon-ec2-r8gd-thf.md)
