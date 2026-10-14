@@ -5,7 +5,17 @@
 
 ## 2026 年
 
+- [2026-10-13 - AWS Deadline Cloud - Deadline Cloud モニターでのアクセス可能リソース検索機能](2026/2026-10-13-deadline-cloud-resources.md)
+- [2026-10-13 - AWS DataSync - Enhanced モードの FSx for OpenZFS、NFS 4.2、オブジェクトメタデータ制御サポート](2026/2026-10-13-datasync-enhanced-openzfs-nfs42-metadata.md)
+- [2026-10-13 - Amazon RDS for SQL Server - 最新累積更新プログラム CU のサポート (SQL Server 2025 CU8)](2026/2026-10-13-amazon-rds-supports-latest-cu-microsoft-sql-server.md)
+- [2026-10-13 - Amazon DCV - バージョン 2026.0 リリース (RHEL 10 サポートと新クライアント)](2026/2026-10-13-amazon-dcv-2026-0.md)
 - [2026-10-13 - Kiro - エンタープライズ向けサインインコントロールの強化](2026/2026-10-13-kiro-sign-in-controls.md)
+- [2026-10-13 - Amazon ECS - LiveTaskCount メトリクスの追加と RunningTaskCount メトリクスの無料化](2026/2026-10-13-ecs-service-metrics.md)
+- [2026-10-13 - Amazon Location Service - インタラクティブな API Playground の提供開始](2026/2026-10-13-amazon-location-service-api-playground.md)
+- [2026-10-13 - Kiro - ローカルコマンドサンドボックスとローカル自律モード (IDE 1.3.0 / CLI 2.31.0)](2026/2026-10-13-kiro-changelog-2026-10-13.md)
+- [2026-10-13 - Amazon Route 53 - プレミアムドメインの登録・移管・更新サポート](2026/2026-10-13-route-53-premium-domains.md)
+- [2026-10-13 - AWS Agent Registry - レジストリレコードのカスタムメタデータ対応](2026/2026-10-13-aws-agent-registry-custom-metadata-registry-records.md)
+- [2026-10-13 - Agent Toolkit for AWS - AWS AI/ML スキルによる SageMaker AI 専門知識のコーディングエージェントへの提供](2026/2026-10-13-bring-sagemaker-ai-expertise-to-your-coding-agent.md)
 - [2026-10-12 - AWS Transfer Family - パブリック SFTP サーバーのカスタムポートサポート](2026/2026-10-12-transfer-family-custom-ports-sftp.md)
 - [2026-10-12 - Amazon OpenSearch Service - インデックスレベル暗号化のサポート](2026/2026-10-12-opensearch-index-level-encryption.md)
 - [2026-10-12 - Amazon CloudFront - AWS Lambda Web Functions オリジンサポート](2026/2026-10-12-cloudfront-lambda-web-functions-origin.md)

@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon ECS - LiveTaskCount メトリクスの追加と RunningTaskCount メトリクスの無料化</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.ba-card {
+  border-radius: 8px;
+  padding: 16px;
+}
+.ba-before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+.ba-card ul { margin: 0; padding-left: 2px; list-style: none; }
+.ba-card li {
+  margin: 8px 0;
+  padding-left: 24px;
+  position: relative;
+  font-size: 14px;
+}
+.ba-before li::before { content: "✗"; position: absolute; left: 0; color: #FF6B4A; font-weight: bold; }
+.ba-after li::before { content: "✓"; position: absolute; left: 0; color: #4CAF50; font-weight: bold; }
+
+/* Stat cards */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.3;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Feature cards */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+.feature-card p { margin: 4px 0; font-size: 14px; }
+.feature-card ul { margin: 6px 0 0 0; padding-left: 20px; font-size: 14px; }
+.feature-card li { margin: 4px 0; }
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+.diagram-note {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Steps */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+  align-items: flex-start;
+}
+.step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+/* Merit / Demerit */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 760px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+.merit-card, .demerit-card {
+  border-radius: 8px;
+  padding: 16px;
+}
+.merit-card {
+  background: rgba(29, 129, 2, 0.1);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+.demerit-card {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+}
+.merit-card h3, .demerit-card h3 { margin-top: 0; }
+.merit-card ul, .demerit-card ul { margin: 0; padding-left: 20px; font-size: 14px; }
+.merit-card li, .demerit-card li { margin: 8px 0; }
+
+/* Use cases */
+.usecase {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(255, 153, 0, 0.04));
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label { font-weight: 700; color: var(--aws-white); }
+
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 0 6px 0;
+}
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 10px 14px;
+  text-align: center;
+  min-width: 90px;
+  font-size: 13px;
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 22px;
+  font-weight: bold;
+}
+
+/* Links */
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.related-list { margin: 0; padding-left: 20px; font-size: 14px; }
+.related-list li { margin: 8px 0; }
+.related-list .svc { font-weight: 700; color: var(--aws-white); }
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(0, 161, 201, 0.1));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px 20px;
+  font-size: 15px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0 0 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="service-badge">☁️ Amazon ECS</div>
+    <h1>📊 LiveTaskCount メトリクスの追加と RunningTaskCount メトリクスの無料化</h1>
+    <div class="subtitle">アクティブなタスク数を無料・オプトイン不要で監視 ｜ リリース日: <span class="date">2026 年 10 月 13 日</span></div>
+  </div>
+
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>Amazon ECS は、サービス内でアクティブに実行中のタスク数を示す新しいサービスメトリクス <span class="highlight">LiveTaskCount</span> を発表しました。すべてのお客様が無料で利用でき、CloudWatch Container Insights へのオプトインも不要です。あわせて、Container Insights の既存メトリクス <span class="highlight">RunningTaskCount</span> の課金が廃止され、2026 年 10 月 1 日以降は無料で利用できます。</p>
+    <p>LiveTaskCount は ACTIVATING、RUNNING、DEACTIVATING の各状態にあるタスクをカウントします。スケールイン時にコネクションドレイニング中のタスクなど、停止状態へ遷移中でもまだ実行されているタスクを含むため、オートスケーリングのアラームやキャパシティモニタリングに適しています。一方、RunningTaskCount は現在の状態と希望する状態の両方が RUNNING であるタスクのみをカウントし、サービスのヘルスと安定性のシグナルとして引き続き有用です。</p>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">🆕 LiveTaskCount</div>
+        <div class="stat-label">新しいサービスメトリクス<br>ACTIVATING / RUNNING / DEACTIVATING をカウント</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">¥0</div>
+        <div class="stat-label">LiveTaskCount は無料<br>Container Insights のオプトイン不要</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">無料化</div>
+        <div class="stat-label">RunningTaskCount の課金廃止<br>2026 年 10 月 1 日以降・対応不要</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-card ba-before">
+        <div class="ba-title">😣 アップデート前の課題</div>
+        <ul>
+          <li>タスク数を把握するための RunningTaskCount は Container Insights の有効化が必要で、カスタムメトリクスとして課金されていた</li>
+          <li>RunningTaskCount は現在の状態と希望する状態の両方が RUNNING のタスクのみをカウントするため、起動中 (ACTIVATING) やドレイニング中 (DEACTIVATING) のタスクを含めた「実際に稼働しているタスクの全体像」を把握できなかった</li>
+          <li>スケールイン時にトラフィックを処理しながらドレイニング中のタスクがカウントから漏れ、オートスケーリングやキャパシティプランニングの判断材料として不十分な場合があった</li>
+        </ul>
+      </div>
+      <div class="ba-card ba-after">
+        <div class="ba-title">😊 アップデート後の改善</div>
+        <ul>
+          <li>LiveTaskCount により、ACTIVATING、RUNNING、DEACTIVATING を含むアクティブなタスク数を無料・オプトイン不要で取得可能に</li>
+          <li>ドレイニング中のタスクもカウントされ、オートスケーリングアラームやキャパシティモニタリングでより正確な稼働タスク数を利用可能に</li>
+          <li>RunningTaskCount が ECS サービス数やクラスター数にかかわらず無料に。変更は自動適用で対応不要</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart LR
+    subgraph Lifecycle["🔄 ECS タスクライフサイクル"]
+        direction LR
+        P["⏳ PROVISIONING"] --> PD["📦 PENDING"]
+        PD --> A["🚀 ACTIVATING"]
+        A --> R["✅ RUNNING"]
+        R --> D["🔻 DEACTIVATING<br/>ドレイニング中"]
+        D --> S["🛑 STOPPED"]
+    end
+
+    subgraph Metrics["📊 CloudWatch メトリクス"]
+        direction LR
+        LTC["🆕 LiveTaskCount<br/>無料・オプトイン不要"]
+        RTC["📈 RunningTaskCount<br/>Container Insights・無料化"]
+        LTC ~~~ RTC
+    end
+
+    A -.-> LTC
+    R -.-> LTC
+    D -.-> LTC
+    R -.-> RTC
+
+    classDef state fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef draining fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef stopped fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+    classDef newmetric fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef metric fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class P,PD,A,R state
+    class D draining
+    class S stopped
+    class LTC newmetric
+    class RTC metric
+    class Lifecycle,Metrics layer
+      </pre>
+    </div>
+    <p class="diagram-note">タスクライフサイクルの各状態と 2 つのメトリクスのカウント範囲を示しています。LiveTaskCount は ACTIVATING、RUNNING、DEACTIVATING の 3 状態をカウントし、RunningTaskCount は RUNNING 状態のみをカウントします。</p>
+  </div>
+
+  <div class="section">
+    <h2>⭐ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">🆕 1. LiveTaskCount メトリクスの追加</div>
+      <ul>
+        <li>サービス内でアクティブに実行中のタスク数をカウントする新しいサービスメトリクス</li>
+        <li><span class="highlight">ACTIVATING、RUNNING、DEACTIVATING</span> の各状態のタスクを含む</li>
+        <li>スケールイン時にコネクションドレイニング中のタスクなど、停止状態へ遷移中でもまだ実行されメトリクスを生成しているタスクをカウント</li>
+        <li>ECS のサービス使用率メトリクスの一部として提供され、<span class="highlight">無料</span>で利用可能</li>
+        <li>CloudWatch Container Insights へのオプトインは不要</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">💰 2. RunningTaskCount メトリクスの無料化</div>
+      <ul>
+        <li>CloudWatch Container Insights で提供される、クラスター単位およびサービス単位の実行中タスク数メトリクス</li>
+        <li>現在の状態と希望する状態の両方が RUNNING であるタスクをカウントし、サービスのヘルスと安定性のシグナルとして機能</li>
+        <li><span class="highlight">2026 年 10 月 1 日以降</span>、ECS サービス数やクラスター数にかかわらず課金されない</li>
+        <li>変更は自動的に適用され、お客様側での対応は不要</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🔀 3. 2 つのメトリクスの使い分け</div>
+      <ul>
+        <li><strong>LiveTaskCount</strong>: オートスケーリングアラームやキャパシティモニタリング向け。ドレイニング中もトラフィックを処理しているタスクを含めた全体像を把握できる</li>
+        <li><strong>RunningTaskCount</strong>: ヘルスと安定性の監視向け。実行中タスク数が指定値を下回った場合のアラームなどに利用できる</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📊 メトリクスの比較</h3>
+    <table>
+      <tr><th>項目</th><th>LiveTaskCount</th><th>RunningTaskCount</th></tr>
+      <tr><td>提供元</td><td>ECS サービス使用率メトリクス</td><td>CloudWatch Container Insights</td></tr>
+      <tr><td>カウント対象の状態</td><td>ACTIVATING、RUNNING、DEACTIVATING</td><td>現在の状態と希望する状態がともに RUNNING</td></tr>
+      <tr><td>ドレイニング中のタスク</td><td>✓ カウントする</td><td>✗ カウントしない</td></tr>
+      <tr><td>Container Insights のオプトイン</td><td>不要</td><td>必要</td></tr>
+      <tr><td>料金</td><td>無料</td><td>無料 (2026 年 10 月 1 日以降)</td></tr>
+      <tr><td>主な用途</td><td>オートスケーリング、キャパシティモニタリング</td><td>ヘルスと安定性の監視</td></tr>
+    </table>
+
+    <h3>📦 その他のサービス使用率メトリクス</h3>
+    <p style="font-size: 14px;">LiveTaskCount は、既存の ECS サービス使用率メトリクスと同じ枠組みで提供されます。</p>
+    <table>
+      <tr><th>メトリクス</th><th>説明</th></tr>
+      <tr><td>CPUUtilization</td><td>タスク定義で指定した CPU に対する使用率</td></tr>
+      <tr><td>MemoryUtilization</td><td>タスク定義で指定したメモリに対する使用率</td></tr>
+      <tr><td>EBS ファイルシステム使用率</td><td>タスクにアタッチされた EBS ボリュームの使用率</td></tr>
+      <tr><td>🆕 LiveTaskCount</td><td>アクティブに実行中のタスク数 (今回追加)</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <ul style="font-size: 14px; padding-left: 20px;">
+      <li>Amazon ECS でサービスが稼働していること</li>
+      <li>CloudWatch メトリクスを参照する IAM 権限があること</li>
+      <li>RunningTaskCount を利用する場合は、CloudWatch Container Insights が有効化されていること (LiveTaskCount では不要)</li>
+    </ul>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">CloudWatch で LiveTaskCount メトリクスを確認する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">LiveTaskCount メトリクスの取得</span>
+          </div>
+          <pre><code class="language-bash">aws cloudwatch get-metric-statistics \
+  --namespace AWS/ECS \
+  --metric-name LiveTaskCount \
+  --dimensions Name=ClusterName,Value=my-cluster Name=ServiceName,Value=my-service \
+  --start-time 2026-10-13T00:00:00Z \
+  --end-time 2026-10-13T01:00:00Z \
+  --period 60 \
+  --statistics Average</code></pre>
+        </div>
+        <p>指定したクラスターとサービスの LiveTaskCount メトリクスを 60 秒間隔で取得しています。アクティブに実行中のタスク数の推移を確認できます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">LiveTaskCount に基づく CloudWatch アラームを作成する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">タスク数低下を通知するアラーム</span>
+          </div>
+          <pre><code class="language-bash">aws cloudwatch put-metric-alarm \
+  --alarm-name my-service-live-task-count-low \
+  --namespace AWS/ECS \
+  --metric-name LiveTaskCount \
+  --dimensions Name=ClusterName,Value=my-cluster Name=ServiceName,Value=my-service \
+  --statistic Average \
+  --period 60 \
+  --evaluation-periods 3 \
+  --threshold 2 \
+  --comparison-operator LessThanThreshold \
+  --alarm-actions arn:aws:sns:ap-northeast-1:123456789012:my-topic</code></pre>
+        </div>
+        <p>アクティブなタスク数が 3 分間連続で 2 を下回った場合に SNS トピックへ通知するアラームを作成しています。しきい値や評価期間はワークロードに合わせて調整してください。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">RunningTaskCount によるヘルス監視を継続する</div>
+        <p>Container Insights を有効化している場合、既存の RunningTaskCount によるアラームやダッシュボードはそのまま利用できます。<span class="highlight">2026 年 10 月 1 日以降は課金されない</span>ため、設定変更は不要です。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット・制約事項</h2>
+    <div class="merit-grid">
+      <div class="merit-card">
+        <h3>✅ ビジネス面のメリット</h3>
+        <ul>
+          <li><strong>コスト削減</strong>: Container Insights の RunningTaskCount が無料になり、多数のサービスやクラスターを運用している環境ではカスタムメトリクス課金が削減される</li>
+          <li><strong>可観測性の民主化</strong>: LiveTaskCount は Container Insights のオプトインなしで無料提供されるため、追加コストを気にせずすべての環境でタスク数の監視を標準化できる</li>
+          <li><strong>対応不要</strong>: 料金変更は自動的に適用され、お客様側での作業は発生しない</li>
+        </ul>
+        <h3>✅ 技術面のメリット</h3>
+        <ul>
+          <li><strong>正確なキャパシティ把握</strong>: ドレイニング中のタスクを含むアクティブなタスク数を把握でき、スケールイン中もトラフィックを処理しているタスクを見落とさない</li>
+          <li><strong>オートスケーリングの精度向上</strong>: LiveTaskCount をオートスケーリングのアラームに利用することで、実際の稼働タスク数に基づいた判断が可能になる</li>
+          <li><strong>用途別の使い分け</strong>: キャパシティモニタリングには LiveTaskCount、ヘルスと安定性の監視には RunningTaskCount と、目的に応じたメトリクス選択が可能になる</li>
+        </ul>
+      </div>
+      <div class="demerit-card">
+        <h3>⚠️ 制限事項</h3>
+        <ul>
+          <li>RunningTaskCount の利用には引き続き CloudWatch Container Insights の有効化が必要</li>
+          <li>Container Insights が収集するその他のメトリクスは、引き続きカスタムメトリクスとして課金される</li>
+          <li>RunningTaskCount の無料化は 2026 年 10 月 1 日以降の利用分に適用される</li>
+        </ul>
+        <h3>🤔 考慮すべき点</h3>
+        <ul>
+          <li>LiveTaskCount はドレイニング中のタスクも含むため、RUNNING 状態のタスク数のみを前提とした既存のアラームをそのまま置き換えると挙動が変わる可能性がある</li>
+          <li>2 つのメトリクスはカウント対象が異なるため、スケールインやデプロイ中は値に差が出ることを理解した上で使い分ける必要がある</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1️⃣ スケールイン中も正確なキャパシティを把握するオートスケーリング監視</div>
+      <p><span class="label">シナリオ</span>: Web サービスでスケールイン時にコネクションドレイニングを行っており、ドレイニング中のタスクもトラフィックを処理している。実際に稼働しているタスク数に基づいてキャパシティを監視したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">LiveTaskCount によるキャパシティ監視アラーム</span>
+        </div>
+        <pre><code class="language-bash">aws cloudwatch put-metric-alarm \
+  --alarm-name web-service-capacity-watch \
+  --namespace AWS/ECS \
+  --metric-name LiveTaskCount \
+  --dimensions Name=ClusterName,Value=web-cluster Name=ServiceName,Value=web-service \
+  --statistic Average --period 60 --evaluation-periods 2 \
+  --threshold 10 --comparison-operator GreaterThanThreshold \
+  --alarm-actions arn:aws:sns:ap-northeast-1:123456789012:capacity-topic</code></pre>
+      </div>
+      <p><span class="label">効果</span>: ドレイニング中のタスクを含めた実際の稼働タスク数で監視でき、スケールイン中のキャパシティの過小評価を防げる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2️⃣ サービスのヘルス監視によるタスク数低下の検知</div>
+      <p><span class="label">シナリオ</span>: バッチ処理サービスで、安定稼働しているタスク数が希望数を下回った場合に迅速に検知したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">RunningTaskCount によるヘルス監視アラーム</span>
+        </div>
+        <pre><code class="language-bash">aws cloudwatch put-metric-alarm \
+  --alarm-name batch-service-health \
+  --namespace ECS/ContainerInsights \
+  --metric-name RunningTaskCount \
+  --dimensions Name=ClusterName,Value=batch-cluster Name=ServiceName,Value=batch-service \
+  --statistic Minimum --period 60 --evaluation-periods 3 \
+  --threshold 4 --comparison-operator LessThanThreshold \
+  --alarm-actions arn:aws:sns:ap-northeast-1:123456789012:oncall-topic</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 現在の状態と希望する状態がともに RUNNING のタスク数で監視するため、サービスの安定性低下を正確に検知できる。無料化により監視コストも発生しない。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3️⃣ マルチクラスター環境での監視コスト最適化</div>
+      <p><span class="label">シナリオ</span>: 数十のクラスターと数百のサービスを運用しており、Container Insights の RunningTaskCount によるカスタムメトリクス課金がコスト要因となっていた。</p>
+      <div class="flow-diagram">
+        <div class="flow-step">💰 RunningTaskCount の<br>課金は自動的に廃止<br>対応不要</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📊 キャパシティ監視用<br>ダッシュボードは<br>LiveTaskCount に移行</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">⚙️ その他のメトリクスは<br>必要なクラスターのみ<br>Container Insights 継続</div>
+      </div>
+      <p><span class="label">効果</span>: タスク数監視に関するメトリクスコストを削減しつつ、全サービスで一貫したタスク数の可観測性を維持できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <ul style="font-size: 14px; padding-left: 20px;">
+      <li><strong>LiveTaskCount</strong>: <span class="highlight">無料</span>で利用できます。CloudWatch Container Insights へのオプトインは不要です。</li>
+      <li><strong>RunningTaskCount</strong>: <span class="highlight">2026 年 10 月 1 日以降</span>、CloudWatch Container Insights における課金が廃止され、アカウント内の ECS サービス数やクラスター数にかかわらず無料で利用できます。この変更は自動的に適用されます。</li>
+      <li>Container Insights が収集するその他のメトリクスは、引き続きカスタムメトリクスとして課金されます。詳細は <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">CloudWatch 料金ページ</a>を参照してください。</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>Amazon ECS が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <ul class="related-list">
+      <li><span class="svc">Amazon CloudWatch</span>: LiveTaskCount および RunningTaskCount メトリクスの保存・可視化・アラーム設定を行うモニタリングサービス</li>
+      <li><span class="svc">CloudWatch Container Insights</span>: ECS クラスターとサービスの詳細なメトリクスを収集する機能。RunningTaskCount はこの機能の一部として提供される</li>
+      <li><span class="svc">Application Auto Scaling</span>: ECS サービスのオートスケーリング機能。LiveTaskCount をアラームと組み合わせることで、より正確なキャパシティ判断が可能になる</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin: 0;">Amazon ECS に無料の <span class="highlight">LiveTaskCount</span> メトリクスが追加され、ドレイニング中を含むアクティブなタスク数を Container Insights なしで把握できるようになりました。あわせて <span class="highlight">RunningTaskCount も無料化</span>されたため、タスク数の監視コストを気にする必要がなくなります。オートスケーリングやキャパシティモニタリングには LiveTaskCount、ヘルス監視には RunningTaskCount という使い分けを検討することを推奨します。</p>
+    </div>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/ecs-service-metrics/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/ecs-service-metrics/</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service_utilization.html#cw_live_task_count" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Amazon ECS サービス使用率メトリクス (LiveTaskCount)</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/cloudwatch-container-insights.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Amazon ECS CloudWatch Container Insights</a></li>
+      <li><a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ: Amazon CloudWatch</a></li>
+    </ul>
+    <p style="margin-top: 12px;">本インフォグラフィックは AWS News レポート (2026-10-13-ecs-service-metrics.md) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
