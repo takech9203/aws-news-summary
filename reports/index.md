@@ -5,6 +5,18 @@
 
 ## 2026 年
 
+- [2026-10-14 - AWS Transfer Family - Web アプリの SVG ロゴ・ICO ファビコン対応](2026/2026-10-14-transfer-family-svg-ico-favicons.md)
+- [2026-10-14 - AWS Transfer Family - SFTP サーバーホストキーの AWS Secrets Manager 保存サポート](2026/2026-10-14-transfer-family-secrets-host-keys.md)
+- [2026-10-14 - Amazon RDS Proxy - SQL Server 2022 サポート](2026/2026-10-14-rds-proxy-supports-sqlserver-2022.md)
+- [2026-10-14 - AWS Backup - アジアパシフィック (ニュージーランド) リージョンでの Amazon FSx ファイルシステムのサポート](2026/2026-10-14-aws-backup-fsx-asia-pacific-new-zealand.md)
+- [2026-10-14 - Amazon SageMaker Studio - ソーシャルサインインによる新規 AI/ML ビルダー向けオンボーディング簡素化](2026/2026-10-14-sagemaker-studio-social-sign-in.md)
+- [2026-10-14 - AWS HealthOmics - Nextflow ワークフロー向けリソースフォールバック順序](2026/2026-10-14-aws-healthomics-resource-fallback-for-Nextflow.md)
+- [2026-10-14 - Blockchain Snapshots on AWS - ノードブートストラップ用スナップショットの提供開始](2026/2026-10-14-blockchain-snapshots-node-bootstrapping.md)
+- [2026-10-14 - AWS License Manager - AWS Marketplace 経由で購入した Ubuntu Pro へのライセンスタイプ変換サポート](2026/2026-10-14-aws-license-manager-conversions-ubuntu-pro-marketplace.md)
+- [2026-10-14 - Kiro - ローカルサンドボックス機能 (Local Command Sandbox)](2026/2026-10-14-kiro-local-sandboxing.md)
+- [2026-10-14 - Amazon Application Recovery Controller - Region switch の 4 つの新機能](2026/2026-10-14-region-switch-target-health-ssm-lambda.md)
+- [2026-10-14 - Amazon S3 - Vercel Marketplace および v0 by Vercel での提供開始](2026/2026-10-14-amazon-s3-vercel-marketplace-v0.md)
+- [2026-10-14 - AWS Security Hub - リソースクリティカリティによるエクスポージャー優先順位付け](2026/2026-10-14-security-hub-resource-criticality.md)
 - [2026-10-13 - AWS Deadline Cloud - Deadline Cloud モニターでのアクセス可能リソース検索機能](2026/2026-10-13-deadline-cloud-resources.md)
 - [2026-10-13 - AWS DataSync - Enhanced モードの FSx for OpenZFS、NFS 4.2、オブジェクトメタデータ制御サポート](2026/2026-10-13-datasync-enhanced-openzfs-nfs42-metadata.md)
 - [2026-10-13 - Amazon RDS for SQL Server - 最新累積更新プログラム CU のサポート (SQL Server 2025 CU8)](2026/2026-10-13-amazon-rds-supports-latest-cu-microsoft-sql-server.md)
@@ -15,6 +27,7 @@
 - [2026-10-13 - Kiro - ローカルコマンドサンドボックスとローカル自律モード (IDE 1.3.0 / CLI 2.31.0)](2026/2026-10-13-kiro-changelog-2026-10-13.md)
 - [2026-10-13 - Amazon Route 53 - プレミアムドメインの登録・移管・更新サポート](2026/2026-10-13-route-53-premium-domains.md)
 - [2026-10-13 - AWS Agent Registry - レジストリレコードのカスタムメタデータ対応](2026/2026-10-13-aws-agent-registry-custom-metadata-registry-records.md)
+- [2026-10-13 - AWS Lambda - durable functions の操作数とチェックポイントペイロードの上限引き上げ](2026/2026-10-13-aws-lambda-durable-gen-limit-increase.md)
 - [2026-10-13 - Agent Toolkit for AWS - AWS AI/ML スキルによる SageMaker AI 専門知識のコーディングエージェントへの提供](2026/2026-10-13-bring-sagemaker-ai-expertise-to-your-coding-agent.md)
 - [2026-10-12 - AWS Transfer Family - パブリック SFTP サーバーのカスタムポートサポート](2026/2026-10-12-transfer-family-custom-ports-sftp.md)
 - [2026-10-12 - Amazon OpenSearch Service - インデックスレベル暗号化のサポート](2026/2026-10-12-opensearch-index-level-encryption.md)

@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Lambda durable functions - 操作数とチェックポイントペイロードの上限引き上げ</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul { margin: 8px 0 0 0; padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.stat-card {
+  flex: 1;
+  min-width: 220px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 10px;
+  padding: 18px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-old {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+  text-decoration: line-through;
+  opacity: 0.8;
+}
+.stat-label {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+.stat-note {
+  font-size: 12px;
+  color: var(--aws-smile-orange);
+  margin-top: 4px;
+}
+
+/* Before / After */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.before-box, .after-box {
+  flex: 1;
+  min-width: 280px;
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF6B52; }
+.after-box h3 { color: #4CAF50; }
+.before-box ul, .after-box ul { margin: 8px 0 0 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 6px 0; font-size: 14px; }
+
+/* テーブル */
+.table-wrap { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+td.new-value { color: #4CAF50; font-weight: 700; }
+td.old-value { color: #FF6B52; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B52; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .effect {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+}
+.step-content { flex: 1; }
+.step-content .step-title { font-weight: 700; color: var(--aws-white); }
+.step-content p { margin: 4px 0 0 0; font-size: 14px; }
+
+/* 注意ボックス */
+.note-box {
+  background: rgba(255, 173, 51, 0.1);
+  border: 1px solid rgba(255, 173, 51, 0.5);
+  border-left: 4px solid var(--aws-smile-orange);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 16px 0;
+  font-size: 14px;
+}
+.note-box .note-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 4px;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.two-col > div { flex: 1; min-width: 280px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 640px) {
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+  body { padding: 12px; }
+  .section { padding: 16px; }
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">⚡ AWS Lambda</span>
+    <h1>durable functions の操作数とチェックポイント<br>ペイロードの上限引き上げ</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 10 月 13 日 | 対象: AWS Lambda durable functions</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      AWS Lambda durable functions で、1 回の実行あたりの <span class="highlight">durable operation 数が 3,000 → 30,000 (10 倍)</span> に、
+      <span class="highlight">チェックポイントペイロードの最大サイズが 256 KB → 1 MB</span> に引き上げられました。
+      追加の設定や料金は不要で、durable functions が利用可能なすべての AWS リージョンで自動的に適用されます。
+    </p>
+    <p>
+      durable functions は、チェックポイント、自動リトライ、コンピュート課金なしの wait を備え、最長 1 年間実行できる耐障害性のあるマルチステップアプリケーションや AI ワークフローを構築する機能です。
+      1 MB のチェックポイントは、非同期 Lambda 呼び出し、Amazon SQS、Amazon EventBridge の最大ペイロードサイズと一致し、イベント全体を 1 回の操作でそのまま永続化できます。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-old">3,000</div>
+        <div class="stat-value">30,000</div>
+        <div class="stat-label">1 実行あたりの durable operation 数</div>
+        <div class="stat-note">10 倍に拡大</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-old">256 KB</div>
+        <div class="stat-value">1 MB</div>
+        <div class="stat-label">チェックポイントペイロード最大サイズ</div>
+        <div class="stat-note">SQS / EventBridge / 非同期呼び出しと一致</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">¥0</div>
+        <div class="stat-label">追加料金・設定変更</div>
+        <div class="stat-note">全対象リージョンで自動適用</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <ul>
+          <li>1 実行あたり 3,000 操作の上限により、大規模な反復ループ、長期間のポーリング、複雑なロールバックパスで上限に達するおそれがあった</li>
+          <li>チェックポイントは 256 KB までで、SQS や EventBridge の最大ペイロード 1 MB より小さく、イベント全体をそのまま永続化できないケースがあった</li>
+          <li>エージェントアプリケーションでは、会話履歴やモデル応答が大きくなると Amazon S3 などの外部ストレージへの書き出しが必要だった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <ul>
+          <li>操作数が 10 倍の 30,000 になり、反復ループの拡大、より長期間のポーリング、複雑なロールバックパスを単一の実行内で安全に構築できる</li>
+          <li>チェックポイントが 1 MB となり、非同期 Lambda 呼び出し、SQS、EventBridge からのイベント全体を 1 回の操作で永続化できる</li>
+          <li>より大きな会話履歴、モデル応答、ツール出力を外部ストレージなしでチェックポイントに直接保存できる</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Sources["📨 イベントソース 最大ペイロード 1 MB"]
+        direction LR
+        SQS["📬 Amazon SQS"]
+        EB["🚌 Amazon EventBridge"]
+        ASYNC["⚡ 非同期 Lambda 呼び出し"]
+        SQS ~~~ EB ~~~ ASYNC
+    end
+
+    subgraph DF["⚡ Lambda durable function の実行"]
+        OPS["🔁 durable operations<br/>3,000 → 30,000 / 実行"]
+        CP["💾 チェックポイント<br/>ペイロード 256 KB → 1 MB"]
+        OPS --> CP
+    end
+
+    subgraph Large["🗄️ 1 MB 超の状態"]
+        FS["📁 FileSystem serializer<br/>JavaScript / Python SDK"]
+        EFS["🗂️ Amazon EFS / Amazon S3 Files マウント"]
+        FS --> EFS
+    end
+
+    Sources -->|イベント全体を<br/>1 回の操作で永続化| DF
+    CP -.->|ポインタのみを<br/>チェックポイント| FS
+
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class SQS,EB,ASYNC input
+    class OPS process
+    class CP internal
+    class FS process
+    class EFS storage
+    class Sources,DF,Large layer
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      イベントソースの最大ペイロードとチェックポイントサイズが 1 MB で一致し、イベント全体を 1 回の操作で永続化できる構成を示しています。
+      1 MB を超える状態は FileSystem serializer がファイルマウントに書き込み、チェックポイントにはポインタのみを保存します。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🚀 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ durable operation 数の上限を 3,000 から 30,000 に引き上げ</div>
+      <ul>
+        <li>各ステップの試行、wait-for-condition の各ポーリング、parallel・map 操作の各ブランチがすべて上限にカウントされる</li>
+        <li>反復ループの拡大、長期間のポーリング、ステップ失敗時に実行される複雑なロールバックパスの構築を単一の実行内で行える</li>
+        <li>数千アイテムにわたる反復処理や、外部システムを数週間ポーリングし続けるワークフローも、チェックポイント上限を超えずに実行できる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ チェックポイントペイロードの最大サイズを 256 KB から 1 MB に引き上げ</div>
+      <ul>
+        <li>非同期 Lambda 呼び出し、Amazon SQS、Amazon EventBridge の最大ペイロードサイズ 1 MB と一致</li>
+        <li>これらのソースから受け取ったイベント全体を、分割せずに 1 回の操作で永続化できる</li>
+        <li>エージェントアプリケーションは、より大きな会話履歴、モデル応答、ツール出力をチェックポイントに直接保存できる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 1 MB 超の状態向けの FileSystem serializer</div>
+      <ul>
+        <li>JavaScript および Python の Durable Execution SDK に含まれる</li>
+        <li>ペイロードを Amazon EFS または Amazon S3 Files のマウントに書き込み、チェックポイントにはポインタのみを保存する</li>
+        <li>1 MB の上限を超える大きな状態を扱うワークフローでも、SDK の仕組みの範囲内で対応できる</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>⚙️ 技術仕様</h2>
+    <h3 style="margin-top: 0;">durable functions の主なクォータ (今回の変更を含む)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>変更前</th>
+            <th>変更後</th>
+            <th>引き上げ可否</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1 実行あたりの durable operation 数</td>
+            <td class="old-value">3,000</td>
+            <td class="new-value">30,000</td>
+            <td>不可 (ハードリミット)</td>
+          </tr>
+          <tr>
+            <td>durable operation あたりの最大ペイロードサイズ (チェックポイントおよびコールバック)</td>
+            <td class="old-value">256 KB</td>
+            <td class="new-value">1 MB</td>
+            <td>不可 (ハードリミット)</td>
+          </tr>
+          <tr>
+            <td>1 実行あたりの累積ストレージ書き込み量</td>
+            <td>100 MB</td>
+            <td>100 MB (変更なし)</td>
+            <td>不可 (ハードリミット)</td>
+          </tr>
+          <tr>
+            <td>リージョンあたりの同時実行中 durable execution 数</td>
+            <td>-</td>
+            <td>5,000,000 (バージニア北部、オレゴン、アイルランドは 10,000,000)</td>
+            <td>可 (ソフトリミット)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note-box">
+      <div class="note-title">⚠️ 注意: 累積書き込み量は変更なし</div>
+      1 実行あたりの累積書き込み量 100 MB は変更されていません。1 MB のチェックポイントを多用する場合、操作数の上限より先に累積書き込み量の上限に達する可能性があります。
+    </div>
+
+    <h3>設定変更の要否</h3>
+    <p style="font-size: 14px;">
+      今回のアップデートは既定の上限値の引き上げであり、<span class="highlight">API の変更や関数側の設定変更は不要</span>です。
+      新しい上限は durable functions が利用可能なすべてのリージョンで自動的に適用されます。
+    </p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🔧 設定方法</h2>
+
+    <h3 style="margin-top: 0;">前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Lambda durable functions が利用可能なリージョンで durable 設定付きの Lambda 関数を利用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>JavaScript、Python などの Durable Execution SDK を使用してワークフローを実装していること</span></div>
+
+    <h3>手順</h3>
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">新しい上限の確認</div>
+        <p>新しい上限は自動的に適用されるため、追加の申請や設定は不要です。Lambda 開発者ガイドのクォータページで最新のクォータ値を確認します。</p>
+      </div>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">クォータの確認</span>
+      </div>
+      <pre><code class="language-bash"># Lambda 開発者ガイドのクォータページで durable functions の上限を確認
+# https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html</code></pre>
+    </div>
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">ワークフロー設計の見直し</div>
+        <p>これまで 3,000 操作の上限を考慮して分割していたワークフローや、256 KB に収まるように状態を圧縮・分割していた処理があれば、単一の実行への統合やイベント全体の永続化への簡素化を検討します。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">1 MB 超の状態への対応</div>
+        <p>会話履歴やツール出力が 1 MB を超える可能性がある場合は、SDK の FileSystem serializer を利用し、Amazon EFS または Amazon S3 Files のマウントへ書き込む構成を検討します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>アーキテクチャの簡素化によるコスト削減</strong>: イベント全体をチェックポイントに保存できるため、状態の外部保存用に Amazon S3 や DynamoDB を別途構成・運用する必要性が減る</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>より長期・大規模な業務プロセスへの適用</strong>: 数週間に及ぶ外部システムのポーリングや数千アイテムの反復処理を単一の実行で扱え、適用できる業務プロセスの範囲が広がる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: 上限引き上げによる追加料金はなく、既存のワークフローがそのまま恩恵を受けられる</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">🔩 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ワークフロー分割の削減</strong>: 操作数の上限を理由とした実行の分割や子ワークフローへの切り出しが不要になり、コードがシンプルになる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>イベント処理の一貫性</strong>: イベントソースの最大ペイロードとチェックポイントサイズが一致し、イベントの切り詰めや分割ロジックが不要になる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>エージェントワークロードとの親和性</strong>: 大きな会話履歴やモデル応答を外部ストレージを介さずに保持でき、リプレイ時の整合性管理が容易になる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">🚧 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>1 実行あたり 30,000 操作、ペイロード 1 MB はいずれもハードリミットであり、引き上げ申請はできない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>1 実行あたりの累積ストレージ書き込み量は引き続き 100 MB で変更されていない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>1 MB を超える状態は FileSystem serializer と Amazon EFS または Amazon S3 Files のマウント構成が別途必要になる</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>各ステップの試行、wait-for-condition の各ポーリング、parallel・map の各ブランチがすべて操作数にカウントされるため、設計によっては依然として上限に達する可能性がある</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>大きなチェックポイントを高頻度で書き込むと累積書き込み量 100 MB に先に到達する可能性があり、ペイロードサイズと操作数のバランスを考慮した設計が必要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>従来の上限を前提にした分割ロジックを統合する場合は、リプレイへの影響を考慮し、発行バージョンを使ったデプロイ戦略で移行することが望ましい</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📡 ユースケース 1: 長期間の外部システムポーリング</div>
+      <p><strong>シナリオ</strong>: 外部の基幹システムやサードパーティ API のジョブ完了を、数日から数週間にわたって定期的にポーリングして待つワークフロー。wait-for-condition の各ポーリングが操作数にカウントされる。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Plain</span>
+          <span class="code-title">操作数の試算</span>
+        </div>
+        <pre><code class="language-plaintext">wait-for-condition で 15 分間隔のポーリングを構成した場合
+1 日あたり 96 操作 × 30 日 = 約 2,880 操作
+変更前の 3,000 操作ではポーリングだけで上限に達していたが、
+30,000 操作では前後の処理ステップを含めても十分な余裕がある</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: ポーリング期間を理由にワークフローを分割する必要がなくなり、数週間規模の待機を含む業務プロセスを単一の durable execution で完結できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📬 ユースケース 2: SQS や EventBridge イベントをそのまま永続化するワークフロー</div>
+      <p><strong>シナリオ</strong>: Amazon SQS や Amazon EventBridge から最大 1 MB のイベントを受け取り、複数ステップで処理するワークフロー。従来はチェックポイントが 256 KB までのため、大きなイベントは外部ストレージへの退避や分割が必要だった。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Plain</span>
+          <span class="code-title">変更前後の比較</span>
+        </div>
+        <pre><code class="language-plaintext">変更前: イベント本体を S3 に保存し、チェックポイントにはキーのみを記録
+変更後: イベント全体 (最大 1 MB) を 1 回の操作でチェックポイントに永続化</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: イベントの退避・分割ロジックと外部ストレージへのアクセスが不要になり、コードの簡素化とレイテンシーの削減が期待できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🤖 ユースケース 3: 大規模なエージェントアプリケーション</div>
+      <p><strong>シナリオ</strong>: 数千回のモデル呼び出しとツール呼び出しを行いながら推論を重ねるエージェントアプリケーション。会話履歴やツール出力が実行の進行とともに増大する。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Plain</span>
+          <span class="code-title">実装パターン</span>
+        </div>
+        <pre><code class="language-plaintext">各モデル呼び出し・ツール呼び出しを durable step としてチェックポイント化
+会話履歴やモデル応答 (1 MB 以内) はチェックポイントに直接保存
+1 MB を超える状態は FileSystem serializer で
+Amazon EFS / Amazon S3 Files マウントに書き込み、ポインタのみを保存</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 数千ステップ規模の推論でも操作数の上限に余裕を持って対応でき、中断後も大きな会話コンテキストを失わずに最後に完了したステップから再開できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">料金</h3>
+        <p style="font-size: 14px;">
+          今回の上限引き上げに伴う<span class="highlight">追加料金はありません</span>。AWS Lambda durable functions の既存の料金体系がそのまま適用され、wait による実行の一時停止中はコンピューティング料金が発生しません。
+        </p>
+        <p style="font-size: 14px;">詳細は <a class="aws-link" href="https://aws.amazon.com/lambda/pricing/" target="_blank" rel="noopener noreferrer">AWS Lambda 料金ページ</a> を参照してください。</p>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">利用可能リージョン</h3>
+        <p style="font-size: 14px;">
+          新しい上限は、AWS Lambda durable functions が利用可能な<span class="highlight">すべての AWS リージョン</span>で適用されます。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">⚡ AWS Lambda durable functions</div>
+      <p style="margin: 0; font-size: 14px;">本アップデートの対象機能。チェックポイント、自動リトライ、wait により最長 1 年間の耐障害性のある実行を実現する。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📬 Amazon SQS / 🚌 Amazon EventBridge</div>
+      <p style="margin: 0; font-size: 14px;">最大ペイロード 1 MB がチェックポイントサイズと一致し、イベント全体をそのまま永続化できる統合サービス。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🗂️ Amazon EFS / Amazon S3 Files</div>
+      <p style="margin: 0; font-size: 14px;">1 MB を超える状態を FileSystem serializer 経由で保存するファイルマウント先。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🪜 AWS Step Functions</div>
+      <p style="margin: 0; font-size: 14px;">ワークフローオーケストレーションの選択肢。コードと密結合したワークフローには durable functions、サービス横断のビジュアルオーケストレーションには Step Functions が適する。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <div class="check-item"><span class="check-icon">✓</span><span>1 実行あたりの操作数が <strong>10 倍の 30,000</strong> になり、チェックポイントペイロードが主要なイベントソースの最大サイズと同じ <strong>1 MB</strong> に揃った</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>操作数の上限を理由にワークフローを分割していた場合や、256 KB に収めるために状態を外部ストレージへ退避していた場合は、設計の簡素化を検討する価値がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>累積書き込み量 100 MB の上限は変更されていないため、ペイロードサイズと操作数のバランスを意識した設計を推奨</span></div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/10/aws-lambda-durable-gen-limit-increase/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/aws-lambda-durable-gen-limit-increase/</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html" target="_blank" rel="noopener noreferrer">AWS Lambda durable functions 開発者ガイド</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html" target="_blank" rel="noopener noreferrer">Lambda クォータ (開発者ガイド)</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/durable-execution/sdk-reference/state/serialization/#filesystem-serdes" target="_blank" rel="noopener noreferrer">FileSystem serializer (Durable Execution SDK リファレンス)</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/lambda/pricing/" target="_blank" rel="noopener noreferrer">AWS Lambda 料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-10-13) をもとに生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
