@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oracle Database@AWS - ODB ピアリングにおける集約ルートとデフォルトルートのサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.card p, .card ul { margin: 4px 0; }
+
+ul { padding-left: 24px; margin: 8px 0; }
+li { margin: 6px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid var(--aws-red);
+  border-radius: 8px;
+  padding: 16px;
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid var(--aws-green);
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box .ba-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+.before-box ul, .after-box ul { padding-left: 20px; }
+
+/* 統計カード */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.2));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 4px;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+footer ul { padding-left: 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Oracle Database@AWS</span>
+    <h1>🛣️ ODB ピアリングが集約ルートとデフォルトルートに対応</h1>
+    <div class="subtitle">
+      <span class="release-date">📅 2026 年 10 月 15 日</span> |
+      集約ルート (スーパーネット) およびデフォルトルート 0.0.0.0/0 のアドバタイズをサポート
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      Oracle Database@AWS (ODB) が、Amazon VPC と ODB ネットワークを接続する
+      <span class="highlight">ODB ピアリング</span>において、集約ルート (スーパーネット) と
+      デフォルトルート (0.0.0.0/0) のアドバタイズをサポートしました。
+      ピア側ネットワークの CIDR として <span class="highlight">/0 から /32 までの任意の IPv4 プレフィックス</span>を指定でき、
+      1 つのルートエントリでピアリングされた VPC 経由のすべてのネットワークをカバーできます。
+    </p>
+    <p>
+      ルーティングは<span class="highlight">ロンゲストプレフィックスマッチ</span> (最長プレフィックス一致) に従うため、
+      より具体的な CIDR を持つルートが常に優先されます。既存の個別 CIDR と共存させながら、
+      段階的かつ無停止で集約ルートへ移行できます。特に AWS Transit Gateway を経由して
+      多数のネットワークが接続するアーキテクチャで効果を発揮します。
+    </p>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-value">/0〜/32</div>
+        <div class="stat-label">指定可能な IPv4 プレフィックス</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">1 エントリ</div>
+        <div class="stat-label">で全ネットワークをカバー</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">最大 125</div>
+        <div class="stat-label">ODB ネットワークあたりのピアリング接続数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0 停止</div>
+        <div class="stat-label">既存接続の再作成不要・無停止移行</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before (アップデート前)</div>
+        <ul>
+          <li>到達する各ネットワークを<strong>個別の CIDR</strong> としてアドバタイズする必要があった</li>
+          <li>広い集約レンジやデフォルトルートをアドバタイズできなかった</li>
+          <li>Transit Gateway 配下に VPC やオンプレミスネットワークを追加するたびに CIDR 設定の更新が必要</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After (アップデート後)</div>
+        <ul>
+          <li>任意の CIDR レンジ (/0〜/32) をアドバタイズでき、<strong>単一の集約ルート</strong>で全ネットワークをカバー</li>
+          <li>Transit Gateway 経由のネットワーク追加時も CIDR の個別追加が<strong>不要</strong></li>
+          <li>既存のピアリング接続はそのまま動作し、再作成は不要</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph OnPrem["🏢 オンプレミス"]
+        DC["🖥️ 社内ネットワーク<br/>172.16.0.0/16"]
+    end
+
+    subgraph AWS["☁️ AWS"]
+        subgraph Spokes["🔀 スポークネットワーク"]
+            direction LR
+            VPCA["📦 アプリ VPC A<br/>10.1.0.0/16"]
+            VPCB["📦 アプリ VPC B<br/>10.2.0.0/16"]
+            VPCA ~~~ VPCB
+        end
+        TGW{{"🔁 AWS Transit Gateway"}}
+        subgraph Transit["🚉 トランジット VPC"]
+            Peer["🤝 ODB ピアリング接続<br/>集約ルート 10.0.0.0/8<br/>または 0.0.0.0/0 をアドバタイズ"]
+        end
+        subgraph ODB["🗄️ ODB ネットワーク"]
+            Exadata[("💾 Oracle Exadata<br/>データベース")]
+        end
+    end
+
+    DC --> TGW
+    VPCA --> TGW
+    VPCB --> TGW
+    TGW --> Transit
+    Peer --> Exadata
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef network fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef external fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+
+    class AWS,OnPrem boundary
+    class Spokes,Transit,ODB layer
+    class VPCA,VPCB,DC input
+    class TGW external
+    class Peer network
+    class Exadata database
+      </pre>
+    </div>
+    <p class="diagram-note">
+      トランジット VPC の ODB ピアリング接続で集約ルート (例: 10.0.0.0/8) またはデフォルトルート (0.0.0.0/0)
+      をアドバタイズすることで、Transit Gateway 配下のすべての VPC やオンプレミスネットワークが、
+      個別の CIDR 登録なしに ODB ネットワーク内のデータベースへ到達できます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ 任意の CIDR レンジのアドバタイズ</div>
+      <ul>
+        <li>ピア側ネットワーク CIDR として /0 から /32 までの任意の IPv4 プレフィックスを指定可能</li>
+        <li>スーパーネット (例: 10.0.0.0/8) やデフォルトルート (0.0.0.0/0) を 1 エントリでアドバタイズ</li>
+        <li>狭い CIDR を指定すればアクセスを必要なサブネットに限定でき、セグメンテーションにも対応</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ ロンゲストプレフィックスマッチによるルート解決</div>
+      <ul>
+        <li>CIDR が重複する場合、最も具体的な CIDR が常に優先される</li>
+        <li>スーパーネットやデフォルトルートは、より具体的なルートが処理しないトラフィックのみを運ぶ</li>
+        <li>複数のピアリング接続にまたがって広い CIDR と狭い CIDR を組み合わせ、ルート解決を自動化できる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ ゼロダウンタイムのルート集約</div>
+      <ul>
+        <li>既存の個別 CIDR を残したまま、先に集約スーパーネットを追加できる (同一ピアリング上の重複は許容)</li>
+        <li>動作確認後に個別 CIDR を削除すれば、無停止で集約ルートへ移行できる</li>
+        <li>1 回の <span class="highlight">update-odb-peering-connection</span> コマンドで CIDR の追加と削除を同時に実行可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ デフォルトルートの安全な取り扱い</div>
+      <ul>
+        <li>0.0.0.0/0 はピアリング接続上のピア側ネットワーク CIDR のみを指し、ODB ネットワークが VPC のデフォルトゲートウェイになるわけではない</li>
+        <li>別のピアリングで直接接続された VPC の CIDR は、ロンゲストプレフィックスマッチにより引き続きそのピアリングが優先される</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>ピア側ネットワーク CIDR の仕様</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>指定可能なプレフィックス</td><td>/0〜/32 の任意の IPv4 プレフィックス (スーパーネット、デフォルトルート 0.0.0.0/0 を含む)</td></tr>
+      <tr><td>ルート解決</td><td>ロンゲストプレフィックスマッチ (最も具体的な CIDR が優先)</td></tr>
+      <tr><td>CIDR の一意性</td><td>同一の CIDR は 1 つの ODB ネットワークにつき 1 つのピアリング接続にのみ登録可能</td></tr>
+      <tr><td>ピアリング接続数の上限</td><td>1 つの ODB ネットワークあたり最大 125 接続</td></tr>
+      <tr><td>既存接続への影響</td><td>既存のピアリング接続は動作を継続し、再作成は不要</td></tr>
+      <tr><td>制限 IP アドレス範囲</td><td>ピア側ネットワーク CIDR には ODB ネットワークと同じ制限付き IP アドレス範囲が適用される</td></tr>
+      <tr><td>対応するピアリング形態</td><td>同一アカウント内ピアリング、および AWS RAM で共有された ODB ネットワークとのクロスアカウントピアリング</td></tr>
+    </table>
+
+    <h3>ピア側 CIDR のルールと制約</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>同一のプレフィックスを 2 つのピアリング接続に登録することはできない (ロンゲストプレフィックスマッチで優劣を判定できないため)</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>同じ ODB ネットワークに直接ピアリングされた 2 つの VPC の CIDR は重複してはならず、サブネットも同一であってはならない</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>ピア側 CIDR は ODB ネットワークのクライアントサブネットを包含できるが、同一であってはならない</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>直接ピアリングされた VPC の CIDR 重複はピアリング作成・更新時にのみ検証され、その後のセカンダリ CIDR 追加などによる重複はユーザー側で管理が必要</span></div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Oracle Database@AWS を AWS Marketplace 経由でサブスクライブ済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>複数の ODB ピアリング接続をサポートする ODB ネットワークが作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ピアリング対象の Amazon VPC (トランジット VPC など) が存在し、必要に応じて AWS Transit Gateway にアタッチされていること</span></div>
+
+    <h3>ステップ 1: 集約ルートを指定して ODB ピアリング接続を作成</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">ピアリング接続の作成</span>
+      </div>
+      <pre><code class="language-bash">aws odb create-odb-peering-connection \
+  --odb-network-id odbnet-1234567890abcdef \
+  --peer-network-id vpc-abcdef1234567890 \
+  --peer-network-cidrs-to-be-added "10.0.0.0/8"</code></pre>
+    </div>
+    <p>ピア側ネットワーク CIDR としてスーパーネット 10.0.0.0/8 をアドバタイズし、Transit Gateway 配下の多数の宛先を 1 エントリに集約します。デフォルトルートを使う場合は <span class="highlight">"0.0.0.0/0"</span> を指定します。</p>
+
+    <h3>ステップ 2: 既存接続を無停止で集約ルートへ移行</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">CIDR の追加と削除を同時実行</span>
+      </div>
+      <pre><code class="language-bash">aws odb update-odb-peering-connection \
+  --odb-peering-connection-id odbpcx-1234567890abcdef \
+  --peer-network-cidrs-to-be-added "10.0.0.0/16" \
+  --peer-network-cidrs-to-be-removed "10.0.0.0/24,10.0.1.0/24"</code></pre>
+    </div>
+    <p>より具体的なルートが常に優先されるため、先にスーパーネットを追加してから個別 CIDR を削除する順序であれば、トラフィックの中断は発生しません。</p>
+
+    <h3>ステップ 3: VPC ルートテーブルを設定</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">ODB ネットワーク宛てルートの追加</span>
+      </div>
+      <pre><code class="language-bash">aws ec2 create-route \
+  --route-table-id rtb-1234567890abcdef \
+  --destination-cidr-block 10.0.0.0/16 \
+  --odb-network-arn arn:aws:odb:us-east-1:111111111111:odb-network/odbnet_1234567890abcdef</code></pre>
+    </div>
+    <p>ピアリング接続の作成時に <span class="highlight">--peer-network-route-table-ids</span> パラメータで暗黙的なルート管理を選択した場合、この手順は不要です。ODB ネットワーク側のルートテーブルは Oracle Database@AWS が自動的に設定します。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: ネットワーク追加のたびに発生していた CIDR 更新作業が不要になり、ネットワークチームの運用負荷が軽減される</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>拡張の俊敏性</strong>: 新しい VPC やオンプレミス拠点を Transit Gateway に接続するだけでデータベースへ到達でき、ビジネスの拡大に迅速に対応できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>設定ミスのリスク低減</strong>: 個別エントリ管理が不要になることで、CIDR の登録漏れや誤設定による接続障害を防止できる</span></div>
+
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ルート管理の簡素化</strong>: 単一の集約ルートまたはデフォルトルートで、トランジット VPC 経由のすべての宛先をカバーできる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ゼロダウンタイム移行</strong>: ロンゲストプレフィックスマッチを利用し、スーパーネット追加後に個別 CIDR を削除することで無停止でルートを集約できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟なセグメンテーション</strong>: 広い CIDR と狭い CIDR を組み合わせ、特定サブネットへのアクセス制限と広域の到達性を両立できる</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>本機能は、複数の ODB ピアリング接続をサポートする ODB ネットワークでのみ利用可能</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>同一の CIDR (0.0.0.0/0 を含む) は、1 つの ODB ネットワークにつき 1 つのピアリング接続にのみ登録できる</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ピア側 CIDR は ODB ネットワークのクライアントサブネットと同一にはできない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ピア側 CIDR には ODB ネットワークと同じ制限付き IP アドレス範囲が適用される</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>広い CIDR やデフォルトルートをアドバタイズすると ODB ネットワークから到達可能な範囲が広がるため、セキュリティ要件に応じてより狭い CIDR によるセグメンテーションを検討する</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>直接ピアリングされた VPC の CIDR 重複はピアリング作成・更新時にのみ検証されるため、作成後にセカンダリ CIDR ブロックを追加する場合は重複が生じないようユーザー側での管理が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>0.0.0.0/0 の登録はピアリング接続上のアドバタイズルートに限定され、VPC 自体のデフォルトゲートウェイ設定は変更されない点を理解した上で設計する</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. Transit Gateway ハブアンドスポーク構成の集約</div>
+      <p><strong>シナリオ</strong>: 多数のアプリケーション VPC とオンプレミスネットワークが AWS Transit Gateway に接続されており、すべてのネットワークから ODB ネットワーク内の Oracle Exadata データベースへアクセスする。</p>
+      <ul>
+        <li>トランジット VPC と ODB ネットワークの間に ODB ピアリング接続を作成</li>
+        <li>ピア側ネットワーク CIDR として 10.0.0.0/8 (または 0.0.0.0/0) を登録</li>
+        <li>Transit Gateway とトランジット VPC のルートテーブルを設定</li>
+        <li>以降、スポーク VPC を追加してもピアリング設定の変更は不要</li>
+      </ul>
+      <div class="effect">✅ 効果: ネットワーク追加時の CIDR 登録作業がなくなり、大規模なハブアンドスポーク環境でもルート管理を 1 エントリに集約できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. 個別 CIDR から集約ルートへの無停止移行</div>
+      <p><strong>シナリオ</strong>: 既存の ODB ピアリング接続に多数の個別 CIDR が登録されており、運用簡素化のため集約ルートへ移行したいが、本番データベースへの接続を中断できない。</p>
+      <ul>
+        <li>update-odb-peering-connection で集約スーパーネット 10.0.0.0/16 を追加 (既存の具体的な CIDR が優先されるため、トラフィックへの影響なし)</li>
+        <li>ルーティングが正常であることを確認</li>
+        <li>同コマンドの --peer-network-cidrs-to-be-removed で個別 CIDR を削除 (トラフィックはスーパーネットのルートへ無停止で移行)</li>
+      </ul>
+      <div class="effect">✅ 効果: ロンゲストプレフィックスマッチを活用し、サービス停止なしでルート構成を簡素化できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. デフォルトルートと直接ピアリングの併用</div>
+      <p><strong>シナリオ</strong>: レイテンシー要件の厳しい主要アプリケーション VPC は ODB ネットワークへ直接ピアリングしつつ、その他の多数のネットワークからのトラフィックはトランジット VPC 経由で集約したい。</p>
+      <ul>
+        <li>主要アプリケーション VPC と ODB ネットワークを直接ピアリングし、VPC の CIDR を登録</li>
+        <li>トランジット VPC とのピアリング接続に 0.0.0.0/0 を登録</li>
+        <li>直接ピアリングされた VPC 宛てのトラフィックは、より具体的な CIDR により直接ピアリング経由で転送され、それ以外はトランジット VPC 経由となる</li>
+      </ul>
+      <div class="effect">✅ 効果: 重要なワークロードには低レイテンシーの直接経路を確保しながら、その他のネットワークはデフォルトルートで包括的にカバーできる。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p>本機能自体に関する追加料金の記載はありません。Oracle Database@AWS の利用料金は、AWS Marketplace 経由のサブスクリプションに基づいて適用されます。詳細は AWS Marketplace の Oracle Database@AWS 製品ページを確認してください。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 利用可能リージョン</div>
+      <p>Oracle Database@AWS が利用可能なすべての AWS リージョンで利用できます。なお、本機能は複数の ODB ピアリング接続をサポートする ODB ネットワークで利用可能です。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">📦 Amazon VPC</div>
+      <p>ODB ピアリングの接続先となるアプリケーション実行環境。ルートテーブルの設定により ODB ネットワークへのトラフィックを制御する。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔁 AWS Transit Gateway</div>
+      <p>多数の VPC やオンプレミスネットワークを集約するハブ。本アップデートにより、Transit Gateway 配下のネットワークを単一の集約ルートで ODB ネットワークへ到達させることが可能になった。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌐 AWS Cloud WAN</div>
+      <p>Transit Gateway と同様に、Oracle Database@AWS のドキュメントで接続構成がガイドされているグローバルネットワークサービス。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🤝 AWS RAM</div>
+      <p>ODB ネットワークをアカウント間で共有し、クロスアカウントの ODB ピアリングを構成するためのサービス。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      Oracle Database@AWS の ODB ピアリングが<span class="highlight">集約ルートとデフォルトルート (0.0.0.0/0)</span>
+      のアドバタイズに対応し、Transit Gateway 配下の多数のネットワークから ODB ネットワークへの接続を
+      <span class="highlight">単一のルートエントリ</span>で管理できるようになりました。
+      多数の VPC やオンプレミスネットワークから Oracle Exadata データベースへ接続しているお客様は、
+      ロンゲストプレフィックスマッチを活用した無停止のルート集約により、
+      ピアリング接続の CIDR 管理の簡素化を検討することを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/oracle-database-aws-aggregate-routes-odb/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Oracle Database@AWS aggregate routes for ODB peering</a></li>
+      <li><a href="https://docs.aws.amazon.com/odb/latest/UserGuide/configuring.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Configuring ODB peering to an Amazon VPC</a></li>
+      <li><a href="https://docs.aws.amazon.com/odb/latest/UserGuide/what-is-odb.html" target="_blank" rel="noopener noreferrer" class="aws-link">Oracle Database@AWS ユーザーガイド</a></li>
+      <li><a href="https://aws.amazon.com/marketplace/featured-seller/oracle/" target="_blank" rel="noopener noreferrer" class="aws-link">Oracle Database@AWS 製品ページ</a></li>
+      <li><a href="https://aws.amazon.com/marketplace/pp/prodview-qks5dl3hr7nfw" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Marketplace: Oracle Database@AWS</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-10-15) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
