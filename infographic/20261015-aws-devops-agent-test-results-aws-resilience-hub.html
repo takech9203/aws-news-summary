@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Resilience Hub - AWS DevOps Agent 連携による検出結果とテスト結果のレビュー</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul { margin: 8px 0 0 0; padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+
+.before-box .ba-title { color: #FF8A75; }
+.after-box .ba-title { color: #6FCF4F; }
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 12px 0;
+}
+
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.spec-table td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+.spec-table code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #6FCF4F; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF8A75; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-content { flex: 1; min-width: 0; }
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase .effect {
+  margin-top: 10px;
+  font-size: 14px;
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+/* 注意ボックス */
+.warning-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+.warning-box .warn-title {
+  color: #FF8A75;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+/* リージョン */
+.region-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.region-tag {
+  background: rgba(0, 161, 201, 0.15);
+  border: 1px solid rgba(0, 161, 201, 0.5);
+  color: var(--aws-light-gray);
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+.region-tag.tokyo {
+  background: rgba(255, 153, 0, 0.2);
+  border-color: var(--aws-orange);
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+}
+
+/* 関連サービス */
+.related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.related-card {
+  background: rgba(140, 79, 255, 0.08);
+  border: 1px solid rgba(140, 79, 255, 0.4);
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 14px;
+}
+
+.related-card .rel-title {
+  color: var(--aws-purple);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+ul.link-list { padding-left: 20px; margin: 8px 0; }
+ul.link-list li { margin: 6px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+@media (max-width: 700px) {
+  .before-after { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">🛡️ AWS Resilience Hub</span>
+    <h1>AWS DevOps Agent 連携による<br>検出結果とテスト結果のレビュー</h1>
+    <div class="subtitle">
+      <span class="date">📅 リリース日: 2026 年 10 月 15 日</span> |
+      障害モード評価の検出結果レビューとレジリエンステスト結果の調査を AI エージェントで実現
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      次世代の AWS Resilience Hub が <span class="highlight">AWS DevOps Agent</span> と統合され、
+      障害モード評価 (FMA: Failure Mode Assessment) の検出結果のレビュー、緩和策の実装、
+      レジリエンステスト結果のレビューを AI エージェントで行えるようになりました。
+    </p>
+    <p>本アップデートでは 2 つの連携機能が提供されます。</p>
+    <div class="card">
+      <div class="card-title">🧪 レジリエンステストの調査 (自動起動)</div>
+      テストを実行すると DevOps Agent の調査が自動的に起動し、症状・根本原因・影響に加えて、
+      ARC リージョン切り替えなどの観測された復旧アクションを構造化された分析結果として返します。
+    </div>
+    <div class="card">
+      <div class="card-title">💬 検出結果からの対話型エージェント分析 (オンデマンド)</div>
+      Resilience Hub コンソールの検出結果から、コンテキストが設定済みの状態で DevOps Agent の
+      オンデマンドタスクを直接開始し、質問や調査を通じて緩和計画を作成できます。
+    </div>
+    <p>
+      対象ユーザーは<span class="highlight">プラットフォームエンジニアリングチームと SRE チーム</span>で、
+      レジリエンス上の課題の調査と対処を AI エージェントとの対話で効率化できます。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>検出された問題の根本原因調査や緩和策の検討をエンジニアが手動で実施</li>
+          <li>テスト結果の症状・根本原因・影響・復旧アクションの把握にはログやメトリクスの個別分析が必要</li>
+          <li>検出結果と DevOps Agent の調査が分離し、コンテキストを引き継ぐ仕組みがなかった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>テスト実行と同時に調査が自動開始され、判定 (verdict)・確信度・分析サマリーを確認可能</li>
+          <li>すべての検出結果から「Chat with DevOps Agent」でコンテキスト引き継ぎ済みの対話型セッションを開始</li>
+          <li>テストレポートに DevOps Agent の調査セクションが含まれ、共有と報告が容易に</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 SRE / プラットフォームエンジニア"])
+
+    subgraph RH["🛡️ 次世代 AWS Resilience Hub"]
+        direction LR
+        FMA["🔍 障害モード評価の検出結果"]
+        Test["🧪 レジリエンステスト実行"]
+        FMA ~~~ Test
+    end
+
+    Role["🔑 インボーカーロール<br/>aidevops 権限を追加"]
+
+    subgraph DA["🤖 AWS DevOps Agent"]
+        Space["🏠 Agent Space"]
+        Investigation["📋 調査タスク<br/>症状 / 根本原因 / 影響 / 復旧アクション"]
+    end
+
+    User -->|検出結果からチャット開始| FMA
+    User -->|テスト実行| Test
+    FMA -->|オンデマンドタスク起動| Role
+    Test -.->|調査を自動起動| Role
+    Role --> Space
+    Space --> Investigation
+    Investigation -.->|分析サマリーをテスト結果とレポートに表示| RH
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class User user
+    class RH,DA layer
+    class FMA,Test process
+    class Role decision
+    class Space,Investigation internal
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      Resilience Hub はサービスレベルで設定済みのインボーカーロールを引き受けて AWS DevOps Agent の
+      Agent Space に接続し、検出結果からの対話型調査とレジリエンステストの自動調査を実行します。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">1️⃣ レジリエンステストの調査 (自動起動)</div>
+      <ul>
+        <li>テスト実行と同時に DevOps Agent の調査が自動的に開始</li>
+        <li>テスト完了後まもなく、分析サマリーがテスト実行結果とテストレポートに表示</li>
+        <li>症状、根本原因、影響、ARC リージョン切り替えなどの観測された復旧アクションを把握</li>
+        <li>判定 (verdict)、確信度 (confidence)、分析サマリーを含み、リンクからフルセッションを開ける</li>
+        <li>DevOps Agent の判定は参考情報 (advisory) であり、テスト実行自体の結果が正式な判定</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">2️⃣ 障害モード評価の検出結果からの対話型エージェント分析 (オンデマンド)</div>
+      <ul>
+        <li>すべての障害モード評価の検出結果で「Chat with DevOps Agent」を選択可能</li>
+        <li>検出結果のコンテキストがあらかじめ設定された対話型セッションが開く</li>
+        <li>質問や調査を通じて検出結果を深掘りし、緩和計画を作成</li>
+        <li>API 使用時は各検出結果が同じセッションへの <code style="background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;">investigationDeepLink</code> を返す</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">3️⃣ テストレポートへの調査結果の統合</div>
+      <ul>
+        <li>接続済みサービスのテストレポートに DevOps Agent の調査セクションとサマリーを含む</li>
+        <li>テストレポートの生成は DevOps Agent の調査完了時に完了</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>連携の仕組み</h3>
+    <table class="spec-table">
+      <tr><th style="width: 28%;">項目</th><th>詳細</th></tr>
+      <tr><td>接続単位</td><td>Resilience Hub のサービスごとに DevOps Agent の Agent Space を接続</td></tr>
+      <tr><td>Agent Space ARN 形式</td><td><code>arn:aws:aidevops:{region}:{account-id}:agentspace/{agent-space-id}</code></td></tr>
+      <tr><td>認証方式</td><td>サービスレベルで設定済みの既存インボーカーロール (リソース検出と同じクロスアカウントロール) を Resilience Hub が引き受ける</td></tr>
+      <tr><td>調査対象リージョン</td><td>Agent Space は DevOps Agent がサポートするリージョンに作成。作成リージョンに関係なく、任意のリージョンのリソースを調査可能</td></tr>
+      <tr><td>接続設定</td><td>サービスの作成時または更新時に <code>devOpsAgentConfiguration</code> へ Agent Space ARN を指定</td></tr>
+      <tr><td>接続解除</td><td>空の DevOps Agent 設定 (<code>'{}'</code>) でサービスを更新 (Agent Space 自体には影響なし)</td></tr>
+    </table>
+
+    <h3>API 変更履歴</h3>
+    <table class="spec-table">
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/10/13</td>
+        <td><a href="https://awsapichanges.com/archive/changes/5f4e0c-resiliencehub.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Resilience Hub V2</a></td>
+        <td>10 updated api methods - DevOps Agent 連携のサポート追加。サービスレベルで Agent Space ARN を指定し、Resilience Hub v2 から直接調査を起動可能に</td>
+      </tr>
+    </table>
+
+    <h3>インボーカーロールに追加する IAM 権限</h3>
+    <p style="font-size: 14px;">
+      以下の最小権限ポリシーをインラインポリシーとして追加します。新しいロールの作成や信頼ポリシーの変更は不要です。
+    </p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">最小権限 IAM ポリシー</span>
+      </div>
+      <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ResilienceHubV2DevOpsAgentInvestigation",
+      "Effect": "Allow",
+      "Action": [
+        "aidevops:CreateBacklogTask",
+        "aidevops:GetBacklogTask",
+        "aidevops:ListExecutions",
+        "aidevops:ListJournalRecords",
+        "aidevops:UpdateBacklogTask"
+      ],
+      "Resource": "arn:aws:aidevops:*:*:agentspace/*"
+    },
+    {
+      "Sid": "ResilienceHubV2DevOpsAgentValidation",
+      "Effect": "Allow",
+      "Action": [
+        "aidevops:GetAgentSpace",
+        "aidevops:GetOperatorApp",
+        "aidevops:ListAssociations"
+      ],
+      "Resource": "arn:aws:aidevops:*:*:agentspace/*"
+    }
+  ]
+}</code></pre>
+    </div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>Investigation</strong>: 調査を構成するバックログタスクの開始・ポーリング・更新・キャンセルと、ジャーナルレコードの読み取りを許可</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>Validation</strong>: Agent Space 接続の検証に使用する読み取り専用アクセスを許可</span></div>
+    <div class="warning-box">
+      <div class="warn-title">⚠️ 重要</div>
+      AWS マネージドポリシーの <code style="background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;">AIDevOpsAgentFullAccess</code> や
+      <code style="background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;">AIDevOpsOperatorAppAccessPolicy</code> は、
+      Resilience Hub が呼び出すべきではない Agent Space の変更系アクションを許可するため、アタッチしないでください。
+      上記のインラインポリシーが連携に必要な唯一の権限付与です。
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>DevOps Agent の Agent Space が作成済みであること (DevOps Agent コンソールで作成し ARN を控える)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>リソース検出が設定済みの次世代 Resilience Hub サービスとクロスアカウントインボーカーロールが存在すること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Agent Space が DevOps Agent のサポート対象リージョンにあること</span></div>
+
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">インボーカーロールに DevOps Agent 権限を追加</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">インラインポリシーの追加</span></div>
+          <pre><code class="language-bash">aws iam put-role-policy \
+  --role-name my-invoker-role \
+  --policy-name ResilienceHubDevOpsAgentAccess \
+  --policy-document file://resiliencehub-devops-agent-policy.json</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">
+          権限が不足している場合、接続はアクセス拒否エラーで失敗し、サービスの DevOps Agent ステータスが
+          <span class="highlight">FAILED</span> になります。
+        </p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">サービスを Agent Space に接続</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">UpdateService で接続</span></div>
+          <pre><code class="language-bash">aws resiliencehubv2 update-service \
+  --service-arn &lt;service-arn&gt; \
+  --dev-ops-agent-configuration '{"agentSpaceArn": "&lt;agent-space-arn&gt;"}'</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">
+          サービスの新規作成時に指定することも可能です。コンソールの場合は、サービス設定で DevOps Agent を構成します。
+        </p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">接続ステータスを確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">GetService でステータス確認</span></div>
+          <pre><code class="language-bash">aws resiliencehubv2 get-service \
+  --service-arn &lt;service-arn&gt; \
+  --query 'service.devOpsAgentConfiguration.status'</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">検出結果またはテストから DevOps Agent を起動</div>
+        <p style="font-size: 14px; margin: 0;">
+          検出結果で「Chat with DevOps Agent」を選択して対話型調査を開始。レジリエンステストでは調査が自動開始されるため、
+          テスト完了後にテスト実行結果で判定・確信度・分析サマリーを確認します。API の場合はテスト実行結果の
+          <code style="background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;">devOpsAgentInvestigation</code> ブロックを参照します。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>調査時間の短縮</strong>: AI エージェントが分析を実施するため、エンジニアの分析工数を削減し、緩和策の実装に時間を使える</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>レジリエンス改善サイクルの加速</strong>: 検出から調査、緩和計画の作成までが一連の流れでつながる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>レポートの充実</strong>: AI による調査サマリーが含まれ、ステークホルダーへの報告品質が向上</span></div>
+    <h3>技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>コンテキスト引き継ぎ</strong>: 状況説明の手間なく調査に着手できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>構造化された分析</strong>: 症状、根本原因、影響、観測された復旧アクション (ARC リージョン切り替えなど) を構造化して提供</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>最小権限設計</strong>: 必要な権限は 8 つの aidevops アクションに限定され、Agent Space やリソースを変更する権限は含まれない</span></div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>次世代 (next generation) の Resilience Hub サービスが対象で、リソース検出とインボーカーロールの設定が前提</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Agent Space を事前に作成する必要があり、DevOps Agent のサポート対象リージョンに作成が必要</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>インボーカーロールに必要な aidevops 権限がない場合、接続は失敗しステータスが FAILED になる</span></div>
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>DevOps Agent の判定 (verdict) は参考情報であり、テスト実行自体の結果が正式な判定として扱われる</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>接続済みサービスでは、テストレポートの生成が調査完了まで待機するため、完了タイミングに影響する</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>AIDevOpsAgentFullAccess などの広範なマネージドポリシーをアタッチしないよう注意が必要</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. レジリエンステスト結果の自動分析</div>
+      <p style="margin: 0; font-size: 14px;">
+        <strong>シナリオ</strong>: SRE チームがマルチリージョン構成のワークロードに対してリージョン切り替えの
+        レジリエンステストを実行し、復旧動作が期待どおりであったかを検証したい。
+      </p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">調査結果の確認</span></div>
+        <pre><code class="language-bash"># テスト完了後、テスト実行結果から DevOps Agent の調査結果を確認
+aws resiliencehubv2 get-service \
+  --service-arn &lt;service-arn&gt; \
+  --query 'service.devOpsAgentConfiguration'
+# コンソールでテスト実行を開き devOpsAgentInvestigation の
+# 判定・確信度・分析サマリーを確認</code></pre>
+      </div>
+      <div class="effect">
+        ✅ <strong>効果</strong>: 症状、根本原因、影響、ARC リージョン切り替えなどの復旧アクションが構造化された分析として自動的に得られ、手動のログ分析が不要になる。
+      </div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. 障害モード評価の検出結果に対する緩和計画の作成</div>
+      <p style="margin: 0 0 8px 0; font-size: 14px;">
+        <strong>シナリオ</strong>: プラットフォームエンジニアリングチームが検出された単一障害点について、
+        原因の深掘りと具体的な緩和策を検討したい。
+      </p>
+      <div class="flow-steps" style="font-size: 14px;">
+        <div class="check-item"><span class="check-icon">1.</span><span>Resilience Hub コンソールで障害モード評価の検出結果を開く</span></div>
+        <div class="check-item"><span class="check-icon">2.</span><span>[Chat with DevOps Agent] を選択</span></div>
+        <div class="check-item"><span class="check-icon">3.</span><span>コンテキスト引き継ぎ済みのセッションで「この検出結果の影響範囲は?」「推奨される緩和策は?」と質問</span></div>
+        <div class="check-item"><span class="check-icon">4.</span><span>対話を通じて緩和計画を作成</span></div>
+      </div>
+      <div class="effect">
+        ✅ <strong>効果</strong>: 検出結果の背景情報を手動で収集・説明することなく、対話形式で調査と緩和計画の作成を進められる。
+      </div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. 組織的なレジリエンスレポートの品質向上</div>
+      <p style="margin: 0 0 8px 0; font-size: 14px;">
+        <strong>シナリオ</strong>: 定期的なレジリエンステストの結果を経営層や監査向けのレポートとして共有しており、
+        テスト結果の分析内容もレポートに含めたい。
+      </p>
+      <div class="flow-steps" style="font-size: 14px;">
+        <div class="check-item"><span class="check-icon">1.</span><span>サービスを Agent Space に接続した状態でレジリエンステストを実行</span></div>
+        <div class="check-item"><span class="check-icon">2.</span><span>テストレポートを生成</span></div>
+        <div class="check-item"><span class="check-icon">3.</span><span>レポート内の DevOps Agent 調査セクションのサマリーを確認・共有</span></div>
+      </div>
+      <div class="effect">
+        ✅ <strong>効果</strong>: AI による調査サマリーが自動的に含まれるため、レポート作成の工数を削減しつつ、分析の深さと一貫性を確保できる。
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      本アップデートに関する追加料金の情報は、公式発表には記載されていません。
+      AWS Resilience Hub および AWS DevOps Agent の利用料金が適用されるため、
+      詳細は各サービスの料金ページで確認してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p style="font-size: 14px;">AWS Resilience Hub は以下の AWS リージョンで利用可能です。</p>
+    <div class="region-grid">
+      <span class="region-tag">米国東部 (バージニア北部)</span>
+      <span class="region-tag">米国東部 (オハイオ)</span>
+      <span class="region-tag">米国西部 (オレゴン)</span>
+      <span class="region-tag">カナダ (中部)</span>
+      <span class="region-tag">欧州 (アイルランド)</span>
+      <span class="region-tag">欧州 (ロンドン)</span>
+      <span class="region-tag">欧州 (フランクフルト)</span>
+      <span class="region-tag">欧州 (パリ)</span>
+      <span class="region-tag">欧州 (ストックホルム)</span>
+      <span class="region-tag">アジアパシフィック (ムンバイ)</span>
+      <span class="region-tag">アジアパシフィック (シンガポール)</span>
+      <span class="region-tag">アジアパシフィック (シドニー)</span>
+      <span class="region-tag tokyo">⭐ アジアパシフィック (東京)</span>
+      <span class="region-tag">アジアパシフィック (ソウル)</span>
+      <span class="region-tag">南米 (サンパウロ)</span>
+    </div>
+    <p style="font-size: 14px;">
+      なお、DevOps Agent は Agent Space の作成リージョンに関係なく、任意のリージョンのリソースを調査できます。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="related-card">
+        <div class="rel-title">🤖 AWS DevOps Agent</div>
+        本連携の調査を実行する AI エージェント。Agent Space 内でバックログタスクとして調査を実行し、ジャーナルレコードとして分析結果を記録。
+      </div>
+      <div class="related-card">
+        <div class="rel-title">🔄 Amazon Application Recovery Controller</div>
+        レジリエンステスト中のリージョン切り替えなどの復旧アクションとして、DevOps Agent の調査で観測対象となる。
+      </div>
+      <div class="related-card">
+        <div class="rel-title">💥 AWS Fault Injection Service</div>
+        レジリエンステストの基盤となる障害注入の仕組みと関連し、テストシナリオの実行に関係する。
+      </div>
+      <div class="related-card">
+        <div class="rel-title">🔐 AWS IAM</div>
+        インボーカーロールへの最小権限ポリシーの追加により、Resilience Hub が DevOps Agent を安全に呼び出すためのアクセス制御を提供。
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      次世代の AWS Resilience Hub と AWS DevOps Agent の統合により、
+      <span class="highlight">レジリエンステスト結果の自動分析</span>と、
+      <span class="highlight">障害モード評価の検出結果に対する対話型調査</span>が可能になりました。
+      レジリエンスの検出から調査、緩和計画の作成までが一連の流れでつながるため、
+      SRE やプラットフォームエンジニアリングチームの運用効率が大きく向上します。
+      次世代 Resilience Hub を利用している場合は、インボーカーロールへの最小権限ポリシーの追加と
+      Agent Space の接続から始めることを推奨します。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul class="link-list">
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/aws-devops-agent-test-results-aws-resilience-hub/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): AWS DevOps Agent test results in AWS Resilience Hub</a></li>
+      <li><a href="https://docs.aws.amazon.com/resilience-hub/latest/userguide/next-gen-devops-agent-integration.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Working with AWS DevOps Agent in the next generation of Resilience Hub</a></li>
+      <li><a href="https://docs.aws.amazon.com/resilience-hub/latest/userguide/next-gen-devops-agent-prerequisites.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Prerequisites</a></li>
+      <li><a href="https://docs.aws.amazon.com/resilience-hub/latest/userguide/next-gen-devops-agent-invoker-role.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Add DevOps Agent permissions to the invoker role</a></li>
+      <li><a href="https://docs.aws.amazon.com/resilience-hub/latest/userguide/next-gen-devops-agent-connect.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Connect a service to the Agent Space</a></li>
+      <li><a href="https://docs.aws.amazon.com/resilience-hub/latest/userguide/next-gen-devops-agent-results.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Investigate findings and test runs</a></li>
+      <li><a href="https://aws.amazon.com/resilience-hub/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Resilience Hub 製品ページ</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/5f4e0c-resiliencehub.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS API Changes: AWS Resilience Hub V2</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-10-15-aws-devops-agent-test-results-aws-resilience-hub.md) をもとに生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon DynamoDB Streams - タイムスタンプベースのストリーム処理</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .box-title { color: #FF8A73; font-weight: 700; margin-bottom: 10px; }
+.after-box .box-title { color: #6FCF4F; font-weight: 700; margin-bottom: 10px; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #6FCF4F; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+tr.new-feature td {
+  background: rgba(29, 129, 2, 0.15);
+  color: var(--aws-white);
+}
+.table-wrap { overflow-x: auto; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+code.inline {
+  background: rgba(140, 79, 255, 0.15);
+  color: #C9A9FF;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase-label {
+  color: var(--aws-white);
+  font-weight: 600;
+}
+
+/* 統計カード */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 760px) {
+  .stat-grid { grid-template-columns: 1fr; }
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-white);
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 4px;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.step-body { flex: 1; min-width: 0; }
+.step-title { color: var(--aws-white); font-weight: 600; margin-bottom: 6px; }
+
+ul { margin: 8px 0; padding-left: 22px; }
+li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+footer ul { list-style: none; padding-left: 0; }
+footer li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Amazon DynamoDB Streams</span>
+    <h1>⏰ タイムスタンプベースのストリーム処理</h1>
+    <p class="subtitle">
+      <span class="highlight">AT_TIMESTAMP</span> シャードイテレータで、指定時刻以降の最初のレコードからストリーム読み取りを開始可能に
+      <br>📅 リリース日: <span class="release-date">2026 年 10 月 15 日</span>
+    </p>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      Amazon DynamoDB Streams が<span class="highlight">タイムスタンプベースのストリーム処理</span>をサポートしました。
+      <code class="inline">AT_TIMESTAMP</code> シャードイテレータタイプを使用すると、<code class="inline">ApproximateCreationDateTime</code> が指定時刻以降である最初のレコードから読み取りを開始できます。
+    </p>
+    <p>
+      DynamoDB Streams Kinesis アダプターを通じて <span class="highlight">Kinesis Client Library (KCL)</span> からも利用でき、障害からの復旧、デバッグ・監査のためのデータ再生、バックログのスキップ、PITR エクスポート後の同期といったユースケースに対応します。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ Before: 開始位置の選択肢が限定的</div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>開始位置は最古のレコード (TRIM_HORIZON) か新規レコード (LATEST) のみ</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>中断後の再開は「全体を再処理」か「レコードを失う」かのトレードオフ</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>PITR エクスポート後、エクスポート時点以降の変更だけを正確に適用する手段がない</span></div>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ After: 時刻を指定した柔軟な読み取り開始</div>
+        <div class="check-item"><span class="check-icon">✓</span><span>タイムスタンプ指定で、その時刻以降の最初のレコードから読み取り開始</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>復旧時にストリーム全体の再処理や取りこぼしを回避</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>データ再生 (デバッグ・監査)、バックログのスキップ、PITR エクスポート時刻からの同期が可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <p>シャードイテレータタイプごとの読み取り開始位置を示しています。新しい <code class="inline">AT_TIMESTAMP</code> では、指定したタイムスタンプ以降の最初のレコードから読み取りを開始できます。</p>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart LR
+    subgraph Stream["📜 DynamoDB Streams 保持期間は最大 24 時間"]
+        direction LR
+        R1["🗂️ 最古の<br/>レコード"]
+        R2["🗂️ 過去の<br/>レコード"]
+        R3["🕐 指定時刻以降の<br/>最初のレコード"]
+        R4["🆕 新規<br/>レコード"]
+        R1 --> R2 --> R3 --> R4
+    end
+
+    TH(["TRIM_HORIZON<br/>従来から利用可能"]) --> R1
+    AT(["AT_TIMESTAMP<br/>今回の新機能"]) --> R3
+    LT(["LATEST<br/>従来から利用可能"]) --> R4
+
+    classDef stream fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef record fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef legacy fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef newfeat fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class Stream stream
+    class R1,R2,R3,R4 record
+    class TH,LT legacy
+    class AT newfeat
+      </pre>
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🕐 AT_TIMESTAMP シャードイテレータタイプ</div>
+      <ul>
+        <li><code class="inline">GetShardIterator</code> API に新しいイテレータタイプ <code class="inline">AT_TIMESTAMP</code> が追加</li>
+        <li>タイムスタンプを指定すると、<code class="inline">ApproximateCreationDateTime</code> が指定時刻以降である最初のレコードからイテレータが開始</li>
+        <li>取得したイテレータを <code class="inline">GetRecords</code> に渡し、指定時点以降のレコードを順に読み取り</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📚 Kinesis Client Library (KCL) との統合</div>
+      <ul>
+        <li>DynamoDB Streams Kinesis アダプター <span class="highlight">バージョン 2.5.0 以降</span>で KCL アプリケーションから利用可能</li>
+        <li><code class="inline">InitialPositionInStreamExtended.newInitialPositionAtTimestamp</code> でタイムスタンプを指定し、<code class="inline">StreamTracker</code> を <code class="inline">ConfigsBuilder</code> に登録</li>
+        <li>アダプターは新しいリースごとに <code class="inline">AT_TIMESTAMP</code> を初期位置として初期化し、指定タイムスタンプで <code class="inline">GetShardIterator</code> を呼び出す</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🛡️ 安全なタイムスタンプ処理</div>
+      <ul>
+        <li>タイムスタンプが保持期間 (24 時間) より古い場合、エラーにならず各シャードの最古のレコードから開始</li>
+        <li>タイムスタンプが未来の場合、アダプターが初期化時に検証し API 呼び出しなしで拒否</li>
+        <li>追加の IAM 権限は不要、既存のアダプターアプリケーションと同じ権限で動作</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>読み取り開始位置の比較</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>イテレータタイプ</th><th>読み取り開始位置</th><th>主な用途</th></tr>
+        <tr><td>TRIM_HORIZON</td><td>保持されている最古のレコード (最大 24 時間前)</td><td>全レコードの処理</td></tr>
+        <tr><td>LATEST</td><td>消費開始後に書き込まれた新しいレコード</td><td>リアルタイム処理</td></tr>
+        <tr><td>AT_SEQUENCE_NUMBER / AFTER_SEQUENCE_NUMBER</td><td>指定したシーケンス番号の位置</td><td>チェックポイントからの再開</td></tr>
+        <tr class="new-feature"><td>AT_TIMESTAMP 🆕</td><td>指定時刻以降の最初のレコード</td><td>時刻指定による再開・再生</td></tr>
+      </table>
+    </div>
+
+    <h3>タイムスタンプのシナリオ別動作</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>シナリオ</th><th>動作</th></tr>
+        <tr><td>タイムスタンプが保持期間内</td><td>指定時刻以降の最初のレコードから読み取り開始</td></tr>
+        <tr><td>タイムスタンプが保持期間より古い</td><td>エラーにならず、各シャードの最古のレコードから開始</td></tr>
+        <tr><td>タイムスタンプが未来</td><td>アダプターが初期化時に拒否し、処理を開始しない</td></tr>
+      </table>
+    </div>
+
+    <h3>API 変更履歴</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/10/14</td>
+          <td><a href="https://awsapichanges.com/archive/changes/fca45a-streams.dynamodb.html" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon DynamoDB Streams</a></td>
+          <td>GetShardIterator API に新しいイテレータタイプ AT_TIMESTAMP を追加</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>DynamoDB テーブルで DynamoDB Streams が有効化されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>KCL で利用する場合は DynamoDB Streams Kinesis アダプターのバージョン 2.5.0 以降を使用すること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>既存のアダプターアプリケーションと同じ IAM 権限 (追加の API 権限は不要)</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-body">
+        <div class="step-title">AWS CLI でタイムスタンプ指定のシャードイテレータを取得</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">GetShardIterator を AT_TIMESTAMP で呼び出し</span></div>
+          <pre><code class="language-bash">aws dynamodbstreams get-shard-iterator \
+  --stream-arn arn:aws:dynamodb:ap-northeast-1:123456789012:table/MyTable/stream/2026-10-15T00:00:00.000 \
+  --shard-id shardId-00000001 \
+  --shard-iterator-type AT_TIMESTAMP \
+  --timestamp 2026-10-15T09:00:00+09:00</code></pre>
+        </div>
+        <p>指定したタイムスタンプ以降の最初のレコードを指すシャードイテレータを取得します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-body">
+        <div class="step-title">取得したイテレータでレコードを読み取る</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">GetRecords でレコードを取得</span></div>
+          <pre><code class="language-bash">aws dynamodbstreams get-records \
+  --shard-iterator &lt;ステップ1で取得したシャードイテレータ&gt;</code></pre>
+        </div>
+        <p>レスポンスには <code class="inline">ApproximateCreationDateTime</code> が指定時刻以降である最初のレコードから順に含まれます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-body">
+        <div class="step-title">KCL アプリケーションでタイムスタンプを設定 (Java)</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Java</span><span class="code-title">KCL 初期位置の設定</span></div>
+          <pre><code class="language-java">// 開始タイムスタンプを指定して初期位置を作成
+InitialPositionInStreamExtended initialPosition =
+    InitialPositionInStreamExtended.newInitialPositionAtTimestamp(
+        Date.from(Instant.ofEpochMilli(1790467200000L)));
+
+// ストリームトラッカーを作成
+StreamTracker streamTracker = StreamsSchedulerFactory.createSingleStreamTracker(
+    streamArn,
+    initialPosition);
+
+// スケジューラが指定タイムスタンプからシャードを読み取るよう登録
+configsBuilder.streamTracker(streamTracker);</code></pre>
+        </div>
+        <p>アダプターは新しいリースごとに指定タイムスタンプで <code class="inline">GetShardIterator</code> を呼び出し、レコードの読み取りを開始します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">⚡ 復旧短縮</div>
+        <div class="stat-label">必要な時点からのみ再開し、ダウンタイム後のキャッチアップが高速に</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">🔍 監査効率化</div>
+        <div class="stat-label">過去の特定時点からデータを再生し、調査作業を効率化</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">💰 追加料金なし</div>
+        <div class="stat-label">標準の GetRecords API リクエスト料金のみで利用可能</div>
+      </div>
+    </div>
+
+    <h3>🏢 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>復旧時間の短縮</strong>: 障害や中断からの復旧時に、必要な時点からのみ処理を再開できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>監査対応の効率化</strong>: 過去の特定時点からデータを再生でき、監査やデバッグの調査を効率化</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: 標準の GetRecords API リクエスト料金以外に追加料金は発生しない</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>再処理の削減</strong>: ストリーム全体の再処理が不要になり、重複処理や下流システムへの負荷を削減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>PITR との連携</strong>: PITR エクスポートのタイムスタンプを開始位置に指定し、復元後のテーブルとストリーム消費を正確に同期</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>バックログのスキップ</strong>: 最新レコードに近いタイムスタンプを指定し、処理しきれないバックログをスキップして追いつき可能</span></div>
+  </div>
+
+  <!-- 制約・考慮点 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>DynamoDB Streams の保持期間は最大 24 時間のままで、保持期間を過ぎたレコードはタイムスタンプを指定しても復元できない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>KCL で利用する場合は DynamoDB Streams Kinesis アダプターのバージョン 2.5.0 以降が必要</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>未来のタイムスタンプは指定できない (アダプターが初期化時に拒否する)</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>稼働中のアプリケーションでは、リーステーブルに状態が保存されているため、タイムスタンプや初期位置 (<code class="inline">AT_TIMESTAMP</code>、<code class="inline">TRIM_HORIZON</code>、<code class="inline">LATEST</code>) を変更してはならない。チェックポイント済みのシャードは既存のチェックポイントから継続し、シャードごとに異なる開始位置で処理される可能性がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>設定を安全に変更するには、アプリケーションを停止したうえで、リーステーブルを削除して再起動する (推奨)、または新しいアプリケーション名で新しいリーステーブルを作成する</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>現在時刻に近いタイムスタンプを指定する場合は、アプリケーションホストとサービス間のクロック差を考慮する</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1️⃣ 障害・中断からの復旧</div>
+      <p><span class="usecase-label">シナリオ</span>: ストリームコンシューマーが数時間停止した後、停止時点から処理を再開したい。チェックポイント情報が失われていても停止時刻は把握している。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Java</span><span class="code-title">停止時刻 (例: 3 時間前) から再開</span></div>
+        <pre><code class="language-java">InitialPositionInStreamExtended initialPosition =
+    InitialPositionInStreamExtended.newInitialPositionAtTimestamp(
+        Date.from(Instant.now().minus(Duration.ofHours(3))));</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 再処理による重複や取りこぼしを避けつつ、停止時点から正確に処理を再開できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2️⃣ デバッグ・監査のためのデータ再生</div>
+      <p><span class="usecase-label">シナリオ</span>: 本番環境で特定の時刻に発生した問題を調査するため、その時刻以降の変更レコードを別のコンシューマーで再生して分析したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">問題発生時刻以降のレコードを取得</span></div>
+        <pre><code class="language-bash">aws dynamodbstreams get-shard-iterator \
+  --stream-arn &lt;ストリーム ARN&gt; \
+  --shard-id &lt;シャード ID&gt; \
+  --shard-iterator-type AT_TIMESTAMP \
+  --timestamp 2026-10-15T03:00:00Z</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 問題発生時刻以降の変更履歴だけをピンポイントで取得でき、調査時間を短縮できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3️⃣ PITR エクスポート後の同期</div>
+      <p><span class="usecase-label">シナリオ</span>: PITR エクスポートでテーブルデータを別システムに複製した後、エクスポート時点以降の変更をストリームから適用して同期を維持したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Java</span><span class="code-title">PITR エクスポートのタイムスタンプから開始</span></div>
+        <pre><code class="language-java">InitialPositionInStreamExtended initialPosition =
+    InitialPositionInStreamExtended.newInitialPositionAtTimestamp(
+        exportTimestamp);</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: エクスポート時点と読み取り開始位置が正確に一致し、変更の欠落や重複なく同期を継続できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p>この機能自体に<span class="highlight">追加料金はありません</span>。標準の <code class="inline">GetRecords</code> API リクエスト料金のみが適用されます。詳細は <a href="https://aws.amazon.com/dynamodb/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">DynamoDB 料金ページ</a>を参照してください。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 利用可能リージョン</div>
+      <p>すべての商用 AWS リージョン、AWS GovCloud (US) リージョン、中国リージョンで利用可能です。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">📜 Amazon DynamoDB Streams</div>
+      <p>テーブルの項目レベルの変更をキャプチャするストリーム機能。本アップデートの対象。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📚 Kinesis Client Library (KCL)</div>
+      <p>DynamoDB Streams Kinesis アダプターを介してストリームを消費するためのライブラリ。バージョン 2.5.0 以降のアダプターで本機能に対応。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🕰️ DynamoDB ポイントインタイムリカバリ (PITR)</div>
+      <p>特定時点へのテーブル復元・エクスポート機能。エクスポートタイムスタンプを本機能の開始位置として利用できる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌊 Amazon Kinesis Data Streams</div>
+      <p>Kinesis では以前から AT_TIMESTAMP イテレータが利用可能であり、DynamoDB Streams でも同等の操作性が実現された。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      DynamoDB Streams の <code class="inline">AT_TIMESTAMP</code> シャードイテレータにより、時刻を指定したストリーム読み取りが可能になり、<span class="highlight">障害復旧・データ再生・PITR 後の同期</span>といった運用上の課題が大きく改善されます。
+    </p>
+    <div class="check-item"><span class="check-icon">✓</span><span>追加料金なしで利用可能。復旧手順やリプレイ手順への組み込みを検討することを推奨</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>KCL 利用時はアダプターをバージョン 2.5.0 以降に更新</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>稼働中アプリケーションの初期位置変更時はリーステーブルの扱いに注意</span></div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>🔗 <a href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-dynamodb-streams-timestamp-processing" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon DynamoDB Streams timestamp processing</a></li>
+      <li>📖 <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.Timestamp.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Using the DynamoDB Streams Kinesis Adapter to read records from a timestamp</a></li>
+      <li>📖 <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.KCLAdapter.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Using the DynamoDB Streams Kinesis adapter to process stream records</a></li>
+      <li>💻 <a href="https://github.com/awslabs/dynamodb-streams-kinesis-adapter" target="_blank" rel="noopener noreferrer" class="aws-link">DynamoDB Streams Kinesis Adapter (GitHub)</a></li>
+      <li>💰 <a href="https://aws.amazon.com/dynamodb/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">DynamoDB 料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-10-15) をもとに作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Transform - Aurora PostgreSQL クロスリージョンデプロイ対応と 7 リージョン拡大</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    .release-badge {
+      display: inline-block;
+      background: rgba(0, 161, 201, 0.2);
+      color: var(--aws-teal);
+      font-weight: 600;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+      margin-left: 8px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.4;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .card ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .card li { margin: 4px 0; }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 { margin-top: 0; }
+    .before-box h3 { color: #FF6B4A; }
+    .after-box h3 { color: #4CAF50; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .before-box li, .after-box li { margin: 8px 0; font-size: 14px; }
+
+    /* 統計カード */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 40px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      vertical-align: top;
+    }
+
+    tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+    /* フロー図 */
+    .flow-diagram {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-squid-ink);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 16px;
+      text-align: center;
+      min-width: 120px;
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .flow-step .step-num {
+      color: var(--aws-orange);
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+      align-self: center;
+    }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+
+    /* リージョンバッジ */
+    .region-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .region-badge {
+      background: rgba(0, 161, 201, 0.12);
+      border: 1px solid rgba(0, 161, 201, 0.5);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      text-align: center;
+      color: var(--aws-white);
+    }
+
+    .region-badge.new {
+      background: rgba(29, 129, 2, 0.15);
+      border-color: rgba(76, 175, 80, 0.6);
+    }
+
+    .region-badge .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 10px;
+      padding: 1px 8px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    .region-badge.new .tag {
+      background: #4CAF50;
+      color: var(--aws-squid-ink);
+    }
+
+    .region-badge.existing .tag {
+      background: var(--aws-teal);
+      color: var(--aws-squid-ink);
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 18px;
+      margin: 14px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .usecase p { margin: 6px 0; font-size: 14px; }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 3px solid #4CAF50;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-note {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 12px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { padding-left: 20px; margin: 8px 0; }
+    footer li { margin: 4px 0; }
+
+    @media (max-width: 700px) {
+      .before-after { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div>
+        <span class="service-badge">AWS Transform</span>
+        <span class="release-badge">📅 2026 年 10 月 15 日</span>
+      </div>
+      <h1>🔄 フルスタック Windows モダナイゼーションが<br>Aurora PostgreSQL クロスリージョンデプロイに対応</h1>
+      <div class="subtitle">SQL Server → Aurora PostgreSQL 変換のデプロイ先を自由に選択。利用可能リージョンも 7 つ追加され、東京を含む合計 8 リージョンへ拡大</div>
+    </div>
+
+    <!-- 統計情報 -->
+    <div class="section">
+      <h2>📊 数字で見るアップデート</h2>
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-number">+7</div>
+          <div class="stat-label">追加されたリージョン数</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">8</div>
+          <div class="stat-label">利用可能リージョン合計<br>(東京リージョンを含む)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">1</div>
+          <div class="stat-label">DB 変換 + クロスリージョンデプロイ + アプリ更新を完結するワークフロー数</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📝 概要</h2>
+      <p>
+        AWS Transform のフルスタック Windows モダナイゼーションが、SQL Server から変換した
+        <span class="highlight">Amazon Aurora PostgreSQL のクロスリージョンデプロイ</span>に対応しました。
+        SQL Server の DDL ファイルをアップロードし、変換プラン内でターゲット AWS リージョンを指定するだけで、
+        変換後の Aurora PostgreSQL クラスターを AWS Transform の実行リージョンとは異なるリージョンへデプロイできます。
+      </p>
+      <p>
+        同じワークフローの中で、依存する .NET アプリケーションの<span class="highlight">接続文字列や ADO.NET、Entity Framework のデータアクセスコード</span>も
+        PostgreSQL 互換に自動更新されます。データレジデンシー、レイテンシー、ディザスタリカバリの各要件に合わせて、
+        デプロイ先を柔軟にコントロールできる点が主要な価値です。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before: アップデート前の課題</h3>
+          <ul>
+            <li>利用可能リージョンが限られ、利用リージョンの近くでしか変換ワークフローを実行できなかった</li>
+            <li>変換後の Aurora PostgreSQL のデプロイ先を柔軟に選択できず、データレジデンシーやレイテンシー要件を満たすには追加の移行作業が必要だった</li>
+            <li>DR 用に別リージョンへ配置したい場合、変換後に手動でクラスターを再構築・移行する必要があった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ After: アップデート後の改善</h3>
+          <ul>
+            <li>DDL アップロードと変換プランでのターゲットリージョン指定だけで、別リージョンへ直接デプロイ可能に</li>
+            <li>フランクフルト、ロンドン、ムンバイ、ソウル、東京、シドニー、モントリオールの 7 リージョンが追加され、合計 8 リージョンで利用可能に</li>
+            <li>データレジデンシー、レイテンシー、DR の各要件に合わせたデータベース配置を 1 つのワークフローで完結</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Source["🏢 ソース環境"]
+        SQL[("🗄️ SQL Server<br/>データベース")]
+        DDL["📄 DDL ファイル"]
+        App["💻 .NET アプリケーション"]
+    end
+
+    subgraph TransformRegion["☁️ AWS Transform 実行リージョン"]
+        Transform["🤖 AWS Transform<br/>フルスタック Windows<br/>モダナイゼーション"]
+        Plan["📋 変換プラン<br/>ターゲットリージョン指定"]
+    end
+
+    subgraph TargetRegion["🌏 ターゲット AWS リージョン"]
+        Aurora[("🐘 Aurora PostgreSQL<br/>クラスター")]
+    end
+
+    SQL --> DDL
+    DDL --> Transform
+    App --> Transform
+    Transform --> Plan
+    Plan -->|クロスリージョンデプロイ| Aurora
+    Transform -.->|接続文字列と<br/>データアクセスコードを更新| App
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class Source,TransformRegion,TargetRegion boundary
+    class Transform,Plan internal
+    class SQL,Aurora database
+    class DDL,App input
+        </pre>
+      </div>
+      <p class="diagram-note">
+        SQL Server の DDL ファイルをアップロードし、変換プランでターゲットリージョンを指定すると、変換後の Aurora PostgreSQL クラスターが
+        AWS Transform の実行リージョンとは異なるリージョンへデプロイされます。同時に、依存する .NET アプリケーションの接続文字列と
+        データアクセスコードも PostgreSQL 互換に更新されます。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="card">
+        <div class="card-title">1️⃣ Aurora PostgreSQL のクロスリージョンデプロイ</div>
+        <ul>
+          <li>SQL Server の DDL ファイルをアップロードし、変換プラン内でターゲット AWS リージョンを設定可能</li>
+          <li>変換結果の Aurora PostgreSQL クラスターを、AWS Transform の実行リージョンとは異なるリージョンへデプロイ</li>
+          <li>データレジデンシー、レイテンシー、ディザスタリカバリの各要件に対応</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-title">2️⃣ .NET アプリケーションの PostgreSQL 互換化</div>
+        <ul>
+          <li>同一ワークフロー内で、依存する .NET アプリケーションを PostgreSQL 互換に変換</li>
+          <li>接続文字列を新しいターゲット PostgreSQL データベースに合わせて自動更新</li>
+          <li>ADO.NET および Entity Framework のデータアクセスコードを更新</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-title">3️⃣ 利用可能リージョンの拡大 (7 リージョン追加)</div>
+        <ul>
+          <li>従来のバージニア北部に加え、フランクフルト、ロンドン、ムンバイ、ソウル、東京、シドニー、モントリオールが追加</li>
+          <li>東京リージョンを含む合計 8 リージョンで利用可能に</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- クロスリージョンデプロイのワークフロー -->
+    <div class="section">
+      <h2>🔁 クロスリージョンデプロイのワークフロー</h2>
+      <div class="flow-diagram">
+        <div class="flow-step"><span class="step-num">STEP 1</span>📄 DDL<br>アップロード</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step"><span class="step-num">STEP 2</span>🌏 ターゲット<br>リージョン指定</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step"><span class="step-num">STEP 3</span>🤖 データベース<br>変換</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step"><span class="step-num">STEP 4</span>🚀 クロスリージョン<br>デプロイ</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step"><span class="step-num">STEP 5</span>💻 アプリケーション<br>更新</div>
+      </div>
+      <table>
+        <tr><th style="width: 220px;">ステップ</th><th>内容</th></tr>
+        <tr><td>1. DDL アップロード</td><td>SQL Server の DDL ファイルを AWS Transform にアップロード</td></tr>
+        <tr><td>2. ターゲットリージョン指定</td><td>変換プラン内でデプロイ先の AWS リージョンを設定</td></tr>
+        <tr><td>3. データベース変換</td><td>スキーマとコードオブジェクトを Aurora PostgreSQL 向けに変換</td></tr>
+        <tr><td>4. クロスリージョンデプロイ</td><td>変換結果の Aurora PostgreSQL クラスターをターゲットリージョンへデプロイ</td></tr>
+        <tr><td>5. アプリケーション更新</td><td>接続文字列、ADO.NET、Entity Framework のコードを PostgreSQL 互換に更新</td></tr>
+      </table>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <p>公式ドキュメントによると、AWS Transform for SQL Server モダナイゼーションは以下をサポートしています。</p>
+      <table>
+        <tr><th style="width: 220px;">項目</th><th>詳細</th></tr>
+        <tr><td>ソースデータベース</td><td>Microsoft SQL Server 2008 R2 ～ 2022 (Express / Standard / Enterprise の全エディション)</td></tr>
+        <tr><td>ソースのホスト環境</td><td>Amazon RDS for SQL Server、Amazon EC2 上の SQL Server、AWS 外のホスト環境</td></tr>
+        <tr><td>ターゲットデータベース</td><td>Amazon Aurora PostgreSQL (PostgreSQL 15 以降互換)</td></tr>
+        <tr><td>スキーマ変換</td><td>テーブル、ビュー、インデックス、制約、リレーションシップを自動変換</td></tr>
+        <tr><td>ストアドプロシージャ変換</td><td>T-SQL を PL/pgSQL へ AI 支援で変換</td></tr>
+        <tr><td>データ移行</td><td>AWS DMS を利用し、整合性検証付きで移行 (オプトアウトも可能)</td></tr>
+        <tr><td>対応 .NET バージョン</td><td>.NET 6 / 7 / 8 / 10 (.NET Framework 4.x 以前は非対応)</td></tr>
+        <tr><td>対応 ORM</td><td>Entity Framework 6.3 ～ 6.5、EF Core 1.0 ～ 10.0、ADO.NET</td></tr>
+        <tr><td>プロバイダー変更</td><td>SQL Server プロバイダーを Npgsql に置換</td></tr>
+        <tr><td>対応リポジトリ</td><td>GitHub、GitLab、Bitbucket、Azure DevOps、Amazon S3</td></tr>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+      <h3>📋 前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>管理者アクセス権を持つ AWS アカウントと、IAM Identity Center の有効化</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>必要なサービスロールの作成と、適切なネットワーク構成を持つ VPC</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ソース SQL Server への接続に必要な権限 (VIEW DEFINITION および VIEW DATABASE STATE) を持つデータベースユーザー</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>.NET アプリケーションの場合は .NET 6 以降 (.NET Framework 4.x 以前は、先に AWS Transform for .NET でアップグレードが必要)</span></div>
+
+      <h3>🚀 手順</h3>
+      <div class="card">
+        <div class="card-title">ステップ 1: AWS Transform でジョブを開始する</div>
+        <p style="margin: 0; font-size: 14px;">AWS Transform のウェブエクスペリエンスにサインインし、フルスタック Windows モダナイゼーション (SQL Server モダナイゼーション) のジョブを作成。ソースコードリポジトリ (GitHub、GitLab、Bitbucket、Azure DevOps、Amazon S3 など) を接続します。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">ステップ 2: DDL ファイルをアップロードし、ターゲットリージョンを指定する</div>
+        <p style="margin: 0; font-size: 14px;">SQL Server データベースの DDL ファイルをアップロードし、変換プラン内でデプロイ先となるターゲット AWS リージョンを設定。この設定により、変換後の Aurora PostgreSQL クラスターが指定したリージョンにデプロイされます。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">ステップ 3: 変換とデプロイを実行する</div>
+        <p style="margin: 0; font-size: 14px;">変換プランに沿ってスキーマ変換、ストアドプロシージャ変換、アプリケーションコードの更新を実行。Human-in-the-loop のチェックポイントで変換結果をレビュー・承認しながら進められます。変換完了後、Aurora PostgreSQL クラスターがターゲットリージョンにデプロイされ、.NET アプリケーションの接続文字列とデータアクセスコードが更新されます。</p>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <h3>💼 ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">データレジデンシー要件への対応</strong>: 各国・各地域のデータ所在地要件に合わせて、モダナイズ後のデータベースを適切なリージョンに配置できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">ディザスタリカバリ戦略の実現</strong>: 変換とあわせて DR 要件に沿ったリージョンへのデプロイを計画でき、移行後の再配置作業が不要になる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">SQL Server ライセンスコストからの脱却</strong>: Aurora PostgreSQL への移行により、商用ライセンスコストを削減できる</span></div>
+      <h3>⚙️ 技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">ワークフローの一元化</strong>: データベース変換、クロスリージョンデプロイ、アプリケーションコード更新を 1 つのワークフローで完結できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">レイテンシーの最適化</strong>: アプリケーションの利用拠点に近いリージョンへデータベースをデプロイすることで、アクセスレイテンシーを低減できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">東京リージョンを含む 8 リージョンでの利用</strong>: 日本のお客様も国内リージョンで変換ワークフローを実行できるようになった</span></div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <h3>🚫 制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>.NET Framework 4.x 以前のアプリケーションは直接サポートされず、先に AWS Transform for .NET で .NET 6 以降へのアップグレードが必要</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>ターゲットデータベースは Amazon Aurora PostgreSQL (PostgreSQL 15 以降互換) に限定される</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>AWS ホストのソースデータベースを使用する場合、データベースと AWS Transform が同一リージョンにあることが要件 (クロスリージョンデプロイはデプロイ先の指定に関する機能)</span></div>
+      <h3>🤔 考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>データ移行をオプトアウトした場合でも、エージェントログ、評価結果、SQL スキーマファイルなどのメタデータや処理アーティファクトはサービス利用リージョンに保存されるため、厳格なデータレジデンシー要件がある場合は注意が必要</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>アーティファクトは独自の KMS キーで暗号化でき、TTL 期間が設定されるため、保存ポリシーを事前に確認することを推奨</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>変換後のストアドプロシージャやアプリケーションコードは、Human-in-the-loop チェックポイントでのレビューとテストが重要</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">🏦 ユースケース 1: データレジデンシー要件を満たすデータベースモダナイゼーション</div>
+        <p><strong>シナリオ</strong>: 金融機関が SQL Server ベースの基幹システムを Aurora PostgreSQL へモダナイズするにあたり、規制によりデータベースを国内リージョンに配置する必要がある。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+          <pre><code class="language-text">1. AWS Transform で SQL Server の DDL ファイルをアップロード
+2. 変換プランでターゲットリージョンに アジアパシフィック (東京) を指定
+3. 変換後の Aurora PostgreSQL クラスターを東京リージョンへデプロイ
+4. .NET アプリケーションの接続文字列を東京リージョンのクラスターに更新</code></pre>
+        </div>
+        <div class="effect">✅ <strong>効果</strong>: 規制要件を満たしつつ、手動での再配置作業なしにモダナイゼーションを完了できる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🌐 ユースケース 2: ディザスタリカバリを考慮したマルチリージョン構成</div>
+        <p><strong>シナリオ</strong>: グローバル企業が SQL Server からのモダナイゼーションにあわせて、本番環境とは別のリージョンに DR 用のデータベース環境を整備したい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+          <pre><code class="language-text">1. 変換プランで DR 戦略に沿ったターゲットリージョンを指定
+2. 変換結果の Aurora PostgreSQL クラスターを DR 対象リージョンへデプロイ
+3. Aurora の機能 (Aurora Global Database など) と組み合わせて
+   マルチリージョン構成を構築</code></pre>
+        </div>
+        <div class="effect">✅ <strong>効果</strong>: モダナイゼーションと DR 構成の整備を同時に進められ、事業継続性を強化できる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">⚡ ユースケース 3: ユーザー拠点に近いリージョンへのレイテンシー最適化デプロイ</div>
+        <p><strong>シナリオ</strong>: アジア太平洋地域のユーザー向け .NET アプリケーションのデータベースを、ユーザー拠点に近いリージョンへ配置してレイテンシーを低減したい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+          <pre><code class="language-text">1. SQL Server の DDL ファイルをアップロードし、変換プランを作成
+2. ターゲットリージョンにユーザー拠点へ近いリージョンを指定
+3. 同一ワークフローで .NET アプリケーションの
+   ADO.NET / Entity Framework コードを更新</code></pre>
+        </div>
+        <div class="effect">✅ <strong>効果</strong>: アプリケーションとデータベース間、およびユーザーとの距離を最適化し、応答性能を改善できる。</div>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>
+        AWS Transform の料金詳細は、公式の製品ページを参照してください。なお、変換先にデプロイされる
+        <span class="highlight">Amazon Aurora PostgreSQL クラスター</span>や、データ移行に使用される
+        <span class="highlight">AWS DMS</span> などの AWS リソースには、各サービスの通常の利用料金が発生します。
+      </p>
+    </div>
+
+    <!-- 利用可能リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン (合計 8 リージョン)</h2>
+      <div class="region-grid">
+        <div class="region-badge existing">🇺🇸 米国東部 (バージニア北部)<span class="tag">既存</span></div>
+        <div class="region-badge new">🇩🇪 欧州 (フランクフルト)<span class="tag">NEW</span></div>
+        <div class="region-badge new">🇬🇧 欧州 (ロンドン)<span class="tag">NEW</span></div>
+        <div class="region-badge new">🇮🇳 アジアパシフィック (ムンバイ)<span class="tag">NEW</span></div>
+        <div class="region-badge new">🇰🇷 アジアパシフィック (ソウル)<span class="tag">NEW</span></div>
+        <div class="region-badge new">🇯🇵 アジアパシフィック (東京)<span class="tag">NEW</span></div>
+        <div class="region-badge new">🇦🇺 アジアパシフィック (シドニー)<span class="tag">NEW</span></div>
+        <div class="region-badge new">🇨🇦 カナダ (モントリオール)<span class="tag">NEW</span></div>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <div class="card-title">🐘 Amazon Aurora PostgreSQL</div>
+        <p style="margin: 0; font-size: 14px;">モダナイゼーションのターゲットデータベース。PostgreSQL 15 以降互換のクラスターがデプロイされる。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🔄 AWS Database Migration Service (DMS)</div>
+        <p style="margin: 0; font-size: 14px;">ストレージオブジェクトの変換とデータ移行を支える基盤サービス。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🧰 AWS Transform for .NET</div>
+        <p style="margin: 0; font-size: 14px;">.NET Framework アプリケーションをクロスプラットフォーム .NET へモダナイズするエージェント。SQL Server モダナイゼーションの前提となる場合がある。</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>✅ まとめ</h2>
+      <p>
+        AWS Transform のフルスタック Windows モダナイゼーションが Aurora PostgreSQL のクロスリージョンデプロイに対応し、
+        <span class="highlight">東京リージョンを含む 8 リージョン</span>へ拡大されたことで、データレジデンシー、レイテンシー、
+        ディザスタリカバリの各要件に沿った SQL Server モダナイゼーションが <span class="highlight">1 つのワークフロー</span>で実現できるようになりました。
+        SQL Server から Aurora PostgreSQL への移行を検討しているお客様は、変換プランでのターゲットリージョン指定を活用し、
+        デプロイ先の設計を含めたモダナイゼーション計画を立てることを推奨します。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/aws-transform-full-stack-aurora-cross-region" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): aws-transform-full-stack-aurora-cross-region</a></li>
+        <li><a href="https://aws.amazon.com/transform/windows/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Transform 製品ページ (Windows)</a></li>
+        <li><a href="https://docs.aws.amazon.com/transform/latest/userguide/windows-full-stack.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Transform for full-stack Windows ドキュメント</a></li>
+        <li><a href="https://docs.aws.amazon.com/transform/latest/userguide/sql-server-modernization.html" target="_blank" rel="noopener noreferrer" class="aws-link">SQL Server モダナイゼーション ドキュメント</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-10-15-aws-transform-full-stack-aurora-cross-region.md) を基に作成されています。</p>
+    </footer>
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Redshift - S3 Tables によるシステムテーブル長期保存の対応リージョン拡大</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header { margin-bottom: 32px; }
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle { font-size: 15px; color: var(--aws-light-gray); }
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.stat-card {
+  flex: 1;
+  min-width: 200px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.1;
+}
+.stat-label {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: stretch;
+  margin: 20px 0;
+}
+.ba-box {
+  flex: 1;
+  min-width: 280px;
+  border-radius: 8px;
+  padding: 18px;
+}
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.ba-before .ba-title { color: #FF8A70; }
+.ba-after .ba-title { color: #6FCF52; }
+.ba-box ul { margin: 0; padding-left: 20px; }
+.ba-box li { margin: 6px 0; font-size: 14px; }
+
+/* 機能カード */
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+.feature-desc { font-size: 14px; }
+.feature-desc ul { margin: 6px 0 0 0; padding-left: 20px; }
+.feature-desc li { margin: 4px 0; }
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.spec-table td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+.spec-table code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+.check-icon { color: #6FCF52; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A70; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.14), rgba(255, 153, 0, 0.04));
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 16px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* リージョンカード */
+.region-grid {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.region-card {
+  flex: 1;
+  min-width: 200px;
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--aws-white);
+  font-size: 15px;
+}
+.region-card .region-sub {
+  display: block;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--aws-light-gray);
+  margin-top: 4px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.two-col > div { flex: 1; min-width: 300px; }
+
+/* 関連サービス */
+.related-item {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+  font-size: 14px;
+  align-items: flex-start;
+}
+.related-name {
+  font-weight: 700;
+  color: var(--aws-white);
+  white-space: nowrap;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 640px) {
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+  .stat-value { font-size: 28px; }
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Amazon Redshift</span>
+    <h1>🗄️ システムテーブル長期保存<br>S3 Tables ネイティブ統合の対応リージョン拡大</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 10 月 15 日 | GovCloud (US) を含む 4 リージョンが新たに対応</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon Redshift のシステムテーブルデータを <span class="highlight">Amazon S3 Tables とのネイティブ統合</span>により長期保存する機能が、
+      <span class="highlight">アジアパシフィック (ニュージーランド)、カナダ西部 (カルガリー)、AWS GovCloud (US-East / US-West)</span> の 4 リージョンに拡大されました。
+    </p>
+    <p>
+      有効化すると、AWS がシステムテーブルデータを <span class="highlight">Apache Iceberg 形式</span>で S3 Tables に自動書き込みし、パーティショニング、コンパクション、保持期間の管理まで実施。
+      従来 <span class="highlight">7 日間</span>に制限されていた保持期間を、コンプライアンス・監査・オブザーバビリティの要件に合わせて自由に延長できます。
+      特に GovCloud 対応は、厳格なコンプライアンス要件を持つ政府機関や規制業界にとって重要です。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">+4</div>
+        <div class="stat-label">追加リージョン<br>(GovCloud US 含む)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">7 日 → 無期限</div>
+        <div class="stat-label">保持期間の上限<br>(有効期限ポリシーで調整可能)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">25+</div>
+        <div class="stat-label">対応する SYS_* ビュー数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">¥0</div>
+        <div class="stat-label">ログ配信は追加料金なし</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>システムテーブルはウェアハウス内で <strong>7 日間</strong>しか保持されず、長期の監査・コンプライアンス要件を満たせない</li>
+          <li>7 日を超える保持には S3 へのエクスポートを行う<strong>カスタム ETL パイプライン</strong>の構築・運用が必要</li>
+          <li>エクスポート処理が<strong>本番ワークロードとリソース競合</strong>する可能性</li>
+          <li>複数ウェアハウスの横断分析はデータ集約を自前で実装</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>NZ、カルガリー、GovCloud (US-East / US-West) でも利用可能に</li>
+          <li>7 日の制限を超えて<strong>要件に応じた期間 (無期限も可)</strong> で保持可能</li>
+          <li>書き込み・パーティショニング・コンパクションを AWS が自動管理し、<strong>カスタム ETL が不要</strong></li>
+          <li>複数ウェアハウスのデータを単一の場所に集約し<strong>フリート全体を横断分析</strong></li>
+          <li>AWS Agent Toolkit で<strong>自然言語によるインサイト取得</strong>が可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Warehouses["🏢 Redshift データウェアハウス"]
+        direction LR
+        RS1["🗄️ Provisioned RA3/RG<br/>クラスター"]
+        RS2["⚡ Redshift Serverless<br/>ワークグループ"]
+        RS1 ~~~ RS2
+    end
+
+    subgraph S3T["🪣 Amazon S3 Tables"]
+        ICE[("📋 システムテーブルデータ<br/>Apache Iceberg 形式<br/>自動パーティショニング / コンパクション")]
+    end
+
+    subgraph Catalog["📚 AWS Glue Data Catalog"]
+        GC["🔍 カタログ統合<br/>アカウント / リージョンごとに 1 回"]
+    end
+
+    subgraph Query["⚙️ クエリエンジン"]
+        direction LR
+        Q1["🗄️ Redshift"]
+        Q2["🔎 Amazon Athena"]
+        Q3["🦆 DuckDB など<br/>Iceberg 互換エンジン"]
+        Q1 ~~~ Q2 ~~~ Q3
+    end
+
+    Agent["🤖 AWS Agent Toolkit<br/>自然言語でのインサイト取得"]
+
+    RS1 -->|"SYS_* ビューを<br/>バッチ自動配信"| ICE
+    RS2 -->|"SYS_* ビューを<br/>バッチ自動配信"| ICE
+    ICE --> GC
+    GC --> Q1
+    GC --> Q2
+    GC --> Q3
+    Q1 -.-> Agent
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Warehouses,S3T,Catalog,Query layer
+    class RS1,RS2 compute
+    class ICE storage
+    class GC internal
+    class Q1,Q2,Q3,Agent process
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      Redshift が完了済みのシステムテーブルレコードをバッチで S3 Tables に自動配信し、AWS Glue Data Catalog との統合を経て、Redshift、Athena、DuckDB などの Iceberg 互換エンジンから長期保存データをクエリできます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">⏳ 7 日間を超えるシステムテーブルデータの保持</div>
+      <div class="feature-desc">
+        SYS_* ビューはウェアハウス内では 7 日間のみ保持。本機能を有効化すると完了済みレコードが S3 Tables に Apache Iceberg 形式で自動配信されます。保持期間は S3 Tables のレコード有効期限ポリシーで設定し、未設定の場合は無期限に保持されます。
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🤖 サービスマネージドなデータ配信とテーブル管理</div>
+      <div class="feature-desc">
+        S3 テーブルバケット (aws-redshift)、名前空間、テーブルの作成からスキーマ進化、コンパクション、スナップショット管理まで AWS が自動実行。配信は本番ワークロードと分離され、各レコードは Exactly-once で配信されるため再有効化しても重複しません。
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🧩 2 つのデプロイメントモデル</div>
+      <div class="feature-desc">
+        <ul>
+          <li><strong>ウェアハウス個別</strong>: ウェアハウスごとに専用の S3 テーブルセットへ書き込み、物理的に分離</li>
+          <li><strong>統合 (consolidated)</strong>: 同一アカウント・リージョン内の複数ウェアハウスを共有テーブルに集約し、warehouse_namespace_arn や warehouse_name 列で区別。フリート全体の横断分析が可能</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🔓 オープンフォーマットによるマルチエンジンクエリ</div>
+      <div class="feature-desc">
+        Apache Iceberg 形式のため Redshift、Amazon Athena、DuckDB など任意の互換エンジンでクエリ可能。Glue Data Catalog 統合により IAM / Lake Formation で細かなアクセス制御ができ、AWS Agent Toolkit のスキルで自然言語によるパフォーマンスインサイト取得にも対応します。
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🌏 追加リージョンへの拡大</div>
+      <div class="feature-desc">
+        アジアパシフィック (ニュージーランド)、カナダ西部 (カルガリー)、AWS GovCloud (US-East)、AWS GovCloud (US-West) で新たに利用可能に。GovCloud 対応により政府機関や規制業界の厳格な監査要件にも対応しやすくなりました。
+      </div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>対応環境と前提条件</h3>
+    <table class="spec-table">
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対応インスタンス</td><td>Amazon Redshift Provisioned RA3 / RG インスタンス、Amazon Redshift Serverless</td></tr>
+      <tr><td>保存形式</td><td>Apache Iceberg (S3 Tables)</td></tr>
+      <tr><td>配信方式</td><td>固定頻度のバッチ配信、完了済みレコードのみ、Exactly-once</td></tr>
+      <tr><td>デプロイメントモデル</td><td>ウェアハウス個別 (cluster / namespace) または統合 (account)</td></tr>
+      <tr><td>対応システムテーブル</td><td>SYS_QUERY_HISTORY、SYS_QUERY_TEXT、SYS_CONNECTION_LOG、SYS_USERLOG など 25 以上の SYS_* ビュー</td></tr>
+      <tr><td>暗号化</td><td>デフォルトは SSE-S3、AWS KMS カスタマーマネージドキーも指定可能</td></tr>
+      <tr><td>保持期間</td><td>S3 Tables のレコード有効期限ポリシーで設定 (未設定時は無期限)</td></tr>
+      <tr><td>スコープ</td><td>単一アカウント・単一リージョン内 (クロスアカウントは Glue Data Catalog 共有で対応)</td></tr>
+    </table>
+
+    <h3>追加されるメタデータ列</h3>
+    <p style="font-size: 14px;">各 S3 テーブルには、元の SYS_* ビューの全列に加えて以下のメタデータ列が追加されます。</p>
+    <table class="spec-table">
+      <tr><th>列名</th><th>型</th><th>説明</th></tr>
+      <tr><td><code>warehouse_account_id</code></td><td>string</td><td>ソースデータウェアハウスを所有する AWS アカウント</td></tr>
+      <tr><td><code>warehouse_region_name</code></td><td>string</td><td>ソースデータウェアハウスのリージョン</td></tr>
+      <tr><td><code>warehouse_namespace_arn</code></td><td>string</td><td>名前空間の ARN (リネームや再作成でも不変の一意識別子)</td></tr>
+      <tr><td><code>warehouse_name</code></td><td>string</td><td>クラスター名またはワークグループ名</td></tr>
+      <tr><td><code>s3_tables_ingestion_time</code></td><td>timestamp</td><td>Redshift が行を S3 Tables にコミットした時刻 (UTC)</td></tr>
+    </table>
+
+    <h3>有効化に必要な権限</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">IAM ポリシー (有効化を実行するプリンシパル)</span>
+      </div>
+      <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "redshift:EnableLogging",
+        "s3tables:CreateTableBucket",
+        "s3tables:PutTableBucketEncryption",
+        "s3tables:PutTableBucketPolicy"
+      ],
+      "Resource": "*"
+    }
+  ]
+}</code></pre>
+    </div>
+    <p style="font-size: 14px;">
+      Redshift Serverless の場合は <code style="background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;">redshift:EnableLogging</code> の代わりに
+      <code style="background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;">redshift-serverless:UpdateNamespace</code> が必要です。
+      バケット作成後の名前空間とテーブルの作成は、Redshift と S3 Tables 間のサービス信頼関係により行われます。
+    </p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon Redshift Provisioned RA3 / RG インスタンス、または Redshift Serverless ワークグループを利用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>有効化するプリンシパルに前述の IAM 権限が付与されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>保存データをクエリするには、S3 テーブルバケットが AWS Glue Data Catalog と統合されていること (アカウント・リージョンごとに 1 回)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>一部のビュー (SYS_QUERY_DETAIL、SYS_QUERY_EXPLAIN など) はパッチ P203 以降が必要</span></div>
+
+    <div class="flow-diagram" style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 24px 0;">
+      <div style="background: var(--aws-squid-ink); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">1️⃣ 統合を有効化<br><span style="font-size: 12px;">CLI / API</span></div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-squid-ink); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">2️⃣ 配信ステータス確認<br><span style="font-size: 12px;">describe / get</span></div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-squid-ink); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">3️⃣ Glue Catalog 統合<br><span style="font-size: 12px;">1 回のみ</span></div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-squid-ink); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">4️⃣ 保持期間を設定<br><span style="font-size: 12px;">有効期限ポリシー</span></div>
+    </div>
+
+    <h3>ステップ 1: 有効化 (Provisioned クラスター)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">ログ出力先タイプ s3table を指定して有効化</span>
+      </div>
+      <pre><code class="language-bash">aws redshift enable-logging \
+    --cluster-identifier my-redshift-cluster \
+    --log-destination-type s3table \
+    --log-exports all \
+    --s3-table-granularity account</code></pre>
+    </div>
+    <p style="font-size: 14px;">
+      <code style="background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;">--log-exports</code> には all または SYS_* ビュー名のリストを指定し、
+      <code style="background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;">--s3-table-granularity</code> で cluster (個別) または account (統合) を選択します。
+      実行するとアカウント内に aws-redshift という S3 テーブルバケットが作成され、配信が開始されます。
+    </p>
+
+    <h3>ステップ 2: 有効化 (Redshift Serverless)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">名前空間単位で設定</span>
+      </div>
+      <pre><code class="language-bash">aws redshift-serverless update-namespace \
+    --namespace-name my-namespace \
+    --log-destination-type s3table \
+    --s3-table-action Enable \
+    --s3-table-names all \
+    --s3-table-granularity namespace</code></pre>
+    </div>
+
+    <h3>ステップ 3: 配信ステータスの確認</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">有効化されたテーブル、名前空間、最終取り込み時刻を確認</span>
+      </div>
+      <pre><code class="language-bash"># Provisioned クラスターの場合
+aws redshift describe-logging-status \
+    --cluster-identifier my-redshift-cluster
+
+# Serverless の場合
+aws redshift-serverless get-namespace \
+    --namespace-name my-namespace</code></pre>
+    </div>
+
+    <h3>ステップ 4: Glue Data Catalog 統合と保持期間の設定</h3>
+    <p style="font-size: 14px;">
+      S3 テーブルバケットを AWS Glue Data Catalog と統合すると、Redshift では外部スキーマの作成 (<code style="background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;">CREATE EXTERNAL SCHEMA ... FROM DATA CATALOG</code>)、Athena ではそのままの SQL でクエリできるようになります。保持期間は S3 Tables のレコード有効期限ポリシーをテーブル単位で設定します (例: 365 日)。
+    </p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div>
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス・監査要件への対応</strong>: クエリ履歴、接続ログ、変更履歴を数か月から数年単位で保持可能。GovCloud 対応により政府機関や規制業界でも利用可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: カスタム ETL パイプラインの構築・保守が不要になり、エンジニアリングリソースを本来の業務に集中</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ログ配信は追加料金なし</strong>: 配信自体は無料。課金は S3 Tables のストレージとメンテナンス、クエリエンジンの利用分のみ</span></div>
+      </div>
+      <div>
+        <h3>⚙️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>本番ワークロードへの影響なし</strong>: 配信はバックグラウンドで実行され、リソース競合が発生しない。Serverless ではワークグループを起動状態に保つこともない</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>オープンフォーマットの柔軟性</strong>: Redshift、Athena、DuckDB、Spark など任意の Iceberg 互換エンジンで分析でき、ベンダーロックインがない</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>フリート全体の一元的オブザーバビリティ</strong>: 統合モデルにより複数ウェアハウスを単一テーブルで横断分析</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>監査証跡の完全性</strong>: 配信済みデータはイミュータブルで、管理者でも改変・削除ができず、監査証跡として信頼性が高い</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3>🚫 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>単一アカウント・単一リージョン内でのみ動作。クロスリージョン・クロスアカウント分析はクエリ時の結合または Glue Data Catalog のクロスアカウント共有で対応</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>1 つのウェアハウスで同時に使用できるデプロイメントパターンは 1 つのみ</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>パターン切り替え、再有効化、テーブル再追加では過去データのバックフィルは行われない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>配信済みデータはイミュータブルで、個別行の変更・削除は不可</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>S3 テーブルを削除すると保存データは完全に失われ、再有効化しても復元されない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>配信は固定頻度のバッチベースでリアルタイムではない。進行中のクエリなど未完了のアクティビティは配信されない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>暗号化キーはテーブル作成後に変更不可。変更には統合の無効化とテーブル削除 (データ完全削除) が必要</span></div>
+      </div>
+      <div>
+        <h3>🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>SYS_QUERY_TEXT などはクエリ内のリテラル値 (機密情報を含む可能性) を保持するため、機密性を評価して対象テーブルとモデルを選択</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>保持期間を設定しないと無期限に保持されるため、要件を満たす最小限の保持期間を設定してストレージコストを管理</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>大量の履歴データをクエリする際は warehouse_name や s3_tables_ingestion_time などのメタデータ列でフィルタリングしてスキャン量を削減</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>KMS カスタマーマネージドキー使用時は、systemtables.redshift.amazonaws.com と maintenance.s3tables.amazonaws.com のサービスプリンシパルにキー使用を許可するキーポリシーが必要</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1️⃣ GovCloud 環境での長期監査証跡の保持</div>
+      <p><span class="label">シナリオ</span>: AWS GovCloud (US) で Redshift を運用する政府機関が、規制要件により全クエリと接続の履歴を 1 年以上保持する必要がある。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">監査対象ビューを個別粒度で有効化</span>
+        </div>
+        <pre><code class="language-bash">aws redshift enable-logging \
+    --cluster-identifier gov-dwh-cluster \
+    --log-destination-type s3table \
+    --log-exports sys_query_history sys_query_text sys_connection_log sys_userlog \
+    --s3-table-granularity cluster</code></pre>
+      </div>
+      <p style="font-size: 13px;">S3 Tables 側でレコード有効期限を 400 日に設定する。</p>
+      <p><span class="label">効果</span>: カスタム ETL なしで監査証跡を自動保存。データはイミュータブルなため、監査人に対して改変されていない証跡として提示できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2️⃣ 複数ウェアハウスの横断的なパフォーマンス分析</div>
+      <p><span class="label">シナリオ</span>: 同一アカウント・リージョン内で複数の Serverless ワークグループと Provisioned クラスターを運用し、フリート全体のクエリパフォーマンスのトレンドを一元的に分析したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">統合モデル (account 粒度) で有効化後、Athena から横断クエリ</span>
+        </div>
+        <pre><code class="language-sql">SELECT warehouse_name,
+       DATE_TRUNC('week', start_time) AS week,
+       AVG(elapsed_time) / 1000000.0 AS avg_elapsed_sec,
+       COUNT(*) AS query_count
+FROM "aws-redshift"."sys_query_history"
+WHERE start_time > CURRENT_DATE - INTERVAL '90' DAY
+GROUP BY 1, 2
+ORDER BY 1, 2;</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 7 日を超える期間のトレンドをウェアハウス横断で可視化でき、キャパシティプランニングやワークロード変更前後の影響比較に活用できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3️⃣ 過去インシデントの根本原因分析</div>
+      <p><span class="label">シナリオ</span>: 3 週間前に発生したパフォーマンス劣化の根本原因を分析したいが、クラスター内のシステムテーブルには直近 7 日分しか残っていない。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">Redshift から外部スキーマ経由で過去のクエリ詳細を分析</span>
+        </div>
+        <pre><code class="language-sql">CREATE EXTERNAL SCHEMA sys_history
+FROM DATA CATALOG DATABASE 'aws_redshift_namespace'
+IAM_ROLE 'arn:aws:iam::123456789012:role/RedshiftS3TablesRole';
+
+SELECT query_id, start_time, elapsed_time, queue_time, status
+FROM sys_history.sys_query_history
+WHERE start_time BETWEEN '2026-09-20' AND '2026-09-27'
+ORDER BY elapsed_time DESC
+LIMIT 50;</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 保存期間の制限なく過去のインシデントを調査でき、ポストモーテムや再発防止策の立案に必要なデータを確保できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>Redshift から S3 Tables へのシステムテーブルデータの書き込み (ログ配信) 自体は<span class="highlight">無料</span>です。課金対象は以下のとおりです。</p>
+    <div class="check-item"><span class="check-icon">✓</span><span>保存データに対する S3 Tables の標準的なストレージ料金とメンテナンス料金</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>データの読み取りに使用するクエリエンジン (Redshift、Athena など) の料金</span></div>
+    <p style="font-size: 14px;">
+      詳細は <a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon S3 の料金ページ</a> を参照してください。保持期間をコンプライアンス要件を満たす最小限に設定することで、ストレージコストを最適化できます。
+    </p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>今回のアップデートで、以下の AWS リージョンが追加されました。</p>
+    <div class="region-grid">
+      <div class="region-card">🇳🇿 アジアパシフィック<span class="region-sub">ニュージーランド</span></div>
+      <div class="region-card">🇨🇦 カナダ西部<span class="region-sub">カルガリー</span></div>
+      <div class="region-card">🏛️ AWS GovCloud<span class="region-sub">US-East</span></div>
+      <div class="region-card">🏛️ AWS GovCloud<span class="region-sub">US-West</span></div>
+    </div>
+    <p style="font-size: 14px;">
+      本機能は、Redshift と S3 Tables の両方がサポートされているすべての AWS 商用リージョンで利用できます。対象は Amazon Redshift Provisioned RG / RA3 インスタンスと Amazon Redshift Serverless です。
+    </p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-item"><span class="related-name">🪣 Amazon S3 Tables</span><span>システムテーブルデータの保存先。Apache Iceberg 形式のフルマネージドなテーブルストレージで、パーティショニング、コンパクション、レコード有効期限を自動管理</span></div>
+    <div class="related-item"><span class="related-name">📚 AWS Glue Data Catalog</span><span>S3 テーブルバケットのカタログ統合により、Redshift や Athena からのクエリと、IAM / Lake Formation によるアクセス制御を実現</span></div>
+    <div class="related-item"><span class="related-name">🔎 Amazon Athena</span><span>サーバーレス SQL エンジン。インフラ不要で長期保存されたシステムテーブルデータをクエリ可能</span></div>
+    <div class="related-item"><span class="related-name">🔐 AWS Lake Formation</span><span>統合デプロイメントモデルにおいて、テーブル・列・行レベルの細かなアクセス制御を提供</span></div>
+    <div class="related-item"><span class="related-name">🤖 AWS Agent Toolkit</span><span>システムテーブルデータをクエリしてパフォーマンスインサイトや最適化推奨を提示する AI エージェントスキルを提供</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      Amazon Redshift のシステムテーブルを S3 Tables に長期保存する機能が、アジアパシフィック (ニュージーランド)、カナダ西部 (カルガリー)、AWS GovCloud (US-East / US-West) に拡大されました。
+      <span class="highlight">7 日間の保持制限をカスタム ETL なしで克服</span>でき、特に GovCloud 対応により厳格な監査・コンプライアンス要件を持つ組織でも利用しやすくなりました。
+      該当リージョンで Redshift を運用し、監査証跡の長期保持や横断的なオブザーバビリティが必要な場合は、本機能の有効化を検討することを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/redshift-long-term-system-table-retention-expansion/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon Redshift long-term system table retention expansion</a></li>
+      <li><a href="https://aws.amazon.com/blogs/big-data/long-term-system-tables-retention-in-amazon-redshift-with-amazon-s3-tables/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: Long-term system tables retention in Amazon Redshift with Amazon S3 Tables</a></li>
+      <li><a href="https://docs.aws.amazon.com/redshift/latest/mgmt/system-table-s3-tables.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: System table integration with S3 Tables</a></li>
+      <li><a href="https://github.com/aws/agent-toolkit-for-aws/tree/main/skills/specialized-skills/system-table-skills" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Agent Toolkit: System table skills</a></li>
+      <li><a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ (Amazon S3)</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-10-15) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

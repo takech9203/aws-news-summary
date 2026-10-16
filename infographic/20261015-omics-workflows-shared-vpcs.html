@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS HealthOmics が共有 VPC (クロスアカウント VPC) をサポート</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header { margin-bottom: 32px; }
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.stat-card {
+  flex: 1;
+  min-width: 200px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.1;
+}
+.stat-label {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: stretch;
+  margin: 20px 0;
+}
+.ba-box {
+  flex: 1;
+  min-width: 280px;
+  border-radius: 8px;
+  padding: 18px;
+}
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+.ba-box ul { margin: 0; padding-left: 20px; }
+.ba-box li { margin: 6px 0; font-size: 14px; }
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+.feature-card p { margin: 0; font-size: 14px; }
+.feature-card ul { margin: 6px 0 0 0; padding-left: 20px; font-size: 14px; }
+.feature-card li { margin: 4px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+/* ユースケース */
+.usecase {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.14), rgba(255, 153, 0, 0.04));
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .effect {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 153, 0, 0.4);
+}
+
+/* チェックリスト */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14.5px;
+}
+.check-icon { color: #4CAF50; font-weight: 700; }
+.cross-icon { color: #FF6B4A; font-weight: 700; }
+.warn-icon { color: var(--aws-smile-orange); font-weight: 700; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 10px 16px;
+  text-align: center;
+  min-width: 120px;
+  font-size: 14px;
+}
+.flow-step .step-num {
+  display: block;
+  color: var(--aws-orange);
+  font-weight: 700;
+  font-size: 12px;
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 22px;
+  font-weight: bold;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.25);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+code.inline {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 13.5px;
+  font-family: 'Courier New', monospace;
+}
+
+/* リージョンタグ */
+.region-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+.region-tag {
+  background: rgba(0, 161, 201, 0.15);
+  border: 1px solid rgba(0, 161, 201, 0.5);
+  color: #7FD6EC;
+  border-radius: 16px;
+  padding: 4px 14px;
+  font-size: 13.5px;
+}
+
+/* 関連サービス */
+.related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin: 14px 0;
+}
+.related-card {
+  background: rgba(140, 79, 255, 0.1);
+  border: 1px solid rgba(140, 79, 255, 0.4);
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 14px;
+}
+.related-card .related-name {
+  font-weight: 700;
+  color: #B794FF;
+  margin-bottom: 4px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12.5px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">AWS HealthOmics</span>
+    <h1>🧬 共有 VPC (クロスアカウント VPC) のサポート開始</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 10 月 15 日 | AWS RAM によるクロスアカウント VPC 共有でワークフローを実行</div>
+  </div>
+
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      AWS HealthOmics が、<span class="highlight">AWS Resource Access Manager (AWS RAM)</span> を使用して他の AWS アカウントが管理する Amazon VPC をアカウント間で共有し、その<span class="highlight">共有 VPC 内でワークフローを実行</span>できるようになりました。AWS HealthOmics は、ヘルスケア・ライフサイエンス分野のお客様がフルマネージドなバイオインフォマティクスワークフローを大規模に実行できる HIPAA 対応サービスです。
+    </p>
+    <p>
+      組織内の複数アカウントに対して単一の VPC からサブネットとセキュリティグループを共有し、ネットワーク管理を一元化できます。HealthOmics は各アカウントのワークフロー実行用 <span class="highlight">ENI を共有サブネットに直接配置</span>するため、VPC ピアリング接続や VPC エンドポイントの重複作成なしに、プライベートにデータへアクセスできます。
+    </p>
+    <p>
+      集中管理型ネットワークを採用する組織では、ネットワーク管理チームが VPC・サブネット・VPC エンドポイント・NAT ゲートウェイを一元管理しつつ、研究者や開発者は自身のアカウントでワークフローの実行に集中する、という役割分担が実現できます。
+    </p>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>各アカウントの VPC ごとに個別の AWS PrivateLink VPC エンドポイントを作成する必要があり、エンドポイントが重複してコストと管理負荷が増大</li>
+          <li>VPC ピアリングを使用してアカウントごとのルートテーブルを個別に維持する必要があった</li>
+          <li>ネットワーク構成がアカウントごとに分散し、セキュリティポリシーの一貫した適用が困難</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>単一の集中管理された VPC 内で複数アカウントのワークフローを実行でき、VPC エンドポイントや NAT ゲートウェイを組織全体で共用可能に</li>
+          <li>VPC ピアリング接続や VPC エンドポイントの重複作成なしに、ワークフローがプライベートにデータへアクセス可能に</li>
+          <li><code class="inline">CreateConfiguration</code> API の <code class="inline">VpcConfig</code> に追加された <code class="inline">vpcOwnerAccountId</code> を指定するだけで共有 VPC を利用可能に</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Org["🏢 AWS Organizations"]
+        subgraph Owner["🛠️ ネットワーク管理アカウント VPC オーナー"]
+            RAM["🤝 AWS RAM リソース共有"]
+            subgraph SharedVPC["☁️ 集中管理された共有 VPC"]
+                direction LR
+                SubnetA["🔀 共有サブネット A"]
+                SubnetB["🔀 共有サブネット B"]
+                SubnetA ~~~ SubnetB
+            end
+            EP["🔌 VPC エンドポイント / NAT ゲートウェイ"]
+        end
+        subgraph P1["🧬 研究アカウント 1 参加者"]
+            Run1["⚡ HealthOmics ワークフロー実行"]
+        end
+        subgraph P2["🧬 研究アカウント 2 参加者"]
+            Run2["⚡ HealthOmics ワークフロー実行"]
+        end
+    end
+
+    RAM -.->|サブネットとセキュリティグループを共有| P1
+    RAM -.->|サブネットとセキュリティグループを共有| P2
+    Run1 -->|ENI を直接配置| SubnetA
+    Run2 -->|ENI を直接配置| SubnetB
+    SubnetA --> EP
+    SubnetB --> EP
+
+    classDef org fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef owner fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef vpc fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef network fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef share fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class Org org
+    class Owner,P1,P2 owner
+    class SharedVPC vpc
+    class SubnetA,SubnetB,EP network
+    class Run1,Run2 compute
+    class RAM share
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      ネットワーク管理アカウントが AWS RAM でサブネットとセキュリティグループを研究アカウントに共有し、各アカウントの HealthOmics ワークフローの ENI が共有サブネットに直接配置される構成です。VPC エンドポイントや NAT ゲートウェイは共有 VPC 側で一元管理されます。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">🤝 AWS RAM によるクロスアカウント VPC 共有</div>
+      <ul>
+        <li>VPC オーナーアカウントが AWS RAM のリソース共有を使用して、サブネット (およびオプションでセキュリティグループ) を参加アカウントに共有</li>
+        <li>参加アカウントの HealthOmics ワークフロー実行用 ENI は、共有サブネット内に直接配置される</li>
+        <li>両アカウントが同一の AWS Organizations 組織に所属している必要がある</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🆕 <code class="inline">vpcOwnerAccountId</code> パラメータの追加</div>
+      <ul>
+        <li>HealthOmics の構成リソース Configuration の <code class="inline">VpcConfig</code> に、オプションの <code class="inline">vpcOwnerAccountId</code> フィールドが追加</li>
+        <li>共有サブネットとセキュリティグループを所有する VPC オーナーの 12 桁のアカウント ID を指定</li>
+        <li>構成の作成後、ステータスが <code class="inline">ACTIVE</code> になるまで最大 15 分かかる</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🔗 VPC ピアリングによるクロスアカウント接続 (補完手段)</div>
+      <ul>
+        <li>組織をまたぐアカウント間や、特定リソースへのアクセスのみが必要な場合は、従来どおり VPC ピアリングを利用可能</li>
+        <li>ピアリングの場合、ENI は自アカウントの VPC 内に残り、<code class="inline">vpcOwnerAccountId</code> は設定しない</li>
+        <li>ドキュメントでは RAM 共有と VPC ピアリングの使い分け基準が整理されている</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🛡️ 共有停止時の保護機能</div>
+      <ul>
+        <li>VPC オーナーが共有を停止すると、参加アカウントは共有解除されたリソースを使用した新規実行や新規構成の作成が不可に</li>
+        <li>HealthOmics が共有サブネット内に作成した ENI は、未使用状態が 48 時間続いた後に自動的に削除 (スイープ) される</li>
+        <li>ENI が残っている間、VPC オーナーは共有 VPC やサブネットを削除できないため、クリーンアップのタイミングを計画する必要がある</li>
+      </ul>
+    </div>
+
+    <h3>🔀 RAM 共有と VPC ピアリングの使い分け</h3>
+    <table>
+      <tr><th>観点</th><th>RAM 共有</th><th>VPC ピアリング</th></tr>
+      <tr>
+        <td><strong>AWS Organizations</strong></td>
+        <td>必須 (同一組織に所属)</td>
+        <td>不要</td>
+      </tr>
+      <tr>
+        <td><strong>ENI の配置場所</strong></td>
+        <td>共有 VPC のサブネット内</td>
+        <td>自アカウントの VPC 内</td>
+      </tr>
+      <tr>
+        <td><strong>適するケース</strong></td>
+        <td>集中型 Egress や中央ネットワークアカウントなど、共有 VPC 内でワークフローを動かす必要がある場合</td>
+        <td>他アカウント VPC 内の特定リソースへのアクセスのみが必要な場合</td>
+      </tr>
+      <tr>
+        <td><strong>スケーリング上の考慮</strong></td>
+        <td>AWS RAM のサービスクォータに依存 (デフォルトでリージョンあたり 25,000 リソース共有)</td>
+        <td>VPC あたりアクティブなピアリング接続はデフォルト 50 件。超過が見込まれる場合は RAM 共有を検討</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📌 前提条件 (RAM 共有)</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr>
+        <td><strong>AWS Organizations</strong></td>
+        <td>VPC オーナーアカウントと参加アカウントが同一組織に所属していること</td>
+      </tr>
+      <tr>
+        <td><strong>サービスリンクロール</strong></td>
+        <td><code class="inline">AWSServiceRoleForHealthOmics</code> が両方のアカウントに存在すること。参加アカウント側は初回の構成作成時に自動作成されるが、VPC オーナー側はクロスアカウント操作となるため自動作成されず、VPC オーナーが用意する必要がある</td>
+      </tr>
+      <tr>
+        <td><strong>VPC</strong></td>
+        <td>VPC オーナーアカウントに、接続要件を満たす非デフォルト VPC のサブネットがあること (デフォルト VPC のサブネットは共有不可)。サブネットは HealthOmics が動作するアベイラビリティーゾーンに配置する</td>
+      </tr>
+      <tr>
+        <td><strong>セキュリティグループ</strong></td>
+        <td>共有 VPC 内のセキュリティグループ。VPC オーナー所有 (RAM で共有) と参加アカウント所有のどちらでも利用可能</td>
+      </tr>
+      <tr>
+        <td><strong>権限</strong></td>
+        <td>VPC オーナー側で AWS RAM リソース共有の作成権限、参加アカウント側で HealthOmics 構成リソースの作成権限とワークフロー実行権限</td>
+      </tr>
+    </table>
+
+    <h3>📝 API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/10/12</td>
+        <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/05bce7-omics.html" target="_blank" rel="noopener noreferrer">omics</a></td>
+        <td>3 updated api methods - <code class="inline">CreateConfiguration</code> の <code class="inline">VpcConfig</code> にオプションの <code class="inline">vpcOwnerAccountId</code> フィールドが追加され、AWS RAM で共有されたサブネットとセキュリティグループを所有するアカウントを指定可能に</td>
+      </tr>
+    </table>
+
+    <h3>🧩 構成リソースの設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">共有 VPC を使用する構成リソース</span>
+      </div>
+      <pre><code class="language-json">{
+  "name": "cross-account-ram-config",
+  "runConfigurations": {
+    "vpcConfig": {
+      "securityGroupIds": ["sg-1234567890abcdef0"],
+      "subnetIds": ["subnet-1234567890abcdef0"],
+      "vpcOwnerAccountId": "111122223333"
+    }
+  }
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>VPC オーナーアカウントと参加アカウントが同一の AWS Organizations 組織に所属していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>両アカウントに <code class="inline">AWSServiceRoleForHealthOmics</code> サービスリンクロールが存在すること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>VPC オーナーアカウントに、共有するサブネット・セキュリティグループ・必要な接続性 (NAT ゲートウェイなど) を備えた非デフォルト VPC があること</span></div>
+
+    <div class="flow-diagram">
+      <div class="flow-step"><span class="step-num">STEP 1</span>🏢 組織での RAM 共有を有効化</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step"><span class="step-num">STEP 2</span>🤝 リソース共有を作成</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step"><span class="step-num">STEP 3</span>⚙️ HealthOmics 構成を作成</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step"><span class="step-num">STEP 4</span>⚡ ワークフローを実行</div>
+    </div>
+
+    <h3>ステップ 1: 組織での RAM 共有を有効化 (管理アカウント)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">AWS Organizations 内でのリソース共有を有効化</span>
+      </div>
+      <pre><code class="language-bash">aws ram enable-sharing-with-aws-organization</code></pre>
+    </div>
+    <p style="font-size: 14px;">これにより、メンバーアカウントは招待の承諾なしで共有リソースを受け取れるようになります。</p>
+
+    <h3>ステップ 2: リソース共有を作成 (VPC オーナーアカウント)</h3>
+    <p style="font-size: 14px;">AWS RAM コンソールで [Create resource share] を選択し、ワークフロー実行に使用するサブネット (必要に応じてセキュリティグループも) をリソースとして追加します。プリンシパルには参加アカウントの ID または組織 ID を指定します。</p>
+
+    <h3>ステップ 3: HealthOmics 構成を作成 (参加アカウント)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">vpcOwnerAccountId を指定して構成リソースを作成</span>
+      </div>
+      <pre><code class="language-bash">aws omics create-configuration \
+  --name cross-account-ram-config \
+  --run-configurations '{
+    "vpcConfig": {
+      "securityGroupIds": ["sg-1234567890abcdef0"],
+      "subnetIds": ["subnet-1234567890abcdef0"],
+      "vpcOwnerAccountId": "111122223333"
+    }
+  }'</code></pre>
+    </div>
+    <p style="font-size: 14px;">共有サブネット ID・セキュリティグループ ID と、VPC オーナーの 12 桁のアカウント ID を指定します。作成後、ステータスが <code class="inline">ACTIVE</code> になるまで最大 15 分待ちます。</p>
+
+    <h3>ステップ 4: ワークフローを実行</h3>
+    <p style="font-size: 14px;">ネットワーキングモードを <code class="inline">VPC</code> に設定し、作成した構成の名前を指定してワークフロー実行を開始します。実行の ENI は共有サブネット内に配置され、共有 VPC 内のリソースにプライベートにアクセスできます。</p>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>インフラコストの削減</strong>: VPC エンドポイントや NAT ゲートウェイをアカウントごとに重複作成する必要がなくなり、組織全体でネットワークインフラを共用できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ガバナンスの強化</strong>: ネットワーク管理チームが VPC 構成・ルーティング・セキュリティポリシーを一元管理でき、コンプライアンス要件への対応が容易になる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>研究開発の俊敏性向上</strong>: 研究者や開発者はネットワーク構築を待たずに、自身のアカウントでワークフローの実行に集中できる</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ネットワーク管理の簡素化</strong>: VPC ピアリング接続やアカウントごとのルートテーブル維持が不要になり、集中管理型ネットワークの運用負荷が軽減される</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>シンプルな API 統合</strong>: 構成リソースに <code class="inline">vpcOwnerAccountId</code> を指定するだけで共有 VPC を利用でき、ワークフロー定義の変更は不要</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>安全な共有解除</strong>: 共有停止時には新規実行がブロックされ、未使用 ENI は 48 時間後に自動削除されるため、VPC オーナーがリソースの制御を失わない</span></div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>RAM 共有を利用するには、VPC オーナーアカウントと参加アカウントが同一の AWS Organizations 組織に所属している必要がある (組織をまたぐ場合は VPC ピアリングを使用)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>デフォルト VPC のサブネットは AWS RAM で共有できず、非デフォルト VPC のサブネットのみ共有可能</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span><code class="inline">AWSServiceRoleForHealthOmics</code> サービスリンクロールが VPC オーナーアカウント側では自動作成されないため、VPC オーナーが事前に用意する必要がある</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>構成リソースが <code class="inline">ACTIVE</code> になるまで最大 15 分かかる</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">!</span><span>共有停止後も、HealthOmics が作成した ENI が未使用状態で 48 時間経過するまで、VPC オーナーは共有 VPC やサブネットを削除できない</span></div>
+    <div class="warn-item"><span class="warn-icon">!</span><span>共有サブネットは HealthOmics が動作するアベイラビリティーゾーンに配置する必要がある</span></div>
+    <div class="warn-item"><span class="warn-icon">!</span><span>セキュリティグループは最小権限で構成し、VPC フローログや CloudWatch メトリクスでクロスアカウントのトラフィックを監視することが推奨される</span></div>
+    <div class="warn-item"><span class="warn-icon">!</span><span>AWS RAM のサービスクォータ (デフォルトでリージョンあたり 25,000 リソース共有、共有あたり 5,000 リソース・5,000 プリンシパル) に注意する</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1️⃣ 中央ネットワークアカウントによる集中型 Egress</div>
+      <p><strong>シナリオ</strong>: 製薬企業がネットワーク管理専用アカウントで共有 VPC・NAT ゲートウェイ・VPC エンドポイントを一元管理し、複数の研究チームがそれぞれのアカウントでゲノム解析ワークフローを実行する。</p>
+      <p><strong>実装例</strong>: ネットワークアカウントで共有 VPC・サブネット・NAT ゲートウェイ・S3 用 VPC エンドポイントを構築 → AWS RAM でサブネットとセキュリティグループを組織 ID 宛てに共有 → 各研究アカウントで <code class="inline">vpcOwnerAccountId</code> を指定した HealthOmics 構成を作成 → ネットワーキングモード VPC でワークフローを実行</p>
+      <p class="effect">💡 <strong>効果</strong>: VPC エンドポイントと NAT ゲートウェイの重複が解消され、アウトバウンド通信の制御とコストを一元管理できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2️⃣ オンプレミスのリファレンスデータへのプライベートアクセス</div>
+      <p><strong>シナリオ</strong>: 医療機関が AWS Direct Connect や Site-to-Site VPN を終端する共有 VPC を中央アカウントで管理し、各部門のアカウントからオンプレミスのリファレンスデータベースやライセンスサーバーにアクセスするワークフローを実行する。</p>
+      <p><strong>実装例</strong>: 中央アカウントの共有 VPC にオンプレミス接続とルーティングを集約 → 共有サブネットを各部門アカウントに RAM で共有 → 各部門アカウントのワークフロー ENI を共有サブネットに配置して実行</p>
+      <p class="effect">💡 <strong>効果</strong>: 部門アカウントごとにハイブリッド接続やルートテーブルを構築する必要がなくなり、オンプレミス資源へのアクセス経路を一元管理できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3️⃣ 組織外アカウントの特定リソースへのアクセス (VPC ピアリング)</div>
+      <p><strong>シナリオ</strong>: 共同研究先の別組織アカウントが保有する Amazon RDS クラスターのアノテーションデータに、自アカウントのワークフローからプライベートにアクセスする。</p>
+      <p><strong>実装例</strong>: 自アカウント (リクエスタ) に CIDR が重複しない VPC を作成 → 相手アカウント (アクセプタ) との VPC ピアリング接続を作成・承諾 → 双方のルートテーブルとセキュリティグループを更新 → <code class="inline">vpcOwnerAccountId</code> は設定せず、自アカウントのサブネットでワークフローを実行</p>
+      <p class="effect">💡 <strong>効果</strong>: AWS Organizations の組織をまたぐ場合でも、ピアリング経由で相手 VPC 内の特定リソースにプライベートにアクセスできる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      共有 VPC のサポート自体に対する HealthOmics の<span class="highlight">追加料金の記載はありません</span>。HealthOmics のワークフロー実行料金は従来どおり適用されます。
+    </p>
+    <p style="font-size: 14px;">
+      なお、公式ドキュメントには、クロスアカウント接続のために作成する Amazon VPC や関連リソース (NAT ゲートウェイ、VPC エンドポイント、ピアリング経由のデータ転送など) によって課金が発生する可能性があると記載されています。詳細は各サービスの料金ページを確認してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>AWS HealthOmics が利用可能なすべてのリージョンで利用できます。</p>
+    <div class="region-tags">
+      <span class="region-tag">🇺🇸 米国東部 (バージニア北部)</span>
+      <span class="region-tag">🇺🇸 米国東部 (オハイオ)</span>
+      <span class="region-tag">🇺🇸 米国西部 (オレゴン)</span>
+      <span class="region-tag">🇩🇪 欧州 (フランクフルト)</span>
+      <span class="region-tag">🇮🇪 欧州 (アイルランド)</span>
+      <span class="region-tag">🇬🇧 欧州 (ロンドン)</span>
+      <span class="region-tag">🇮🇱 イスラエル (テルアビブ)</span>
+      <span class="region-tag">🇸🇬 アジアパシフィック (シンガポール)</span>
+      <span class="region-tag">🇰🇷 アジアパシフィック (ソウル)</span>
+      <span class="region-tag">🇯🇵 アジアパシフィック (東京)</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="related-card">
+        <div class="related-name">🤝 AWS Resource Access Manager (AWS RAM)</div>
+        サブネットとセキュリティグループをアカウント間で共有するための中核サービス。組織での共有を有効化するとメンバーアカウントは招待なしで共有リソースを利用できる
+      </div>
+      <div class="related-card">
+        <div class="related-name">🏢 AWS Organizations</div>
+        RAM 共有の前提条件。VPC オーナーと参加アカウントが同一組織に所属している必要がある
+      </div>
+      <div class="related-card">
+        <div class="related-name">☁️ Amazon VPC</div>
+        共有 VPC・サブネット・セキュリティグループ・VPC ピアリングなど、本機能の基盤となるネットワーキングサービス
+      </div>
+      <div class="related-card">
+        <div class="related-name">🔌 AWS PrivateLink</div>
+        従来は各 VPC に個別のエンドポイント作成が必要だったが、共有 VPC により組織全体でエンドポイントを共用できるようになった
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      AWS HealthOmics の共有 VPC サポートにより、集中管理型ネットワークを採用する組織は、VPC エンドポイントの重複やピアリング接続の維持なしに、<span class="highlight">複数アカウントのバイオインフォマティクスワークフローを単一の共有 VPC 内で実行</span>できるようになりました。
+    </p>
+    <p>
+      マルチアカウント環境で HealthOmics を運用しているお客様は、<code class="inline">AWSServiceRoleForHealthOmics</code> ロールの両アカウントでの準備と AWS RAM によるサブネット共有を確認した上で、<code class="inline">vpcOwnerAccountId</code> を指定した構成への移行を検討することを推奨します。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/10/omics-workflows-shared-vpcs/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/10/omics-workflows-shared-vpcs/</a></li>
+      <li>ドキュメント: Connecting to a VPC in another account: <a class="aws-link" href="https://docs.aws.amazon.com/omics/latest/dev/workflows-vpc-cross-account.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/omics/latest/dev/workflows-vpc-cross-account.html</a></li>
+      <li>AWS HealthOmics 製品ページ: <a class="aws-link" href="https://aws.amazon.com/healthomics/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/healthomics/</a></li>
+      <li>Amazon VPC: Share your VPC subnets with other accounts: <a class="aws-link" href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-sharing.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/vpc/latest/userguide/vpc-sharing.html</a></li>
+      <li>AWS RAM ユーザーガイド: <a class="aws-link" href="https://docs.aws.amazon.com/ram/latest/userguide/" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/ram/latest/userguide/</a></li>
+      <li>API 変更履歴: <a class="aws-link" href="https://awsapichanges.com/archive/changes/05bce7-omics.html" target="_blank" rel="noopener noreferrer">https://awsapichanges.com/archive/changes/05bce7-omics.html</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-10-15-omics-workflows-shared-vpcs.md) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
