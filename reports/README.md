@@ -7,6 +7,7 @@
 
 - [2026-10-16 - AWS Outposts - 第 2 世代 Outposts ラックが AWS メキシコ (中部) リージョンをサポート](2026/2026-10-16-aws-outposts-racks-mexico-central.md)
 - [2026-10-16 - AWS End User Messaging - RCS 登録動画のガイド付きウィザード](2026/2026-10-16-aws-end-user-messaging-adds-guided-wizard-rcs-registration-videos.md)
+- [2026-10-16 - Amazon Braket - FedRAMP Class C 対応](2026/2026-10-16-braket-fedramp-class-c.md)
 - [2026-10-16 - AWS End User Messaging - Notify によるエンドツーエンドのマネージド OTP 検証](2026/2026-10-16-aws-end-user-messaging-adds-end-to-end-managed-OTP.md)
 - [2026-10-16 - AWS End User Messaging - ブランドプロファイル (Brand Profiles) のサポート](2026/2026-10-16-aws-end-user-messaging-now-supports-brand-profiles.md)
 - [2026-10-16 - AWS End User Messaging - 登録プロセスの改善による迅速で高品質な申請の実現](2026/2026-10-16-aws-end-user-messaging-adds-registration-improvements-for-faster-higher-quality-submissions.md)
@@ -16,7 +17,9 @@
 - [2026-10-16 - Amazon SageMaker JumpStart - NVIDIA Nemotron 3.5 Super VL モデルの提供開始](2026/2026-10-16-nvidia-nemotron-3.5-super-vl-on-sagemaker-jumpstart.md)
 - [2026-10-15 - Amazon Time Sync Service - マイクロ秒精度の時刻同期を 135 の追加 EC2 インスタンスタイプでサポート](2026/2026-10-15-time-sync-additional-instances-all-regions.md)
 - [2026-10-15 - Amazon CloudFront - VPC オリジンのデュアルスタック対応](2026/2026-10-15-cloudfront-vpc-origin-dualstack.md)
+- [2026-10-15 - Kiro - Kimi K3 モデルの提供開始](2026/2026-10-15-kiro-kimi-k3.md)
 - [2026-10-15 - Amazon Managed Service for Prometheus - Collector のアジアパシフィック (ニュージーランド) リージョン対応](2026/2026-10-15-ams-prometheus-collector-apac-nz.md)
+- [2026-10-15 - Amazon SageMaker Studio - 新しいサインインオプションによる新規 AI/ML ビルダー向けオンボーディング簡素化](2026/2026-10-15-sagemaker-studio-new-sign-in-options.md)
 - [2026-10-15 - AWS Transform - フルスタック Windows モダナイゼーションの Aurora PostgreSQL クロスリージョンデプロイ対応と 7 リージョン拡大](2026/2026-10-15-aws-transform-full-stack-aurora-cross-region.md)
 - [2026-10-15 - Amazon DynamoDB Streams - タイムスタンプベースのストリーム処理](2026/2026-10-15-amazon-dynamodb-streams-timestamp-processing.md)
 - [2026-10-15 - AWS Resilience Hub - AWS DevOps Agent 連携による検出結果とテスト結果のレビュー](2026/2026-10-15-aws-devops-agent-test-results-aws-resilience-hub.md)
