@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Connect - Global Resiliency のリージョン切り替え準備状況の可視化</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 12px 0;
+}
+
+.feature-card .feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+
+.feature-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.feature-card li {
+  margin: 4px 0;
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; font-size: 14.5px; }
+
+/* ステータスバッジ */
+.status-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 20px 0 8px 0;
+}
+
+.status-badge {
+  border-radius: 8px;
+  padding: 12px 18px;
+  text-align: center;
+  font-weight: 600;
+  min-width: 180px;
+}
+
+.status-sync {
+  background: rgba(29, 129, 2, 0.15);
+  border: 2px solid var(--aws-green);
+  color: #6FCF57;
+}
+
+.status-pending {
+  background: rgba(255, 153, 0, 0.12);
+  border: 2px solid var(--aws-orange);
+  color: var(--aws-smile-orange);
+}
+
+.status-action {
+  background: rgba(209, 50, 18, 0.12);
+  border: 2px solid var(--aws-red);
+  color: #FF6B4A;
+}
+
+.status-badge .status-en {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14.5px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 12px 0;
+}
+
+.usecase .uc-title {
+  color: var(--aws-orange);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase .uc-label {
+  color: var(--aws-white);
+  font-weight: 600;
+}
+
+.usecase ol {
+  margin: 8px 0;
+  padding-left: 22px;
+  font-size: 14.5px;
+}
+
+.usecase li { margin: 4px 0; }
+
+.uc-effect {
+  background: rgba(29, 129, 2, 0.12);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-size: 14.5px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13.5px;
+  color: var(--aws-smile-orange);
+  word-break: break-all;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-content { flex: 1; min-width: 0; }
+
+.step-content .step-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* リージョンペア */
+.region-pairs {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.region-pair {
+  background: rgba(0, 161, 201, 0.1);
+  border: 2px solid var(--aws-teal);
+  border-radius: 8px;
+  padding: 12px 18px;
+  text-align: center;
+  font-size: 14.5px;
+}
+
+.region-pair .pair-arrow {
+  color: var(--aws-teal);
+  font-weight: 700;
+}
+
+.aws-link { color: var(--aws-teal); text-decoration: none; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.note-box {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px dashed var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-size: 14.5px;
+}
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px 24px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+
+ul.plain { margin: 8px 0; padding-left: 20px; }
+ul.plain li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">📞 Amazon Connect</span>
+    <h1>🌐 Customer Global Resiliency<br>リージョン切り替え準備状況を 1 か所で可視化</h1>
+    <div class="subtitle">
+      <span class="release-date">📅 リリース日: 2026 年 10 月 19 日</span> |
+      機能: Global Resiliency ページによる準備状況の可視化
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon Connect Customer Global Resiliency の管理者向けウェブサイトに、新しい <span class="highlight">Global Resiliency ページ</span>が追加されました。リンクされたリージョン間での<span class="highlight">リージョン切り替え (Region switch) の準備状況</span>を 1 か所で確認できます。
+    </p>
+    <p>
+      ネイティブにレプリケーションされるリソースの一覧と同期ステータスが表示され、トラフィック分散グループに未関連付けの電話番号やユーザーといった<span class="highlight">設定ギャップをその場で修正</span>できます。障害発生前の平常時から、レジリエンシー態勢を継続的に点検できるようになります。
+    </p>
+
+    <div class="status-row">
+      <div class="status-badge status-sync">✅ 同期済み<span class="status-en">in sync</span></div>
+      <div class="status-badge status-pending">⏳ 同期保留中<span class="status-en">pending</span></div>
+      <div class="status-badge status-action">⚠️ 要対応<span class="status-en">needs action</span></div>
+    </div>
+    <div class="diagram-caption">リソースタイプごとに 3 区分のステータスで表示</div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ アップデート前の課題</div>
+        <ul>
+          <li>準備状況を一元的に確認する画面がなく、リソースの同期状態を個別に確認する必要があった</li>
+          <li>電話番号やユーザーの関連付け漏れに気づきにくく、切り替え時に初めて問題が発覚するリスクがあった</li>
+          <li>設定ギャップの修正には、個別の管理画面や API 操作が必要だった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <ul>
+          <li>Global Resiliency ページで全体的な準備状況を 1 か所で確認できる</li>
+          <li>リソースごとに同期済み・同期保留中・要対応のステータスを一覧で把握できる</li>
+          <li>未関連付けの電話番号やユーザーを、同じページから直接関連付けて修正できる</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Admin(["👤 管理者"]) --> GRPage["🖥️ Global Resiliency ページ<br/>管理者向けウェブサイト"]
+
+    subgraph Readiness["📋 準備状況の可視化"]
+        direction LR
+        Overall["✅ 全体の準備状況"]
+        Resources["🗂️ レプリケーション<br/>リソース一覧<br/>同期済み / 保留中 / 要対応"]
+        Fix["🔧 未関連付けリソースの<br/>関連付け操作"]
+        Overall ~~~ Resources ~~~ Fix
+    end
+
+    GRPage --> Readiness
+
+    subgraph Source["☁️ ソースリージョン"]
+        InstanceA["📞 Connect インスタンス"]
+    end
+
+    subgraph Replica["☁️ レプリカリージョン"]
+        InstanceB["📞 Connect レプリカインスタンス"]
+    end
+
+    TDG["🔀 トラフィック分散グループ<br/>電話番号・エージェント"]
+
+    Readiness -.-> InstanceA
+    Readiness -.-> InstanceB
+    InstanceA <--> TDG
+    InstanceB <--> TDG
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef page fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class Admin user
+    class GRPage page
+    class Readiness layer
+    class Source,Replica cloud
+    class InstanceA,InstanceB internal
+    class Overall,Resources,Fix,TDG input
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      管理者は Global Resiliency ページから、リンクされた 2 つのリージョンにまたがるリソースの同期状態と切り替え準備状況を一元的に確認し、設定ギャップをその場で修正できます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">1️⃣ 全体的な準備状況の表示</div>
+      <ul>
+        <li>リージョン切り替えに対するインスタンス全体の readiness ステータスを表示</li>
+        <li>障害発生時だけでなく、平常時にいつでもレジリエンシー態勢を確認可能</li>
+        <li>定期的なフェイルオーバーテストや監査の起点として活用できる</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">2️⃣ レプリケーション対象リソースのステータス一覧</div>
+      <ul>
+        <li>Global Resiliency がネイティブにレプリケーションするリソースを一覧表示</li>
+        <li>各リソースタイプについて、同期済み・同期保留中・要対応のステータスを確認可能</li>
+        <li>どのリソースが切り替えの阻害要因になっているかを即座に特定できる</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">3️⃣ 影響を受けるリソースの直接修正</div>
+      <ul>
+        <li>トラフィック分散グループに関連付けられていない電話番号やユーザーなどを検出</li>
+        <li>検出された未関連付けリソースを、Global Resiliency ページから直接関連付け可能</li>
+        <li>個別の管理画面や API 操作に移動することなく、設定ギャップを解消できる</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>Global Resiliency の基本構成要素</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr>
+        <td>レプリカインスタンス</td>
+        <td>ReplicateInstance API などで別リージョンに作成する Connect インスタンスの複製</td>
+      </tr>
+      <tr>
+        <td>トラフィック分散グループ</td>
+        <td>異なるリージョンの Connect インスタンスをリンクするリソース。電話番号を関連付け、トラフィックを 10% 刻みで分散可能</td>
+      </tr>
+      <tr>
+        <td>準備状況ステータス</td>
+        <td>同期済み (in sync)・同期保留中 (pending)・要対応 (needs action) の 3 区分でリソースを表示</td>
+      </tr>
+      <tr>
+        <td>利用画面</td>
+        <td>Amazon Connect 管理者向けウェブサイトの Global Resiliency ページ</td>
+      </tr>
+    </table>
+
+    <h3>前提となるドメイン形式</h3>
+    <div class="note-box">
+      ⚠️ 2021 年 3 月 31 日より前に作成されたインスタンスで <code class="inline">https://{instance-alias}.awsapps.com/connect/</code> 形式のドメインを使用している場合、Global Resiliency を正しく構成できません。<code class="inline">https://{instance-alias}.my.connect.aws/</code> 形式へのドメイン更新が必要です。
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon Connect Customer Global Resiliency が有効化されたインスタンスであること (利用には Amazon Connect の Solutions Architect または Technical Account Manager への連絡が必要)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>インスタンスのドメインが <code class="inline">https://{instance-alias}.my.connect.aws/</code> 形式であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Global Resiliency がサポートされるリージョンペアでインスタンスを運用していること</span></div>
+
+    <h3>手順</h3>
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">レプリカインスタンスとトラフィック分散グループの作成</div>
+        <p style="margin: 4px 0; font-size: 14.5px;">ReplicateInstance API で既存インスタンスの複製を別リージョンに作成し、CreateTrafficDistributionGroup API で 2 つのリージョンのインスタンスをリンクします。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">レプリカ作成とトラフィック分散グループ作成</span>
+          </div>
+          <pre><code class="language-bash"># 既存インスタンスのレプリカを別リージョンに作成
+aws connect replicate-instance \
+  --instance-id &lt;インスタンス ID&gt; \
+  --replica-region us-west-2 \
+  --replica-alias &lt;レプリカのエイリアス&gt;
+
+# トラフィック分散グループを作成
+aws connect create-traffic-distribution-group \
+  --name my-tdg \
+  --instance-id &lt;インスタンス ARN&gt;</code></pre>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">電話番号とユーザーの関連付け</div>
+        <p style="margin: 4px 0; font-size: 14.5px;">UpdatePhoneNumber API で電話番号をトラフィック分散グループに割り当てます。ユーザー (エージェント) についても同様に関連付けを行います。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">電話番号の割り当て</span>
+          </div>
+          <pre><code class="language-bash"># 電話番号をトラフィック分散グループに割り当て
+aws connect update-phone-number \
+  --phone-number-id &lt;電話番号 ID&gt; \
+  --target-arn &lt;トラフィック分散グループ ARN&gt;</code></pre>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">Global Resiliency ページで準備状況を確認</div>
+        <p style="margin: 4px 0; font-size: 14.5px;">管理者向けウェブサイトにログインし、Global Resiliency ページを開きます。全体の準備状況と各リソースタイプのステータスを確認し、「要対応」と表示されたリソースがあれば、このページから直接関連付けを行います。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">ダウンタイムリスクの低減</strong>: 切り替えの阻害要因を平常時に発見・解消でき、障害時に切り替えが失敗するリスクを低減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">運用負荷の削減</strong>: 準備状況の確認が 1 か所に集約され、監査やフェイルオーバーテスト前の点検作業が効率化</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">非技術者にも分かりやすい可視化</strong>: ビジネスユーザーや管理者が API を使わずにレジリエンシー態勢を把握できる</span></div>
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">同期状態の透明性</strong>: リソースごとの同期状態 (in sync / pending / needs action) が明確になり、問題の切り分けが容易</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">設定ギャップのその場での修正</strong>: 未関連付けの電話番号やユーザーを検出し、同じページから関連付けまで完結</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">継続的なレジリエンシー点検</strong>: 月次のフェイルオーバーテストなど定期的な検証プロセスに組み込みやすい</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Global Resiliency の利用には、Amazon Connect の Solutions Architect または Technical Account Manager への連絡によるアクセス付与が必要</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>レプリカを作成できるリージョンの組み合わせは固定 (バージニア北部とオレゴン、フランクフルトとロンドン、東京と大阪)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>旧形式ドメイン (awsapps.com/connect) のインスタンスでは構成できず、ドメイン更新が必要</span></div>
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>本ページはネイティブにレプリケーションされるリソースの状態を表示するもの。Lambda 関数や外部連携などレプリケーション対象外のリソースは別途リージョン間での整合性確保が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>可視化に加えて、実際のリージョン切り替え手順 (トラフィック分散の更新) の定期的なテストは引き続き重要</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+    <div class="usecase">
+      <div class="uc-title">🏦 ユースケース 1: 障害発生前の定期点検</div>
+      <p style="margin: 4px 0; font-size: 14.5px;"><span class="uc-label">シナリオ</span>: 金融機関のコンタクトセンターで、月次のレジリエンシー点検を実施。従来は複数の画面と API でリソースの同期状態を個別に確認していた。</p>
+      <ol>
+        <li>Global Resiliency ページを開き、全体の準備状況を確認</li>
+        <li>「要対応」のリソースタイプを特定</li>
+        <li>未関連付けの電話番号・ユーザーをページ上で関連付け</li>
+        <li>全リソースが「同期済み」になったことを確認し、点検記録に残す</li>
+      </ol>
+      <div class="uc-effect">✅ <strong>効果</strong>: 点検作業が 1 画面に集約され、確認漏れによる切り替え失敗のリスクを低減できる。</div>
+    </div>
+    <div class="usecase">
+      <div class="uc-title">📈 ユースケース 2: 新規リソース追加後の整合性確認</div>
+      <p style="margin: 4px 0; font-size: 14.5px;"><span class="uc-label">シナリオ</span>: コンタクトセンターの拡張に伴い、新しい電話番号の取得とエージェントの追加を実施。これらが DR 構成に正しく組み込まれているかを確認したい。</p>
+      <ol>
+        <li>電話番号の取得とユーザー作成後、Global Resiliency ページを確認</li>
+        <li>トラフィック分散グループに未関連付けのリソースが「要対応」として表示される</li>
+        <li>ページ上から該当リソースをトラフィック分散グループに関連付け</li>
+      </ol>
+      <div class="uc-effect">✅ <strong>効果</strong>: リソース追加のたびに発生しがちな DR 構成への組み込み漏れを、早期に検出・修正できる。</div>
+    </div>
+    <div class="usecase">
+      <div class="uc-title">🧪 ユースケース 3: フェイルオーバーテスト前の事前チェック</div>
+      <p style="margin: 4px 0; font-size: 14.5px;"><span class="uc-label">シナリオ</span>: 月次のフェイルオーバーテストの実施前に、リージョン切り替えが成功する状態にあるかを確認したい。</p>
+      <ol>
+        <li>テスト実施前に Global Resiliency ページで全体の準備状況を確認</li>
+        <li>同期保留中のリソースがあれば同期完了を待つ</li>
+        <li>すべて同期済みであることを確認してから UpdateTrafficDistribution でトラフィックを切り替え</li>
+      </ol>
+      <div class="uc-effect">✅ <strong>効果</strong>: テスト当日の手戻りを防ぎ、切り替え手順の検証に集中できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      今回の発表には、本機能に関する<span class="highlight">追加料金の記載はありません</span>。Amazon Connect の料金は従量課金制であり、詳細は <a href="https://aws.amazon.com/connect/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon Connect の料金ページ</a> を参照してください。
+    </p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>Amazon Connect Customer Global Resiliency がサポートされるすべての AWS リージョンで利用可能です。Global Resiliency は以下のリージョンペアで作成されたインスタンスで利用できます。</p>
+    <div class="region-pairs">
+      <div class="region-pair">🇺🇸 米国東部 バージニア北部 <span class="pair-arrow">⇄</span> 米国西部 オレゴン</div>
+      <div class="region-pair">🇪🇺 欧州 フランクフルト <span class="pair-arrow">⇄</span> 欧州 ロンドン</div>
+      <div class="region-pair">🇯🇵 アジアパシフィック 東京 <span class="pair-arrow">⇄</span> 大阪</div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <strong style="color: var(--aws-white);">🔀 Amazon Connect トラフィック分散グループ</strong><br>
+      異なるリージョンの Connect インスタンスをリンクし、電話番号のトラフィックを 10% 刻みで分散する機能。本アップデートで未関連付けリソースの検出・修正対象となる。
+    </div>
+    <div class="card">
+      <strong style="color: var(--aws-white);">🧑‍💻 Amazon Connect エージェントワークスペース</strong><br>
+      エージェントが利用する統合ワークスペース。リージョン切り替え時にはエージェントのサインイン先も切り替わるため、準備状況の確認が重要。
+    </div>
+    <div class="card">
+      <strong style="color: var(--aws-white);">🛡️ Amazon Route 53 Application Recovery Controller</strong><br>
+      AWS 全般のマルチリージョン切り替えを管理するサービス。Connect 以外のワークロードを含めた DR 戦略で併用を検討できる。
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section summary-box">
+    <h2>📝 まとめ</h2>
+    <p style="margin-bottom: 0;">
+      Amazon Connect Customer Global Resiliency の新しい Global Resiliency ページにより、<span class="highlight">リージョン切り替えの準備状況を管理画面上で一元的に可視化</span>し、設定ギャップをその場で修正できるようになりました。マルチリージョン構成で Amazon Connect を運用しているチームは、月次のフェイルオーバーテストや定期点検のプロセスに本ページでの確認を組み込むことを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典</p>
+    <ul class="plain">
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-connect-global-resiliency-readiness-overview" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-connect-global-resiliency-readiness-overview</a></li>
+      <li><a href="https://docs.aws.amazon.com/connect/latest/adminguide/get-started-connect-global-resiliency.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Get started with Connect Customer Global Resiliency</a></li>
+      <li><a href="https://aws.amazon.com/connect/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ: https://aws.amazon.com/connect/pricing/</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-10-19) を基に作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#FF9900',
+      primaryTextColor: '#232F3E',
+      primaryBorderColor: '#FF9900',
+      lineColor: '#FF9900',
+      secondaryColor: '#F5F5F5',
+      tertiaryColor: '#FAFAFA',
+      background: '#FFFFFF',
+      mainBkg: '#FFF3E0',
+      nodeBorder: '#FF9900',
+      clusterBkg: '#FFF8E1',
+      clusterBorder: '#FF9900',
+      edgeLabelBackground: '#FFFFFF',
+      textColor: '#232F3E'
+    }
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

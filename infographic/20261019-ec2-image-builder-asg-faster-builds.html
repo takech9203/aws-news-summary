@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EC2 Image Builder - Auto Scaling Group 連携による高速イメージビルド</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header { margin-bottom: 32px; }
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle { font-size: 16px; color: var(--aws-light-gray); }
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After 比較 */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.before-box, .after-box {
+  flex: 1;
+  min-width: 280px;
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .ba-title { color: #FF6B4A; }
+.after-box .ba-title { color: #4CAF50; }
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.ba-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.stat-card {
+  flex: 1;
+  min-width: 180px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-number {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.3;
+}
+.stat-label { font-size: 14px; color: var(--aws-light-gray); }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+code.inline {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(255, 153, 0, 0.04));
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase-effect {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid #4CAF50;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 20px 0;
+  align-items: flex-start;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.two-col > div { flex: 1; min-width: 280px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+ul.plain { margin: 8px 0; padding-left: 20px; }
+ul.plain li { margin: 6px 0; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">⚙️ EC2 Image Builder</span>
+    <h1>🚀 Auto Scaling Group 連携による高速イメージビルド</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 10 月 19 日 | 機能: ASG の既存インスタンスを利用したイメージビルド (Parent Instance)</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>EC2 Image Builder が、<span class="highlight">Amazon EC2 Auto Scaling Group (ASG) 内で既に稼働中のインスタンス</span>を利用してイメージをビルドする機能をサポートしました。インフラストラクチャ設定に ASG を指定すると、ビルドのたびに新しいインスタンスを起動する代わりに、ASG から稼働中のインスタンスを 1 台選択してビルドコンポーネントを適用します。<span class="highlight">インスタンスの起動とブートストラップの待ち時間が不要</span>になるため、ビルド時間を短縮できます。</p>
+    <p>ASG はインスタンスがビルドに使用されるたびにプールを自動的に補充するため、<span class="highlight">ウォームなインスタンスプール</span>を常に維持できます。本機能は完全にオプトインであり、既存のパイプラインには影響しません。</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-number">起動待ちゼロ</div>
+        <div class="stat-label">稼働中インスタンスを即利用</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">自動補充</div>
+        <div class="stat-label">ASG がプールを常に維持</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">追加料金なし</div>
+        <div class="stat-label">全リージョンで利用可能</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ アップデート前の課題</div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>ビルドのたびに新しい EC2 インスタンスを起動し、起動と SSM Agent 登録 (ブートストラップ) の待ち時間がビルド時間に含まれていた</span></div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>頻繁なビルド実行環境では起動待ち時間の累積がパイプライン全体のスループットを低下させていた</span></div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>事前にウォームアップしたインスタンスプールをビルドに活用する仕組みがなかった</span></div>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>ASG 内の稼働中インスタンスをそのままビルドに使用でき、起動とブートストラップの待ち時間を排除</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>ASG がプールを自動補充し、連続的なパイプライン実行でも常にビルド可能なインスタンスを確保</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>完全オプトインのため、既存パイプラインへの影響なく段階的に導入可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Pipeline(["🚀 Image Builder パイプライン実行"]) --> Check{🔍 インフラ設定に<br/>ASG 指定あり?}
+    Check -->|なし| Launch["⚙️ 新規インスタンスを起動<br/>従来のビルドフロー"]
+    Check -->|あり| Select["🎯 ASG から条件を満たす<br/>稼働中インスタンスを選択"]
+
+    subgraph ASG["🏢 Auto Scaling Group ビルドプール"]
+        direction LR
+        I1["🖥️ インスタンス A"]
+        I2["🖥️ インスタンス B"]
+        I3["🖥️ インスタンス C"]
+        I1 ~~~ I2 ~~~ I3
+    end
+
+    ASG --> Select
+    Select --> Detach["🏷️ タグ付与と ASG からのデタッチ"]
+    Detach --> Build["🔧 SSM 経由で<br/>ビルドコンポーネントを適用"]
+    Launch --> Build
+    Build --> AMI[("📀 出力イメージ AMI")]
+    Detach -.->|希望容量は不変| Refill["♻️ ASG が代替インスタンスを<br/>自動起動しプールを補充"]
+    Refill -.-> ASG
+
+    classDef trigger fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Pipeline trigger
+    class Check decision
+    class Launch,Select,Detach,Build process
+    class Refill internal
+    class AMI storage
+    class ASG layer
+      </pre>
+    </div>
+    <p>ASG を指定したパイプラインでは、Image Builder が稼働中インスタンスを選択してタグ付与とデタッチを行い、SSM 経由でビルドを実行します。ASG の希望容量は変わらないため、代替インスタンスが自動起動されてプールが補充されます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⭐ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">1️⃣ ASG からの稼働中インスタンスの選択</div>
+      <p style="margin: 0; font-size: 14px;">インフラストラクチャ設定の <code class="inline">parentInstance</code> に ASG 名を指定すると、ビルド時に ASG 内のインスタンスをランダムに 1 台選択します (インスタンスの指定は不可)。選択条件は「<span class="highlight">InService 状態</span>」「<span class="highlight">SSM Agent がオンライン</span>」「<span class="highlight">同じプラットフォームとアーキテクチャ</span>」の 3 点です。コンテナビルドの場合、コンテナレシピのインスタンス設定でイメージが指定されているときのみアーキテクチャを比較します。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">2️⃣ タグ付与とデタッチによるプール管理</div>
+      <p style="margin: 0; font-size: 14px;">ビルド開始前に対象インスタンスへ <code class="inline">Name</code>、<code class="inline">CreatedBy</code>、<code class="inline">Ec2ImageBuilderArn</code> とインフラストラクチャ設定のリソースタグを付与し、ASG からデタッチします。希望容量は変更されないため、ASG が代替インスタンスを自動起動してプールを補充します (デタッチされたインスタンスは ASG に戻りません)。本機能が適用されるのは<span class="highlight">ビルドフェーズのみ</span>で、テストインスタンスは従来どおり起動されます。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">3️⃣ 容量待機タイムアウト capacityWaitTimeoutSeconds</div>
+      <p style="margin: 0; font-size: 14px;">条件を満たすインスタンスがない場合、<code class="inline">capacityWaitTimeoutSeconds</code> (最大 1 時間) まで待機し、利用可能にならなければビルドは失敗します。<span class="highlight">新規インスタンス起動へのフォールバックは行われません</span>。値が 0 または未指定の場合は即座に失敗します。チェック間隔は最初の 5 分間が約 15 秒ごと、その後は約 45 秒ごとです。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">4️⃣ ビルド後のインスタンス保持 terminateInstanceOnCompletion</div>
+      <p style="margin: 0; font-size: 14px;">今回の API 更新で追加された <code class="inline">terminateInstanceOnCompletion</code> を <code class="inline">false</code> に設定すると、ビルド成功後もインスタンスを保持できます。AMI ビルドでは <code class="inline">CreateImage</code> ステップがイメージ作成前にインスタンスを停止するため、保持されたインスタンスはビルド後に <span class="highlight">stopped 状態</span>となります。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📋 ビルドインスタンスに適用される設定</h3>
+    <p style="font-size: 14px;">稼働中のインスタンスを使用するため、ビルドインスタンスは <span class="highlight">ASG の起動テンプレートの設定を維持</span>します。以下の設定は適用されません。変更が必要な場合は ASG の起動テンプレートを更新します。</p>
+    <table>
+      <tr><th>設定ソース</th><th>適用されない設定</th></tr>
+      <tr><td>インフラストラクチャ設定</td><td>インスタンスタイプ、インスタンスプロファイル、サブネット、セキュリティグループ、キーペア、プレイスメント、インスタンスメタデータオプション</td></tr>
+      <tr><td>イメージレシピ</td><td>ベースイメージ、ブロックデバイスマッピング、ユーザーデータ (出力 AMI はインスタンス自身のボリュームから作成される)</td></tr>
+      <tr><td>コンテナレシピ</td><td>インスタンス設定</td></tr>
+    </table>
+
+    <h3>✅ 前提条件 (要件)</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>ASG の配置</td><td>インフラストラクチャ設定と同じ AWS アカウントおよびリージョンに存在すること</td></tr>
+      <tr><td>プラットフォーム</td><td>ASG のインスタンスがイメージと同じプラットフォームとアーキテクチャで動作していること</td></tr>
+      <tr><td>SSM Agent</td><td>SSM Agent がインストールされ、Systems Manager でオンラインであること (AmazonSSMManagedInstanceCore ポリシーなどを含むインスタンスプロファイルと Systems Manager へのネットワークアクセスが必要)</td></tr>
+      <tr><td>インスタンスプロファイル</td><td>ASG の起動テンプレートに、Image Builder とビルドコンポーネントに必要な権限を持つインスタンスプロファイルを設定すること</td></tr>
+      <tr><td>コンテナビルド</td><td>インスタンス上で Docker が稼働していること</td></tr>
+      <tr><td>実行ロール</td><td>パイプラインに ASG を利用できる実行ロールを指定すること (サービスリンクロールには ASG の権限がない)</td></tr>
+    </table>
+
+    <h3>🔄 API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/10/14</td>
+        <td><a href="https://awsapichanges.com/archive/changes/fca45a-imagebuilder.html" target="_blank" rel="noopener noreferrer" class="aws-link">imagebuilder</a></td>
+        <td>4 updated api methods - <code class="inline">CreateInfrastructureConfiguration</code>、<code class="inline">UpdateInfrastructureConfiguration</code>、<code class="inline">GetInfrastructureConfiguration</code>、<code class="inline">GetImage</code> に <code class="inline">parentInstance</code> (autoScalingGroup の name と capacityWaitTimeoutSeconds) および <code class="inline">terminateInstanceOnCompletion</code> が追加</td>
+      </tr>
+    </table>
+
+    <h3>🔐 実行ロールに必要な権限</h3>
+    <p style="font-size: 14px;">EC2ImageBuilderExecutionPolicy マネージドポリシーに加えて、以下の権限が必要です。</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">実行ロール追加ポリシー</span>
+      </div>
+      <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "TagInstanceInASG",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateTags",
+                "ec2:DeleteTags"
+            ],
+            "Resource": "arn:aws:ec2:*:*:instance/*",
+            "Condition": {
+                "StringEquals": {
+                    "ec2:ResourceTag/aws:autoscaling:groupName": "my-build-pool"
+                }
+            }
+        },
+        {
+            "Sid": "DescribeASG",
+            "Effect": "Allow",
+            "Action": "autoscaling:DescribeAutoScalingGroups",
+            "Resource": "*"
+        },
+        {
+            "Sid": "DetachFromASG",
+            "Effect": "Allow",
+            "Action": "autoscaling:DetachInstances",
+            "Resource": "arn:aws:autoscaling:*:*:autoScalingGroup:*:autoScalingGroupName/my-build-pool"
+        }
+    ]
+}</code></pre>
+    </div>
+    <p style="font-size: 14px;">ポリシーを自作する代わりに、<code class="inline">EC2ImageBuilderParentInstanceASGRoleTemplate</code> ロールテンプレートから必要な権限を持つロールを作成することもできます (コンソールの「Create new role with required permission」または AWS CLI の <code class="inline">acquire-role</code> コマンド)。なお、このロールテンプレートは AWS GovCloud (US) リージョンおよび中国リージョンでは利用できません。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>📌 前提条件</h3>
+    <ul class="plain" style="font-size: 14px;">
+      <li>ビルド用のインスタンスプールとなる ASG を、インフラストラクチャ設定と同じアカウント・リージョンに作成済みであること</li>
+      <li>ASG の起動テンプレートに SSM Agent とビルドに必要な権限を持つインスタンスプロファイルが設定されていること</li>
+      <li>パイプラインに EC2ImageBuilderExecutionPolicy と ASG 操作権限を持つ実行ロールを指定できること</li>
+    </ul>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">ASG の起動テンプレートにインスタンスプロファイルを設定</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">起動テンプレート更新とインスタンスリフレッシュ</span></div>
+          <pre><code class="language-bash"># 起動テンプレートの新バージョンを作成し IAM インスタンスプロファイルを設定
+aws ec2 create-launch-template-version \
+    --launch-template-name my-build-pool-template \
+    --source-version 1 \
+    --launch-template-data '{"IamInstanceProfile":{"Name":"EC2InstanceProfileForImageBuilder"}}'
+
+# 稼働中のインスタンスを新しい設定に置き換えるためインスタンスリフレッシュを開始
+aws autoscaling start-instance-refresh \
+    --auto-scaling-group-name my-build-pool</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">新しいインスタンスプロファイルは新規起動インスタンスにのみ適用されるため、インスタンスリフレッシュで稼働中のインスタンスを新しい設定に置き換えます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">実行ロールを作成</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ロールテンプレートからロールを作成</span></div>
+          <pre><code class="language-bash"># ロールテンプレートから ASG 連携に必要な権限を持つロールを作成
+aws iam acquire-role \
+    --template-arn arn:aws:iam::aws:role-template/imagebuilder.amazonaws.com/EC2ImageBuilderParentInstanceASGRoleTemplate:3 \
+    --replacement-values \
+    'AutoScalingGroupName={Values=[my-build-pool]},RoleNameSuffix={Values=[my-build-pool]}'</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">EC2ImageBuilderExecutionPolicy と ASG 操作権限を持つ実行ロール <code class="inline">EC2ImageBuilderParentInstanceASG-my-build-pool</code> を作成します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">インフラストラクチャ設定に ASG を指定</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">parentInstance に ASG を指定</span></div>
+          <pre><code class="language-bash"># parentInstance に ASG 名と容量待機タイムアウトを指定してインフラストラクチャ設定を作成
+aws imagebuilder create-infrastructure-configuration \
+    --name my-asg-infra-config \
+    --instance-profile-name EC2InstanceProfileForImageBuilder \
+    --parent-instance '{"autoScalingGroup":{"name":"my-build-pool","capacityWaitTimeoutSeconds":600}}'</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">利用可能なインスタンスがない場合に最大 600 秒待機するように設定しています。既存のインフラストラクチャ設定に追加する場合は <code class="inline">update-infrastructure-configuration</code> を使用します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">パイプラインに実行ロールを設定して実行</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">パイプラインの更新と実行</span></div>
+          <pre><code class="language-bash"># パイプラインに実行ロールを設定
+aws imagebuilder update-image-pipeline \
+    --image-pipeline-arn arn:aws:imagebuilder:ap-northeast-1:123456789012:image-pipeline/my-pipeline \
+    --image-recipe-arn arn:aws:imagebuilder:ap-northeast-1:123456789012:image-recipe/my-recipe/1.0.0 \
+    --infrastructure-configuration-arn arn:aws:imagebuilder:ap-northeast-1:123456789012:infrastructure-configuration/my-asg-infra-config \
+    --execution-role arn:aws:iam::123456789012:role/EC2ImageBuilderParentInstanceASG-my-build-pool
+
+# パイプラインを実行
+aws imagebuilder start-image-pipeline-execution \
+    --image-pipeline-arn arn:aws:imagebuilder:ap-northeast-1:123456789012:image-pipeline/my-pipeline</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">Image Builder は ASG から条件を満たすインスタンスを選択し、ビルドコンポーネントを適用してイメージを作成します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">💼 ビジネス面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">ビルド時間の短縮</strong>: 起動とブートストラップの時間が不要になり、イメージの提供リードタイムを短縮</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">追加コストなし</strong>: 本機能自体に追加料金はなく、全リージョンで利用可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">既存環境への影響なし</strong>: 完全オプトインのため、リスクなく段階的に導入可能</span></div>
+        <h3>🔧 技術面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">ウォームプールの活用</strong>: 常にビルド可能なインスタンスプールを維持し、連続実行にも対応</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">自動補充</strong>: 希望容量が維持されるため、代替インスタンスが自動起動されプールが枯渇しない</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">インスタンス保持オプション</strong>: ビルド後のインスタンスを保持してデバッグや再利用に活用可能</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">⚠️ 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>インスタンスはランダムに選択され、指定は不可 (特定インスタンスを使う場合は <code class="inline">LaunchInstance</code> ステップアクションの <code class="inline">parentInstanceId</code> 入力を使用)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>利用可能なインスタンスがない場合、新規起動へのフォールバックは行われずビルドは失敗 (待機は最大 1 時間)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>適用されるのはビルドフェーズのみで、テストインスタンスは従来どおり起動</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ASG はインフラストラクチャ設定と同じアカウント・リージョンに存在する必要がある</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ロールテンプレートは AWS GovCloud (US) と中国リージョンでは利用不可</span></div>
+        <h3>🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">!</span><span>ビルドインスタンスは ASG の起動テンプレート設定を維持するため、インフラ設定やレシピの該当項目は適用されない。出力 AMI もインスタンス自身のボリュームから作成される</span></div>
+        <div class="check-item"><span class="warn-icon">!</span><span>ビルドプール用 ASG の常時稼働インスタンスに EC2 利用料金が発生。プールサイズとビルド頻度のバランスを検討</span></div>
+        <div class="check-item"><span class="warn-icon">!</span><span>サービスリンクロールでは ASG を操作できないため、実行ロールの指定が必須</span></div>
+        <div class="check-item"><span class="warn-icon">!</span><span>ビルドのたびにデタッチと代替起動が発生するため、ASG のスケーリングアクティビティやモニタリングへの影響を確認</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🏆 ユースケース 1: ゴールデン AMI パイプラインの高速化</div>
+      <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: var(--aws-white);">シナリオ</strong>: セキュリティパッチ適用のため、毎日複数のゴールデン AMI をビルドしている。インスタンス起動と SSM Agent 登録の待ち時間がビルド時間の大きな割合を占めている。</p>
+      <ul class="plain" style="font-size: 14px;">
+        <li>ベース AMI を起動する ASG (希望容量 2〜3 台) をビルドプールとして作成</li>
+        <li>インフラストラクチャ設定の parentInstance に ASG を指定</li>
+        <li>既存の日次パイプラインのインフラストラクチャ設定を差し替え</li>
+      </ul>
+      <div class="usecase-effect">✅ <strong>効果</strong>: 起動とブートストラップの待ち時間が排除され、日次のイメージ提供サイクルが短縮される。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔁 ユースケース 2: CI/CD パイプラインでの頻繁なイメージビルド</div>
+      <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: var(--aws-white);">シナリオ</strong>: アプリケーションのリリースごとに AMI をビルドする CI/CD パイプラインがあり、1 日に何度もビルドが実行される。ビルド時間がデプロイ全体のボトルネックになっている。</p>
+      <ul class="plain" style="font-size: 14px;">
+        <li>ビルド頻度に合わせた希望容量の ASG を作成 (消費されると自動補充)</li>
+        <li>capacityWaitTimeoutSeconds を設定し、同時実行時の待機を許容</li>
+        <li>パイプラインの実行ロールに ASG 操作権限を付与</li>
+      </ul>
+      <div class="usecase-effect">✅ <strong>効果</strong>: 連続するビルドでも常にウォームなインスタンスが利用でき、リリースのリードタイムが安定して短縮される。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔍 ユースケース 3: ビルド失敗時のデバッグ効率化</div>
+      <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: var(--aws-white);">シナリオ</strong>: ビルドコンポーネントの開発中で、ビルド結果の検証やトラブルシューティングのためにビルド後のインスタンスを確認したい。</p>
+      <ul class="plain" style="font-size: 14px;">
+        <li>インフラストラクチャ設定で terminateInstanceOnCompletion を false に設定</li>
+        <li>ビルド完了後、stopped 状態のインスタンスを起動して内容を確認</li>
+        <li>確認後は手動でインスタンスを終了 (ボリューム料金と稼働中の料金が発生)</li>
+      </ul>
+      <div class="usecase-effect">✅ <strong>効果</strong>: ビルド成果物の検証やコンポーネントのデバッグが実機で行えるようになり、開発サイクルが効率化される。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">💵 料金</h3>
+        <p style="font-size: 14px;">本機能に<span class="highlight">追加料金はありません</span>。EC2 Image Builder 自体は無料で、ビルドに使用する EC2 インスタンス、EBS ボリューム、作成されたイメージの保存などの基盤リソースに対して通常の料金が発生します。</p>
+        <p style="font-size: 14px;">ASG のビルドプールとして常時稼働させるインスタンスの EC2 利用料金が発生する点に注意が必要です。また、<code class="inline">terminateInstanceOnCompletion</code> を <code class="inline">false</code> にして保持したインスタンスは、終了するまでボリューム料金 (および起動中はインスタンス料金) が発生します。</p>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">🌏 利用可能リージョン</h3>
+        <p style="font-size: 14px;">すべての AWS リージョンで利用可能です (AWS GovCloud (US) を含む)。</p>
+        <p style="font-size: 14px;">ただし、実行ロール作成用のロールテンプレートは AWS GovCloud (US) リージョンと中国リージョンでは利用できないため、これらのリージョンでは実行ロールのポリシーを手動で作成する必要があります。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">📈 Amazon EC2 Auto Scaling</div>
+      <p style="margin: 0; font-size: 14px;">ビルドプールとなるインスタンス群を管理し、デタッチ後の自動補充を担う。起動テンプレートでビルドインスタンスの設定を制御する。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🛠️ AWS Systems Manager</div>
+      <p style="margin: 0; font-size: 14px;">Image Builder はビルドコンポーネントを Systems Manager 経由で実行するため、ASG のインスタンスで SSM Agent がオンラインである必要がある。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔐 AWS IAM</div>
+      <p style="margin: 0; font-size: 14px;">実行ロールに ASG 操作権限が必要。<code class="inline">EC2ImageBuilderParentInstanceASGRoleTemplate</code> ロールテンプレートで必要な権限を持つロールを作成できる。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>🎯 まとめ</h2>
+    <p>EC2 Image Builder が ASG の稼働中インスタンスを利用したビルドに対応し、<span class="highlight">インスタンス起動とブートストラップの待ち時間を排除</span>してイメージビルドを高速化できるようになりました。完全オプトインで既存パイプラインに影響しないため、イメージビルドの頻度が高い環境では<span class="highlight">まず 1 つのパイプラインで効果を検証</span>することを推奨します。</p>
+    <p>導入時は ASG の起動テンプレートへのインスタンスプロファイル設定と、実行ロールへの ASG 操作権限の付与を忘れずに行ってください。</p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/ec2-image-builder-asg-faster-builds/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li><a href="https://docs.aws.amazon.com/imagebuilder/latest/userguide/infra-config-parent-instance.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Build on an instance from an Auto Scaling group</a></li>
+      <li><a href="https://docs.aws.amazon.com/imagebuilder/latest/APIReference/API_ParentInstanceConfiguration.html" target="_blank" rel="noopener noreferrer" class="aws-link">API リファレンス: ParentInstanceConfiguration</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/fca45a-imagebuilder.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS API Changes: imagebuilder (2026/10/14)</a></li>
+      <li><a href="https://aws.amazon.com/image-builder/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">EC2 Image Builder 料金</a></li>
+    </ul>
+    <p>作成日: 2026 年 10 月 20 日 | ベースレポート: reports/2026/2026-10-19-ec2-image-builder-asg-faster-builds.md</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

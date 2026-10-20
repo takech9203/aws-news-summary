@@ -5,6 +5,17 @@
 
 ## 2026 年
 
+- [2026-10-19 - Amazon CloudWatch - CloudWatch Omni が追加 8 リージョンで利用可能に (東京リージョン対応)](2026/2026-10-19-amazon-cloudwatch-omni-8-regions.md)
+- [2026-10-19 - AWS Elemental MediaConnect - Router 高ビットレートモードのサポート](2026/2026-10-19-mediaconnect-router-high-bitrate.md)
+- [2026-10-19 - Amazon RDS Custom for SQL Server - 最新の累積更新プログラム CU と GDR 更新プログラムのサポート](2026/2026-10-19-amazon-rds-custom-supports-latest-cumulative-update-gdr-microsoft-sql-server.md)
+- [2026-10-19 - Kiro - チャットセッションをまたぐ Memory 機能の一般提供開始](2026/2026-10-19-kiro-changelog-2026-10-19.md)
+- [2026-10-19 - EC2 Image Builder - Auto Scaling Group 連携による高速イメージビルド](2026/2026-10-19-ec2-image-builder-asg-faster-builds.md)
+- [2026-10-19 - AWS IAM Identity Center - アイデンティティストアにおけるユーザー・グループの楽観的ロック対応](2026/2026-10-19-iam-identity-store-optimistic-locking.md)
+- [2026-10-19 - Amazon GuardDuty - Runtime Monitoring 向けオプション脅威検出ルール](2026/2026-10-19-guardduty-runtime-optional-detection-rules.md)
+- [2026-10-19 - Amazon RDS for SQL Server - リードレプリカ上での DB スナップショット作成サポート](2026/2026-10-19-rds-sqlserver-supports-snapshots-on-read-replicas.md)
+- [2026-10-19 - Amazon Bedrock - Grok 4.7 が AWS GovCloud (US) で利用可能に](2026/2026-10-19-amazon-bedrock-grok-4-7-govcloud.md)
+- [2026-10-19 - Amazon Connect - Customer Global Resiliency のリージョン切り替え準備状況の可視化](2026/2026-10-19-amazon-connect-global-resiliency-readiness-overview.md)
+- [2026-10-17 - AWS Partner Central - Solution Matching Engine パフォーマンスインサイト](2026/2026-10-17-solution-matching-engine-performance.md)
 - [2026-10-16 - AWS Outposts - 第 2 世代 Outposts ラックが AWS メキシコ (中部) リージョンをサポート](2026/2026-10-16-aws-outposts-racks-mexico-central.md)
 - [2026-10-16 - AWS End User Messaging - RCS 登録動画のガイド付きウィザード](2026/2026-10-16-aws-end-user-messaging-adds-guided-wizard-rcs-registration-videos.md)
 - [2026-10-16 - Amazon Braket - FedRAMP Class C 対応](2026/2026-10-16-braket-fedramp-class-c.md)
