@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon ElastiCache Serverless for Valkey ゼロダウンタイムオンライン移行</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.date-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--aws-light-gray);
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF6B4A; }
+.after-box h3 { color: #4CAF50; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.before-box li, .after-box li { margin: 8px 0; }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px 14px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 140px;
+  font-size: 14px;
+}
+
+.flow-step .step-name {
+  font-weight: 700;
+  color: var(--aws-white);
+  display: block;
+}
+
+.flow-step .step-api {
+  color: var(--aws-orange);
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+  align-self: center;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+.state-badge {
+  display: inline-block;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  background: rgba(0, 161, 201, 0.15);
+  color: var(--aws-teal);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* チェックリスト */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14.5px;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid #4CAF50;
+  padding: 8px 12px;
+  margin-top: 10px;
+  border-radius: 0 6px 6px 0;
+  font-size: 14px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid { display: flex; justify-content: center; }
+
+.note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  background: rgba(255, 255, 255, 0.05);
+  border-left: 3px solid var(--aws-teal);
+  padding: 10px 14px;
+  border-radius: 0 6px 6px 0;
+  margin: 12px 0;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 720px) {
+  .before-after, .two-col { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+  body { padding: 12px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <h1>⚡ ElastiCache Serverless for Valkey<br>ゼロダウンタイムオンライン移行</h1>
+  </div>
+  <div class="subtitle">
+    <span class="service-badge">Amazon ElastiCache</span>
+    <span class="date-badge">📅 リリース日: 2026 年 10 月 20 日</span><br>
+    EC2 上のセルフマネージド Valkey / Redis OSS クラスターから、クライアントにエラーを一切返さずに ElastiCache Serverless for Valkey へオンライン移行できるようになりました。
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      ここでの「ゼロダウンタイム」とは、<span class="highlight">ElastiCache SLA と同じ方法で可用性を測定した場合に、移行中クライアントへエラーを一切返さない</span>ことを意味します。カットオーバー中もアプリケーションは読み書きを継続でき、サードパーティのレプリケーションツールやメンテナンスウィンドウは不要です。
+    </p>
+    <p>
+      移行は 3 つの API 駆動フェーズで制御し、アプリケーションは ElastiCache が提供する<span class="highlight">移行エンドポイント</span> (= サーバーレスキャッシュの標準エンドポイント) に接続するだけ。カットオーバー後も接続先の変更は不要です。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">0</div>
+        <div class="stat-label">移行中にクライアントへ返すエラー<br>(SLA と同じ測定方法)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">3 ステップ</div>
+        <div class="stat-label">準備 → 同期 → カットオーバー<br>の API 駆動フロー</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">180 日間</div>
+        <div class="stat-label">アカウントごとの<br>無料移行期間</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">4.0 → 9.0</div>
+        <div class="stat-label">Redis OSS 4.0 から Valkey 9.0 へ<br>直接移行が可能</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ Before: アップデート前の課題</h3>
+        <ul>
+          <li>スナップショットからのリストアなど<strong>オフライン手段が中心</strong>で、切り替え時にダウンタイムが発生</li>
+          <li>ダウンタイム回避には<strong>サードパーティのレプリケーションツール</strong>や独自のデュアルライト実装が必要</li>
+          <li>カットオーバー時に<strong>接続先エンドポイントの切り替え</strong>と書き込み停止期間の調整が必要</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ After: アップデート後の改善</h3>
+        <ul>
+          <li>EC2 上の Valkey 7.2〜8.1 / Redis OSS 4.0〜7.2 (クラスターモード) から<strong>エラーゼロで移行</strong></li>
+          <li>移行エンドポイント経由でトラフィックを流したまま同期とカットオーバーが完了。<strong>サードパーティツール不要</strong></li>
+          <li>古い Redis OSS 4.0 から <strong>Valkey 9.0 へ直接移行</strong>可能</li>
+          <li>カットオーバーは<strong>手動または自動</strong>から選択可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    App(["👤 アプリケーション"])
+
+    subgraph Migration["🔀 オンライン移行"]
+        EP["🔌 移行エンドポイント<br/>サーバーレスキャッシュの標準エンドポイント"]
+    end
+
+    subgraph Source["🖥️ ソース: Amazon EC2"]
+        SRC[("📦 セルフマネージド<br/>Valkey / Redis OSS<br/>クラスターモード")]
+    end
+
+    subgraph Target["☁️ ターゲット: ElastiCache Serverless"]
+        TGT[("⚡ Serverless for Valkey<br/>Valkey 7.2 / 8.1 / 9.0")]
+    end
+
+    SM["🔐 AWS Secrets Manager<br/>ソース認証情報"]
+
+    App -->|読み書き| EP
+    EP -->|移行中はソースへルーティング| SRC
+    SRC -.->|継続的データレプリケーション| TGT
+    EP -.->|カットオーバー後| TGT
+    SM -.->|TLS + 認証情報| SRC
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef endpoint fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef source fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef target fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef secret fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class App user
+    class EP endpoint
+    class SRC source
+    class TGT target
+    class SM secret
+    class Migration,Source,Target layer
+      </pre>
+    </div>
+    <div class="note">
+      💡 アプリケーションは移行エンドポイントに接続したまま、移行中はソースキャッシュへルーティングされ、バックグラウンドでターゲットへデータがレプリケートされます。カットオーバー後は同じエンドポイントがターゲットのサーバーレスキャッシュを指すため、接続先の変更は不要です。
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🔧 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🛡️ ゼロダウンタイムのオンライン移行</div>
+      ElastiCache SLA と同じ方法で可用性を測定し、移行中にクライアントへエラーを返しません。カットオーバー中も読み書きを継続でき、サードパーティのレプリケーションツールやメンテナンスウィンドウは不要です。
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔀 3 ステップの移行フロー</div>
+      <div class="flow-diagram">
+        <div class="flow-step">
+          <span class="step-name">1️⃣ 移行の準備</span>
+          <span class="step-api">PrepareMigration</span>
+          要件検証とインフラの<br>プロビジョニング
+        </div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">
+          <span class="step-name">2️⃣ データ同期の開始</span>
+          <span class="step-api">StartMigration</span>
+          全シャードの<br>継続的レプリケーション
+        </div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">
+          <span class="step-name">3️⃣ カットオーバー完了</span>
+          <span class="step-api">CompleteMigration</span>
+          手動 (デフォルト)<br>または自動
+        </div>
+      </div>
+      各ステップの遷移はキャッシュの Events タブにイベントとして記録され、失敗時には理由が表示されます。
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔌 移行エンドポイント</div>
+      サーバーレスキャッシュの標準エンドポイントがそのまま移行エンドポイントになるため、カットオーバー後の接続先変更が不要。移行中は ElastiCache がリクエストをソースキャッシュへプロキシします。データ同期は途中で停止 (StopMigration) でき、その間もソースキャッシュ経由で提供が継続されます。
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔐 セキュアなソース接続</div>
+      TLS による転送時暗号化と認証でソースに接続 (SourceTlsMode: none / verify-ca)。ソースの認証情報は AWS Secrets Manager のシークレットから読み取ります。
+    </div>
+
+    <div class="card">
+      <div class="card-title">📚 幅広いバージョンサポート</div>
+      ソースは EC2 上のクラスターモードの Redis OSS 4.0〜7.2、Valkey 7.2〜8.1。ターゲットは Valkey 7.2 / 8.1 / 9.0。古い Redis OSS から Valkey 9.0 へ直接移行できます。ソースバージョンはターゲットバージョン以下である必要があります。
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>📋 技術仕様</h2>
+
+    <h3>移行の要件</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>ソースエンジン</td><td>Valkey 7.2〜8.1 または Redis OSS 4.0〜7.2 (クラスターモード必須)</td></tr>
+      <tr><td>ソース環境</td><td>Amazon EC2 上のセルフマネージドキャッシュ (ElastiCache マネージドキャッシュ、Amazon MemoryDB はソース不可)</td></tr>
+      <tr><td>ソース規模</td><td>ノードあたり最大 32 GB (used_memory)、最大 166 シャード</td></tr>
+      <tr><td>ソースの条件</td><td>ハッシュスロットが全範囲をカバー、PSYNC / REPLCONF コマンドが有効、移行中のリシャーディング禁止</td></tr>
+      <tr><td>ターゲット</td><td>空の ElastiCache Serverless for Valkey キャッシュ (Valkey 7.2 / 8.1 / 9.0)、IPv4、パブリックエンドポイントなし</td></tr>
+      <tr><td>ネットワーク</td><td>ターゲットキャッシュの VPC からソースへプライベート到達可能であること</td></tr>
+      <tr><td>キー名の長さ</td><td>最大 4 KiB (ElastiCache Serverless の制限)</td></tr>
+    </table>
+
+    <h3>移行のステート</h3>
+    <table>
+      <tr><th>ステート</th><th>意味</th></tr>
+      <tr><td><span class="state-badge">preparing</span></td><td>ソースの検証と移行インフラのプロビジョニング中</td></tr>
+      <tr><td><span class="state-badge">ready-to-sync</span></td><td>移行エンドポイントへのトラフィック切り替えとデータ同期開始が可能</td></tr>
+      <tr><td><span class="state-badge">initiating-sync</span></td><td>全シャードでレプリケーションを開始中</td></tr>
+      <tr><td><span class="state-badge">syncing</span></td><td>データ同期が進行中</td></tr>
+      <tr><td><span class="state-badge">cutting-over</span></td><td>ターゲットへのカットオーバーを完了処理中</td></tr>
+      <tr><td><span class="state-badge">stopping</span></td><td>ユーザーのリクエストによりデータ同期を停止中</td></tr>
+    </table>
+
+    <h3>API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/10/20</td>
+        <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/c13b91-elasticache.html" target="_blank" rel="noopener noreferrer">Amazon ElastiCache</a></td>
+        <td>2 new 6 updated api methods - <code>PrepareMigration</code> と <code>StopMigration</code> を新規追加。<code>StartMigration</code> / <code>CompleteMigration</code> にサーバーレスキャッシュ対応 (<code>ServerlessCacheName</code>、<code>AutoCutover</code>、<code>ClearTargetCacheData</code>、<code>Force</code>) を追加。<code>CreateServerlessCache</code> / <code>DescribeServerlessCaches</code> などのレスポンスに <code>Migration</code> オブジェクト (Status、MigrationEndpoint、CutoverMode) を追加</td>
+      </tr>
+    </table>
+
+    <h3>新規 API の例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">PrepareMigration リクエスト例</span>
+      </div>
+      <pre><code class="language-json">{
+  "PrepareMigration": {
+    "ServerlessCacheName": "my-serverless-cache",
+    "CustomerNodeEndpointList": [
+      { "Address": "10.0.1.10", "Port": 6379 }
+    ],
+    "SourceAuthenticationConfiguration": {
+      "SecretManagerConfig": {
+        "SecretArn": "arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:valkey-auth"
+      }
+    },
+    "SourceTlsConfiguration": {
+      "SourceTlsMode": "verify-ca",
+      "SourceTlsCertificate": "-----BEGIN CERTIFICATE-----..."
+    }
+  }
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>ソースが EC2 上のクラスターモードの Valkey 7.2〜8.1 または Redis OSS 4.0〜7.2 であり、PSYNC / REPLCONF が有効であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ターゲットの ElastiCache Serverless for Valkey キャッシュを事前に作成し、空かつパブリックエンドポイントなし (IPv4) であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ターゲットキャッシュの VPC からソースへプライベートに到達でき、ソースのセキュリティグループが ElastiCache からのインバウンドを許可していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ソースが認証を要求する場合、認証情報を AWS Secrets Manager に保存し、ElastiCache に読み取り権限を付与していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ソースのプライマリノードに、移行中のフルシンク (プロセスフォーク) と本番トラフィックを同時にさばく CPU / メモリの余裕があること</span></div>
+
+    <h3>ステップ 1: 移行の準備</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">prepare-migration</span>
+      </div>
+      <pre><code class="language-bash">aws elasticache prepare-migration \
+  --serverless-cache-name my-serverless-cache \
+  --customer-node-endpoint-list "Address=10.0.1.10,Port=6379" \
+  --source-authentication-configuration 'SecretManagerConfig={SecretArn=arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:valkey-auth}' \
+  --source-tls-configuration 'SourceTlsMode=verify-ca'</code></pre>
+    </div>
+    <p>ソースキャッシュを移行要件に対して検証し、移行インフラをプロビジョニングして移行エンドポイントを返します。要件を満たさない場合は準備ステップが失敗し、理由を示すイベントがキャッシュに記録されて、移行はロールバックされます。</p>
+
+    <h3>ステップ 2: アプリケーションの切り替えとデータ同期の開始</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">start-migration</span>
+      </div>
+      <pre><code class="language-bash">aws elasticache start-migration \
+  --serverless-cache-name my-serverless-cache \
+  --auto-cutover</code></pre>
+    </div>
+    <p>アプリケーションの接続先を移行エンドポイントに切り替えて、トラフィックが流れていることを確認したうえでデータ同期を開始します。<span class="highlight">--auto-cutover</span> を指定すると、データ同期の完了後に自動でカットオーバーされます (デフォルトは手動)。ElastiCache はアプリケーションが切り替わったかを検知できないため、同期開始前に切り替えを完了させる必要があります。</p>
+
+    <h3>ステップ 3: 移行状態の確認とカットオーバーの完了</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">describe-serverless-caches / complete-migration</span>
+      </div>
+      <pre><code class="language-bash"># 移行状態と移行エンドポイントの確認
+aws elasticache describe-serverless-caches \
+  --serverless-cache-name my-serverless-cache \
+  --query 'ServerlessCaches[0].Migration'
+
+# 手動カットオーバーの場合
+aws elasticache complete-migration \
+  --serverless-cache-name my-serverless-cache</code></pre>
+    </div>
+    <p><code>Migration</code> オブジェクト (Status、MigrationEndpoint、CutoverMode) を確認し、手動カットオーバーの場合は <code>complete-migration</code> を実行します。ElastiCache は次の完全同期ウィンドウでターゲットキャッシュへ切り替え、アプリケーションは同じエンドポイントのまま ElastiCache Serverless から提供されるようになります。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top:0;">💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ダウンタイムなしの移行</strong>: メンテナンスウィンドウの調整やサービス停止の告知が不要になり、移行プロジェクトのハードルが大幅に低下</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: セルフマネージド運用 (パッチ適用、スケーリング、障害対応) から自動スケーリングする Serverless へ移行し運用負荷を削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>180 日間の無料移行期間</strong>: アカウントごとに最初の移行準備から 180 日間は移行機能を無料で利用可能</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top:0;">🔬 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>アプリケーション変更が最小限</strong>: 移行エンドポイントは標準エンドポイントそのもので、カットオーバー後の接続先変更が不要</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>バージョンアップグレードの同時実行</strong>: Redis OSS 4.0 などから Valkey 9.0 へ直接移行でき、移行とアップグレードを 1 回で完了</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>可観測性</strong>: 各フェーズの遷移がイベントとして記録され、標準メトリクス (BytesUsedForCache、CurrItems、NetworkBytesIn など) で進行状況を確認可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>セキュアな接続</strong>: TLS による転送時暗号化と Secrets Manager による認証情報管理に対応</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3 style="margin-top:0;">制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>ソースは EC2 上のクラスターモードのセルフマネージドキャッシュに限定。クラスターモード無効のソース、ElastiCache マネージドキャッシュ、Amazon MemoryDB はソース不可</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>ソース規模はノードあたり最大 32 GB、最大 166 シャードまで</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>移行中はパイプライン非サポート。コマンドが直列化されバッチ処理のレイテンシーが増加 (コネクションプールの拡大を検討)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>移行中はリーダーエンドポイントを使用不可。トラフィックは移行エンドポイントに送る必要がある</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>移行エラーは永続的なものとして報告され、エラー発生後は移行を再開できない。終了には強制完了 (Force) が必要</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>カットオーバー後のロールバックはない。ソースに戻すにはアプリケーショントラフィックを自分で戻す必要がある</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>1 つのキャッシュは同時に 1 つの移行のターゲットにしかなれない</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>移行エンドポイント経由のトラフィックには ElastiCache Serverless のコマンドサポートが適用される。FLUSH、CLUSTER 系、Pub/Sub 系コマンドの利用を事前に確認する</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>移行中にソースへ直接書き込むとターゲットとの不整合が発生し、移行エラーになる。すべてのトラフィックを移行エンドポイント経由にする</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>ロード済みスクリプトはレプリケートされないため、移行エンドポイント経由で SCRIPT LOAD を再実行する。Pub/Sub のサブスクリプションはカットオーバー時に切断され、再接続が必要</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>データ同期を停止 (StopMigration) しても課金は止まらない。移行と課金を終了するのは CompleteMigration</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>移行スループットはソースのシャード数に比例。少数シャードに高トラフィックが集中する構成では低トラフィック時間帯の移行を計画する</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>ネットワーク経路、ソースの TLS 証明書、Secrets Manager の認証情報は移行完了まで変更しない。準備ステップが作成するセキュリティグループも削除しない</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1️⃣ EC2 セルフマネージド Redis OSS からのマネージド移行</div>
+      <p style="margin:0 0 8px 0; font-size:14.5px;">EC2 上で Redis OSS 7.0 のクラスターを自前運用しており、パッチ適用やスケーリングの運用負荷を削減するため ElastiCache Serverless for Valkey へ移行したい。ただし 24 時間 365 日稼働の EC サイトのセッションストアであり、ダウンタイムは許容できない。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># 1. 空のターゲットキャッシュを作成
+aws elasticache create-serverless-cache \
+  --serverless-cache-name session-store \
+  --engine valkey --major-engine-version 8
+
+# 2. 移行を準備し、移行エンドポイントを取得
+aws elasticache prepare-migration \
+  --serverless-cache-name session-store \
+  --customer-node-endpoint-list "Address=10.0.1.10,Port=6379" \
+  --source-authentication-configuration 'SecretManagerConfig={SecretArn=arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:redis-auth}'
+
+# 3. アプリを移行エンドポイントへ切り替え後、同期開始 (手動カットオーバー)
+aws elasticache start-migration --serverless-cache-name session-store</code></pre>
+      </div>
+      <div class="effect">✨ <strong>効果</strong>: セッションを失うことなく、エラーゼロでマネージドサービスへ移行できる。移行後は自動スケーリングにより容量管理が不要になる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2️⃣ 古い Redis OSS から Valkey 9.0 への直接アップグレード移行</div>
+      <p style="margin:0 0 8px 0; font-size:14.5px;">EC2 上に Redis OSS 4.0 のレガシークラスターが残っており、段階的なバージョンアップを繰り返す手間をかけずに最新の Valkey 9.0 環境へ一気に移行したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># ターゲットとして Valkey 9.0 のサーバーレスキャッシュを作成
+aws elasticache create-serverless-cache \
+  --serverless-cache-name legacy-modernize \
+  --engine valkey --major-engine-version 9
+
+# 以降、prepare-migration、start-migration、complete-migration を実行</code></pre>
+      </div>
+      <div class="effect">✨ <strong>効果</strong>: Redis OSS 4.0 から Valkey 9.0 へ中間バージョンを経由せずに直接移行でき、アップグレード作業を 1 回のオンライン移行に集約できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3️⃣ 自動カットオーバーによる省力化移行</div>
+      <p style="margin:0 0 8px 0; font-size:14.5px;">複数のキャッシュクラスターを順次移行する計画で、各クラスターの同期完了を待ってカットオーバー操作を行う人的コストを削減したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># AutoCutover を有効にして同期開始。同期完了後に自動で切り替わる
+aws elasticache start-migration \
+  --serverless-cache-name cache-01 \
+  --auto-cutover
+
+# 進行状況はイベントとメトリクスで監視
+aws elasticache describe-events --source-type serverless-cache</code></pre>
+      </div>
+      <div class="effect">✨ <strong>効果</strong>: データ同期が完了した次の完全同期ウィンドウで自動的にカットオーバーされるため、オペレーターの待機が不要になる。完了はキャッシュ詳細ページのバナーとイベントで確認できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>移行機能は、AWS アカウントごとに<span class="highlight">最初の移行準備から 180 日間は無料</span>で利用できます。無料期間の終了後は、移行がアクティブな間、移行ノードのノード時間単位で課金されます。</p>
+    <div class="note">
+      ⚠️ ターゲットの ElastiCache Serverless キャッシュ自体は、無料期間中であっても標準のデータストレージ (GB-時間) と ECPU のレートで別途課金されます。データ同期を停止しても移行インフラの課金は継続されるため、移行を終了する場合は CompleteMigration を実行してください。
+    </div>
+    <p>詳細は <a class="aws-link" href="https://aws.amazon.com/elasticache/pricing/" target="_blank" rel="noopener noreferrer">ElastiCache 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>すべての <span class="highlight">AWS 商用リージョン</span>、<span class="highlight">中国リージョン</span>、および <span class="highlight">AWS GovCloud (US) リージョン</span>で利用可能です。</p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card"><div class="card-title">⚡ Amazon ElastiCache Serverless</div>移行先となるサーバーレスキャッシュ。容量管理不要で、ワークロードに応じて自動スケーリングする。</div>
+    <div class="card"><div class="card-title">🔐 AWS Secrets Manager</div>ソースキャッシュの認証情報を安全に保存し、移行時に ElastiCache が読み取る。</div>
+    <div class="card"><div class="card-title">🖥️ Amazon EC2</div>移行元のセルフマネージド Valkey / Redis OSS クラスターが稼働する環境。</div>
+    <div class="card"><div class="card-title">📊 Amazon CloudWatch</div>移行中のターゲットキャッシュのメトリクス (BytesUsedForCache、CurrItems、NetworkBytesIn など) とイベントによる監視。</div>
+    <div class="card"><div class="card-title">🔀 ElastiCache ノードベースクラスターへのオンライン移行</div>ノードベース (プロビジョンド) クラスターへ移行する場合は、既存の別のオンライン移行フローを使用する。</div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      ElastiCache Serverless for Valkey へのオンライン移行は、セルフマネージド環境からマネージドなサーバーレス環境への移行における最大の障壁であった<span class="highlight">ダウンタイムとツール整備の問題を解消</span>する重要なアップデートです。
+    </p>
+    <div class="check-item"><span class="check-icon">✓</span><span>180 日間の無料移行期間内に、前提条件 (クラスターモード、バージョン、ネットワーク到達性) を確認して移行を計画する</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>まずは検証環境で移行フローを試す</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>パイプライン利用時のレイテンシー増加やコマンド互換性への影響を確認してから本番移行に進む</span></div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-elasticache-serverless-valkey-online-migration/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/migration-to-serverless.html" target="_blank" rel="noopener noreferrer">ドキュメント: Online migration to ElastiCache Serverless</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/migration-to-serverless-prerequisites.html" target="_blank" rel="noopener noreferrer">ドキュメント: Prerequisites for online migration</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/elasticache/sla/" target="_blank" rel="noopener noreferrer">ElastiCache SLA</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/elasticache/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a></li>
+      <li><a class="aws-link" href="https://awsapichanges.com/archive/changes/c13b91-elasticache.html" target="_blank" rel="noopener noreferrer">API 変更履歴 (awsapichanges.com)</a></li>
+    </ul>
+    <p>レポート: reports/2026/2026-10-20-amazon-elasticache-serverless-valkey-online-migration.md | 生成日: 2026 年 10 月 20 日</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

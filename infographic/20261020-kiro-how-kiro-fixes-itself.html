@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiro - kiro-trace による自己改善の仕組み</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+      margin-bottom: 8px;
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 12px 0 28px 0;
+    }
+
+    .service-badge {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 16px;
+      font-size: 14px;
+    }
+
+    .date-badge {
+      background: var(--aws-dark-squid);
+      border: 1px solid rgba(255, 153, 0, 0.5);
+      color: var(--aws-light-gray);
+      padding: 4px 14px;
+      border-radius: 16px;
+      font-size: 14px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+
+    .card p { margin: 6px 0; font-size: 14.5px; }
+
+    /* Before / After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .ba-label {
+      font-weight: 700;
+      font-size: 15px;
+      margin-bottom: 10px;
+    }
+
+    .before-box .ba-label { color: #FF6B4A; }
+    .after-box .ba-label { color: #4CAF50; }
+
+    .ba-list { margin: 0; padding-left: 0; list-style: none; }
+    .ba-list li {
+      margin: 8px 0;
+      padding-left: 22px;
+      position: relative;
+      font-size: 14px;
+    }
+    .before-box .ba-list li::before { content: "✗"; position: absolute; left: 0; color: #FF6B4A; font-weight: 700; }
+    .after-box .ba-list li::before { content: "✓"; position: absolute; left: 0; color: #4CAF50; font-weight: 700; }
+
+    /* 統計カード */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 18px 14px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-note {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      background: rgba(0, 161, 201, 0.1);
+      border-left: 3px solid var(--aws-teal);
+      padding: 10px 14px;
+      border-radius: 0 6px 6px 0;
+    }
+
+    /* テーブル */
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+
+    .info-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      white-space: nowrap;
+    }
+
+    .info-table td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      vertical-align: top;
+    }
+
+    /* チェックリスト */
+    .check-item, .cross-item, .arrow-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14.5px;
+    }
+
+    .check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+    .arrow-icon { color: var(--aws-orange); font-size: 16px; flex-shrink: 0; font-weight: 700; }
+
+    /* 役割分離の 3 ボックス */
+    .roles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .role-card {
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .role-card .role-icon { font-size: 30px; }
+    .role-card .role-name { font-weight: 700; color: var(--aws-white); margin: 6px 0; }
+    .role-card .role-desc { font-size: 13px; }
+
+    .role-loop { background: rgba(0, 161, 201, 0.12); border: 1px solid rgba(0, 161, 201, 0.6); }
+    .role-gate { background: rgba(140, 79, 255, 0.12); border: 1px solid rgba(140, 79, 255, 0.6); }
+    .role-human { background: rgba(29, 129, 2, 0.12); border: 1px solid rgba(29, 129, 2, 0.6); }
+
+    /* ユースケース / takeaway */
+    .usecase {
+      background: rgba(255, 153, 0, 0.1);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 10px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      margin-bottom: 4px;
+      font-size: 15px;
+    }
+
+    .usecase p { margin: 0; font-size: 14px; }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { margin: 6px 0; padding-left: 20px; }
+
+    @media (max-width: 720px) {
+      .before-after, .two-col { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- タイトルエリア -->
+    <div class="header">
+      <h1>🔄 Kiro - kiro-trace による自己改善の仕組み</h1>
+    </div>
+    <div class="subtitle">How Kiro fixes itself, and how we keep the fixes honest — 自己修正を「正直」に保つトレーシングシステムの解説</div>
+    <div class="badge-row">
+      <span class="service-badge">Kiro</span>
+      <span class="date-badge">📅 2026 年 10 月 20 日</span>
+      <span class="date-badge">📝 Blog 解説記事 (社内システム)</span>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        Kiro チームは、AI コーディングエージェントである Kiro が<span class="highlight">自身の実行履歴 (トラジェクトリ) から問題を発見し、修正を提案し、その修正を厳格に検証する</span>社内トレーシングシステム「kiro-trace」の仕組みを解説する Blog 記事を公開しました。本記事は新機能の発表ではなく、Kiro の品質を継続的に向上させるための開発手法と品質保証プロセスの解説です。
+      </p>
+      <p>
+        kiro-trace は、ベンチマークや人間が承認したライブトラフィックの問題報告を入力として、失敗の診断、変更の提案、変更前後の比較実行を行い、<span class="highlight">3 段階のゲート (スクリーニング、リグレッション、確認) を通過した変更のみ</span>をプルリクエストとして人間のレビューに回します。
+      </p>
+      <p>
+        象徴的な事例として、ファイル読み取り・検索ツールの説明文に含まれていた「ハーネスの動作に関する誤った記述」が、数百セッションにわたり <span class="highlight">61,742 回</span>もモデルに送信されていた問題が紹介されています。このような問題はユーザーからのチケットとして報告されることがほぼなく、自動化されたトレース分析が有効であることを示しています。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <div class="ba-label">❌ Before: 自己改善の課題</div>
+          <ul class="ba-list">
+            <li>最悪の問題はクリーンなバグレポートとして現れず、リカバリー方法やツール呼び出し順序、長いコンテキスト保持の中に隠れ、数千件の実行ログを読まないと気づけない</li>
+            <li>エージェントが自分の修正を自分で採点するループでは、ベンチマークに過剰適合した narrow hack を採用する危険</li>
+            <li>少数回の平均値では 1 件の外れ値に結果が左右され、「偶然の 1 回」の改善を誤採用するリスク (遅く高コストで精度も低い変更を出荷しかけた事例あり)</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <div class="ba-label">✅ After: kiro-trace による改善</div>
+          <ul class="ba-list">
+            <li>最初の 1 週間で 7 件の修正がマージされ、プロンプト、ツール説明、引数チェック、レスポンス動作が改善</li>
+            <li>変更不要なファイルの再読み取りを約 83% 削減、約 8 回に 1 回の検索が静かに失敗していたバグを修正</li>
+            <li>コンパクションの保持スコア (retention) を 0.82 から 0.92 に向上し、長い会話でも作業内容を見失いにくく</li>
+            <li>確認済みの修正はすべて決定論的アサーションとして恒久的なリグレッションスイートに追加され、再発を防止</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数字で見る成果 -->
+    <div class="section">
+      <h2>📊 数字で見る kiro-trace の成果</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">7 / 8</div>
+          <div class="stat-label">最初の 1 週間で作成された PR 8 件のうち 7 件がマージ (差し戻し 0 件)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">61,742 回</div>
+          <div class="stat-label">誤ったツール説明がモデルに送信されていた回数 (445 サンプル) → 削除</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">約 83% 削減</div>
+          <div class="stat-label">変更されていないファイルの冗長な再読み取り</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">0.82 → 0.92</div>
+          <div class="stat-label">コンパクション (長い会話の要約) の retention スコア</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">1/8 → 修正</div>
+          <div class="stat-label">約 8 回に 1 回の検索がエラーなしで空の結果を返すサイレントバグ</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">141 件 / 月</div>
+          <div class="stat-label">先月のコアモジュールへのバグ修正コミット (1 日約 5 件) をさらに加速</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ: kiro-trace の 1 サイクル</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Evidence["📥 エビデンス"]
+        direction LR
+        BM["📊 ベンチマークでの失敗"]
+        LT["🗣️ 人間が承認した<br/>ライブトラフィックの問題"]
+        BM ~~~ LT
+    end
+
+    subgraph Loop["🔄 kiro-trace ループ 提案者"]
+        DIAG["🔍 失敗の読解と診断"]
+        REF["🤖 参照エージェントパネル<br/>同一タスクを他エージェントで実行"]
+        RESEARCH["📚 外部リサーチ<br/>論文・公開コード・他エージェント"]
+        CHANGE["✏️ 1 つのレバーを変更<br/>追加より削除を優先"]
+        AB["⚖️ 変更オフ/オンで<br/>同じ Kiro を比較実行"]
+    end
+
+    subgraph Gate["🚦 ゲート 決定論的コード"]
+        S1{"① スクリーニング"}
+        S2{"② リグレッション<br/>マージンに対する検定"}
+        S3{"③ 確認<br/>フルベンチマーク vs 対照群"}
+    end
+
+    HUMAN(["👤 人間によるコードレビューとマージ判断"])
+
+    Evidence --> DIAG
+    DIAG --> REF
+    DIAG --> RESEARCH
+    REF --> CHANGE
+    RESEARCH --> CHANGE
+    CHANGE --> AB
+    AB --> S1
+    S1 --> S2
+    S2 --> S3
+    S3 -->|合格| HUMAN
+    S1 -.->|不合格| DIAG
+    S2 -.->|不合格| DIAG
+    S3 -.->|不合格| DIAG
+
+    classDef evidence fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef loop fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef gate fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef human fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef container fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class BM,LT evidence
+    class DIAG,REF,RESEARCH,CHANGE,AB loop
+    class S1,S2,S3 gate
+    class HUMAN human
+    class Evidence,Loop,Gate container
+        </pre>
+      </div>
+      <p class="diagram-note">
+        💡 kiro-trace の 1 サイクルを示した図です。提案者 (ループ)、判定者 (決定論的コードのゲート)、最終判断者 (人間) の 3 つの役割を明確に分離しており、変更を書く主体と変更を受け入れる主体が同一にならないよう設計されています。
+      </p>
+
+      <div class="roles-grid">
+        <div class="role-card role-loop">
+          <div class="role-icon">🔄</div>
+          <div class="role-name">提案者: ループ</div>
+          <div class="role-desc">失敗を診断し、変更を提案・適用して比較実行する</div>
+        </div>
+        <div class="role-card role-gate">
+          <div class="role-icon">🚦</div>
+          <div class="role-name">判定者: ゲート</div>
+          <div class="role-desc">モデルが触れられないプレーンなコードが変更の採否を決定</div>
+        </div>
+        <div class="role-card role-human">
+          <div class="role-icon">👤</div>
+          <div class="role-name">最終承認者: 人間</div>
+          <div class="role-desc">コードレビューと最終的なマージ判断を実施</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 設計原則 -->
+    <div class="section">
+      <h2>⚙️ kiro-trace の設計原則</h2>
+
+      <div class="card">
+        <div class="card-title">1️⃣ 提案者と判定者の分離</div>
+        <p>変更を書く主体と有効性を判断する主体が同一だと、変更を受け入れる方向に偏ります。Kiro は改善される対象、ループは変更の提案と適用、ゲート (プレーンなコード) は採否の決定、という <span class="highlight">3 つの役割を常に分離</span>し、最終的なマージ判断は人間が行います。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">2️⃣ 失敗に絞った反復 (Iterate on the failures)</div>
+        <p>毎回フルベンチマークを実行するのは遅くて高コストなため、失敗モードをカバーする小さなタスクセットで高速に反復します。フルベンチマークは最後に 1 回だけ実行し、変更ありの実行と変更なしの対照実行を比較。<span class="highlight">小さなセットで勝ってもフル実行で勝てない変更は出荷しません</span>。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">3️⃣ Kiro 自身の履歴に基づくレビュー</div>
+        <p>汎用的な LLM ジャッジではなく、Kiro の実際のコードレビューコメントや開発者の議論を読み込んだレビュアーを使用します。失敗時は同じ入力・同じ予算で<span class="highlight">参照エージェント (他の強力なモデル) のパネル</span>を同一タスクで実行し、成功例との差分を修正のヒントに。別のリサーチステップで論文・公開コード・他エージェントの解法を取り込みます (コードのコピーはしない)。デフォルトではルールを追加する前に何かを削除することを試みます。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">4️⃣ モデルが触れられないチェックによるデルタでの判断</div>
+        <p>変更はコストの低いものから段階的にチェックされ、大半の候補は高コストなチェックの前に脱落します。スコアそのものではなく<span class="highlight">デルタ (差分) を測定し、対照群を毎回再実行</span>することで、新しいモデルの効果ではなくその変更自体の寄与を測定。小サンプルでは弱い検定が「有意差なし」となりやすいため、設定されたマージンに対して「リグレッションがないこと」の証明を要求します。ネットワーク経由でタスクの答えを調べた実行を無効化するコンタミネーションチェックも実施します。</p>
+      </div>
+    </div>
+
+    <!-- 代表的な修正事例 -->
+    <div class="section">
+      <h2>🔧 代表的な修正事例</h2>
+
+      <div class="card">
+        <div class="card-title">🗑️ 誤ったツール説明の削除</div>
+        <p>ハーネスの動作について誤った主張をする 1 文が、445 サンプルで <span class="highlight">61,742 回</span>モデルに送信されていたが何の役にも立っていなかったため削除。存在しないツールを呼び出すよう指示するガイダンスも削除。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">✂️ 無駄なツール呼び出しの削減</div>
+        <p>変更されていないファイルを再読み取りしないようにし、冗長な再読み取りを<span class="highlight">約 83% 削減</span>。過度に厳格またはドキュメント不足だった 2 つのツールコントラクトを修正し、サンプリングした 80 セッションで読み取りツールのスキーマ拒否 205 件とサブエージェントオーケストレーションの拒否 167 件を解消。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🛡️ 技術的な些細な理由による失敗の防止</div>
+        <p>モデルが boolean を文字列の "true" として返した際に呼び出しが拒否され作業が停止していた問題を、リトライ時の値補正で解決。不正な仕様によって<span class="highlight">約 8 回に 1 回の検索がエラーなしで空の結果を返していた</span>サイレントバグを修正。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎯 過剰な委譲の抑制</div>
+        <p>単純な直接編集にまでサブエージェントを起動させていた包括的な委譲指示を削除し、委譲が有効な場面は維持。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔍 参照エージェント追加による仕様欠陥の発見</div>
+        <p>より厳格な参照エージェントをパネルに追加したところ、相対パスのバグが判明 (その参照エージェントでは読み取りの 13-17% が失敗、出荷モデルでは 1.6% にとどまり欠陥が隠れていた)。仕様の修正はコントラクトを共有するすべてのモデルに有効で、現在レビュー中。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📦 未出荷の最大の変更</div>
+        <p>積極的な削除により構築した小さなツール・プロンプトプロファイルは、Terminal-Bench 2.1 の pass@1 で <span class="highlight">77.5% に対して 82.4%</span> を記録し、トークンコストは約 3 分の 1。すべての Kiro ユーザーのデフォルトを変更するプロダクト判断を伴うため、チームレビュー中で未出荷。</p>
+      </div>
+    </div>
+
+    <!-- コンパクション改善事例 -->
+    <div class="section">
+      <h2>🧠 事例: コンパクション改善 (retention 0.82 → 0.92)</h2>
+      <p>コンパクションは、Kiro がコンテキスト上限に達した際に長い会話を要約し、新しいインスタンスが作業を継続できるようにする仕組みです。</p>
+      <table class="info-table">
+        <tr>
+          <th>フェーズ</th>
+          <th>内容</th>
+        </tr>
+        <tr>
+          <td>🔍 診断</td>
+          <td>コンパクション後に Kiro が現在のタスクを放棄し、はるかに古いタスクを自信を持って再開することがあった。旧設計では過去のユーザーメッセージの生ダンプを新しい順で要約末尾に付加しており、要約が最も古い質問で終わっていたため、「はい、それでお願いします」のような短い確認メッセージが誤ったリクエストに紐付けられていた</td>
+        </tr>
+        <tr>
+          <td>📏 測定</td>
+          <td>実際にコンパクションが発生した社内の会話 (最大約 150 万トークン、4 つのサイズ帯) からベンチマークを構築。候補の要約だけを新しいモデルに渡し、作業を継続できるかを採点 (実行可能性、ファイルパスの有無、過去の決定の記載、スレッドの一貫性の 4 点)</td>
+        </tr>
+        <tr>
+          <td>🌐 外部調査</td>
+          <td>各種プロダクションエージェントや公開されているハンドオフプラクティスのコンパクション手法を 11 個のプロンプトとして再構築し (うち 5 個は外部由来)、直接比較</td>
+        </tr>
+        <tr>
+          <td>🚀 修正と出荷</td>
+          <td>誤ったタスク再開の原因だった古いユーザーメッセージのリストを削除。コンパクション後は、サイズ上限付きの簡潔な固定テンプレートによる短い要約と直近のターンのみを保持し、特定のタスク名を含まない静的な再開キューで終了する設計に変更。retention は 0.82 から 0.92 に向上し出荷された</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- ループ自体の改善 -->
+    <div class="section">
+      <h2>🔁 ループ自体の改善</h2>
+      <div class="arrow-item"><span class="arrow-icon">→</span><span>kiro-trace のチェックは、チームや自動ループが実際に騙された事例から成長している (正しい修正の出力がスコアラーに届かず 0 点になった事例、タスクのセットアップがエージェントの自己修復を許して実バグを隠した事例、古いチェックアウトにより修正済みの問題にプルリクエストを作成した事例など)</span></div>
+      <div class="arrow-item"><span class="arrow-icon">→</span><span>確認された修正ごとに、その実行に関する決定論的なアサーションを恒久的なリグレッションスイートに追加し、一度直した失敗の再発を検知</span></div>
+      <div class="arrow-item"><span class="arrow-icon">→</span><span>今後は Amazon 社内で解決済みのインシデントとチケットに基づいたチェックの構築を予定</span></div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>✨ メリット</h2>
+      <div class="two-col">
+        <div>
+          <h3>💼 ビジネス面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>人手では発見不可能な問題の自動検出</strong>: チケットとして報告されない問題 (誤ったツール説明、無駄なトークン消費、サイレントな失敗) を数千件の実行ログから自動的に発見</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>変更の信頼性担保</strong>: 偶然の成功による見かけ上の改善を決定論的なチェックで排除し、本当に価値のある変更だけが出荷される</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>継続的な品質向上</strong>: 先月だけでコアモジュールに 141 件のバグ修正コミット (1 日約 5 件) があった改善サイクルを自動化でさらに加速</span></div>
+        </div>
+        <div>
+          <h3>🔧 技術面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>役割分離による健全性</strong>: 提案者 (ループ)、判定者 (コード)、最終承認者 (人間) の分離により、自己採点ループの典型的な失敗 (narrow hack の採用) を防止</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>デルタベースの評価</strong>: 対照群を毎回再実行してデルタで判断するため、モデル更新などの外部要因と変更自体の効果を区別できる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>恒久的なリグレッション防止</strong>: 修正ごとに決定論的アサーションが蓄積され、再発防止がメカニズムレベルでカバーされる</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <h3>制限事項</h3>
+      <div class="cross-item"><span class="cross-icon">✗</span><span>kiro-trace は Kiro チームの社内システムであり、ユーザーが直接利用できる機能ではない</span></div>
+      <div class="cross-item"><span class="cross-icon">✗</span><span>記事中の数値はすべて社内実験のデルタであり、本番環境での推定値ではない</span></div>
+      <div class="cross-item"><span class="cross-icon">✗</span><span>最も効果の大きい変更 (小さなツール・プロンプトプロファイル) は、プロダクト判断を伴うため未出荷</span></div>
+      <h3>考慮すべき点</h3>
+      <div class="arrow-item"><span class="arrow-icon">→</span><span>「有意な害なし」は「害なし」と同義ではなく、小さな害は変更が積み重なると急速に蓄積するため、マージンに対する検定が必要 (記事の Takeaway)</span></div>
+      <div class="arrow-item"><span class="arrow-icon">→</span><span>自己改善ループを構築する場合、提案者と判定者を分離し、採否の判断をモデルが触れられないコードに置くことが重要</span></div>
+    </div>
+
+    <!-- Takeaway -->
+    <div class="section">
+      <h2>💡 参考になるポイント (エージェント開発者向け)</h2>
+      <p>AI エージェントの自己改善システムを構築する開発者に向けた 5 つの Takeaway です。</p>
+      <div class="usecase">
+        <div class="usecase-title">1. 提案者と判定者を分離する</div>
+        <p>採用・却下の判断は、モデルが触れられないコードに置く</p>
+      </div>
+      <div class="usecase">
+        <div class="usecase-title">2. デルタで判断し、対照群を毎回再実行する</div>
+        <p>新しいモデルだけでもスコアは動くため</p>
+      </div>
+      <div class="usecase">
+        <div class="usecase-title">3. マージンに対して検定する</div>
+        <p>「有意な害なし」は「害なし」ではなく、小さな害は変更の積み重ねで急速に蓄積する</p>
+      </div>
+      <div class="usecase">
+        <div class="usecase-title">4. 確認された修正を恒久的なリグレッションチェックに変換する</div>
+        <p>失敗したメカニズム自体を対象にすることで、単一の結果以上をカバーする</p>
+      </div>
+      <div class="usecase">
+        <div class="usecase-title">5. 追加の前に削除を試す</div>
+        <p>モデルが賢くなるほど、最も安全な改善は削除であることが多い</p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金 / 🌍 利用可能リージョン</h2>
+      <div class="arrow-item"><span class="arrow-icon">→</span><span><strong>料金</strong>: 本記事は開発手法の解説記事であり、料金に関する変更はありません。Kiro の料金は <a href="https://kiro.dev/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Kiro Pricing</a> を参照してください</span></div>
+      <div class="arrow-item"><span class="arrow-icon">→</span><span><strong>リージョン</strong>: グローバル (Kiro はグローバルに提供されるサービスです)</span></div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <div class="card-title">🖥️ Kiro IDE / CLI</div>
+        <p>本記事で解説された改善 (無駄な呼び出しの削減、より慎重な委譲、長い会話でのコンテキスト保持の向上) は、ゲートと人間のコードレビューを通過したうえで Kiro ユーザーに届けられる</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🗜️ コンパクション機能</div>
+        <p>Kiro がコンテキスト上限到達時に会話を要約して作業を継続する仕組み。本記事の改善により retention が 0.82 から 0.92 に向上</p>
+      </div>
+      <div class="card">
+        <div class="card-title">📈 Continuous Prompt Evaluation</div>
+        <p>人間が書いたプロンプト変更を LLM ジャッジとライブ A/B テストで評価する仕組みを扱った関連記事。kiro-trace はその後段 (自動トラジェクトリマイニング、変更生成、ハーネスの自己改善) を担う</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>🎯 まとめ</h2>
+      <p>
+        本記事は、Kiro が自身の実行履歴から問題を発見し修正する社内システム kiro-trace の設計思想と実績を解説したものです。<span class="highlight">提案者・判定者・最終承認者の分離、デルタベースの評価、恒久的なリグレッションチェック</span>といった原則は、AI エージェントの自己改善システムを構築するすべての開発者にとって参考になります。Kiro ユーザーにとっては、無駄なツール呼び出しの削減や長い会話でのコンテキスト保持の向上といった形で、継続的な品質改善の恩恵を受けられることを意味します。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li><a href="https://kiro.dev/blog/how-kiro-fixes-itself/" target="_blank" rel="noopener noreferrer" class="aws-link">Kiro Blog: How Kiro fixes itself, and how we keep the fixes honest</a></li>
+        <li><a href="https://kiro.dev/changelog/" target="_blank" rel="noopener noreferrer" class="aws-link">Kiro Changelog</a></li>
+        <li><a href="https://kiro.dev/" target="_blank" rel="noopener noreferrer" class="aws-link">Kiro 公式サイト</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-10-20-kiro-how-kiro-fixes-itself.md) を基に作成されました。記載の数値はすべて Kiro チームの社内実験によるデルタです。</p>
+    </footer>
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+</body>
+</html>
