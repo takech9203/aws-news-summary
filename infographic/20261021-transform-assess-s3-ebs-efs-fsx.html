@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Transform - S3 / EBS / EFS / FSx 向けストレージ移行アセスメント</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-right: 8px;
+  margin-bottom: 12px;
+}
+
+.date-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--aws-light-gray);
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+}
+
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 12px 0;
+}
+
+.feature-card .feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 17px;
+  margin-bottom: 6px;
+}
+
+.feature-card ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+.feature-card li { margin: 4px 0; font-size: 14px; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .box-title { color: #FF8A73; font-weight: 700; margin-bottom: 8px; }
+.after-box .box-title { color: #6BCB4A; font-weight: 700; margin-bottom: 8px; }
+
+.before-box ul, .after-box ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+.table-wrapper { overflow-x: auto; }
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+
+.check-icon { color: #6BCB4A; font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin: 14px 0;
+}
+
+.usecase .usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 8px 0; font-size: 14px; }
+
+.effect-box {
+  background: rgba(29, 129, 2, 0.12);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 14px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+.code-note { font-size: 13px; color: var(--aws-light-gray); margin: 6px 0 16px 0; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* 統計カード */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--aws-orange);
+}
+
+.stat-label { font-size: 13px; color: var(--aws-light-gray); margin-top: 4px; }
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+.step-body { flex: 1; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-body p { margin: 4px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS Transform</span>
+      <span class="service-badge">Amazon S3</span>
+      <span class="service-badge">Amazon EBS</span>
+      <span class="service-badge">Amazon EFS</span>
+      <span class="service-badge">Amazon FSx</span>
+      <span class="date-badge">📅 リリース日: 2026 年 10 月 21 日</span>
+    </div>
+    <h1>🗄️ オンプレミスストレージの移行アセスメントに対応</h1>
+    <div class="subtitle">インベントリをアップロードするだけで、S3 / EBS / EFS / FSx へのベストフィット分析、サイジング、TCO ビジネスケース生成を自動化</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      AWS Transform の移行アセスメントが、<span class="highlight">オンプレミスストレージの AWS への移行評価</span>に対応しました。
+      NetApp Digital Advisor のエクスポートや RVTools ファイルなどのストレージインベントリをアップロードするだけで、
+      各ワークロードを最適な AWS ストレージサービス (<span class="highlight">Amazon S3、Amazon EBS、Amazon EFS、Amazon FSx</span>) にマッチングし、
+      サイジング推奨とコスト試算を行い、<span class="highlight">TCO (総所有コスト) ベースのビジネスケース</span>を生成します。
+    </p>
+    <p>
+      Single-AZ と Multi-AZ の比較やコスト重視と性能重視の比較といった <span class="highlight">What-if シナリオ</span>の実行、
+      チャットでのフォローアップ質問も可能です。オンプレミスのストレージ基盤 (ファイルサーバー、ストレージアレイ、バックアップ基盤など) の
+      AWS 移行を検討しているインフラエンジニア、ストレージ管理者、移行計画の意思決定者に向けたアップデートです。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ Before: 手作業での移行評価</div>
+        <ul>
+          <li>数百〜数千のボリュームについて、プロトコル、容量、IOPS、スループットなどの特性を手作業で分析する必要があった</li>
+          <li>ブロック、ファイル、オブジェクトといったストレージ種別ごとに、最適な AWS サービスの選定とサイジングを個別に検討する必要があった</li>
+          <li>Single-AZ と Multi-AZ、コスト最適化と性能最適化といった構成の比較試算に時間がかかり、ビジネスケースの作成が困難だった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ After: アップロードだけで自動化</div>
+        <ul>
+          <li>ストレージインベントリ (NetApp Digital Advisor エクスポート、RVTools ファイルなど) をアップロードするだけで、最適な AWS ストレージサービスに自動マッチング</li>
+          <li>容量、IOPS、スループットに基づくサイジング推奨とコスト試算を自動で取得し、TCO ビジネスケースを短時間で作成</li>
+          <li>Single-AZ と Multi-AZ、コスト重視と性能重視などの What-if シナリオを実行し、チャットでフォローアップ質問が可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Input["📥 入力: ストレージインベントリ"]
+        direction LR
+        NETAPP["📄 NetApp Digital Advisor<br/>エクスポート"]
+        RVT["📄 RVTools ファイル"]
+        OTHER["📄 その他の<br/>インベントリ形式"]
+        NETAPP ~~~ RVT ~~~ OTHER
+    end
+
+    subgraph Source["🏢 評価対象のオンプレミスストレージ"]
+        direction LR
+        NAS["🗂️ NAS 共有"]
+        SAN["🧱 SAN LUN"]
+        DAS["💽 直接接続ディスク"]
+        BKP["🗄️ バックアップ<br/>リポジトリ"]
+        NAS ~~~ SAN ~~~ DAS ~~~ BKP
+    end
+
+    subgraph Transform["🤖 AWS Transform ストレージアセスメント"]
+        MATCH["🎯 ベストフィット分析<br/>ワークロードとサービスの<br/>マッチング"]
+        SIZE["📐 サイジング推奨<br/>容量 / IOPS / スループット"]
+        COST["💰 コスト試算"]
+        WHATIF{"🔀 What-if シナリオ<br/>Single-AZ と Multi-AZ<br/>コストと性能"}
+        CHATQ["💬 チャットでの<br/>フォローアップ質問"]
+    end
+
+    subgraph Target["☁️ 推奨先 AWS ストレージサービス"]
+        direction LR
+        S3[("🪣 Amazon S3")]
+        EBS[("📦 Amazon EBS")]
+        EFS[("🗂️ Amazon EFS")]
+        FSX[("🗄️ Amazon FSx<br/>ONTAP / Windows<br/>OpenZFS / Lustre")]
+        S3 ~~~ EBS ~~~ EFS ~~~ FSX
+    end
+
+    TCO["📊 TCO ビジネスケース"]
+
+    Source -.-> Input
+    Input --> MATCH
+    MATCH --> SIZE
+    SIZE --> COST
+    COST --> WHATIF
+    WHATIF --> TCO
+    TCO <-.-> CHATQ
+    MATCH -.-> Target
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+
+    class Input,Source,Transform,Target layer
+    class NETAPP,RVT,OTHER,NAS,SAN,DAS,BKP input
+    class MATCH,SIZE,COST,CHATQ internal
+    class WHATIF decision
+    class TCO process
+    class S3,EBS,EFS,FSX storage
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      オンプレミスストレージのインベントリをアップロードすると、AWS Transform が各ワークロードを最適な AWS ストレージサービスにマッチングし、サイジングとコスト試算を経て TCO ビジネスケースを生成します。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">📥 1. ストレージインベントリの自動取り込み</div>
+      <ul>
+        <li>NAS 共有、SAN LUN、直接接続ディスク、バックアップリポジトリを評価対象にできる</li>
+        <li>NetApp Digital Advisor エクスポート、RVTools ファイル (Excel または CSV の ZIP)、NetApp Data Infrastructure Insights (DII) クエリエクスポート、AWS Transform Assessment Data テンプレートなど、既存の資産管理データをそのまま利用できる</li>
+        <li>認識できない形式は柔軟なパーサーでベストエフォートの取り込みを行い、不足データはチャットで補完できる</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🎯 2. ベストフィットなサービスマッチングとサイジング</div>
+      <ul>
+        <li>各ワークロードをストレージ種別に応じて最適なサービスにマッピング (ファイルストレージは Amazon FSx、ブロックストレージは Amazon EBS、オブジェクトやバックアップは Amazon S3 など)</li>
+        <li>現在の容量、IOPS、スループット要件に基づいて推奨構成をサイジング</li>
+        <li>Amazon EBS では gp3、io2 Block Express、sc1、st1 からボリュームタイプを選定し、「コスト最適化」と「1 ボリュームを複数の gp3 に分割する 1-2-many」の 2 つの戦略を比較提示</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">📊 3. TCO ビジネスケースの自動生成</div>
+      <ul>
+        <li>サイジング結果に基づきコストを試算し、TCO ベースのビジネスケースを生成</li>
+        <li>除外したストレージ、デフォルト値で補完した項目、アイドルボリュームをレポートし、試算の信頼度を判断できる</li>
+        <li>PPTX、XLSX、PDF 形式での成果物出力に対応 (移行アセスメント共通機能)</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">💬 4. What-if シナリオとチャットによる対話</div>
+      <ul>
+        <li>Single-AZ と Multi-AZ の比較、コスト最適化構成と性能最適化構成の比較などのシナリオを実行できる</li>
+        <li>「gp3 から io2 に移行した場合の影響は?」のようなフォローアップ質問をチャットで実行し、前提を変えた再試算が可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📂 ストレージ種別と推奨先サービスのマッピング</h3>
+    <div class="table-wrapper">
+      <table>
+        <tr><th>オンプレミスのストレージ種別</th><th>推奨先 AWS サービス</th></tr>
+        <tr><td>🗂️ ファイルストレージ (ファイルサーバー、NAS アレイ)</td><td>Amazon FSx (NetApp ONTAP / Windows File Server / OpenZFS / Lustre)、Amazon EFS</td></tr>
+        <tr><td>📦 ブロックストレージ (サーバー / VM 接続ボリューム)</td><td>Amazon EBS (gp3 / io2 Block Express / sc1 / st1)</td></tr>
+        <tr><td>🪣 オブジェクト / バックアップストレージ</td><td>Amazon S3 (Standard / Standard-IA / Glacier Instant Retrieval に配分)</td></tr>
+        <tr><td>🧱 SAN ボリューム</td><td>NetApp DII 由来は Amazon EBS、その他のソース由来は Amazon FSx for NetApp ONTAP</td></tr>
+      </table>
+    </div>
+
+    <h3>📋 アセスメントの主な仕様 (ユーザーガイドより)</h3>
+    <div class="table-wrapper">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>入力データ</td><td>RVTools エクスポート、NetApp DII クエリエクスポート、AWS Transform Assessment Data テンプレートなど</td></tr>
+        <tr><td>性能データの収集期間</td><td>最低 7 日間、ピーク (バッチや月末処理) を捉えるには最大 30 日間を推奨</td></tr>
+        <tr><td>Amazon EBS の試算</td><td>容量、プロビジョンド IOPS、スループットを考慮。VM の各ボリュームにデフォルト 30 GiB の gp3 ブートボリュームを追加</td></tr>
+        <tr><td>Amazon S3 のデフォルト配分</td><td>S3 Standard 20%、S3 Standard-IA 30%、S3 Glacier Instant Retrieval 50% (変更可能)。メタデータ / バージョニング用に容量を 20% 上乗せ</td></tr>
+        <tr><td>FSx for NetApp ONTAP の試算</td><td>SSD 層と容量プール層への配分、追加 IOPS、スループット階層、データ削減効果 (NetApp 以外のソースはデフォルト 45%) を考慮。Single-AZ と Multi-AZ の両方を試算</td></tr>
+        <tr><td>リージョン指定</td><td>1 つのアセスメントで 1 リージョンを試算。リージョン比較はシナリオを分けて実行</td></tr>
+      </table>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">7〜30 日</div>
+        <div class="stat-label">推奨する性能データの収集期間</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">4 サービス</div>
+        <div class="stat-label">S3 / EBS / EFS / FSx へのマッチング</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">3 形式</div>
+        <div class="stat-label">PPTX / XLSX / PDF で成果物を出力</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Transform ワークスペースへのアクセス権限</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>サポートされている形式のストレージインベントリデータ (RVTools、NetApp Digital Advisor / DII エクスポートなど)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>性能ピークを反映するため、7 日間以上 (推奨は最大 30 日間) の性能データ</span></div>
+
+    <h3>📌 手順</h3>
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-body">
+        <div class="step-title">インベントリデータの準備とアップロード</div>
+        <p>評価対象のストレージに応じてインベントリを準備します。たとえば NetApp DII の場合、NAS ボリュームには Disk、Internal Volumes、Storage、Share クエリ、SAN ボリュームには Virtual Machines、Volumes クエリを実行し、結果を ZIP ファイルとしてエクスポートします。AWS Transform ワークスペースで移行アセスメントジョブを作成し、ファイルをアップロードします。</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-body">
+        <div class="step-title">ディスカバリー結果の確認とアセスメント実行</div>
+        <p>AWS Transform が生成したディスカバリーサマリー (ストレージサマリー、データ品質警告など) を確認し、対象スコープや前提条件 (ターゲットリージョン、EBS ボリュームタイプの指定など) を設定してアセスメントを実行します。各ワークロードのマッチング結果、サイジング推奨、コスト試算が提示されます。</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-body">
+        <div class="step-title">What-if シナリオの実行とビジネスケースの作成</div>
+        <p>チャットでプロンプトを実行し、前提を変えた比較や再試算を行います。Single-AZ と Multi-AZ、コスト重視と性能重視などのシナリオを比較し、最終的な TCO ビジネスケースを PPTX / XLSX / PDF 形式で出力してステークホルダーとの合意形成に活用します。</p>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Text</span>
+        <span class="code-title">チャットプロンプトの例</span>
+      </div>
+      <pre><code class="language-text">- "Estimate storage costs for my file servers on Amazon FSx for NetApp ONTAP"
+- "What is the impact of moving from gp3 to io2 volumes?"
+- "Model my backup and archive data on Amazon S3"
+- "Use gp3 for all of my application volumes"</code></pre>
+    </div>
+
+    <div class="flow-diagram">
+      <div class="flow-step">📄 インベントリ<br/>準備・アップロード</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔍 ディスカバリー<br/>確認・実行</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔀 What-if<br/>シナリオ比較</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📊 TCO ビジネス<br/>ケース出力</div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>👍 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>評価期間の大幅な短縮</strong>: 多数のボリュームの手作業分析が不要になり、ストレージ移行のビジネスケース作成を短時間で完了できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>データドリブンな意思決定</strong>: 実際のインベントリと性能データに基づく TCO 試算により、移行判断の根拠を定量的に示せる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>既存データの再利用</strong>: NetApp Digital Advisor や RVTools など、すでに手元にあるエクスポートをそのまま入力に使えるため、新たなデータ収集の負担が小さい</span></div>
+
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ベストフィットなサービス選定</strong>: プロトコル、容量、性能特性に基づき、S3 / EBS / EFS / FSx の中から最適なサービスを自動で選定できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>性能要件を考慮したサイジング</strong>: 容量だけでなく IOPS とスループットを考慮した推奨構成が得られ、過剰または過小なプロビジョニングを回避できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>構成比較の容易さ</strong>: Single-AZ と Multi-AZ、EBS ボリュームタイプの変更などの What-if シナリオをチャットで即座に比較できる</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>🚧 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>1 つのストレージアセスメントで試算できるのは単一リージョンのみ。リージョンを指定しない、または複数指定した場合はエラーになる (リージョン比較はシナリオを分けて実行する)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>容量データがないボリュームや、サポートされるボリュームタイプの上限を超える要件を持つストレージはマッピングできず、コスト試算から除外される</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>AWS Transform が利用可能なリージョンでのみ利用できる</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>使用容量やピーク性能などの欠損フィールドはドキュメント化されたデフォルト値で補完されるため、入力データの品質が試算精度に直結する (例: 使用容量が不明な場合はプロビジョンド容量の 50% を使用中と仮定)</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>アイドルボリュームはコスト試算に含まれたうえでフラグ付けされるため、アーカイブや廃止の候補として別途精査することを推奨</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>アセスメント結果はあくまで試算であり、実際の移行時には PoC などによる検証を推奨。データ移行の実行自体 (AWS DataSync や AWS Transfer Family などの利用) は本機能の範囲外</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🗄️ ユースケース 1: NetApp ストレージアレイの AWS 移行評価</div>
+      <p><strong>シナリオ</strong>: オンプレミスで NetApp ストレージアレイを運用しており、ハードウェア更改を機に AWS への移行を検討しているが、FSx for NetApp ONTAP への移行コストが見通せない。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-text">1. NetApp Digital Advisor のエクスポート、または NetApp DII の
+   クエリ結果 (7〜30 日間の性能データ) を ZIP で用意
+2. AWS Transform にアップロードしてアセスメントを実行
+3. SSD 層と容量プール層の配分、Single-AZ と Multi-AZ の
+   試算結果を比較して移行計画に反映</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: アレイが報告する重複排除・圧縮の削減効果を反映した現実的なサイジングとコスト試算が得られ、移行可否の判断を迅速化できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🖥️ ユースケース 2: VMware 環境のストレージを含む全体移行の試算</div>
+      <p><strong>シナリオ</strong>: VMware 環境の AWS 移行を計画しており、VM に接続されたボリュームと共有ファイルサーバーを含めた全体のストレージコストを把握したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-text">1. RVTools のフルエクスポート (Excel または ZIP/CSV) を取得
+2. AWS Transform の移行アセスメントにアップロード
+3. VM 接続ボリュームは EBS (コスト最適化と 1-2-many の
+   2 戦略)、ファイルサーバーは FSx の試算結果を確認
+4. "What is the impact of moving from gp3 to io2 volumes?" の
+   ような What-if シナリオで構成を比較</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: コンピューティングとストレージを一体で評価した TCO ビジネスケースを作成でき、移行スコープの検討を効率化できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🪣 ユースケース 3: バックアップ / アーカイブデータの S3 移行試算</div>
+      <p><strong>シナリオ</strong>: オンプレミスのバックアップリポジトリの維持コストが課題となっており、Amazon S3 への移行によるコスト削減効果を経営層に提示したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-text">1. バックアップリポジトリを含むストレージインベントリを
+   アップロード
+2. "Model my backup and archive data on Amazon S3" を実行
+3. デフォルトのストレージクラス配分 (Standard 20% /
+   Standard-IA 30% / Glacier Instant Retrieval 50%) を
+   アクセスパターンに合わせて調整
+4. 生成された TCO ビジネスケースを提案資料として活用</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: アクセスパターンに応じたストレージクラス配分を反映したコスト削減効果を定量的に示し、予算承認を得やすくなる。</div>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      本アセスメント機能自体の追加料金は公式発表には記載されていません。アセスメントの出力として、移行後の Amazon S3、EBS、EFS、FSx の想定コストが提示されます。
+      詳細は <a href="https://aws.amazon.com/transform/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Transform の料金ページ</a>を確認してください。
+    </p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>
+      AWS Transform が提供されているすべての AWS リージョンで利用可能です。対象リージョンの一覧は
+      <a href="https://docs.aws.amazon.com/transform/latest/userguide/regions.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Transform ユーザーガイドのリージョン一覧</a>を参照してください。
+    </p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="table-wrapper">
+      <table>
+        <tr><th>サービス</th><th>役割</th></tr>
+        <tr><td>🪣 Amazon S3</td><td>オブジェクトストレージとバックアップ / アーカイブデータの移行先。Standard、Standard-IA、Glacier Instant Retrieval への配分を試算</td></tr>
+        <tr><td>📦 Amazon EBS</td><td>サーバー / VM 接続のブロックストレージの移行先。gp3、io2 Block Express、sc1、st1 を対象にサイジング</td></tr>
+        <tr><td>🗂️ Amazon EFS</td><td>ファイルストレージの移行先候補の 1 つ</td></tr>
+        <tr><td>🗄️ Amazon FSx</td><td>NAS / ファイルサーバーの移行先。NetApp ONTAP、Windows File Server、OpenZFS、Lustre の各タイプに対応</td></tr>
+        <tr><td>🤖 AWS Transform 移行アセスメント</td><td>コンピューティング、データベース (SQL Server)、分析 (Apache Kafka) のアセスメントに続き、今回ストレージが追加</td></tr>
+        <tr><td>🚚 AWS DataSync / AWS Transfer Family</td><td>アセスメント後の実際のデータ移行に利用できるサービス</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>🎯 まとめ</h2>
+    <p>
+      AWS Transform の移行アセスメントがオンプレミスストレージの評価に対応し、インベントリをアップロードするだけで
+      <span class="highlight">S3 / EBS / EFS / FSx へのベストフィットなマッチング、サイジング、TCO ビジネスケースの作成</span>までを自動化できるようになりました。
+    </p>
+    <p>
+      ストレージ基盤の AWS 移行を検討している場合は、まず NetApp Digital Advisor や RVTools などの既存エクスポートを用意して
+      AWS Transform でアセスメントを実行し、Single-AZ と Multi-AZ などの What-if シナリオを比較しながら移行計画の検討を開始することを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/transform-assess-s3-ebs-efs-fsx/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/transform-assess-s3-ebs-efs-fsx/</a></li>
+      <li><a href="https://aws.amazon.com/transform/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Transform 製品ページ: https://aws.amazon.com/transform/</a></li>
+      <li><a href="https://docs.aws.amazon.com/transform/latest/userguide/transform-app-assessments.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Transform 移行アセスメント ドキュメント</a></li>
+      <li><a href="https://docs.aws.amazon.com/transform/latest/userguide/transform-app-assessments-storage.html" target="_blank" rel="noopener noreferrer" class="aws-link">ストレージアセスメント ドキュメント</a></li>
+      <li><a href="https://docs.aws.amazon.com/transform/latest/userguide/transform-app-assessments-quick-start.html" target="_blank" rel="noopener noreferrer" class="aws-link">移行アセスメント クイックスタートガイド</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-10-21-transform-assess-s3-ebs-efs-fsx.md) を基に作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

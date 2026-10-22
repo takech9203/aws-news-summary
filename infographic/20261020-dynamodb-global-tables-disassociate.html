@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon DynamoDB - グローバルテーブルのレプリカ切り離しサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.card p, .card ul { margin: 0; font-size: 14px; }
+.card ul { padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 14px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+
+.before-box h3, .after-box h3 { margin: 0 0 10px 0; font-size: 16px; }
+.before-box h3 { color: #FF8A73; }
+.after-box h3 { color: #6BC95B; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #6BC95B; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 120px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+}
+
+/* 統計カード */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-card .stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+.stat-card .stat-label { font-size: 13px; color: var(--aws-light-gray); }
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.note {
+  background: rgba(255, 173, 51, 0.1);
+  border-left: 4px solid var(--aws-smile-orange);
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { padding-left: 20px; margin: 8px 0; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .before-after { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Amazon DynamoDB</span>
+    <h1>✂️ グローバルテーブルのレプリカ切り離し<br>(Disassociate) サポート</h1>
+    <div class="subtitle">
+      <span class="release-date">📅 リリース日: 2026 年 10 月 20 日</span> |
+      機能: グローバルテーブルからのレプリカ切り離し
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon DynamoDB グローバルテーブルで、<span class="highlight">テーブルやデータを削除することなくレプリカを切り離す</span>ことが可能になりました。
+      切り離されたテーブルは、同じアカウント・同じリージョンの<span class="highlight">単一リージョンテーブル</span>として、
+      テーブル名と ARN を保持したまま継続利用できます。代替テーブルの作成やデータのコピーは不要です。
+    </p>
+    <p>
+      対象は、マルチリージョン結果整合性 (MREC) を使用する同一アカウントおよびマルチアカウントのグローバルテーブル
+      (バージョン 2019.11.21) で、<span class="highlight">すべての AWS リージョン</span>で利用できます。
+    </p>
+
+    <div class="flow-diagram">
+      <div class="flow-step">🌍 グローバルテーブル<br>3 リージョン構成</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔓 切り離し保護を<br>無効化</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">✂️ Disassociate<br>アクション実行</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📦 単一リージョン<br>テーブルとして継続</div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <ul>
+          <li>レプリカを除外するには<strong>削除するしかなく</strong>、そのリージョンのテーブルとデータは失われた</li>
+          <li>データを残したい場合は、代替テーブルを作成してデータをエクスポート / コピーする作業が必要だった</li>
+          <li>マルチアカウントの共有グローバルテーブルから特定のアカウントだけが離脱し、既存データを引き継いで独立運用する手段がなかった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <ul>
+          <li>レプリカを削除せずに<strong>レプリケーションのみを停止</strong>し、既存テーブルを単一リージョンテーブルとして利用可能に</li>
+          <li>テーブル名・ARN・データに加え、インデックス、Streams、TTL、バックアップ、暗号化などの設定が維持され、<strong>移行作業が不要</strong>に</li>
+          <li>切り離し保護がデフォルトで有効化されており、誤操作による意図しない切り離しを防止</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <p>3 リージョン構成のグローバルテーブルから us-west-2 のレプリカを切り離す例です。切り離されたテーブルは単一リージョンテーブルとなり、残りの 2 リージョンはグローバルテーブルとして継続します。</p>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Op["⚙️ UpdateTable の Disassociate アクション<br/>対象: us-west-2 レプリカ"]
+
+    subgraph Before["🌍 切り離し前 - 3 リージョンのグローバルテーブル"]
+        direction LR
+        B1["🗄️ us-east-1<br/>レプリカ"]
+        B2["🗄️ ap-northeast-1<br/>レプリカ"]
+        B3["🗄️ us-west-2<br/>レプリカ"]
+        B1 <--> B2
+        B2 <--> B3
+        B1 <--> B3
+    end
+
+    subgraph After["✂️ 切り離し後"]
+        direction LR
+        subgraph GT["🌍 グローバルテーブルとして継続"]
+            A1["🗄️ us-east-1<br/>レプリカ"]
+            A2["🗄️ ap-northeast-1<br/>レプリカ"]
+            A1 <--> A2
+        end
+        A3["📦 us-west-2<br/>単一リージョンテーブル<br/>データと設定を保持"]
+        GT ~~~ A3
+    end
+
+    Before --> Op --> After
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef replica fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef regional fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef action fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class Before,After,GT boundary
+    class B1,B2,B3,A1,A2 replica
+    class A3 regional
+    class Op action
+      </pre>
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <h4>✂️ 1. レプリカの切り離し (Disassociate)</h4>
+      <ul>
+        <li><code class="inline">UpdateTable</code> API の <code class="inline">ReplicaUpdates</code> 配列に新しい <code class="inline">Disassociate</code> アクションを指定して実行</li>
+        <li>切り離されたレプリカは、同じアカウント・リージョンの単一リージョンテーブルになり、<strong>テーブル名と ARN を保持</strong></li>
+        <li>インデックス、DynamoDB Streams、TTL、バックアップ、暗号化、課金モード、テーブルクラスなどの設定は維持 (レプリケーション固有の設定とメトリクスは適用されなくなる)</li>
+        <li>レプリカが 3 つ以上の場合、切り離したレプリカのみが単一リージョンテーブル化。レプリカが 2 つの場合は両方が単一リージョンテーブルに (どちらのテーブルもデータも削除されない)</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🛡️ 2. 切り離し保護 (Disassociation Protection)</h4>
+      <ul>
+        <li>各レプリカで<strong>デフォルトで有効</strong>になっており、誤操作による切り離しを防止</li>
+        <li>切り離し実行前に保護を無効化して更新完了を待つ必要がある (保護を無効化してもレプリケーションは停止しない)</li>
+        <li>削除保護 (deletion protection) とは<strong>独立した設定</strong></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🔄 3. レプリケーション停止境界による整合性確保</h4>
+      <ul>
+        <li>切り離しリクエスト受付時に、レプリケーション停止境界 (replication stop boundary) となる時点を設定</li>
+        <li>離脱レプリカへの直接書き込みのうち、<strong>境界までのすべての書き込みが残りの全レプリカに配信されるまで待機</strong></li>
+        <li>配信が完了できない場合、切り離しは完了せず全レプリカが元のグローバルテーブルに残る (安全側に倒れる設計)</li>
+        <li>切り離しの最中および完了後も、テーブルは読み取り / 書き込みを継続して処理可能 (無停止)</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🏢 4. マルチアカウントグローバルテーブルのサポート</h4>
+      <ul>
+        <li>各アカウントは<strong>自分が所有するレプリカのみ</strong>を切り離し可能</li>
+        <li>共有グローバルテーブルからの離脱後も、既存データを保持したまま独立運用が可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>対応範囲と要件</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対応する整合性モード</td><td>マルチリージョン結果整合性 (MREC) のみ。マルチリージョン強整合性 (MRSC) は非対応</td></tr>
+      <tr><td>対応バージョン</td><td>Global Tables version 2019.11.21 (Current)。2017.11.29 (Legacy) は非対応</td></tr>
+      <tr><td>対応構成</td><td>同一アカウントおよびマルチアカウントのグローバルテーブル</td></tr>
+      <tr><td>実行場所</td><td>レプリカが存在するリージョンかつ所有アカウントからリクエスト</td></tr>
+      <tr><td>前提ステータス</td><td>対象レプリカが <code class="inline">ACTIVE</code> であり、すべてのレプリカが到達可能であること</td></tr>
+      <tr><td>同時実行制限</td><td>グローバルテーブルごとにレプリカのライフサイクル操作は同時に 1 つのみ</td></tr>
+      <tr><td>ブロック条件</td><td>いずれかのレプリカが <code class="inline">INACCESSIBLE_ENCRYPTION_CREDENTIALS</code>、<code class="inline">REPLICATION_NOT_AUTHORIZED</code>、<code class="inline">ARCHIVING</code>、<code class="inline">ARCHIVED</code> の場合は実行不可</td></tr>
+      <tr><td>時間制限</td><td>過去 24 時間以内に新しいレプリカ追加のソースとなったレプリカは切り離し不可</td></tr>
+      <tr><td>操作インターフェイス</td><td>AWS Management Console、AWS CLI、DynamoDB API、AWS CloudFormation</td></tr>
+    </table>
+
+    <h3>API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/10/20</td>
+        <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/c13b91-dynamodb.html" target="_blank" rel="noopener noreferrer">Amazon DynamoDB</a></td>
+        <td>6 updated api methods - <code class="inline">UpdateTable</code> の <code class="inline">ReplicaUpdates</code> に <code class="inline">Disassociate</code> アクションを追加。<code class="inline">CreateTable</code>、<code class="inline">DeleteTable</code>、<code class="inline">DescribeTable</code>、<code class="inline">RestoreTableFromBackup</code>、<code class="inline">RestoreTableToPointInTime</code>、<code class="inline">UpdateTable</code> のレスポンスに <code class="inline">DisassociationProtectionEnabled</code> を追加</td>
+      </tr>
+    </table>
+
+    <h3>必要な IAM 権限</h3>
+    <p style="font-size: 14px;">
+      切り離しには、対象レプリカのテーブル ARN に対して <code class="inline">dynamodb:UpdateTable</code> と
+      <code class="inline">dynamodb:DisassociateTableReplica</code> の両方が必要です。
+      <code class="inline">dynamodb:DisassociateTableReplica</code> は IAM 権限であり、独立した API オペレーションではありません。
+      保護状態の確認と完了のモニタリングには <code class="inline">dynamodb:DescribeTable</code> が必要です。
+    </p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">IAM ポリシー例</span>
+      </div>
+      <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:UpdateTable",
+                "dynamodb:DisassociateTableReplica",
+                "dynamodb:DescribeTable"
+            ],
+            "Resource": "arn:aws:dynamodb:us-west-2:111122223333:table/Music"
+        }
+    ]
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>📝 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>MREC を使用する Global Tables version 2019.11.21 (Current) のグローバルテーブルであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>対象レプリカが <code class="inline">ACTIVE</code> で、すべてのレプリカが到達可能であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>必要な IAM 権限とレプリケーションに必要な暗号化キーへのアクセスが維持されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>他のレプリカライフサイクル操作 (レプリカ作成や別の切り離し) が実行中でないこと</span></div>
+
+    <h3>ステップ 1: 切り離し保護を無効化する</h3>
+    <p style="font-size: 14px;">対象レプリカのリージョンで、デフォルトで有効になっている切り離し保護を無効化します。レプリカを所有するアカウントの認証情報で実行します。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">切り離し保護の無効化</span></div>
+      <pre><code class="language-bash">aws dynamodb update-table \
+    --table-name Music \
+    --region us-west-2 \
+    --no-disassociation-protection-enabled</code></pre>
+    </div>
+
+    <h3>ステップ 2: 保護の無効化とテーブル状態を確認する</h3>
+    <p style="font-size: 14px;"><code class="inline">TableStatus</code> が <code class="inline">ACTIVE</code> かつ <code class="inline">DisassociationProtectionEnabled</code> が <code class="inline">false</code> になるまで繰り返し確認します。フィールドが存在しない、または <code class="inline">true</code> の場合は次に進まないでください。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">状態確認</span></div>
+      <pre><code class="language-bash">aws dynamodb describe-table \
+    --table-name Music \
+    --region us-west-2 \
+    --query 'Table.{TableStatus:TableStatus,DisassociationProtectionEnabled:DisassociationProtectionEnabled,Replicas:Replicas}'</code></pre>
+    </div>
+
+    <h3>ステップ 3: Disassociate アクションを実行する</h3>
+    <p style="font-size: 14px;"><code class="inline">ReplicaUpdates</code> に <code class="inline">Disassociate</code> アクションを 1 つ指定して切り離しをリクエストします。ローカルリージョンを指定し、<code class="inline">DisassociationMode</code> に <code class="inline">WAIT_FOR_REPLICATION</code> を明示的に設定します。レスポンスが成功しても、操作自体は非同期で継続します。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">切り離しの実行</span></div>
+      <pre><code class="language-bash">aws dynamodb update-table \
+    --table-name Music \
+    --region us-west-2 \
+    --replica-updates '[{"Disassociate":{"RegionName":"us-west-2","DisassociationMode":"WAIT_FOR_REPLICATION"}}]'</code></pre>
+    </div>
+
+    <h3>ステップ 4: 完了を確認する</h3>
+    <p style="font-size: 14px;"><code class="inline">TableStatus</code> が <code class="inline">ACTIVE</code> であること、および <code class="inline">Replicas</code> にピアレプリカが残っていないことの<strong>両方</strong>を確認します。</p>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">完了確認</span></div>
+      <pre><code class="language-bash">aws dynamodb describe-table \
+    --table-name Music \
+    --region us-west-2 \
+    --query 'Table.{TableStatus:TableStatus,Replicas:Replicas}'</code></pre>
+    </div>
+    <div class="note">
+      ⚠️ <code class="inline">ACTIVE</code> だけでは成功の確認になりません。切り離しがロールバックした場合も <code class="inline">ACTIVE</code> に戻るため、必ずレプリカメンバーシップを確認します。残りのレプリカ側からも、更新後のメンバーシップを確認することが推奨されます。
+    </div>
+
+    <h3>ステップ 5: CloudFormation で管理している場合</h3>
+    <p style="font-size: 14px;"><code class="inline">AWS::DynamoDB::GlobalTable</code> リソースで管理しているレプリカは、<code class="inline">TableType</code> プロパティを使用して切り離します。以下の 2 段階のスタック更新を、レプリカのアカウントとリージョンで実行します。</p>
+    <ol style="font-size: 14px;">
+      <li><code class="inline">Replicas</code> 内の対象リージョンのエントリで <code class="inline">DisassociationProtectionEnabled</code> を <code class="inline">false</code> に設定し、<code class="inline">TableType</code> を <code class="inline">GlobalTableReplica</code> に設定して更新する</li>
+      <li><code class="inline">TableType</code> を <code class="inline">Regional</code> に変更し、<code class="inline">Replicas</code> にスタックのリージョンのみを残して更新する (マルチアカウントの場合は <code class="inline">GlobalTableSourceArn</code> を削除し、継承していたテーブル設定を明示的に宣言する)</li>
+    </ol>
+    <div class="note">
+      ⚠️ <code class="inline">TableType</code> を <code class="inline">Regional</code> に変更せずにレプリカエントリを削除すると、通常のスタック更新と同様に<strong>レプリカが削除される</strong>ため注意が必要です。
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>移行コストの削減</strong>: リージョン移行やアカウント移行の完了後、代替テーブルの作成やデータコピーなしでレプリケーション構成を解消でき、移行プロジェクトの工数とリスクを削減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト最適化</strong>: 不要になったリージョンへのレプリケートされた書き込み課金を停止しつつ、監査やコンプライアンス要件のためにデータを保持</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>組織の独立性</strong>: マルチアカウント共有グローバルテーブルに参加している組織やチームが、既存データを引き継いだまま独立したテーブル運用に移行可能</span></div>
+
+    <h3>技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>データ整合性の担保</strong>: レプリケーション停止境界により、離脱レプリカへの書き込みが残りのレプリカに配信されてから切り離しが完了するため、データロスを抑えた離脱が可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>設定の完全な維持</strong>: テーブル名、ARN、インデックス、Streams、TTL、バックアップ、暗号化などが維持され、アプリケーション側の変更を最小化</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>安全性の確保</strong>: デフォルト有効の切り離し保護と 2 段階の操作により、誤操作による意図しないレプリケーション停止を防止</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>無停止での切り離し</strong>: 切り離しの最中もテーブルは読み取り / 書き込みを継続して処理可能</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>マルチリージョン強整合性 (MRSC) のグローバルテーブルでは利用不可</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Global Tables version 2017.11.29 (Legacy) では利用不可</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span><strong>切り離しは取り消し (undo) 不可</strong>。同じテーブルを元のグローバルテーブルに再接続することもできない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>過去 24 時間以内に新規レプリカ追加のソースになったレプリカは切り離し不可</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>グローバルテーブルごとにレプリカライフサイクル操作は同時に 1 つのみで、他の操作の完了を待つ必要がある</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>いずれかのレプリカが <code class="inline">INACCESSIBLE_ENCRYPTION_CREDENTIALS</code>、<code class="inline">REPLICATION_NOT_AUTHORIZED</code>、<code class="inline">ARCHIVING</code>、<code class="inline">ARCHIVED</code> の場合は実行がブロックされる</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>MREC は非同期レプリケーションのため、切り離されたテーブルには他リージョンの最新の書き込みが含まれていない可能性がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>同じリージョンに代替レプリカを作成する場合は、スタンドアロンテーブルに残したい変更を残りのグローバルテーブルへ反映してから、スタンドアロンテーブルを削除して新しいレプリカを追加する必要がある (新しいレプリカは残りのグローバルテーブルからデータをコピーする)</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span><code class="inline">TableStatus</code> が <code class="inline">ACTIVE</code> に戻っただけでは成功とは限らないため、必ずレプリカメンバーシップを確認する</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>受け付けられた操作も、暗号化キーへのアクセス喪失などにより後からロールバックされる場合がある。その場合は <code class="inline">ReplicaStatus</code> と <code class="inline">ReplicaStatusDescription</code> を確認して原因を解消する</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>🏢 ユースケース 1: マルチアカウント共有グローバルテーブルからの離脱</h4>
+      <p><strong>シナリオ</strong>: 複数の事業部が別々の AWS アカウントでマルチアカウントグローバルテーブルを共有していたが、組織再編により一部の事業部がデータを引き継いで独立運用することになった。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">離脱するアカウントの認証情報で、自アカウントのレプリカのみを切り離す</span></div>
+        <pre><code class="language-bash">aws dynamodb update-table \
+    --table-name SharedCatalog \
+    --region ap-northeast-1 \
+    --no-disassociation-protection-enabled
+
+aws dynamodb update-table \
+    --table-name SharedCatalog \
+    --region ap-northeast-1 \
+    --replica-updates '[{"Disassociate":{"RegionName":"ap-northeast-1","DisassociationMode":"WAIT_FOR_REPLICATION"}}]'</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: データコピーや代替テーブルの構築なしで、離脱時点のデータを保持した単一リージョンテーブルとして独立運用を開始できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>🌏 ユースケース 2: リージョン移行後のレプリケーション解消</h4>
+      <p><strong>シナリオ</strong>: ワークロードを us-west-2 から us-east-1 へ移行するために一時的にグローバルテーブルを構成し、移行完了後は旧リージョンのテーブルを監査用に保持しつつレプリケーションを停止したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">移行先リージョン側を確認した後、旧リージョンのレプリカを切り離す</span></div>
+        <pre><code class="language-bash">aws dynamodb update-table \
+    --table-name Orders \
+    --region us-west-2 \
+    --replica-updates '[{"Disassociate":{"RegionName":"us-west-2","DisassociationMode":"WAIT_FOR_REPLICATION"}}]'</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: 旧リージョンのテーブルを削除せずにレプリケートされた書き込みの課金を停止し、監査・検証用のデータとして保持できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>📜 ユースケース 3: CloudFormation 管理下のレプリカの計画的な単一リージョン化</h4>
+      <p><strong>シナリオ</strong>: IaC で管理しているグローバルテーブルについて、特定リージョンの利用縮小に伴い、そのリージョンのレプリカをデータを保持したまま単一リージョンテーブルへ移行したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">2 段階のスタック更新</span></div>
+        <pre><code class="language-yaml"># 更新 1: 切り離し保護の無効化
+Resources:
+  GlobalTable:
+    Type: AWS::DynamoDB::GlobalTable
+    DeletionPolicy: Retain
+    Properties:
+      TableName: GT-CFN-Table
+      TableType: GlobalTableReplica
+      Replicas:
+        - Region: us-east-1
+          DisassociationProtectionEnabled: false
+        - Region: us-east-2
+
+# 更新 2: TableType を Regional に変更して切り離し
+# Replicas にはスタックのリージョンのみを残す</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: スタックが切り離し後も同じテーブルを単一リージョンテーブルとして管理し続け、テーブルやデータは削除されない。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      レプリカの切り離し操作自体に追加料金は発表されていません。切り離し後のテーブルは単一リージョンテーブルとして課金されるため、
+      グローバルテーブルの<span class="highlight">レプリケートされた書き込み (replicated writes) に関する課金は発生しなくなります</span>。
+    </p>
+    <table>
+      <tr><th>状態</th><th>課金</th></tr>
+      <tr><td>切り離し前 (レプリカ)</td><td>グローバルテーブルのレプリケートされた書き込み課金を含む</td></tr>
+      <tr><td>切り離し後 (単一リージョンテーブル)</td><td>通常の単一リージョンテーブルとしての読み取り / 書き込み・ストレージ課金のみ</td></tr>
+    </table>
+    <p style="font-size: 14px;">詳細は <a class="aws-link" href="https://aws.amazon.com/dynamodb/pricing/" target="_blank" rel="noopener noreferrer">Amazon DynamoDB の料金ページ</a> を参照してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">すべての AWS リージョン</div>
+        <div class="stat-label">で利用可能</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">MREC</div>
+        <div class="stat-label">マルチリージョン結果整合性のグローバルテーブルが対象</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">同一 / マルチアカウント</div>
+        <div class="stat-label">両方の構成に対応</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <h4>🌐 DynamoDB グローバルテーブル</h4>
+      <p>本機能の対象となるフルマネージドのマルチリージョン・マルチアクティブレプリケーション機能</p>
+    </div>
+    <div class="card">
+      <h4>📜 AWS CloudFormation</h4>
+      <p><code class="inline">AWS::DynamoDB::GlobalTable</code> リソースの <code class="inline">TableType</code> プロパティにより、IaC で切り離しを管理可能</p>
+    </div>
+    <div class="card">
+      <h4>🔐 AWS IAM</h4>
+      <p>新しい IAM 権限 <code class="inline">dynamodb:DisassociateTableReplica</code> により、切り離し操作を最小権限で制御可能</p>
+    </div>
+    <div class="card">
+      <h4>🔑 AWS KMS</h4>
+      <p>レプリケーションに必要な暗号化キーへのアクセスが失われると切り離しがブロックまたはロールバックされるため、キー管理との関係に注意が必要</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      DynamoDB グローバルテーブルのレプリカ切り離し機能により、これまで「削除」しか選択肢がなかったレプリカのライフサイクルに、
+      <span class="highlight">データと設定を保持したまま単一リージョンテーブル化する</span>という新しい選択肢が加わりました。
+      リージョン移行やマルチアカウント構成からの離脱、コスト最適化を検討しているチームは、
+      切り離し保護の挙動と<span class="highlight">「取り消し不可」という制約</span>を理解した上で、本機能の活用を検討することを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/10/dynamodb-global-tables-disassociate/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/dynamodb-global-tables-disassociate/</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/globaltables-disassociate.html" target="_blank" rel="noopener noreferrer">ドキュメント: Disassociating a global table replica</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateTable.html" target="_blank" rel="noopener noreferrer">API リファレンス: UpdateTable</a></li>
+      <li><a class="aws-link" href="https://awsapichanges.com/archive/changes/c13b91-dynamodb.html" target="_blank" rel="noopener noreferrer">API 変更履歴 (awsapichanges.com)</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/dynamodb/pricing/" target="_blank" rel="noopener noreferrer">料金ページ: https://aws.amazon.com/dynamodb/pricing/</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-10-20-dynamodb-global-tables-disassociate.md) をもとに生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
