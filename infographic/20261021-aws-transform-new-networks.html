@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Transform - 新規ネットワーク構築とセキュリティグループのモダナイズ</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 8px 0;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+      margin-bottom: 24px;
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .service-badge {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 16px;
+      font-size: 14px;
+    }
+
+    .date-badge {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+      padding: 4px 14px;
+      border-radius: 16px;
+      font-size: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .new-badge {
+      background: var(--aws-green);
+      color: var(--aws-white);
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 16px;
+      font-size: 14px;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+    }
+
+    .feature-card {
+      background: var(--aws-squid-ink);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 14px 0;
+    }
+
+    .feature-card h3 {
+      margin: 0 0 8px 0;
+      color: var(--aws-orange);
+      font-size: 17px;
+    }
+
+    .feature-card ul {
+      margin: 8px 0 0 0;
+      padding-left: 20px;
+    }
+
+    .feature-card li {
+      margin: 6px 0;
+      font-size: 14.5px;
+    }
+
+    /* Before/After 比較 */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 720px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px 20px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 { color: #FF6B6B; }
+    .after-box h3 { color: #6BCB77; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li { margin: 6px 0; }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 15px;
+    }
+
+    .check-icon { color: #6BCB77; font-size: 17px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B6B; font-size: 17px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 17px; flex-shrink: 0; }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--aws-light-gray);
+    }
+
+    /* ステップ */
+    .step {
+      display: flex;
+      gap: 14px;
+      margin: 16px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    .step-content { flex: 1; }
+
+    .step-content h3 {
+      margin: 2px 0 6px 0;
+      font-size: 16px;
+      color: var(--aws-white);
+    }
+
+    .step-content p {
+      margin: 0 0 8px 0;
+      font-size: 14.5px;
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin: 14px 0;
+    }
+
+    .usecase h3 {
+      margin: 0 0 8px 0;
+      color: var(--aws-smile-orange);
+      font-size: 17px;
+    }
+
+    .usecase p {
+      margin: 6px 0;
+      font-size: 14.5px;
+    }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 3px solid var(--aws-green);
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* Mermaid コンテナ */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 13.5px;
+      color: var(--aws-light-gray);
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* メリット・デメリット 2 カラム */
+    .pros-cons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 720px) {
+      .pros-cons { grid-template-columns: 1fr; }
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    .related-item {
+      display: flex;
+      gap: 10px;
+      margin: 10px 0;
+      align-items: flex-start;
+      font-size: 14.5px;
+    }
+
+    .related-icon { font-size: 18px; flex-shrink: 0; }
+
+    .summary-box {
+      background: rgba(255, 153, 0, 0.1);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 20px 24px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    footer li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔄 AWS Transform<br>新規ネットワーク構築とセキュリティグループのモダナイズ</h1>
+    </div>
+    <div class="badge-row">
+      <span class="service-badge">AWS Transform</span>
+      <span class="date-badge">📅 2026 年 10 月 21 日</span>
+      <span class="new-badge">NEW</span>
+    </div>
+    <div class="subtitle">新規 AWS ネットワークの設計・構築、および既存 VPC へのセキュリティポスチャ適用</div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>AWS Transform for migrations に、ネットワークを AWS に移行するための <span class="highlight">2 つの新しいアプローチ</span>が追加されました。従来の「既存ネットワークの移行とモダナイズ」に加えて、<span class="highlight">新規 AWS ネットワークをゼロから設計・構築</span>するアプローチと、<span class="highlight">オンプレミスのアクセスルールをセキュリティグループに変換して既存 VPC に適用</span>するアプローチが利用可能になりました。</p>
+      <p>変換の過程で古くなったルール (stale rules) を検出して最適化を推奨し、生成されたセキュリティグループは<span class="highlight">ネットワークスタックの再デプロイなし</span>で既存の VPC にそのままデプロイできます。VMware 環境などからの大規模移行を計画している組織や、ランディングゾーン構築済みでセキュリティルールのみを移行したい組織が主な対象です。</p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before: アップデート前の課題</h3>
+          <ul>
+            <li>既存のソースネットワーク構成を変換する方式のみで、ソース構成ファイルを前提としないネットワーク設計はできなかった</li>
+            <li>複雑化・陳腐化したネットワーク定義をそのまま持ち込むか、AWS ネットワークを手動で設計する必要があった</li>
+            <li>VPC 構築済み環境では、ファイアウォールルールをセキュリティグループとして手動で再作成する必要があり、時間と設定ミスのリスクがあった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ After: アップデート後の改善</h3>
+          <ul>
+            <li>ソース構成ファイルなしで、AWS ベストプラクティスに沿った新規ネットワークを対話形式で設計・構築できる</li>
+            <li>古いルールの検出と最適化の推奨により、セキュリティポスチャをモダナイズできる</li>
+            <li>既存 VPC に対して、ネットワークスタックを再デプロイすることなくセキュリティグループのみを追加デプロイできる</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    User(["👤 移行担当者"]) --> Choice{"🧭 ネットワーク移行<br/>アプローチの選択"}
+
+    subgraph Transform["🤖 AWS Transform for migrations"]
+        direction TB
+        Choice --> Migrate["🔄 既存ネットワークを<br/>新規 VPC にマッピング<br/>従来からの機能"]
+        Choice --> Design["🆕 新規 AWS ネットワーク<br/>をゼロから設計<br/>New"]
+        Choice --> Posture["🛡️ 既存 VPC に<br/>セキュリティポスチャ適用<br/>New"]
+        Posture --> Optimize["🔍 古いルールの検出と<br/>最適化の推奨"]
+    end
+
+    subgraph AWSCloud["☁️ AWS クラウド"]
+        direction TB
+        NewNet["🌐 新規 VPC / サブネット /<br/>セキュリティグループ / 接続"]
+        ExistVPC["🏗️ 既存 VPC<br/>再デプロイ不要"]
+        SG["🔐 生成された<br/>セキュリティグループ"]
+    end
+
+    Migrate --> NewNet
+    Design --> NewNet
+    Optimize --> SG
+    SG --> ExistVPC
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef newfeat fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef target fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Transform,AWSCloud cloud
+    class Migrate process
+    class Design,Posture,Optimize newfeat
+    class Choice decision
+    class User user
+    class NewNet,ExistVPC,SG target
+        </pre>
+      </div>
+      <p class="diagram-caption">AWS Transform が提供する 3 つのネットワーク移行アプローチの全体像。今回のアップデートで、新規ネットワーク設計 (中央) と既存 VPC へのセキュリティポスチャ適用 (右) が追加されました。</p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <h3>🆕 1. 新規 AWS ネットワークの設計 (Design a new AWS network)</h3>
+        <ul>
+          <li>ソース構成ファイルを使わず、移行するアプリケーションの情報からネットワークを設計</li>
+          <li>AI エージェントとの対話形式で、トポロジー選択、ネットワーク定義、レビュー、タグ設定、デプロイまでをガイド</li>
+          <li>アプリケーション名、環境 (本番・ステージング・開発など)、サーバー台数を伝えると、環境ごとに VPC を自動設計</li>
+          <li>CIDR 範囲は指定可能で、未指定の場合は重複しない範囲を自動割り当て</li>
+          <li>VPC サイズは Small (最大 250 アドレス)、Medium (最大 1,000)、Large (最大 4,000)、XL (最大 16,000) から選択</li>
+          <li>ビジュアルとチャットでレビューし、自然言語の Direct Edits で変更可能。変更は検証され、競合が事前に検出される</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>🛡️ 2. 既存 VPC へのセキュリティポスチャ適用 (Apply security posture to existing VPCs)</h3>
+        <ul>
+          <li>ソースのファイアウォールルールからセキュリティグループを生成し、既存 VPC に関連付け</li>
+          <li>対応ソースファイル: VMware NSX、Cisco ACI、Palo Alto Networks、Fortinet FortiGate、modelizeIT、AWS Transform discovery tool。その他の形式は自動変換を試行</li>
+          <li>対象 VPC はタグ (<code>CreatedFor: AWSTransform</code> など) で指定し、タグ付けした VPC のみが移行スコープに含まれる</li>
+          <li>ソースサブネットと既存 VPC を CIDR でマッチングするカバレッジ分析を実行。Re-IP の場合は CIDR マッピングを対話形式で指定可能</li>
+          <li>VPC トポロジー (Isolated / Connected) に応じて、CIDR ベースまたはセキュリティグループ参照ベースのルールを生成</li>
+          <li>セキュリティグループのみをデプロイするため、既存のネットワークスタックの再デプロイは不要</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>🔍 3. 古いルールの検出とモダナイズ</h3>
+        <ul>
+          <li>アクセスルールの変換時に、古くなったルール (stale rules) を検出し、最適化を推奨</li>
+          <li>CIDR マッピング指定時は、影響を受けるルールを複製し、オンプレミス側を指すルールには説明に <code>[ONPREM]</code> プレフィックスを付与。移行中はオンプレミスと AWS の双方のワークロードと通信可能</li>
+          <li>カットオーバー完了後に <code>[ONPREM]</code> プレフィックス付きルールを削除することで、クリーンなセキュリティポスチャに移行</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>🌐 新規ネットワーク設計のトポロジー</h3>
+      <table>
+        <tr><th>トポロジー</th><th>説明</th></tr>
+        <tr><td><strong>Hub and Spoke</strong></td><td>アプリケーション間で通信が必要な場合に選択。AWS Transit Gateway が VPC を接続し、VPC 間トラフィックを中央ハブ経由でルーティング</td></tr>
+        <tr><td><strong>Isolated VPCs</strong></td><td>アプリケーションが独立して動作し、相互接続が不要な場合に選択</td></tr>
+      </table>
+
+      <h3>🔐 セキュリティポスチャ適用のルール生成方式</h3>
+      <table>
+        <tr><th>VPC トポロジー</th><th>ルール生成方式</th></tr>
+        <tr><td><strong>Isolated</strong></td><td>CIDR 範囲ベースのルールを生成</td></tr>
+        <tr><td><strong>Connected</strong></td><td>セキュリティグループ参照ベースのルールを生成 (Transit Gateway 利用時は <code>SecurityGroupReferencingSupport</code> の有効化が必要)</td></tr>
+      </table>
+
+      <h3>🚀 デプロイ方式</h3>
+      <table>
+        <tr><th>方式</th><th>詳細</th></tr>
+        <tr><td><strong>AWS Transform マネージドデプロイ</strong></td><td>承認後、AWS Transform が代理でデプロイを実行</td></tr>
+        <tr><td><strong>セルフデプロイ</strong></td><td>IaC として出力し、自身でデプロイ。出力形式は CloudFormation、AWS CDK、HashiCorp Terraform、Landing Zone Accelerator (LZA) に対応</td></tr>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+
+      <h3>📋 前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>AWS Transform のワークスペースが設定済みであること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>マルチアカウント構成の場合、ネットワーク移行開始前にクロスアカウントアクセスの設定が完了していること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>セキュリティポスチャ適用の場合、ファイアウォールルールを含むソースネットワークファイルが必要 (RVTools はファイアウォールルールを含まないため非対応)</span></div>
+
+      <h3>🛠️ 手順 (既存 VPC へのセキュリティポスチャ適用の例)</h3>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>ソースネットワークファイルのアップロード</h3>
+          <p>User Uploads からファイル名を指定するか、チャット内でファイルを直接アップロード。VMware NSX、Cisco ACI、Palo Alto Networks、Fortinet FortiGate などのエクスポートファイルに対応。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>既存 VPC のタグ付け</h3>
+          <p>タグ付けページで対象 VPC を選択。選択した VPC には以下のタグが適用され、移行スコープに含まれます。タグ付けした VPC のみが対象となり、それ以外のリソースは変更されません。</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Text</span>
+              <span class="code-title">VPC に適用されるタグ</span>
+            </div>
+            <pre><code class="language-text">Key: CreatedFor   Value: AWSTransform
+Key: ATWorkspace  Value: {workspace-id}</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>ソースサブネットと既存 VPC のマッチング</h3>
+          <p>カバレッジ分析の結果を確認し、未カバーのサブネットがあれば CIDR マッピングをチャットで指定。可能な限り広い範囲 (/16 など) でマッピングすると一括でカバーされます。マッピングは同じプレフィックス長同士である必要があります。</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Text</span>
+              <span class="code-title">CIDR マッピングの指定例</span>
+            </div>
+            <pre><code class="language-text">Map 10.68.0.0/16 to 172.31.0.0/16</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h3>トポロジー指定、レビュー、デプロイ</h3>
+          <p>既存 VPC が Isolated か Connected かを指定し、生成されたセキュリティグループを Human-in-the-loop レビューで確認。確認後、マネージドデプロイまたはセルフデプロイ (CloudFormation / CDK / Terraform / LZA) でデプロイ。カットオーバー完了後は <code>[ONPREM]</code> プレフィックス付きルールを削除します。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット・デメリット -->
+    <div class="section">
+      <h2>💡 メリット・制約事項</h2>
+      <div class="pros-cons">
+        <div class="card">
+          <h3 style="margin-top: 0;">📈 ビジネス面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>移行期間の短縮</strong>: 手動設計と比較して、大幅に短い時間で本番利用可能なネットワーク基盤を準備</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>技術的負債の解消</strong>: レガシーなネットワーク定義を持ち込まず、クリーンな状態で移行を開始</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>専門知識への依存低減</strong>: 深いネットワーク専門知識がなくても、ベストプラクティスに沿った設計が可能</span></div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top: 0;">🔬 技術面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>セキュリティポスチャのモダナイズ</strong>: 古いルールの検出と最適化の推奨で、不要なルールを引き継がない</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>既存環境への非破壊的な適用</strong>: セキュリティグループのみを追加デプロイ</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>IaC 出力による統制</strong>: CloudFormation / CDK / Terraform / LZA で既存の変更管理プロセスに組み込める</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>移行期間中の接続性確保</strong>: <code>[ONPREM]</code> 複製ルールで移行済み・未移行ワークロード双方と通信を維持</span></div>
+        </div>
+      </div>
+
+      <div class="card" style="border-color: rgba(209, 50, 18, 0.5);">
+        <h3 style="margin-top: 0; color: #FF6B6B;">⚠️ 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>セキュリティポスチャ適用フローでは RVTools ファイルは利用不可 (ファイアウォールルールを含まないため)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>CIDR マッピングは同じプレフィックス長同士のみ対応 (/24 から /20 のような異なる長さは不可)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>マッピングされた CIDR 範囲外のルール CIDR は移行されない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>セキュリティポスチャ適用フローでは Reachability Analyzer は実行されず、デプロイ済みリソースの自動ロールバックもない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>Connected トポロジー選択時、実際に VPC 間の接続性がないとセキュリティグループ参照ルールのデプロイが失敗する</span></div>
+      </div>
+
+      <div class="card" style="border-color: rgba(255, 173, 51, 0.5);">
+        <h3 style="margin-top: 0; color: var(--aws-smile-orange);">📝 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>Transit Gateway 経由のセキュリティグループ参照には、Transit Gateway と各 VPC アタッチメントで <code>SecurityGroupReferencingSupport</code> の有効化が必要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>マルチアカウント移行では、各ターゲットアカウントにサインインして VPC のタグ付けを個別に行う必要がある</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>カットオーバー後の <code>[ONPREM]</code> ルール削除は手動のクリーンアップ作業として計画に含める</span></div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h3>1️⃣ クリーンスタートでの VMware 移行</h3>
+        <p><strong>シナリオ</strong>: 長年運用してきた VMware 環境のネットワーク定義が複雑化しており、移行を機に AWS ベストプラクティスに沿ったネットワークを再設計したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Text</span>
+            <span class="code-title">実装例</span>
+          </div>
+          <pre><code class="language-text">1. AWS Transform で「Design a new AWS network」を選択
+2. アプリケーション名、環境、サーバー台数をチャットで入力
+3. Hub and Spoke トポロジーを選択し、Transit Gateway 経由の接続構成を生成
+4. ビジュアルレビューで CIDR や構成を確認し、マネージドデプロイで構築</code></pre>
+        </div>
+        <div class="effect">✅ <strong>効果</strong>: レガシー設計を持ち込まず、ベストプラクティスに沿ったネットワークを短時間で構築し、技術的負債をリセットできる。</div>
+      </div>
+
+      <div class="usecase">
+        <h3>2️⃣ ランディングゾーン構築済み環境へのファイアウォールルール移行</h3>
+        <p><strong>シナリオ</strong>: Landing Zone Accelerator で VPC やサブネットは構築済みだが、オンプレミスの Palo Alto Networks ファイアウォールのルールをセキュリティグループとして再現する作業が残っている。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Text</span>
+            <span class="code-title">実装例</span>
+          </div>
+          <pre><code class="language-text">1. 「Apply security posture to existing VPCs」を選択
+2. Palo Alto Networks のエクスポートファイルをアップロード
+3. 対象 VPC にタグを付与し、CIDR カバレッジ分析を確認
+4. 生成されたセキュリティグループをレビューし、LZA 形式で出力して既存パイプラインでデプロイ</code></pre>
+        </div>
+        <div class="effect">✅ <strong>効果</strong>: 手動でのルール再作成と比較して時間を短縮し、変換時の古いルール検出により精度と一貫性も向上する。</div>
+      </div>
+
+      <div class="usecase">
+        <h3>3️⃣ Re-IP を伴う段階的移行での接続性維持</h3>
+        <p><strong>シナリオ</strong>: 移行に合わせてサーバーの IP アドレス体系を変更 (Re-IP) するが、移行期間中はオンプレミスに残るワークロードとの通信も維持したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Text</span>
+            <span class="code-title">実装例</span>
+          </div>
+          <pre><code class="language-text">1. セキュリティポスチャ適用フローで CIDR マッピングを指定
+   例: Map 10.68.0.0/16 to 172.31.0.0/16
+2. AWS Transform が各ルールを複製し、[ONPREM] プレフィックス付きルールで
+   オンプレミス側アドレス空間への通信も許可
+3. カットオーバー完了後、[ONPREM] ルールを削除</code></pre>
+        </div>
+        <div class="effect">✅ <strong>効果</strong>: 移行済み・未移行ワークロードの双方と通信を維持しながら段階的に移行し、完了後はクリーンなルールセットに収束できる。</div>
+      </div>
+    </div>
+
+    <!-- 利用可能リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>AWS の<span class="highlight">すべての商用リージョン</span>および <span class="highlight">AWS GovCloud (US) リージョン</span>への移行がサポートされています。サポート対象リージョンの一覧は <a href="https://docs.aws.amazon.com/transform/latest/userguide/transform-vmware-connect-target-account.html#transform-vmware-cta-supported-regions" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Transform ユーザーガイド</a>を参照してください。</p>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="related-item"><span class="related-icon">🌉</span><span><strong>AWS Transit Gateway</strong>: Hub and Spoke トポロジーでの VPC 間接続、およびセキュリティグループ参照 (<code>SecurityGroupReferencingSupport</code>) の基盤</span></div>
+      <div class="related-item"><span class="related-icon">🌐</span><span><strong>Amazon VPC</strong>: 生成されるネットワークリソース (VPC、サブネット、セキュリティグループ) の基盤サービス</span></div>
+      <div class="related-item"><span class="related-icon">📦</span><span><strong>AWS CloudFormation / AWS CDK / Terraform / Landing Zone Accelerator</strong>: セルフデプロイ時の IaC 出力形式</span></div>
+      <div class="related-item"><span class="related-icon">🏗️</span><span><strong>AWS Transform for migrations (ランディングゾーン対応)</strong>: 2026 年 10 月 20 日発表のランディングゾーン構築機能と組み合わせることで、ネットワークを含む移行基盤全体を AWS Transform で整備可能</span></div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section summary-box">
+      <h2>📝 まとめ</h2>
+      <p>AWS Transform for migrations に、<span class="highlight">新規 AWS ネットワークのゼロからの設計・構築</span>と、<span class="highlight">既存 VPC へのセキュリティポスチャ適用</span>という 2 つのアプローチが追加されました。レガシーなネットワーク定義を持ち込まないクリーンスタートと、古いルールの検出・最適化によるセキュリティグループのモダナイズが可能になり、移行の初期段階におけるネットワーク設計の負担が大きく軽減されます。</p>
+      <p>VMware 環境などからの移行を計画している場合は、既存ネットワークの移行・新規設計・セキュリティポスチャ適用のどのアプローチが自社の状況に適しているかを検討することを推奨します。</p>
+    </div>
+
+    <footer>
+      <p>📎 出典・参考リンク</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/aws-transform-new-networks/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): AWS Transform - new networks</a></li>
+        <li><a href="https://docs.aws.amazon.com/transform/latest/userguide/transform-vmware-migrate-network.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Migrate network</a></li>
+        <li><a href="https://docs.aws.amazon.com/transform/latest/userguide/transform-vmware-design-network.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Design a new AWS network</a></li>
+        <li><a href="https://docs.aws.amazon.com/transform/latest/userguide/transform-vmware-apply-security-posture.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Apply security posture to existing VPCs</a></li>
+        <li><a href="https://aws.amazon.com/transform/migrations/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Transform for migrations 製品ページ</a></li>
+      </ul>
+      <p>このインフォグラフィックは AWS News レポート (2026-10-21) をもとに生成されました。</p>
+    </footer>
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS CloudFormation - Force Rollback によるスタック更新ロールバックの簡素化</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    code.inline {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 { color: #FF6B4A; }
+    .after-box h3 { color: #4CAF50; }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* 機能カード */
+    .feature-card {
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px;
+      margin: 14px 0;
+    }
+
+    .feature-card h3 {
+      margin: 0 0 8px 0;
+      color: var(--aws-white);
+      font-size: 17px;
+    }
+
+    .feature-card ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .feature-card li { margin: 4px 0; }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      vertical-align: top;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* ステップ */
+    .step {
+      display: flex;
+      gap: 14px;
+      margin: 20px 0;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    .step-content { flex: 1; min-width: 0; }
+
+    .step-content h3 { margin: 2px 0 8px 0; font-size: 16px; }
+    .step-content p { margin: 6px 0; font-size: 14px; }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 14px 0;
+    }
+
+    .usecase h3 { margin: 0 0 8px 0; font-size: 16px; color: var(--aws-smile-orange); }
+    .usecase p { margin: 6px 0; font-size: 14px; }
+
+    /* 2 カラムグリッド */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .benefit-box {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .benefit-box h3 { margin-top: 0; font-size: 16px; }
+
+    /* 注意ボックス */
+    .caution-box {
+      background: rgba(255, 173, 51, 0.1);
+      border: 1px solid rgba(255, 173, 51, 0.5);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+
+    .caution-box h3 { margin-top: 0; color: var(--aws-smile-orange); font-size: 16px; }
+
+    /* 関連サービスカード */
+    .related-card {
+      background: rgba(0, 161, 201, 0.08);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    .related-card strong { color: var(--aws-teal); }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    ul.link-list { padding-left: 20px; font-size: 14px; }
+    ul.link-list li { margin: 6px 0; }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    @media (max-width: 700px) {
+      .before-after, .two-col { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+      table { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <span class="service-badge">AWS CloudFormation</span>
+      <h1>🛠️ Force Rollback でスタック更新ロールバックを簡素化</h1>
+      <div class="subtitle">📅 リリース日: 2026 年 10 月 22 日 | 機能: Force Rollback (強制ロールバック)</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        AWS CloudFormation が、スタック更新のロールバック操作を簡素化する新機能
+        <span class="highlight">Force Rollback (強制ロールバック)</span> を発表しました。
+        一部のリソースが自動ロールバックできずスタックが
+        <code class="inline">UPDATE_ROLLBACK_FAILED</code> 状態になった場合でも、
+        <code class="inline">--force-rollback</code> オプションを指定するだけで失敗リソースを自動的にスキップし、
+        <span class="highlight">単一の操作でロールバックを完了</span>できます。
+      </p>
+      <p>
+        スキップされたリソースは記録され、<span class="highlight">ドリフト対応変更セット</span>と組み合わせて差分を確認してから安全に再デプロイできます。
+        AWS CLI、SDK、AWS CDK、AI エージェントなど、すべての CloudFormation ワークフローで利用可能です。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before: 手動での復旧作業</h3>
+          <div class="check-item"><span class="cross-icon">✗</span><span>ロールバックに失敗したリソースを 1 つずつ手動で特定</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span><code class="inline">--resources-to-skip</code> に失敗リソースの論理 ID をすべて列挙して再試行</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>ネストスタックは <code class="inline">{NestedStackName}.{ResourceLogicalID}</code> 形式で個別に調査・指定が必要</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>復旧手順が多く、障害対応時の MTTR が長期化</span></div>
+        </div>
+        <div class="after-box">
+          <h3>✅ After: 単一操作で自動復旧</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><code class="inline">--force-rollback</code> の指定だけで失敗リソースを自動スキップし、1 回でロールバック完了</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>ネストスタック全階層で失敗リソースの特定・列挙が不要</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>スキップしたリソースは <code class="inline">Resource skipped during UpdateRollback</code> として記録</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>ドリフト対応変更セットで差分を確認してから再デプロイ可能</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ 復旧フロー</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    Start(["🚀 スタック更新を実行"]) --> Fail["❌ 更新失敗<br/>自動ロールバック開始"]
+    Fail --> RBFail["⚠️ UPDATE_ROLLBACK_FAILED<br/>一部リソースのロールバック失敗"]
+    RBFail --> Choice{"復旧方法"}
+    Choice -->|従来の方法| Manual["🔍 失敗リソースを手動特定<br/>resources-to-skip に論理 ID を列挙<br/>ネストスタックは個別に調査"]
+    Choice -->|新機能| Force["⚡ force-rollback オプション<br/>失敗リソースを自動スキップ<br/>ネストスタック全階層に対応"]
+    Manual --> Complete["✅ UPDATE_ROLLBACK_COMPLETE<br/>デプロイ可能な状態に復旧"]
+    Force --> Complete
+    Complete --> Drift["📋 ドリフト対応変更セットで<br/>スキップされたリソースの差分を確認"]
+    Drift --> Redeploy(["🔄 安全に再デプロイ"])
+
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef error fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+    classDef success fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Start,Redeploy user
+    class Fail error
+    class RBFail warning
+    class Choice decision
+    class Manual process
+    class Force,Complete,Drift success
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        スタック更新が失敗しロールバックも失敗した場合の復旧フローです。従来は失敗リソースの手動特定が必要でしたが、Force Rollback により単一操作で <code class="inline">UPDATE_ROLLBACK_COMPLETE</code> 状態まで復旧できます。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <h3>1️⃣ 単一操作でのロールバック完了</h3>
+        <ul>
+          <li><code class="inline">continue-update-rollback</code> コマンドに <code class="inline">--force-rollback</code> オプションを追加するだけで実行可能</li>
+          <li>ロールバックに失敗した (<code class="inline">UPDATE_FAILED</code> 状態の) リソースを CloudFormation が自動的にスキップ</li>
+          <li>スキップされたリソースのステータスは <code class="inline">UPDATE_COMPLETE</code> になり、理由に <code class="inline">Resource skipped during UpdateRollback</code> と記録</li>
+          <li>スキップ対象はロールバック失敗リソースのみ。フォワード更新で失敗したリソースはスキップされない</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>2️⃣ ネストされたスタックへの対応</h3>
+        <ul>
+          <li>ネストスタックを含む全階層で、失敗リソースを自動的にスキップ</li>
+          <li>従来必要だった <code class="inline">{NestedStackName}.{ResourceLogicalID}</code> 形式でのリソース指定が不要</li>
+          <li>多階層構成でも、ルートスタックに対する 1 回の操作で全体を復旧可能</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>3️⃣ スキップされたリソースの記録と確認</h3>
+        <ul>
+          <li>ロールバック完了時に、スタックのステータス理由にリソースがスキップされたことが報告される</li>
+          <li>ドリフト検出では <code class="inline">NOT_CHECKED</code> と報告されるため、<code class="inline">DetectStackResourceDrift</code> で個別に差分を確認可能</li>
+          <li>ドリフト対応変更セットで、実際のリソース状態・前回デプロイ状態・desired state の 3 方向比較が可能</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>4️⃣ すべてのワークフローで利用可能</h3>
+        <ul>
+          <li>AWS CLI、SDK、AWS CDK、AI エージェントなど、CloudFormation を利用するすべてのワークフローで使用可能</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様: Force Rollback の動作</h2>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対象の状態</td><td><code class="inline">UPDATE_ROLLBACK_FAILED</code> 状態のスタック</td></tr>
+        <tr><td>スキップ対象</td><td>ロールバック中に <code class="inline">UPDATE_FAILED</code> となったリソース (ネストスタック内を含む)</td></tr>
+        <tr><td>スキップ対象外</td><td>フォワード更新中に失敗したリソース</td></tr>
+        <tr><td>スキップ後のステータス</td><td><code class="inline">UPDATE_COMPLETE</code> (理由: <code class="inline">Resource skipped during UpdateRollback</code>)</td></tr>
+        <tr><td>完了後のスタック状態</td><td><code class="inline">UPDATE_ROLLBACK_COMPLETE</code></td></tr>
+        <tr><td>ドリフト検出での扱い</td><td>スキップされたリソースは <code class="inline">NOT_CHECKED</code> と報告される</td></tr>
+        <tr><td>排他制約</td><td><code class="inline">--force-rollback</code> と <code class="inline">--resources-to-skip</code> は同一リクエストで併用不可</td></tr>
+      </table>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">強制ロールバックの実行</span>
+        </div>
+        <pre><code class="language-bash"># 強制ロールバックの実行
+aws cloudformation continue-update-rollback \
+    --stack-name MyStack \
+    --force-rollback</code></pre>
+      </div>
+      <p style="font-size: 14px;">
+        <code class="inline">UPDATE_ROLLBACK_FAILED</code> 状態のスタックに対して強制ロールバックを実行するコマンドです。失敗リソースを自動スキップし、スタックを <code class="inline">UPDATE_ROLLBACK_COMPLETE</code> 状態に戻します。
+      </p>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>📝 設定方法</h2>
+
+      <h3>✅ 前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>スタックが <code class="inline">UPDATE_ROLLBACK_FAILED</code> 状態であること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>AWS CLI または SDK が利用可能であること (コンソールからも操作可能)</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><code class="inline">cloudformation:ContinueUpdateRollback</code> の IAM 権限があること</span></div>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>スタックの状態を確認</h3>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ステータス確認</span></div>
+            <pre><code class="language-bash">aws cloudformation describe-stacks \
+    --stack-name MyStack \
+    --query "Stacks[0].StackStatus"</code></pre>
+          </div>
+          <p>現在のステータスが <code class="inline">UPDATE_ROLLBACK_FAILED</code> であることを確認します。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>強制ロールバックを実行</h3>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">Force Rollback 実行</span></div>
+            <pre><code class="language-bash">aws cloudformation continue-update-rollback \
+    --stack-name MyStack \
+    --force-rollback</code></pre>
+          </div>
+          <p>失敗リソースを自動スキップしてロールバックを完了します。ネストスタックがある場合も、ルートスタックへの 1 回の実行で全階層が対象になります。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>スキップされたリソースを確認</h3>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">スタックイベントの確認</span></div>
+            <pre><code class="language-bash">aws cloudformation describe-stack-events \
+    --stack-name MyStack \
+    --query "StackEvents[?ResourceStatusReason=='Resource skipped during UpdateRollback']"</code></pre>
+          </div>
+          <p>スキップされたリソースはテンプレートと実際の状態が不整合になっている可能性があるため、必ず確認します。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h3>ドリフト対応変更セットで差分を確認して再デプロイ</h3>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ドリフト対応変更セットの作成</span></div>
+            <pre><code class="language-bash">aws cloudformation create-change-set \
+    --stack-name MyStack \
+    --change-set-name my-drift-aware-changeset \
+    --template-body file://updated-template.yaml \
+    --deployment-mode REVERT_DRIFT</code></pre>
+          </div>
+          <p>実際のリソース状態とテンプレートの 3 方向比較により、スキップされたリソースを含む構成差分を確認してから、安全に次のデプロイを実行できます。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <div class="two-col">
+        <div class="benefit-box">
+          <h3>💼 ビジネス面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>復旧時間の短縮</strong>: 失敗リソースの手動特定と列挙が不要になり、障害発生時の MTTR を大幅に短縮</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の軽減</strong>: 複雑なネストスタック構成でも 1 回の操作で復旧でき、オンコール対応の負担が軽減</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: すべてのリージョンで追加料金なしで利用可能</span></div>
+        </div>
+        <div class="benefit-box">
+          <h3>⚙️ 技術面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>自動化との親和性</strong>: CLI、SDK、CDK、AI エージェントから利用でき、自動復旧パイプラインに組み込みやすい</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>ネストスタック全階層への対応</strong>: 形式指定の調査が不要になり、オペレーションミスを防止</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>可視性の確保</strong>: スキップされたリソースが記録され、差分を確認してから再デプロイ可能</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>🚧 制限事項</h3>
+      <div class="check-item"><span class="warn-icon">⚠</span><span><code class="inline">--force-rollback</code> と <code class="inline">--resources-to-skip</code> は同一リクエストで併用できない (特定リソースのみスキップしたい場合は従来どおり <code class="inline">--resources-to-skip</code> を使用)</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>スキップ対象はロールバック中に失敗したリソースのみで、フォワード更新中に失敗したリソースはスキップされない</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>ドリフト検出では <code class="inline">NOT_CHECKED</code> と報告されるため、差分確認には <code class="inline">DetectStackResourceDrift</code> やドリフト対応変更セットが必要</span></div>
+
+      <div class="caution-box">
+        <h3>🔍 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>ロールバック完了後、スキップされたリソースはスタックテンプレートと不整合な状態になる。次の更新前に整合させないと、以降のスタック更新が失敗し、スタックが復旧不能になる可能性がある</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>強制ロールバックは「エラーを修正できない場合」の手段。まずはロールバック失敗の原因調査と修正を検討することが推奨される</span></div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h3>1. 外部変更されたリソースを含むスタックの復旧</h3>
+        <p><strong>シナリオ</strong>: スタック管理下のデータベースインスタンスが CloudFormation の外部で削除され、更新のロールバックが <code class="inline">UPDATE_ROLLBACK_FAILED</code> で停止した。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">aws cloudformation continue-update-rollback \
+    --stack-name ProductionStack \
+    --force-rollback</code></pre>
+        </div>
+        <p><strong>効果</strong>: 削除済みリソースを手動特定せずにロールバックを完了し、デプロイ可能な状態に復旧。ドリフト対応変更セットで状態を確認し、テンプレートを修正して再デプロイできる。</p>
+      </div>
+
+      <div class="usecase">
+        <h3>2. 多階層ネストスタックの一括復旧</h3>
+        <p><strong>シナリオ</strong>: ルートスタック配下に複数のネストスタックを持つ大規模インフラで更新が失敗し、スタック階層全体が <code class="inline">UPDATE_ROLLBACK_FAILED</code> 状態になった。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">aws cloudformation continue-update-rollback \
+    --stack-name WebInfra \
+    --force-rollback</code></pre>
+        </div>
+        <p><strong>効果</strong>: ネストスタック名や論理 ID を調査・列挙することなく、ルートスタックへの 1 回の操作で階層全体のロールバックを完了できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h3>3. CI/CD パイプラインでの自動復旧</h3>
+        <p><strong>シナリオ</strong>: CDK ベースの CI/CD パイプラインでデプロイが失敗した際、スタックが <code class="inline">UPDATE_ROLLBACK_FAILED</code> のままだと後続のデプロイがすべてブロックされる。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">パイプラインの復旧ステップに組み込む例</span></div>
+          <pre><code class="language-bash">STATUS=$(aws cloudformation describe-stacks \
+    --stack-name MyAppStack \
+    --query "Stacks[0].StackStatus" --output text)
+
+if [ "$STATUS" = "UPDATE_ROLLBACK_FAILED" ]; then
+    aws cloudformation continue-update-rollback \
+        --stack-name MyAppStack \
+        --force-rollback
+fi</code></pre>
+        </div>
+        <p><strong>効果</strong>: 人手の介入なしにスタックを自動復旧し、パイプラインの停止時間を最小化。スキップされたリソースは記録されるため、後から確認・解決できる。</p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金・利用可能リージョン</h2>
+      <div class="two-col">
+        <div class="benefit-box">
+          <h3>💵 料金</h3>
+          <p style="font-size: 14px;">Force Rollback は<span class="highlight">追加料金なし</span>で利用できます。CloudFormation 自体の料金体系 (AWS リソースタイプへの操作は無料、サードパーティリソースタイプのハンドラーオペレーションに課金) に変更はありません。</p>
+        </div>
+        <div class="benefit-box">
+          <h3>🌍 利用可能リージョン</h3>
+          <p style="font-size: 14px;"><span class="highlight">すべての AWS リージョン</span>で利用可能です。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="related-card">
+        <strong>ドリフト対応変更セット (Drift-aware Change Sets)</strong>: 実際のリソース状態・前回デプロイ状態・desired state の 3 方向比較を提供。強制ロールバック後にスキップされたリソースの差分確認と解消に活用できる。
+      </div>
+      <div class="related-card">
+        <strong>AWS CDK</strong>: CDK によるデプロイが失敗した場合の復旧でも Force Rollback を利用できる。
+      </div>
+      <div class="related-card">
+        <strong>CloudFormation ドリフト検出</strong>: スキップされたリソースは <code class="inline">NOT_CHECKED</code> となるため、<code class="inline">DetectStackResourceDrift</code> による個別の差分確認と組み合わせて使用する。
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📌 まとめ</h2>
+      <p>
+        CloudFormation の Force Rollback により、これまで手動でのリソース特定と列挙が必要だった
+        <code class="inline">UPDATE_ROLLBACK_FAILED</code> 状態からの復旧を、<span class="highlight">単一の操作で完了</span>できるようになりました。
+        ネストスタックを含む複雑な構成や CI/CD パイプラインでの自動復旧に特に有効です。
+        スキップされたリソースはテンプレートと不整合になるため、再デプロイ前に
+        <span class="highlight">ドリフト対応変更セットで差分を確認するワークフロー</span>を整備することを推奨します。
+      </p>
+    </div>
+
+    <!-- 参考リンク -->
+    <div class="section">
+      <h2>📚 参考リンク</h2>
+      <ul class="link-list">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/aws-cloudformation-cdk/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-updating-stacks-continueupdaterollback.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Continue rolling back an update</a></li>
+        <li><a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/drift-aware-change-sets.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Using drift-aware change sets</a></li>
+        <li><a href="https://docs.aws.amazon.com/cli/latest/reference/cloudformation/continue-update-rollback.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS CLI リファレンス: continue-update-rollback</a></li>
+        <li><a href="https://docs.aws.amazon.com/cdk/v2/guide/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS CDK ドキュメント</a></li>
+      </ul>
+    </div>
+
+    <footer>
+      <p>📎 出典: <a href="https://aws.amazon.com/about-aws/whats-new/2026/10/aws-cloudformation-cdk/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/10/aws-cloudformation-cdk/</a></p>
+      <p>本インフォグラフィックは AWS News レポート (2026-10-22-aws-cloudformation-cdk.md) をもとに作成されています。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

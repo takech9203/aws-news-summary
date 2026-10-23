@@ -5,7 +5,19 @@
 
 ## 2026 年
 
+- [2026-10-22 - AWS Continuum - コード脆弱性対応機能の一般提供開始](2026/2026-10-22-aws-continuum-for-code-vulnerabilities-is-now-generally-available.md)
+- [2026-10-22 - Amazon Connect Customer - エージェントワークスペースの Customer Profiles アプリのカスタマイズ](2026/2026-10-22-connect-customer-customize-cp.md)
+- [2026-10-22 - AWS Interconnect - last mile - Megaport をパートナーとしたプレビューを開始](2026/2026-10-22-aws-announces-AWS-interconnect-last-mile-megaport-preview.md)
+- [2026-10-22 - Amazon Bedrock AgentCore Gateway - Bedrock InvokeModel API サポートとモデルフォールバック](2026/2026-10-22-agentcore-gateway-invokemodel-fallback.md)
+- [2026-10-22 - Amazon OpenSearch Serverless - デフォルト更新間隔 5 秒のサポート](2026/2026-10-22-amazon-opensearch-serverless-supports-5-second-refresh-interval.md)
+- [2026-10-22 - AWS CloudFormation - スタック更新ロールバック操作の簡素化 (Force Rollback)](2026/2026-10-22-aws-cloudformation-cdk.md)
+- [2026-10-22 - AWS Lambda - MicroVMs が追加の 4 リージョンで利用可能に](2026/2026-10-22-lambda-microvms-4-additional-regions.md)
+- [2026-10-22 - Amazon SageMaker AI - サーバーレスモデルカスタマイズ向け Training Session API](2026/2026-10-22-training-session-apis-on-sagemaker-ai.md)
+- [2026-10-22 - Amazon Quick - アジアパシフィック (シンガポール) リージョンでの提供開始](2026/2026-10-22-amazon-quick-now-available-in-the-aws-singapore-region.md)
+- [2026-10-22 - Amazon SageMaker AI - Muse Glimmer、Qwen 3.8、Ministral 3 モデルのサーバーレスモデルカスタマイズ対応](2026/2026-10-22-amazon-sagemaker-muse-qwen-ministral.md)
+- [2026-10-21 - AWS Transform - 新規ネットワーク構築とセキュリティグループのモダナイズ](2026/2026-10-21-aws-transform-new-networks.md)
 - [2026-10-21 - AWS Transform - Amazon S3 / EBS / EFS / FSx 向けストレージ移行アセスメント](2026/2026-10-21-transform-assess-s3-ebs-efs-fsx.md)
+- [2026-10-21 - AWS Identity and Access Management - サービスリファレンス情報のグローバル条件キー・サービス名・データプレーン分類サポート](2026/2026-10-21-aws-service-reference-information-global-condition-keys-service-names-data-plane.md)
 - [2026-10-21 - Amazon SageMaker AI - サーバーレスモデルカスタマイズジョブでのカスタムシーケンス長サポート](2026/2026-10-21-sagemaker-custom-sequence-lengths.md)
 - [2026-10-21 - AWS Neuron - Neuron 2.33 リリース (ネイティブ PyTorch サポート、Neuron Observer ほか)](2026/2026-10-21-aws-announce-neuron-2-33-0.md)
 - [2026-10-21 - Amazon Aurora / Amazon RDS - On-Demand Capacity Reservations](2026/2026-10-21-amazon-aurora-rds-on-demand-capacity-reservations.md)
@@ -23,6 +35,7 @@
 - [2026-10-20 - Kiro - Kiro IDE と CLI におけるメモリ機能の導入](2026/2026-10-20-kiro-memory-in-ide-cli.md)
 - [2026-10-20 - Amazon ECS - Amazon ECS Gateway (マネージドイングレスソリューション)](2026/2026-10-20-announcing-amazon-ecs-gateway.md)
 - [2026-10-20 - Amazon WorkSpaces - AI エージェント向けセキュアアクセスの簡素化 (OAuth 2.0 認証と接続ライフサイクル管理)](2026/2026-10-20-workspaces-ai-agents-oauth-connection-management.md)
+- [2026-10-20 - Amazon CloudWatch - アラームアクションペイロードへのタグ付与サポート](2026/2026-10-20-amazon-cloudwatch-tags-on-alarm-actions-payload.md)
 - [2026-10-20 - Amazon Bedrock - Claude モデルの構造化出力 (Structured Outputs) サポート](2026/2026-10-20-claude-structured-outputs-bedrock.md)
 - [2026-10-20 - AWS Transform - 既存ランディングゾーンのサポート拡大と IaC 専用モード](2026/2026-10-20-aws-transform-migrations-landing-zones.md)
 - [2026-10-20 - Amazon Bedrock Guardrails - コンテキストグラウンディングチェックの Standard tier サポート](2026/2026-10-20-bedrock-guardrails-grounding-standard.md)
