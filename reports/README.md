@@ -5,9 +5,12 @@
 
 ## 2026 年
 
+- [2026-10-23 - Kiro - Claude Haiku 5.5 の提供開始と MCP Elicitation / Workflow 制御 / メモリ削除](2026/2026-10-23-kiro-changelog-2026-10-23.md)
 - [2026-10-23 - Amazon Corretto - 2026 年 10 月四半期アップデート](2026/2026-10-23-amazon-corretto-october-2026-quarterly-updates.md)
 - [2026-10-23 - Amazon EMR on EKS - EMR チャージ 30% 値下げ](2026/2026-10-23-emr-eks-reduces-emr-charge-30-percent.md)
 - [2026-10-23 - Amazon Connect - Customer Global Resiliency がリンクされたリージョン間での永続チャットをサポート](2026/2026-10-23-amazon-connect-global-resiliency-persistent-chat.md)
+- [2026-10-23 - Amazon Bedrock - Web Search のドメインフィルタリングとユーザーロケーションコントロール](2026/2026-10-23-bedrock-web-search-domain-user-location.md)
+- [2026-10-23 - Amazon MWAA - Mexico (Central) リージョンで Provisioned 環境が利用可能に](2026/2026-10-23-amazon-mwaa-mexico-central.md)
 - [2026-10-23 - AWS Transit Gateway / AWS Cloud WAN - アタッチメントでの 1:1 NAT サポート](2026/2026-10-23-aws-transit-gateway-cloud-wan-1-1-nat.md)
 - [2026-10-22 - AWS Continuum - コード脆弱性対応機能の一般提供開始](2026/2026-10-22-aws-continuum-for-code-vulnerabilities-is-now-generally-available.md)
 - [2026-10-22 - Amazon Connect Customer - エージェントワークスペースの Customer Profiles アプリのカスタマイズ](2026/2026-10-22-connect-customer-customize-cp.md)
