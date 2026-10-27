@@ -5,6 +5,17 @@
 
 ## 2026 年
 
+- [2026-10-26 - Kiro - Claude Haiku 5.5 モデルの提供開始](2026/2026-10-26-kiro-haiku-5-5.md)
+- [2026-10-26 - AWS EC2 Auto Scaling - アカウントレベルでの Launch Before Terminate サポート](2026/2026-10-26-ec2-auto-scaling-launch-before-terminate.md)
+- [2026-10-26 - Amazon Connect Customer - 顧客生涯価値・リピートコーラー別のメトリクス表示](2026/2026-10-26-connect-customer-boma-segment.md)
+- [2026-10-26 - Amazon Bedrock - OpenAI GPT-6.1 Terra の一般提供開始](2026/2026-10-26-openai-gpt-6-1-terra-on-amazon-bedrock.md)
+- [2026-10-26 - Kiro - 週 1,000 PR のソフトウェアファクトリーを安定稼働させる方法 (Keeping a software factory stable at 1,000 PRs a week)](2026/2026-10-26-kiro-software-factory-stability.md)
+- [2026-10-26 - Amazon Connect Customer - テスト・シミュレーションによるフローアクション結果の検証](2026/2026-10-26-connect-customer-validate-flow-actions.md)
+- [2026-10-26 - Amazon WorkSpaces Core Managed Instances - ModifyVolume API サポート](2026/2026-10-26-amazon-workspaces-cmi-modifyvolume.md)
+- [2026-10-26 - AWS IAM Identity Center - クロスリージョン信頼できる ID 伝播のサポート](2026/2026-10-26-aws-iam-identity-center-cross-region-tip.md)
+- [2026-10-26 - Amazon Connect Customer - ビジネスアウトカムメトリクス](2026/2026-10-26-connect-customer-boma-metrics.md)
+- [2026-10-26 - Amazon RDS for SQL Server - 最新 CU と GDR アップデートのサポート](2026/2026-10-26-amazon-rds-supports-latest-cumulative-update-gdr-microsoft-sql-server.md)
+- [2026-10-26 - AWS Key Management Service - ML-KEM によるポスト量子鍵カプセル化のサポート](2026/2026-10-26-kms-ml-kem-post-quantum.md)
 - [2026-10-23 - Kiro - Claude Haiku 5.5 の提供開始と MCP Elicitation / Workflow 制御 / メモリ削除](2026/2026-10-23-kiro-changelog-2026-10-23.md)
 - [2026-10-23 - Amazon Corretto - 2026 年 10 月四半期アップデート](2026/2026-10-23-amazon-corretto-october-2026-quarterly-updates.md)
 - [2026-10-23 - Amazon EMR on EKS - EMR チャージ 30% 値下げ](2026/2026-10-23-emr-eks-reduces-emr-charge-30-percent.md)
