@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon IVS - Low-Latency Streaming フェイルオーバースレート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.card p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+}
+
+.before-box h3 { color: #FF6B5B; }
+.after-box h3 { color: #5BC236; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* Check list */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #5BC236; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B5B; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Table */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+td code, p code, li code {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+}
+
+/* Mermaid container */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Code block */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Steps */
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  margin-right: 8px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.step-title {
+  display: flex;
+  align-items: center;
+  color: var(--aws-white);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px 0;
+}
+
+/* Use case */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.effect-label {
+  color: #5BC236;
+  font-weight: 600;
+}
+
+/* Benefit grid */
+.benefit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.benefit-col h3 {
+  margin-top: 0;
+  font-size: 16px;
+  color: var(--aws-smile-orange);
+}
+
+/* Links */
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .before-after, .benefit-grid { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">Amazon Interactive Video Service</span>
+    <h1>📺 Amazon IVS Low-Latency Streaming<br>フェイルオーバースレート</h1>
+    <div class="subtitle">🗓️ リリース日: 2026 年 10 月 26 日 | 機能: Failover Slate (フェイルオーバースレート)</div>
+  </div>
+
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Amazon IVS Low-Latency Streaming が<span class="highlight">フェイルオーバースレート機能</span>の提供を開始しました。配信者のストリームが予期せず中断された際、視聴者にはバッファリングアイコンやフリーズしたフレームの代わりに、IVS が提供する<span class="highlight">アニメーション画像 (スレート)</span> が自動的に表示されます。配信者が再接続すると、視聴者がプレイヤーを再読み込みすることなく、ライブ再生が自動的に再開されます。</p>
+    <p>モバイルデバイスからの配信や、接続が不安定な場所からの配信で特に有効です。スレートは新規・既存チャンネルのどちらでも有効化でき、Amazon EventBridge イベントと Amazon CloudWatch メトリクスでスレートのアクティビティを監視できます。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ Before: アップデート前の課題</h3>
+        <ul>
+          <li>予期しない切断時、視聴者にはフリーズしたフレームやバッファリングアイコンが表示され、視聴体験が大きく損なわれていた</li>
+          <li>中断が続くと視聴者がプレイヤーを再読み込みしたり、配信ページから離脱したりするリスクが高かった</li>
+          <li>モバイル配信や屋外配信など接続が不安定な環境では、短時間の切断のたびに視聴者維持が難しかった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ After: アップデート後の改善</h3>
+        <ul>
+          <li>予期しない中断時に、IVS がアニメーションのスレート画像を視聴者へ自動表示し、滑らかな視聴体験を維持</li>
+          <li>配信者が再接続すると、視聴者側のプレイヤー再読み込みなしでライブ再生が自動的に再開</li>
+          <li>スレートの表示開始・終了を EventBridge イベントと CloudWatch メトリクスで監視可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+sequenceDiagram
+    participant B as 📹 配信者
+    participant I as ☁️ Amazon IVS
+    participant V as 👤 視聴者
+    participant E as 📣 EventBridge
+
+    B->>I: ライブ配信
+    I->>V: ライブ映像を配信
+    B--xI: 予期しない切断
+    Note over I: 無データ状態が閾値を超過<br/>または明示的な切断シグナルを検知
+    I->>V: フェイルオーバースレートを表示
+    I->>E: Failover Slate Start イベント
+    alt 配信者が再接続
+        B->>I: ストリーム再開
+        I->>V: ライブ再生を自動再開
+        I->>E: Failover Slate End イベント
+    else 最大表示時間を超過
+        I-->>V: チャンネルをオフラインへ移行
+        I->>E: Failover Slate End イベント
+    end
+      </pre>
+    </div>
+    <p class="diagram-caption">予期しない中断を IVS が検知するとスレートが視聴者に表示され、配信者の再接続時には自動でライブ再生へ復帰します。中断が最大表示時間を超えた場合はチャンネルがオフラインになります。</p>
+  </div>
+
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="card">
+      <h4>🖼️ 1. フェイルオーバースレートの自動表示</h4>
+      <p>ストリームの予期しない中断を IVS が検知すると、アニメーションのデフォルトスレートを視聴者に自動表示。検知方法は 2 種類: 無データ状態が <code>activationThresholdSeconds</code> を超えた場合の推定検知と、エンコーダーが異常切断シグナルを送信した場合の明示的検知。配信者が意図的に配信を停止した場合 (クリーンな切断) はスレートは表示されません。</p>
+    </div>
+    <div class="card">
+      <h4>🔄 2. プレイヤー再読み込み不要の自動復帰</h4>
+      <p>配信者が再接続すると、最小表示時間の経過後にスレートからライブ映像へ自動で切り替わります。視聴者はプレイヤーの再読み込みや手動操作なしで、継続的な再生体験を得られます。</p>
+    </div>
+    <div class="card">
+      <h4>♻️ 3. 再利用可能なフェイルオーバースレート設定</h4>
+      <p>スレートの表示タイミングと表示時間を制御する「フェイルオーバースレート設定」をリソースとして作成。1 つの設定を複数のチャンネルに関連付けて再利用可能。新規チャンネル作成時と既存チャンネル更新時のどちらでも有効化できます。</p>
+    </div>
+    <div class="card">
+      <h4>📊 4. EventBridge と CloudWatch による監視</h4>
+      <p>スレートの開始・終了時に <code>Failover Slate Start</code> / <code>Failover Slate End</code> イベントを EventBridge に送信。CloudWatch メトリクス <code>FailoverSlateStarts</code> で、チャンネル横断的なスレート発動状況を集計可能です。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>フェイルオーバースレート設定のパラメータ</h3>
+    <table>
+      <tr><th>パラメータ</th><th>説明</th></tr>
+      <tr><td><code>activationThresholdSeconds</code></td><td>無データ状態がこの秒数続いた場合にスレートを表示する閾値</td></tr>
+      <tr><td><code>minSlateDisplaySeconds</code></td><td>スレートの最小表示時間。再接続してもこの時間はスレートが継続表示される</td></tr>
+      <tr><td><code>maxSlateDisplaySeconds</code></td><td>スレートの最大表示時間。これを超えて中断が続くとチャンネルはオフラインになる</td></tr>
+    </table>
+
+    <h3>中断の検知方式</h3>
+    <table>
+      <tr><th>検知方式</th><th>動作</th></tr>
+      <tr><td>推定検知</td><td><code>activationThresholdSeconds</code> で指定した期間、データを受信しない場合にスレートを表示</td></tr>
+      <tr><td>明示的検知</td><td>エンコーダーが異常切断シグナルを送信した場合、即座にスレートを表示</td></tr>
+    </table>
+
+    <h3>監視</h3>
+    <table>
+      <tr><th>監視手段</th><th>内容</th></tr>
+      <tr><td>Amazon EventBridge</td><td><code>Failover Slate Start</code> / <code>Failover Slate End</code> イベント</td></tr>
+      <tr><td>Amazon CloudWatch</td><td><code>FailoverSlateStarts</code> メトリクス</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon IVS Low-Latency Streaming のチャンネルを作成できる AWS アカウントと IAM 権限があること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS CLI が利用可能であること (コンソールからも設定可能)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>配信用のエンコーダー (OBS、モバイルアプリなど) が利用可能であること</span></div>
+
+    <div class="step-title"><span class="step-number">1</span>フェイルオーバースレート設定を作成する</div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">スレート設定リソースの作成</span></div>
+      <pre><code class="language-bash">aws ivs create-failover-slate-configuration \
+  --name "my-failover-slate" \
+  --activation-threshold-seconds 5 \
+  --min-slate-display-seconds 2 \
+  --max-slate-display-seconds 180</code></pre>
+    </div>
+    <p>この例では、無データ状態が 5 秒続くとスレートを表示し、最小 2 秒間表示、最大 180 秒でチャンネルをオフラインにします。作成した設定は複数チャンネルで再利用できます。</p>
+
+    <div class="step-title"><span class="step-number">2</span>チャンネルに設定を関連付ける</div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">新規作成 / 既存チャンネル更新</span></div>
+      <pre><code class="language-bash"># 新規チャンネル作成時に関連付ける場合
+aws ivs create-channel \
+  --name "my-channel" \
+  --failover-slate-configuration-arn \
+    "arn:aws:ivs:us-west-2:123456789012:failover-slate-configuration/ABcdef12ghIJ"
+
+# 既存チャンネルを更新する場合
+aws ivs update-channel \
+  --arn "arn:aws:ivs:us-west-2:123456789012:channel/ABcdef12ghIJ" \
+  --failover-slate-configuration-arn \
+    "arn:aws:ivs:us-west-2:123456789012:failover-slate-configuration/ABcdef12ghIJ"</code></pre>
+    </div>
+    <p>ライブ中のチャンネルは更新できないため、既存チャンネルの場合は配信を停止してから更新し、配信を再開する必要があります。</p>
+
+    <div class="step-title"><span class="step-number">3</span>動作をテストする</div>
+    <p>配信を開始した状態で、OS レベルでネットワークを切断 (例: スマートフォンの Wi-Fi をオフ) して、予期しない中断をシミュレートします。閾値の経過後に視聴者側でスレートが表示されることを確認します。配信ソフトの停止ボタンはクリーンな切断シグナルを送信するためスレートは発動しません。</p>
+
+    <div class="step-title"><span class="step-number">4</span>無効化する場合</div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">フェイルオーバースレートの無効化</span></div>
+      <pre><code class="language-bash">aws ivs update-channel \
+  --arn "arn:aws:ivs:us-west-2:123456789012:channel/ABcdef12ghIJ" \
+  --failover-slate-configuration-arn ""</code></pre>
+    </div>
+    <p>空の ARN を指定してチャンネルを更新すると、フェイルオーバースレートが無効になります。</p>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="benefit-grid">
+      <div class="benefit-col">
+        <h3>📈 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>視聴者維持率の向上</strong>: 一時的な中断時にも視聴者がページから離脱しにくくなり、エンゲージメントを維持</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>視聴体験の品質向上</strong>: フリーズ画面やバッファリング表示を排除し、プロフェッショナルな配信体験を提供</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>モバイル配信の信頼性向上</strong>: 屋外や移動中など、接続が不安定な環境からの配信でもサービス品質を維持</span></div>
+      </div>
+      <div class="benefit-col">
+        <h3>⚙️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>プレイヤー側の実装不要</strong>: 視聴者側のプレイヤーに追加実装をせずに、IVS 側の設定だけで利用可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>設定の再利用性</strong>: 1 つの設定を複数チャンネルに適用でき、運用負荷を低減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>可観測性</strong>: EventBridge イベントと CloudWatch メトリクスで検知・アラート・自動対応を構築可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>カスタムスレート画像は現時点でサポートされておらず、IVS が提供するデフォルトのアニメーション画像のみ利用可能</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ライブ中のチャンネルは更新できないため、既存チャンネルへの適用には配信の停止・再開が必要</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>スレート表示から通常再生に戻る際、次のキーフレームまで視覚的なアーティファクトが発生する場合がある (既知の問題)</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>スレート表示中もチャンネルはライブ状態として扱われ、映像入力・映像出力の両方に通常どおりの IVS 料金が発生する</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>録画 (Recording) を有効にしているチャンネルでは、中断期間中のスレートのフレームも S3 バケットへの録画に含まれる</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>サードパーティ製エンコーダーの中にはクリーンな切断シグナルを送信しないものがあり、意図的な配信停止でもスレートが表示される可能性がある。利用するエンコーダーで事前にテストすることが推奨される</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>📱 ユースケース 1: モバイルからの屋外ライブ配信</h4>
+      <p><strong>シナリオ</strong>: スポーツ中継やイベント現場からスマートフォンで配信しており、モバイル回線の瞬断が頻繁に発生する。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws ivs create-failover-slate-configuration \
+  --name "mobile-irl-slate" \
+  --activation-threshold-seconds 3 \
+  --min-slate-display-seconds 2 \
+  --max-slate-display-seconds 300</code></pre>
+      </div>
+      <p><span class="effect-label">効果</span>: 短い閾値でスレートへ素早く切り替え、回線復帰後は自動でライブに戻るため、電波状況が変わりやすい屋外でも視聴者が離脱しにくくなる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>👥 ユースケース 2: UGC ライブ配信プラットフォーム</h4>
+      <p><strong>シナリオ</strong>: 多数の個人配信者を抱えるプラットフォームで、配信者ごとの回線品質がまちまちであり、切断時の体験を全チャンネルで統一したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># 共通のスレート設定を全チャンネルに適用
+aws ivs update-channel \
+  --arn "arn:aws:ivs:us-west-2:123456789012:channel/CHANNEL_ID" \
+  --failover-slate-configuration-arn "arn:aws:ivs:us-west-2:123456789012:failover-slate-configuration/SHARED_CONFIG"</code></pre>
+      </div>
+      <p><span class="effect-label">効果</span>: 1 つのフェイルオーバースレート設定を全チャンネルで再利用し、プラットフォーム全体で一貫した中断時の視聴体験を提供できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>🔔 ユースケース 3: スレート発動の監視と運用アラート</h4>
+      <p><strong>シナリオ</strong>: 重要なライブイベント配信で、配信者側の回線トラブルを運用チームが即座に検知して対応したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">EventBridge ルールのイベントパターン</span></div>
+        <pre><code class="language-json">{
+  "source": ["aws.ivs"],
+  "detail-type": ["IVS Stream State Change"],
+  "detail": {
+    "event_name": ["Failover Slate Start"]
+  }
+}</code></pre>
+      </div>
+      <p><span class="effect-label">効果</span>: EventBridge ルールで <code>Failover Slate Start</code> イベントを捕捉して通知を送り、CloudWatch の <code>FailoverSlateStarts</code> メトリクスで傾向を分析することで、回線トラブルへの迅速な対応と品質改善が可能になる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>フェイルオーバースレート機能自体の追加料金に関する記載はありませんが、<span class="highlight">スレート表示中もチャンネルはライブ状態を維持</span>するため、通常の配信時と同様に標準の Amazon IVS 料金が発生します。スレートが視聴者に表示されている間、映像入力と映像出力の両方が全期間にわたって課金対象となる点に注意が必要です。</p>
+    <p>詳細は <a class="aws-link" href="https://aws.amazon.com/ivs/pricing/" target="_blank" rel="noopener noreferrer">Amazon IVS 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>発表では個別のリージョンは明記されていません。Amazon IVS のコンソールおよびストリーム制御・作成 API が利用可能なリージョンについては、<a class="aws-link" href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer">AWS リージョン別サービス表</a> を参照してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <h4>📺 Amazon IVS Low-Latency Streaming</h4>
+      <p>本機能の対象となる低遅延ライブストリーミングサービス。チャンネル単位でスレート設定を関連付けます。</p>
+    </div>
+    <div class="card">
+      <h4>📣 Amazon EventBridge</h4>
+      <p><code>Failover Slate Start</code> / <code>Failover Slate End</code> イベントを受信し、通知や自動対応のトリガーとして利用できます。</p>
+    </div>
+    <div class="card">
+      <h4>📊 Amazon CloudWatch</h4>
+      <p><code>FailoverSlateStarts</code> メトリクスにより、チャンネル横断でのスレート発動状況を可視化できます。</p>
+    </div>
+    <div class="card">
+      <h4>🪣 Amazon S3</h4>
+      <p>チャンネルの録画機能を有効にしている場合、スレート表示中のフレームも S3 への録画に含まれます。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>Amazon IVS Low-Latency Streaming のフェイルオーバースレートは、配信中断時の視聴体験を大きく改善し、特に<span class="highlight">モバイル配信や不安定な接続環境での視聴者維持</span>に直結する機能です。CLI またはコンソールからスレート設定を作成してチャンネルに関連付けるだけで利用でき、<span class="highlight">プレイヤー側の変更は不要</span>です。利用するエンコーダーのクリーン切断の挙動と、スレート表示中も通常課金が継続する点を確認した上で、まずはテストチャンネルでの動作検証から始めることを推奨します。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-ivs-low-latency-streaming-failover-slate" target="_blank" rel="noopener noreferrer">公式発表 (What's New): Amazon IVS Low-Latency Streaming Failover Slate</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/ivs/latest/LowLatencyUserGuide/failover-slate.html" target="_blank" rel="noopener noreferrer">ドキュメント: Amazon IVS Failover Slate</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/ivs/latest/LowLatencyUserGuide/eventbridge.html" target="_blank" rel="noopener noreferrer">ドキュメント: Using Amazon EventBridge with IVS Low-Latency Streaming</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/ivs/latest/LowLatencyUserGuide/stream-health.html" target="_blank" rel="noopener noreferrer">ドキュメント: Monitoring Amazon IVS Low-Latency Streaming</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/ivs/pricing/" target="_blank" rel="noopener noreferrer">Amazon IVS 料金ページ</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-10-26) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
