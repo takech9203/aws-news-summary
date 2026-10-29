@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon EKS - EKS Auto Mode が Kubernetes Gateway API をサポート</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .card p, .card ul {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .card ul {
+      padding-left: 20px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    /* Before/After 比較 */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 700px) {
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 { color: #FF6B6B; }
+    .after-box h3 { color: #6BCB77; }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: #6BCB77; flex-shrink: 0; }
+    .cross-icon { color: #FF6B6B; flex-shrink: 0; }
+
+    /* 統計カード */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.2));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      display: block;
+      line-height: 1.3;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    td code, p code, li code {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Mermaid コンテナ */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .usecase h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-smile-orange);
+      font-size: 16px;
+    }
+
+    .usecase p {
+      margin: 6px 0;
+      font-size: 14px;
+    }
+
+    .usecase .effect {
+      border-top: 1px dashed rgba(255, 153, 0, 0.4);
+      padding-top: 8px;
+      margin-top: 10px;
+    }
+
+    /* 注意ボックス */
+    .warning-box {
+      background: rgba(255, 153, 0, 0.1);
+      border: 1px solid rgba(255, 153, 0, 0.5);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+
+    /* ステップ */
+    .step {
+      display: flex;
+      gap: 12px;
+      margin: 16px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 14px;
+      margin-top: 2px;
+    }
+
+    .step-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .step-content h4 {
+      margin: 0 0 6px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .step-content p {
+      margin: 6px 0;
+      font-size: 14px;
+    }
+
+    ul {
+      margin: 8px 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul {
+      list-style: none;
+      padding-left: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <span class="service-badge">Amazon EKS</span>
+      <h1>🚪 EKS Auto Mode が Kubernetes Gateway API をサポート</h1>
+      <div class="subtitle">📅 リリース日: 2026 年 10 月 28 日 | 🏷️ 機能: EKS Auto Mode における Kubernetes Gateway API サポート</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📝 概要</h2>
+      <p>
+        <span class="highlight">Amazon EKS Auto Mode</span> が <strong>Kubernetes Gateway API</strong> をサポートしました。Gateway API は、従来の Ingress API の制限を解消する<strong>ロール指向で表現力の高い</strong>次世代のトラフィック管理標準です。Gateway や HTTPRoute などの標準リソースを定義するだけで、EKS Auto Mode が基盤となる AWS ロードバランサー (ALB / NLB) を<strong>自動的にプロビジョニング・管理</strong>します。別途コントローラーをインストール・運用する必要はありません。
+      </p>
+
+      <div class="stat-row">
+        <div class="stat-card">
+          <span class="stat-value">0</span>
+          <span class="stat-label">追加コントローラーのインストール数 — 組み込みコントローラーで完結</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">2 種類</span>
+          <span class="stat-label">組み込みゲートウェイコントローラー (ALB 用 / NLB 用)</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">4 ルート</span>
+          <span class="stat-label">HTTPRoute / GRPCRoute / TCPRoute / UDPRoute に対応</span>
+        </div>
+      </div>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ アップデート前の課題</h3>
+          <div class="check-item"><span class="cross-icon">✗</span><span>EKS Auto Mode では Ingress または Service (type LoadBalancer) しか使えず、Gateway API を利用できなかった</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>Gateway API を使うには AWS Load Balancer Controller などを自分でインストール・運用する必要があった</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>Ingress API はロール分離や高度なルーティング (重み付け分割、クロスネームスペース) の表現力に制限があった</span></div>
+        </div>
+        <div class="after-box">
+          <h3>✅ アップデート後の改善</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span>GatewayClass / Gateway / HTTPRoute などを定義するだけで AWS ロードバランサーを自動プロビジョニング・管理</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>コントローラーのインストール・運用が不要になり、次世代トラフィック管理標準をすぐに採用可能</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>HTTP / gRPC ルーティング、クロスネームスペースルーティング、重み付けトラフィック分割、ヘッダーベースルーティング、ACM による TLS 証明書の自動検出が利用可能</span></div>
+        </div>
+      </div>
+
+      <p style="font-size: 14px;">
+        既存の Ingress ベースのワークロードは新しい Gateway API リソースと<strong>並行してそのまま動作</strong>するため、段階的な移行が可能です。プラットフォームチーム・クラスター運用者・アプリケーション開発者の責務を分離した<strong>マルチチーム環境</strong>でトラフィック管理を標準化したい組織に特に有用です。
+      </p>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Cluster["☁️ EKS Auto Mode クラスター"]
+        subgraph GWAPI["📋 Gateway API リソース"]
+            GC["📐 GatewayClass<br/>プラットフォームチームが管理"]
+            GW["🚪 Gateway<br/>クラスター運用者が管理"]
+            RT["🛣️ HTTPRoute / GRPCRoute<br/>TCPRoute / UDPRoute<br/>開発者が管理"]
+            GC ~~~ GW ~~~ RT
+        end
+        CTRL["⚙️ EKS Auto Mode<br/>組み込みゲートウェイコントローラー"]
+        SVC["📦 Service / Pod"]
+    end
+    subgraph AWSLB["🏗️ AWS ロードバランサー"]
+        direction LR
+        ALB["⚖️ ALB<br/>L7 ルート HTTP / gRPC"]
+        NLB["⚡ NLB<br/>L4 ルート TCP / UDP"]
+        ALB ~~~ NLB
+    end
+    ACM["🔐 AWS Certificate Manager<br/>TLS 証明書の自動検出"]
+    User(["👤 ユーザー"])
+
+    GC --> CTRL
+    GW --> CTRL
+    RT --> CTRL
+    CTRL -->|自動プロビジョニング| ALB
+    CTRL -->|自動プロビジョニング| NLB
+    User --> ALB
+    User --> NLB
+    ALB --> SVC
+    NLB --> SVC
+    ACM -.-> ALB
+
+    classDef cluster fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef resource fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef controller fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef lb fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef svc fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef security fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Cluster cluster
+    class GWAPI,AWSLB layer
+    class GC,GW,RT resource
+    class CTRL controller
+    class ALB,NLB lb
+    class SVC svc
+    class ACM security
+    class User user
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        💡 Gateway API リソースを定義すると、EKS Auto Mode の組み込みコントローラーが L7 ルート用の ALB または L4 ルート用の NLB を自動的にプロビジョニングし、Gateway とルート定義に同期させます。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚙️ 主要機能</h2>
+
+      <div class="card">
+        <h4>1️⃣ コントローラー不要の Gateway API サポート</h4>
+        <ul>
+          <li>ALB 用 (<code>eks.amazonaws.com/gateway-alb</code>) と NLB 用 (<code>eks.amazonaws.com/gateway-nlb</code>) の 2 つの組み込みコントローラーを提供</li>
+          <li>L7 ルート (HTTPRoute、GRPCRoute) は ALB、L4 ルート (TCPRoute、UDPRoute) は NLB で処理</li>
+          <li>Gateway とルート定義の変更はロードバランサーに自動同期</li>
+          <li>独自のコントローラー名を使用するため、Envoy Gateway や Istio と同一クラスター内で共存可能</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>2️⃣ 高度なルーティング機能</h4>
+        <ul>
+          <li>HTTP および gRPC ルーティング</li>
+          <li>クロスネームスペーストラフィックルーティング (マルチチーム環境に有用)</li>
+          <li>重み付けトラフィック分割 (カナリアリリースなどに活用可能)</li>
+          <li>ヘッダーベースルーティング</li>
+          <li>AWS Certificate Manager (ACM) による TLS 証明書の自動検出</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>3️⃣ Gateway API CRD のライフサイクル管理の選択</h4>
+        <ul>
+          <li>クラスターの <code>elasticLoadBalancing</code> 設定の <code>gatewayApi.crds.managed</code> フィールドで有効化</li>
+          <li><strong>Managed</strong> (<code>true</code>): AWS が Gateway API v1 の CRD のインストールとライフサイクル管理を代行</li>
+          <li><strong>Unmanaged</strong> (<code>false</code>): ユーザーが CRD の所有権を保持。既に Gateway API を運用中のクラスターや段階的な移行に適する</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>4️⃣ AWS 拡張リソースによるきめ細かな制御</h4>
+        <ul>
+          <li>AWS Load Balancer Controller と同じ拡張リソース (<code>gateway.k8s.aws/v1</code>) をサポート</li>
+          <li><strong>TargetGroupConfiguration</strong>: ヘルスチェック、登録解除遅延、スティッキネスなどを Service レベルで設定</li>
+          <li><strong>LoadBalancerConfiguration</strong>: サブネット配置、セキュリティグループ、アクセスログなどを Gateway / GatewayClass レベルで設定</li>
+          <li><strong>ListenerRuleConfiguration</strong>: Amazon Cognito や OIDC プロバイダーによる認証など AWS 固有の動作で HTTPRoute / GRPCRoute を拡張</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔬 技術仕様</h2>
+
+      <h3>📐 Gateway API のリソースモデル</h3>
+      <table>
+        <thead>
+          <tr><th>リソース</th><th>役割</th><th>主な管理者</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>GatewayClass</code></td>
+            <td>Gateway 作成のテンプレート。管理するコントローラーとロードバランサータイプを定義</td>
+            <td>プラットフォームチーム</td>
+          </tr>
+          <tr>
+            <td><code>Gateway</code></td>
+            <td>ロードバランサーをインスタンス化し、リスナー (プロトコルとポート)、ホスト名、TLS 設定を定義</td>
+            <td>クラスター運用者</td>
+          </tr>
+          <tr>
+            <td><code>HTTPRoute</code> / <code>GRPCRoute</code> / <code>TCPRoute</code> / <code>UDPRoute</code></td>
+            <td>リスナーとバックエンド Service をマッピングするルールを定義</td>
+            <td>アプリケーション開発者</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>⚖️ ルートタイプとロードバランサーの対応</h3>
+      <table>
+        <thead>
+          <tr><th>ルートタイプ</th><th>レイヤー</th><th>プロビジョニングされるロードバランサー</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>HTTPRoute</code></td><td>L7</td><td>Application Load Balancer (ALB)</td></tr>
+          <tr><td><code>GRPCRoute</code></td><td>L7</td><td>Application Load Balancer (ALB)</td></tr>
+          <tr><td><code>TCPRoute</code></td><td>L4</td><td>Network Load Balancer (NLB)</td></tr>
+          <tr><td><code>UDPRoute</code></td><td>L4</td><td>Network Load Balancer (NLB)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>🔧 Gateway API の有効化設定</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">クラスターのネットワーク設定</span>
+        </div>
+        <pre><code class="language-json">{
+    "kubernetesNetworkConfig": {
+        "elasticLoadBalancing": {
+            "enabled": true,
+            "gatewayApi": {
+                "crds": {
+                    "managed": true
+                }
+            }
+        }
+    }
+}</code></pre>
+      </div>
+      <ul style="font-size: 14px;">
+        <li><code>elasticLoadBalancing.enabled</code> を <code>true</code> に設定する (Gateway API サポートは EKS Auto Mode のロードバランシング機能上に構築)</li>
+        <li><code>gatewayApi.crds.managed</code> で AWS が CRD ライフサイクルを管理するかを指定。<code>gatewayApi</code> ブロックを省略した場合、設定は変更されない</li>
+      </ul>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>✅ 前提条件</h3>
+      <ul style="font-size: 14px;">
+        <li>EKS Auto Mode が有効な Amazon EKS クラスター</li>
+        <li>クラスターで Gateway API が有効化されていること (<code>gatewayApi.crds.managed</code> の設定)</li>
+        <li>kubectl がクラスターに接続できるように設定されていること</li>
+        <li>サブネットにパブリック / プライベートを識別するタグが付与されていること (eksctl で作成したクラスターにはタグが付与済み)</li>
+      </ul>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h4>Gateway API の有効化</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">既存クラスターの設定更新</span>
+            </div>
+            <pre><code class="language-bash">aws eks update-cluster-config \
+ --name $CLUSTER_NAME \
+ --kubernetes-network-config '{"elasticLoadBalancing":{"enabled":true,"gatewayApi":{"crds":{"managed":true}}}}'</code></pre>
+          </div>
+          <p>既存の EKS Auto Mode クラスターで Gateway API を有効化し、AWS に CRD のライフサイクル管理を委任します。新規クラスターの場合は <code>create-cluster</code> の <code>--kubernetes-network-config</code> に同じ設定を含めます。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h4>GatewayClass の作成</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">YAML</span>
+              <span class="code-title">gatewayclass.yaml</span>
+            </div>
+            <pre><code class="language-yaml">apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eks-auto-alb
+spec:
+  controllerName: eks.amazonaws.com/gateway-alb</code></pre>
+          </div>
+          <p>EKS Auto Mode の ALB 用ゲートウェイコントローラーを参照する GatewayClass を作成します。他のリソースから参照可能になるまで短い遅延があるため、最初に作成します。<code>kubectl apply -f gatewayclass.yaml</code> で適用します。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h4>Gateway の作成</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">YAML</span>
+              <span class="code-title">gateway.yaml</span>
+            </div>
+            <pre><code class="language-yaml">apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: my-gateway
+  namespace: default
+spec:
+  gatewayClassName: eks-auto-alb
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80</code></pre>
+          </div>
+          <p>GatewayClass を参照し、ポート 80 の HTTP リスナーを定義する Gateway を作成します。この Gateway の作成をトリガーとして、EKS Auto Mode が ALB をプロビジョニングします。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h4>HTTPRoute の作成</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">YAML</span>
+              <span class="code-title">httproute.yaml</span>
+            </div>
+            <pre><code class="language-yaml">apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: my-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: my-gateway
+      sectionName: http
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: service-2048
+          port: 80</code></pre>
+          </div>
+          <p>Gateway の <code>http</code> リスナーに届いたすべてのトラフィックを、バックエンドの Service (この例では <code>service-2048</code> のポート 80) にルーティングする HTTPRoute を作成します。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">5</div>
+        <div class="step-content">
+          <h4>動作確認</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">疎通確認</span>
+            </div>
+            <pre><code class="language-bash">kubectl wait --for=condition=Programmed gateway/my-gateway
+
+ADDRESS=$(kubectl get gateway my-gateway -o jsonpath='{.status.addresses[0].value}')
+curl http://$ADDRESS</code></pre>
+          </div>
+          <p>Gateway が Programmed 状態になるのを待ち、プロビジョニングされたロードバランサーのアドレスを取得して疎通確認を行います。ロードバランサーが利用可能になるまで数分かかる場合があります。Gateway API リソースを削除すると、関連するロードバランサーは AWS アカウントから自動的に削除されます。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+
+      <h3>💼 ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の削減</strong>: コントローラーのインストール・アップグレード・運用が不要になり、プラットフォームチームの管理コストを削減できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>チーム間の責務分離</strong>: ロール指向のリソースモデルにより、プラットフォームチーム・クラスター運用者・開発者がそれぞれの責務範囲でトラフィック管理を行える</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>ベンダーポータビリティ</strong>: Kubernetes 標準 API の採用で特定ベンダーへの依存を減らし、スキルや設定の移植性を高められる</span></div>
+
+      <h3>🔧 技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>宣言的なロードバランサー管理</strong>: Gateway とルート定義に基づき、ALB / NLB のプロビジョニングから削除までが自動化される</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>高度なルーティングの標準化</strong>: 重み付けトラフィック分割やヘッダーベースルーティングなど、Ingress では拡張アノテーションが必要だった機能を標準 API で表現できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>段階的な移行が可能</strong>: 既存の Ingress や Service (type LoadBalancer) と並行して動作するため、ワークロードごとに段階的に移行できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>サードパーティ実装との共存</strong>: 独自のコントローラー名を使用するため、Envoy Gateway や Istio と同一クラスターで併用できる</span></div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>🚫 制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>Gateway API 仕様のすべてのフィールドが AWS ロードバランサーの機能にマッピングされるわけではない (サポート対象フィールドは AWS Load Balancer Controller ドキュメントの機能比較を参照)</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>EKS Auto Mode が有効なクラスターでのみ利用可能 (通常の EKS クラスターでは引き続き AWS Load Balancer Controller の導入が必要)</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>Managed モードを選択する場合、クラスター上の既存 Gateway API CRD が v1 である必要がある。古いバージョンの CRD が存在する場合、操作は拒否される</span></div>
+
+      <h3>🤔 考慮すべき点</h3>
+      <div class="warning-box">
+        <ul style="margin: 0;">
+          <li>Gateway API CRD はクラスター全体のリソースであり、所有者は AWS またはユーザーのいずれか一方のみ。既に別のコントローラーが CRD を管理している場合は Unmanaged を選択する</li>
+          <li>GatewayClass の作成直後は、他のリソースから参照可能になるまで短い遅延がある</li>
+          <li>ロードバランサーのプロビジョニングには数分かかる場合がある</li>
+          <li>サブネットにパブリック / プライベートを識別するタグが必要</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h4>🚀 ユースケース 1: カナリアリリースのための重み付けトラフィック分割</h4>
+        <p><strong>シナリオ</strong>: 新バージョンのアプリケーションを本番環境に展開する際、トラフィックの一部のみを新バージョンに流して安全性を検証したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">YAML</span>
+            <span class="code-title">90% / 10% のトラフィック分割</span>
+          </div>
+          <pre><code class="language-yaml">apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: canary-route
+spec:
+  parentRefs:
+    - name: my-gateway
+  rules:
+    - backendRefs:
+        - name: app-v1
+          port: 80
+          weight: 90
+        - name: app-v2
+          port: 80
+          weight: 10</code></pre>
+        </div>
+        <p class="effect">💡 <strong>効果</strong>: 標準 API のみでトラフィックの 90% を既存バージョン、10% を新バージョンに分割でき、追加ツールなしで安全なカナリアリリースを実現できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h4>👥 ユースケース 2: マルチチーム環境でのクロスネームスペースルーティング</h4>
+        <p><strong>シナリオ</strong>: プラットフォームチームが共有の Gateway を管理し、各アプリケーションチームが自分のネームスペース内でルートを管理するマルチテナント構成を実現したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">YAML</span>
+            <span class="code-title">共有 Gateway の定義</span>
+          </div>
+          <pre><code class="language-yaml">apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: shared-gateway
+  namespace: infra
+spec:
+  gatewayClassName: eks-auto-alb
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              shared-gateway-access: "true"</code></pre>
+        </div>
+        <p class="effect">💡 <strong>効果</strong>: 1 つの ALB を複数チームで共有しながら、各チームは自分のネームスペースのルートのみを管理でき、責務分離とコスト効率を両立できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h4>🎮 ユースケース 3: L4 ワークロードの NLB 自動プロビジョニング</h4>
+        <p><strong>シナリオ</strong>: ゲームサーバーや IoT ブローカーなど、TCP / UDP ベースのワークロードを Kubernetes 標準 API で公開したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">YAML</span>
+            <span class="code-title">NLB 用 GatewayClass の定義</span>
+          </div>
+          <pre><code class="language-yaml">apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eks-auto-nlb
+spec:
+  controllerName: eks.amazonaws.com/gateway-nlb</code></pre>
+        </div>
+        <p class="effect">💡 <strong>効果</strong>: TCPRoute / UDPRoute を定義するだけで NLB が自動プロビジョニングされ、L4 トラフィックも Ingress ではカバーできなかった標準 API で宣言的に管理できる。</p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金・利用可能リージョン</h2>
+      <div class="card">
+        <h4>💵 料金</h4>
+        <p>Gateway API サポート自体は EKS Auto Mode の一部として<span class="highlight">追加料金なし</span>で利用できます。ただし、プロビジョニングされる AWS ロードバランシングリソース (ALB / NLB) には標準料金が適用されます。また、EKS Auto Mode 自体の料金 (管理対象インスタンスに対する料金) は別途発生します。</p>
+      </div>
+      <div class="card">
+        <h4>🌍 利用可能リージョン</h4>
+        <p>EKS Auto Mode が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。</p>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <h4>☁️ Amazon EKS Auto Mode</h4>
+        <p>コンピューティング、ストレージ、ネットワーキングの管理を自動化する EKS の動作モード。本機能はそのロードバランシング機能上に構築されています。</p>
+      </div>
+      <div class="card">
+        <h4>🎛️ AWS Load Balancer Controller</h4>
+        <p>通常の EKS クラスターで Gateway API を利用する場合に使用するコントローラー。EKS Auto Mode は同じ AWS 拡張リソース (<code>gateway.k8s.aws/v1</code>) をサポートします。</p>
+      </div>
+      <div class="card">
+        <h4>⚖️ Elastic Load Balancing (ALB / NLB)</h4>
+        <p>Gateway API リソースに基づいて自動プロビジョニングされるロードバランサー。</p>
+      </div>
+      <div class="card">
+        <h4>🔐 AWS Certificate Manager (ACM)</h4>
+        <p>TLS 証明書の自動検出により、Gateway の TLS 設定と連携します。</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📌 まとめ</h2>
+      <p>
+        EKS Auto Mode が Kubernetes Gateway API を<strong>ネイティブサポート</strong>したことで、コントローラーの運用なしに次世代のトラフィック管理標準を採用できるようになりました。既存の Ingress ワークロードと並行動作するため、まずは<span class="highlight">新規ワークロードや重み付けトラフィック分割が必要なワークロード</span>から段階的に Gateway API への移行を検討することを推奨します。EKS Auto Mode を利用中の場合は、<code>gatewayApi.crds.managed</code> 設定で Gateway API を有効化するところから始められます。
+      </p>
+      <div class="flow-diagram" style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 24px 0;">
+        <div style="background: var(--aws-squid-ink); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">🔧 Gateway API<br/>を有効化</div>
+        <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div style="background: var(--aws-squid-ink); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">📐 GatewayClass<br/>Gateway を定義</div>
+        <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div style="background: var(--aws-squid-ink); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">🛣️ Route を定義</div>
+        <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div style="background: var(--aws-squid-ink); border: 2px solid var(--aws-green); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">✅ ALB / NLB<br/>自動プロビジョニング</div>
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典・参考リンク</p>
+      <ul>
+        <li>🔗 <a href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-eks-auto-mode-kubernetes-gateway-api/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-eks-auto-mode-kubernetes-gateway-api/</a></li>
+        <li>🔗 <a href="https://docs.aws.amazon.com/eks/latest/userguide/auto-configure-gateway-api.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Configure the Kubernetes Gateway API in EKS Auto Mode</a></li>
+        <li>🔗 <a href="https://kubernetes-sigs.github.io/aws-load-balancer-controller/v3.5/guide/gateway/l7gateway/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Load Balancer Controller L7 Gateway API ガイド</a></li>
+        <li>🔗 <a href="https://kubernetes-sigs.github.io/aws-load-balancer-controller/v3.5/guide/gateway/l4gateway/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Load Balancer Controller L4 Gateway API ガイド</a></li>
+        <li>🔗 <a href="https://aws.amazon.com/eks/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon EKS 料金ページ</a></li>
+      </ul>
+      <p>📅 リリース日: 2026 年 10 月 28 日 | 本インフォグラフィックは AWS News レポートに基づいて作成されています。</p>
+    </footer>
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

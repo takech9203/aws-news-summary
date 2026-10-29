@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon ECS Managed Instances - クロスインスタンス統合と Spot 統合</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+
+    .date-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      margin-left: 8px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 8px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .card p { margin: 4px 0; font-size: 14px; }
+
+    /* Before / After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 { color: #FF6B6B; }
+    .after-box h3 { color: #6BCB77; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li { margin: 6px 0; }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 18px 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    .stat-sub {
+      font-size: 12px;
+      color: var(--aws-smile-orange);
+      margin-top: 4px;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--aws-light-gray);
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* Check / cross lists */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: #6BCB77; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B6B; font-size: 16px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+    /* Code blocks */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* Use cases */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+
+    .usecase p { margin: 6px 0; font-size: 14px; }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 3px solid #6BCB77;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    .note-box {
+      background: rgba(0, 161, 201, 0.1);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { margin: 8px 0; padding-left: 20px; }
+    footer li { margin: 4px 0; }
+
+    @media (max-width: 700px) {
+      .before-after, .merit-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <span class="service-badge">Amazon ECS</span>
+        <span class="date-badge">📅 2026 年 10 月 28 日</span>
+      </div>
+      <h1>🚀 ECS Managed Instances<br>クロスインスタンス統合と Spot 統合</h1>
+      <div class="subtitle">フリート全体を横断したタスク再配置で、使用率を最大化しコストを自動削減</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📝 概要</h2>
+      <p>
+        Amazon ECS Managed Instances に、インフラストラクチャ最適化を強化する <span class="highlight">2 つの新機能</span> が追加されました。
+        「<span class="highlight">クロスインスタンス統合</span>」は複数の低使用率インスタンスのタスクをまとめて評価し、より少ないインスタンスへ再配置 (パッキング) します。
+        「<span class="highlight">Spot 統合</span>」は同じアプローチを Spot キャパシティにも適用し、代替キャパシティの確保を確認してから元のインスタンスを回収します。
+      </p>
+      <p>
+        フリートを継続的にモニタリングし、<span class="highlight">start-before-stop</span> (先に起動してから停止する) 方式のグレースフルなタスク置換により、アプリケーションの可用性を維持しながらアイドルキャパシティを回収します。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>⚠️ Before: アップデート前の課題</h3>
+          <ul>
+            <li>インスタンスごとに個別に最適化を評価していたため、複数インスタンスにまたがる再配置機会を活用できなかった</li>
+            <li>利用可能なインスタンスタイプの範囲が狭い場合、個別評価による最適化の効果が限定的だった</li>
+            <li>Spot インスタンスは低使用率でも統合による回収が行われなかった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ After: アップデート後の改善</h3>
+          <ul>
+            <li>複数インスタンスのタスクを同時に評価し、より少ないインスタンスへパッキングして使用率を大幅に向上</li>
+            <li>Spot キャパシティも代替キャパシティの存在を確認したうえで安全に統合</li>
+            <li>追加料金なしで、既存・新規のすべてのキャパシティプロバイダーに自動適用</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 統計 -->
+    <div class="section">
+      <h2>📊 数字で見る統合効果 (AWS テスト結果)</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">19 → 13 台</div>
+          <div class="stat-label">インスタンス数</div>
+          <div class="stat-sub">約 32% 削減</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">42% → 91%</div>
+          <div class="stat-label">CPU 使用率</div>
+          <div class="stat-sub">2 倍以上に向上</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">41% → 88%</div>
+          <div class="stat-label">メモリ使用率</div>
+          <div class="stat-sub">2 倍以上に向上</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">$0</div>
+          <div class="stat-label">追加料金</div>
+          <div class="stat-sub">自動適用・設定不要</div>
+        </div>
+      </div>
+      <p style="font-size: 13px;">
+        テスト条件: c9g インスタンス (最小サイズ 4xlarge) のキャパシティプロバイダーで、1 vCPU / 1.94 GiB のタスクを 261 個実行。
+      </p>
+      <table>
+        <tr><th>項目</th><th>統合前</th><th>統合後</th></tr>
+        <tr><td>インスタンス数</td><td>19 台 (4xlarge x 7、8xlarge x 7、12xlarge x 4、24xlarge x 1)</td><td>13 台 (4xlarge x 8、8xlarge x 5)</td></tr>
+        <tr><td>CPU 使用率</td><td>42%</td><td>91%</td></tr>
+        <tr><td>メモリ使用率</td><td>41%</td><td>88%</td></tr>
+      </table>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Before["⚠️ 統合前: 低使用率のフリート"]
+        direction LR
+        I1["🖥️ インスタンス 1<br/>使用率 40%"]
+        I2["🖥️ インスタンス 2<br/>使用率 45%"]
+        I3["🖥️ インスタンス 3<br/>使用率 40%"]
+        I1 ~~~ I2 ~~~ I3
+    end
+
+    subgraph Engine["⚙️ ECS Managed Instances 最適化エンジン"]
+        Monitor["📡 イベント駆動モニタリング<br/>タスク停止・インスタンス起動を検知"]
+        Evaluate["🔍 クロスインスタンス評価<br/>複数インスタンスのタスクを同時に分析"]
+        Launch["🚀 代替キャパシティを先に起動<br/>start-before-stop"]
+        Drain["🔄 元インスタンスを DRAINING<br/>タスクを安全に移行"]
+    end
+
+    subgraph After["✅ 統合後: 高使用率のフリート"]
+        direction LR
+        N1["🖥️ インスタンス A<br/>使用率 91%"]
+        N2["🖥️ インスタンス B<br/>使用率 88%"]
+        N1 ~~~ N2
+    end
+
+    Before --> Monitor
+    Monitor --> Evaluate
+    Evaluate --> Launch
+    Launch --> Drain
+    Drain --> After
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef warn fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef good fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+
+    class Before,Engine,After layer
+    class I1,I2,I3 warn
+    class Monitor,Evaluate process
+    class Launch,Drain internal
+    class N1,N2 good
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        複数の低使用率インスタンスにまたがるタスクを同時に評価し、代替キャパシティを先に起動してからタスクを移行する start-before-stop 方式で、可用性を維持しながらフリートをより少ないインスタンスへ統合する流れ
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚙️ 主要機能</h2>
+      <div class="card">
+        <div class="card-title">1️⃣ クロスインスタンス統合 (cross-instance consolidation)</div>
+        <p>✓ 複数の低使用率インスタンスで実行中のタスクをまとめて評価し、より少ないインスタンスへパッキング</p>
+        <p>✓ 従来のインスタンス単位の評価と異なり、フリート全体を横断した再配置が可能</p>
+        <p>✓ インスタンスタイプの選択範囲が狭いキャパシティプロバイダーでも高い統合効果を発揮</p>
+      </div>
+      <div class="card">
+        <div class="card-title">2️⃣ Spot 統合 (Spot consolidation)</div>
+        <p>✓ 低使用率の Spot インスタンスも統合の対象に (2026 年 10 月 26 日以降)</p>
+        <p>✓ Spot をドレインする前に代替キャパシティを起動し、置換タスクが RUNNING 状態になるのを待ってから元のインスタンスを回収</p>
+        <p>✓ サービスの最小・最大タスク数制限とタスク保護設定を尊重し、コスト最適化と可用性のバランスを維持</p>
+      </div>
+      <div class="card">
+        <div class="card-title">3️⃣ 安全なタスク置換メカニズム</div>
+        <p>✓ 低使用率インスタンスを DRAINING 状態にし、タスクをより効率的なインスタンスへ移行</p>
+        <p>✓ 全タスクの移行完了後、DEREGISTERING 状態に遷移して EC2 インスタンスを安全に終了</p>
+        <p>✓ サービスタスクを実行するインスタンスが対象 (スタンドアロンタスクは対象外)</p>
+      </div>
+      <div class="card">
+        <div class="card-title">4️⃣ 自動適用</div>
+        <p>✓ 既存・新規のすべての ECS Managed Instances キャパシティプロバイダーに追加設定なしで自動適用</p>
+        <p>✓ 追加料金は発生しない</p>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔬 技術仕様</h2>
+
+      <h3>インフラストラクチャ最適化の種類</h3>
+      <table>
+        <tr><th>最適化の種類</th><th>動作</th></tr>
+        <tr><td>アイドルインスタンス検出</td><td>実行中タスクがないインスタンスを検出し、DEREGISTERING 状態にして EC2 インスタンスを終了</td></tr>
+        <tr><td>低使用率インスタンス検出</td><td>タスク分散を分析し、複数インスタンスのタスクをより少ないインスタンスへ統合 (今回のアップデートでクロスインスタンス評価に強化)</td></tr>
+        <tr><td>Spot 統合</td><td>低使用率の Spot インスタンスを、代替キャパシティ確保後に回収 (2026 年 10 月 26 日以降)</td></tr>
+      </table>
+
+      <h3>ScaleInAfter 設定</h3>
+      <p style="font-size: 14px;">最適化アクションのタイミングは、キャパシティプロバイダー設定の <span class="highlight">ScaleInAfter</span> で制御できます。</p>
+      <table>
+        <tr><th>設定値</th><th>動作</th></tr>
+        <tr><td>0〜3600 (秒)</td><td>インスタンスがアイドルまたは低使用率になってから最適化を開始するまでの遅延時間</td></tr>
+        <tr><td>-1</td><td>インフラストラクチャ最適化を無効化</td></tr>
+        <tr><td>未指定</td><td>ECS Managed Instances がデフォルト設定に基づいて最適なタイミングを自動判断</td></tr>
+      </table>
+      <div class="note-box">
+        💡 待機期間中に新しいタスクが起動した場合、アイドルインスタンスの終了はキャンセルされます。低使用率インスタンスは、待機期間中のタスク起動・停止によりタイマーがリセットされ、新しい待機期間の満了後に再評価されます。
+      </div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>Amazon ECS クラスターで Managed Instances キャパシティプロバイダーを使用していること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>統合の対象はサービスタスクを実行するインスタンス (スタンドアロンタスクは対象外)</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>特別な有効化手順は不要 (既存・新規のキャパシティプロバイダーに自動適用)</span></div>
+
+      <h3>ステップ 1: キャパシティプロバイダーの確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">キャパシティプロバイダーの設定確認</span>
+        </div>
+        <pre><code class="language-bash">aws ecs describe-capacity-providers \
+  --capacity-providers my-managed-instances-cp \
+  --region ap-northeast-1</code></pre>
+      </div>
+      <p style="font-size: 14px;">クロスインスタンス統合と Spot 統合は自動的に適用されるため、追加の有効化操作は不要です。</p>
+
+      <h3>ステップ 2: ScaleInAfter による最適化タイミングの調整 (オプション)</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">最適化開始までの待機時間を 600 秒に設定</span>
+        </div>
+        <pre><code class="language-bash">aws ecs update-capacity-provider \
+  --name my-managed-instances-cp \
+  --managed-instances-provider '{
+    "infrastructureOptimization": {
+      "scaleInAfter": 600
+    }
+  }' \
+  --region ap-northeast-1</code></pre>
+      </div>
+      <p style="font-size: 14px;">ワークロードの変動が大きい場合は長めに設定することで、不要な統合と再スケールアウトの繰り返しを抑制できます。<span class="highlight">-1</span> を指定すると最適化を無効化できます。</p>
+
+      <h3>ステップ 3: 統合動作のモニタリング</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">DRAINING 状態のインスタンスを確認</span>
+        </div>
+        <pre><code class="language-bash">aws ecs list-container-instances \
+  --cluster my-cluster \
+  --status DRAINING \
+  --region ap-northeast-1</code></pre>
+      </div>
+      <p style="font-size: 14px;">統合処理中のインスタンスは DRAINING 状態となり、タスク移行完了後に DEREGISTERING 状態へ遷移して EC2 インスタンスが終了されます。CloudWatch の使用率メトリクスとあわせて、統合によるフリートの変化を確認できます。</p>
+    </div>
+
+    <!-- メリット / デメリット -->
+    <div class="section">
+      <h2>💡 メリットと制約事項</h2>
+      <div class="merit-grid">
+        <div>
+          <h3 style="color: #6BCB77;">✅ ビジネス面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>インフラコストの削減</strong>: フリート全体のインスタンス数を削減 (AWS テストでは 19 台から 13 台へ約 32% 削減)</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: 両機能とも追加料金なしで利用でき、既存環境にも自動適用</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の軽減</strong>: ビンパッキングやインスタンス入れ替えの複雑な最適化判断を AWS に委任</span></div>
+
+          <h3 style="color: #6BCB77;">✅ 技術面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>使用率の大幅な向上</strong>: CPU / メモリ使用率を 90% 近くまで高められる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>可用性を維持した統合</strong>: start-before-stop 方式でサービス断が発生しにくい</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>Spot でも安全な最適化</strong>: 代替キャパシティの存在を確認してから回収</span></div>
+        </div>
+        <div>
+          <h3 style="color: #FF6B6B;">⚠️ 制限事項</h3>
+          <div class="check-item"><span class="cross-icon">✗</span><span>統合の対象はサービスタスクを実行するインスタンスのみ (スタンドアロンタスクは対象外)</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>ECS Managed Instances 専用 (自己管理の EC2 キャパシティプロバイダーや Fargate には適用されない)</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>ScaleInAfter の設定範囲は 0〜3600 秒 (または -1 で無効化)</span></div>
+
+          <h3 style="color: var(--aws-smile-orange);">🤔 考慮すべき点</h3>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>統合時にタスクの再配置が発生するため、起動に時間がかかるタスクや状態を持つタスクでは置換の影響を考慮する</span></div>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>デプロイ設定が適切でない場合は統合の効果が限定される可能性がある</span></div>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>統合を避けたいワークロードでは ScaleInAfter に -1 を設定して無効化できる</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">1️⃣ インスタンスタイプを限定したキャパシティプロバイダーのコスト最適化</div>
+        <p><strong>シナリオ</strong>: ライセンスや性能要件により特定のインスタンスファミリー (例: c9g) のみを使用しており、従来のインスタンス単位の最適化では効果が限定的だった。</p>
+        <p><strong>実装</strong>: キャパシティプロバイダー設定で c9g ファミリーに限定 → クロスインスタンス統合が自動適用され、複数の低使用率インスタンスのタスクを少数のインスタンスへ再配置。</p>
+        <div class="effect">💰 効果: インスタンスタイプの選択範囲が狭くても、フリート横断の評価により高い使用率とコスト削減を実現</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">2️⃣ Spot キャパシティを活用したバッチ・開発環境のコスト削減</div>
+        <p><strong>シナリオ</strong>: 開発環境や中断耐性のあるサービスを Spot インスタンスで運用しており、低使用率の Spot インスタンスが残り続けてコストが無駄になっていた。</p>
+        <p><strong>実装</strong>: Managed Instances キャパシティプロバイダーで Spot を使用 → Spot 統合が代替キャパシティを先に起動し、置換タスクの RUNNING 確認後に元の Spot インスタンスを回収。</p>
+        <div class="effect">💰 効果: Spot の割引メリットを享受しながら、低使用率インスタンスの自動回収でさらにコストを削減。可用性は start-before-stop 方式で維持</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">3️⃣ トラフィック変動の大きい Web サービスのフリート効率化</div>
+        <p><strong>シナリオ</strong>: 日中のピーク後にタスク数が減少し、夜間に低使用率のインスタンスが多数残る Web サービスを運用している。</p>
+        <p><strong>実装</strong>: ScaleInAfter を 600 秒に設定 → タスク減少後 10 分間の安定を確認してから統合を開始し、夜間のフリートを自動的に縮小。</p>
+        <div class="effect">💰 効果: スケールインの繰り返しによるタスク置換の頻発を抑えつつ、オフピーク時間帯のインフラコストを自動的に削減</div>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金と利用可能リージョン</h2>
+      <div class="card">
+        <div class="card-title">💵 料金</div>
+        <p>クロスインスタンス統合および Spot 統合は<span class="highlight">追加料金なし</span>で利用できます。ECS Managed Instances の通常料金 (使用する EC2 インスタンスの料金および Managed Instances の管理料金) のみが適用されます。統合によりインスタンス数が削減されるため、実質的なコスト削減効果が期待できます。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🌍 利用可能リージョン</div>
+        <p>ECS Managed Instances が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます (公式発表では「all AWS Regions」と記載)。既存および新規のすべての ECS Managed Instances キャパシティプロバイダーに自動的に適用されます。</p>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>Amazon ECS Managed Instances</strong>: 本機能の基盤となるフルマネージドなコンピュートオプション。EC2 インスタンスのプロビジョニング・設定・運用を AWS が代行</span></div>
+      <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>Amazon EC2 Spot インスタンス</strong>: Spot 統合の対象となる割引キャパシティ。中断耐性のあるワークロードのコスト削減に有効</span></div>
+      <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>ECS キャパシティプロバイダー</strong>: 統合動作のタイミングを制御する ScaleInAfter などの設定を保持</span></div>
+      <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>ECS タスク保護 (Task Protection)</strong>: 統合時のドレイン処理で尊重される設定。重要な処理中のタスクを置換から保護</span></div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📌 まとめ</h2>
+      <p>
+        ECS Managed Instances のクロスインスタンス統合と Spot 統合により、フリート全体を横断したタスクの再配置が自動化され、<span class="highlight">追加料金なしで大幅な使用率向上とコスト削減</span>が期待できます。
+        既存のキャパシティプロバイダーにも自動適用されるため、まずは CloudWatch メトリクスでフリートの使用率変化を確認し、必要に応じて <span class="highlight">ScaleInAfter</span> でタイミングを調整することを推奨します。
+      </p>
+      <div class="flow-diagram" style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 20px 0 4px 0;">
+        <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">📡 自動モニタリング</div>
+        <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">🔍 フリート横断評価</div>
+        <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">🚀 start-before-stop</div>
+        <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-green); border-radius: 8px; padding: 12px 20px; text-align: center;">💰 コスト削減</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/ecs-managed-instances-consolidation/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/ecs-managed-instances-consolidation/</a></li>
+        <li><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/managed-instances-infrastructure-optimization.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Amazon ECS Managed Instances infrastructure optimization</a></li>
+        <li><a href="https://aws.amazon.com/ecs/managed-instances/" target="_blank" rel="noopener noreferrer" class="aws-link">製品ページ: Amazon ECS Managed Instances</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-10-28) をもとに作成されています。</p>
+    </footer>
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

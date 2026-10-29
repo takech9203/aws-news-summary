@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon EKS - EKS Dashboard によるフリート全体の CA ローテーション可視化</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .release-date {
+      font-size: 14px;
+      color: var(--aws-smile-orange);
+      font-weight: 600;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .card p, .card ul {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .card ul {
+      padding-left: 20px;
+    }
+
+    /* Before / After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.5);
+    }
+
+    .before-box h4 {
+      color: #FF8A73;
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+
+    .after-box h4 {
+      color: #7DD267;
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li {
+      margin: 6px 0;
+    }
+
+    @media (max-width: 700px) {
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* 統計カード */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-white);
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--aws-light-gray);
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* フロー図 */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-squid-ink);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon {
+      color: #7DD267;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .cross-icon {
+      color: #FF8A73;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .warn-icon {
+      color: var(--aws-smile-orange);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .usecase h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-smile-orange);
+      font-size: 16px;
+    }
+
+    .usecase p {
+      margin: 6px 0;
+      font-size: 14px;
+    }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 3px solid var(--aws-green);
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+
+    /* ステップ */
+    .step {
+      display: flex;
+      gap: 12px;
+      margin: 14px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      min-width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 14px;
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-content h4 {
+      margin: 2px 0 6px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .step-content p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    .note-box {
+      background: rgba(0, 161, 201, 0.1);
+      border-left: 4px solid var(--aws-teal);
+      border-radius: 4px;
+      padding: 12px 16px;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul {
+      padding-left: 20px;
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div class="service-badge">☸️ Amazon EKS</div>
+      <h1>EKS Dashboard によるフリート全体の<br>証明書認証局 CA ローテーション可視化</h1>
+      <div class="subtitle">複数アカウント・複数リージョンの EKS クラスターの CA 有効期限を単一ビューで把握</div>
+      <div class="release-date">📅 リリース日: 2026 年 10 月 28 日</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📝 概要</h2>
+      <p>
+        EKS Dashboard に <span class="highlight">CA ローテーション状況の可視化機能</span>が追加されました。
+        EKS クラスターはクラスターごとに固有の CA を持ち、2018 年以降に作成されたクラスターの CA は
+        <span class="highlight">有効期間 10 年</span>のため、期限が近づきつつあります。
+        本機能により、AWS Organizations を通じて全アカウント・全リージョンの CA ローテーション状況を
+        <span class="highlight">追加料金なし</span>で一元的に確認できます。
+      </p>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value">1 ビュー</div>
+          <div class="stat-label">全アカウント・全リージョンの CA 状況を集約</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">10 年</div>
+          <div class="stat-label">2018 年以降に作成されたクラスターの CA 有効期間</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">$0</div>
+          <div class="stat-label">追加料金なしで利用可能</div>
+        </div>
+      </div>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h4>❌ Before: アップデート前の課題</h4>
+          <ul>
+            <li>CA のローテーション状況や有効期限はクラスターごとに個別確認が必要</li>
+            <li>マルチアカウント・マルチリージョン環境では独自の集計スクリプトや運用プロセスが必要</li>
+            <li>自動ローテーションイベントの予定を横断的に把握する手段がなく、計画的な対応が困難</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h4>✅ After: アップデート後の改善</h4>
+          <ul>
+            <li>EKS Dashboard の単一ビューで全クラスターの CA ローテーション状況を確認</li>
+            <li>有効期限が近いクラスターを特定し、優先順位をつけて対応可能</li>
+            <li>今後の自動ローテーションイベントを事前に把握し、計画的に作業を推進</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ</h2>
+      <p>
+        EKS Dashboard は AWS Organizations の信頼されたアクセスを利用して、組織内の全アカウント・全リージョンの
+        EKS クラスターから CA ローテーション状況を集約し、us-east-1 の単一ビューで表示します。
+      </p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Org["🏢 AWS Organizations"]
+        subgraph Mgmt["🔑 管理アカウント"]
+            Dashboard["📊 EKS Dashboard<br/>us-east-1 で表示"]
+        end
+        subgraph AcctA["👥 メンバーアカウント A"]
+            direction LR
+            C1["☸️ EKS クラスター<br/>us-east-1"]
+            C2["☸️ EKS クラスター<br/>ap-northeast-1"]
+            C1 ~~~ C2
+        end
+        subgraph AcctB["👥 メンバーアカウント B"]
+            direction LR
+            C3["☸️ EKS クラスター<br/>eu-west-1"]
+            C4["☸️ EKS クラスター<br/>us-west-2"]
+            C3 ~~~ C4
+        end
+    end
+
+    Admin(["👤 プラットフォームチーム"]) --> Dashboard
+    C1 -.->|CA ローテーション状況| Dashboard
+    C2 -.->|CA ローテーション状況| Dashboard
+    C3 -.->|CA ローテーション状況| Dashboard
+    C4 -.->|CA ローテーション状況| Dashboard
+
+    Dashboard --> View["🔍 フリート全体ビュー<br/>CA 有効期限の近いクラスター<br/>自動ローテーションイベント予定"]
+
+    classDef org fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef mgmt fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef dashboard fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef cluster fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef view fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class Org org
+    class Mgmt,AcctA,AcctB mgmt
+    class Dashboard dashboard
+    class C1,C2,C3,C4 cluster
+    class Admin user
+    class View view
+        </pre>
+      </div>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚙️ 主要機能</h2>
+
+      <div class="card">
+        <h4>📋 1. フリート全体の CA ローテーション状況の一覧表示</h4>
+        <ul>
+          <li>全リージョン・全アカウントのクラスターと CA ローテーション状況を単一ビューで表示</li>
+          <li>クラスターごとの個別確認が不要になり、大規模フリートの管理負荷を削減</li>
+          <li>EKS コンソールのクラスター CA ダッシュボードとして提供</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>⏰ 2. 有効期限が近い CA の特定</h4>
+        <ul>
+          <li>CA の有効期限が近づいているクラスターをハイライト表示</li>
+          <li>対応の優先順位付けが可能になり、期限切れリスクを低減</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>🗓️ 3. 自動ローテーションイベントの予定表示</h4>
+        <ul>
+          <li>AWS による自動ローテーション (successor CA の自動追加・自動アクティベーション) の予定を事前に把握可能</li>
+          <li>ワーカーノードや外部クライアントの更新作業を計画的に実施できる</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- CA ローテーションの仕組み -->
+    <div class="section">
+      <h2>🔄 CA ローテーションの仕組み (背景情報)</h2>
+      <p>
+        EKS の CA ローテーションは、クラスターの可用性を維持しながら段階的に実施される多段階プロセスです。
+      </p>
+
+      <div class="flow-diagram">
+        <div class="flow-step">1️⃣ Append<br>successor CA を追加</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">2️⃣ Distribute<br>マネージドノードへ配布</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">3️⃣ Activate<br>新 CA で証明書発行</div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>ステージ</th>
+            <th>内容</th>
+            <th>実施者</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>ステージ 1: Append</strong></td>
+            <td>successor CA をクラスターに追加。クラスターは新旧両方の CA を信頼する</td>
+            <td>ユーザーまたは AWS (自動)</td>
+          </tr>
+          <tr>
+            <td><strong>ステージ 2: Distribute</strong></td>
+            <td>コントロールプレーン、EKS Auto Mode ノード、Fargate ノードへ successor CA を配布</td>
+            <td>AWS</td>
+          </tr>
+          <tr>
+            <td><strong>ステージ 3: Activate</strong></td>
+            <td>successor CA をアクティベートし、新 CA による証明書発行を開始</td>
+            <td>ユーザーまたは AWS (自動)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="note-box">
+        💡 ステージ 1 からアウトゴーイング CA の廃止までの期間は<strong>デュアルトラスト期間</strong>と呼ばれ、
+        クラスターが両方の CA を同時に信頼するため、ワーカーノードや外部クライアントを段階的に更新できます。
+      </div>
+
+      <h3>📬 通知タイムライン (参考)</h3>
+      <p style="font-size: 14px;">AWS Health、Cluster Insights、E メールを通じて、ローテーションの各段階で通知が送信されます。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>通知</th>
+            <th>タイミング</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CA 有効期限リマインダー</td>
+            <td>有効期限の 2.5 年前</td>
+          </tr>
+          <tr>
+            <td>successor CA 追加 (自動追加の場合)</td>
+            <td>有効期限の 2 年前</td>
+          </tr>
+          <tr>
+            <td>アクティベーション警告</td>
+            <td>自動アクティベーションの 60 日前</td>
+          </tr>
+          <tr>
+            <td>successor CA アクティベート (自動の場合)</td>
+            <td>有効期限の 6 か月前</td>
+          </tr>
+          <tr>
+            <td>最終自動アクティベーション (ロールバック後)</td>
+            <td>有効期限の 45 日前</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="font-size: 13px;">※ 2018 年から 2019 年に作成されたクラスターは、調整されたスケジュールで通知が送信されます。</p>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>✅ 前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>AWS Organizations が有効化されていること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>組織の管理アカウントで EKS Dashboard の信頼されたアクセスを有効化すること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ダッシュボードは米国東部 (バージニア北部、us-east-1) リージョンから表示すること</span></div>
+
+      <h3>📋 手順</h3>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h4>信頼されたアクセスの有効化</h4>
+          <p>組織の管理アカウントで EKS コンソールにアクセスし、EKS Dashboard の信頼されたアクセスを有効化します。委任管理者アカウントを登録すると、管理アカウントを直接使用せずにダッシュボードを閲覧できます。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h4>EKS Dashboard で CA ローテーション状況を確認</h4>
+          <p>us-east-1 リージョンの EKS コンソールから EKS Dashboard を開き、クラスター CA ダッシュボードで全クラスターの CA ローテーション状況、有効期限が近づいている CA を持つクラスター、今後の自動ローテーションイベントを確認します。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h4>個別クラスターの CA 状況を CLI で確認</h4>
+          <p>ダッシュボードで優先対応が必要と判断したクラスターの詳細確認に使用します。</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">CA 一覧と有効期限の確認</span>
+            </div>
+            <pre><code class="language-bash"># クラスターの CA 一覧を表示
+aws eks list-certificate-authorities --cluster-name my-cluster --region us-west-2
+
+# CA の詳細 (有効期限を含む) を表示
+aws eks describe-certificate-authority --cluster-name my-cluster \
+  --certificate-authority-id &lt;ca-id&gt; --region us-west-2</code></pre>
+          </div>
+          <p style="font-size: 13px;"><code>list-certificate-authorities</code> は CA の一覧と署名ステータス・配布ステータスを表示し、<code>describe-certificate-authority</code> は <code>validity</code> ブロックで有効期限 (<code>notAfter</code>) を確認できます。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h4>必要に応じて CA ローテーションを開始</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">successor CA の追加とアクティベート</span>
+            </div>
+            <pre><code class="language-bash"># successor CA を追加
+aws eks create-certificate-authority --cluster-name my-cluster --region us-west-2
+
+# 配布完了後、ワーカーノードと外部クライアントを更新し、successor CA をアクティベート
+aws eks activate-certificate-authority --cluster-name my-cluster \
+  --certificate-authority-id &lt;successor-ca-id&gt; --region us-west-2</code></pre>
+          </div>
+          <p style="font-size: 13px;">配布完了 (<code>distributionStatus: COMPLETE</code>) 後、管理するワーカーノードと外部クライアントを更新してから新 CA に切り替えます。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+
+      <h3>💼 ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コスト削減</strong>: クラスターごとの個別確認や独自の集計スクリプトが不要になり、大規模フリートの CA 管理工数を削減</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>リスク低減</strong>: 有効期限が近いクラスターを早期に特定でき、CA 期限切れによる接続障害リスクを未然に防止</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: EKS Dashboard の CA ローテーション可視化は追加料金なしで利用可能</span></div>
+
+      <h3>🔧 技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>一元的な可視性</strong>: AWS Organizations 連携により、マルチアカウント・マルチリージョン環境のクラスターを単一ビューで把握</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>計画的なローテーション</strong>: 自動ローテーションイベントの予定を事前に把握でき、更新作業を余裕を持って計画可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>既存の通知との補完</strong>: AWS Health、Cluster Insights、E メール通知と組み合わせ、通知とダッシュボードの両面から状況を把握可能</span></div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>🚧 制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>ダッシュボードの表示は米国東部 (us-east-1) リージョンからのみ</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>AWS Organizations の利用と、管理アカウントでの信頼されたアクセスの有効化が必要</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>組織を構成していない単一アカウント環境では、フリート全体ビューの恩恵は限定的</span></div>
+
+      <h3>🤔 考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>ダッシュボードは可視化を提供するものであり、ローテーション作業自体 (トラストバンドル更新、successor CA のアクティベーション) は引き続きユーザーの責任で実施する必要がある</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>外部クライアント (CI/CD パイプライン、監視ツール、開発者端末など) の洗い出しは時間がかかるため、有効期限の 2 年以上前からの早期着手が推奨される</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>CA ピンニングや単一 CA の厳密な検証を行うアプリケーションは、デュアルトラスト期間に入る前に複数 CA を受け入れるよう更新が必要</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h4>🏢 ユースケース 1: 大規模マルチアカウント環境での CA 期限管理</h4>
+        <p><strong>シナリオ</strong>: 数十アカウント・数百クラスターを運用するエンタープライズのプラットフォームチームが、2018 年以降に作成されたクラスターの CA 有効期限を一元管理したい。</p>
+        <p><strong>実装例</strong>: 管理アカウントで信頼されたアクセスを有効化 → us-east-1 の EKS Dashboard で CA ローテーション状況を定期確認 → 有効期限が近いクラスターから順に各担当チームへローテーション作業を依頼。</p>
+        <p class="effect">✅ <strong>効果</strong>: クラスターごとの個別確認が不要になり、フリート全体の期限切れリスクを体系的に管理できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h4>📅 ユースケース 2: 自動ローテーションイベント前の計画的な対応</h4>
+        <p><strong>シナリオ</strong>: AWS による successor CA の自動アクティベーションが近づいているクラスターを把握し、接続断を防ぐために事前にワーカーノードと外部クライアントを更新したい。</p>
+        <p><strong>実装例</strong>: ダッシュボードで自動ローテーションイベント予定を確認 → Cluster Insights でワーカーノード種別を特定 → ノードグループ更新・kubeconfig 更新・CI/CD のトラストバンドル更新を計画的に実施 → 準備完了後、自動アクティベーションを待たず自らアクティベート。</p>
+        <p class="effect">✅ <strong>効果</strong>: 想定外の接続断を回避し、自社のメンテナンスウィンドウ内でローテーションを完了できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h4>📊 ユースケース 3: ガバナンスレポートへの活用</h4>
+        <p><strong>シナリオ</strong>: セキュリティチームが、組織全体の証明書ライフサイクル管理の状況を定期的に経営層へ報告する必要がある。</p>
+        <p><strong>実装例</strong>: CA ローテーションビューを月次レビューで確認 → ローテーション未着手のクラスター数、有効期限までの残期間を集計 → 対応状況をガバナンスレポートに反映。</p>
+        <p class="effect">✅ <strong>効果</strong>: 証明書管理のコンプライアンス状況を客観的なデータに基づいて報告でき、監査対応も容易になる。</p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金・利用可能リージョン</h2>
+      <div class="card">
+        <h4>💵 料金</h4>
+        <p>EKS Dashboard の CA ローテーション可視化機能は、<span class="highlight">追加料金なし</span>で利用できます。EKS クラスター自体の料金は通常どおり発生します。</p>
+      </div>
+      <div class="card">
+        <h4>🌍 利用可能リージョン</h4>
+        <ul>
+          <li><strong>CA ローテーション機能</strong>: Amazon EKS がサポートされるすべての AWS 商用リージョンで利用可能</li>
+          <li><strong>EKS Dashboard</strong>: 米国東部 (バージニア北部、us-east-1) から表示し、全商用リージョンのクラスター状況を集約</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <h4>🏢 AWS Organizations</h4>
+        <p>信頼されたアクセスを有効化することで、組織内の全アカウントのクラスター情報をダッシュボードに集約。</p>
+      </div>
+      <div class="card">
+        <h4>🩺 AWS Health / Cluster Insights</h4>
+        <p>CA ローテーションの各段階における通知を提供し、ダッシュボードと補完的に機能。</p>
+      </div>
+      <div class="card">
+        <h4>📡 Amazon EventBridge</h4>
+        <p>CA ローテーションイベントを既存の監視・アラートワークフローに統合可能。</p>
+      </div>
+      <div class="card">
+        <h4>⚡ EKS Auto Mode / AWS Fargate</h4>
+        <p>これらのマネージドノードは AWS が自動的に successor CA を信頼するよう更新するため、ユーザー側の作業が不要。</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📌 まとめ</h2>
+      <p>
+        EKS Dashboard に CA ローテーションの可視化機能が追加され、マルチアカウント・マルチリージョン環境の
+        クラスターの CA 有効期限と自動ローテーションイベントを<span class="highlight">単一ビュー</span>で把握できるようになりました。
+        2018 年以降に作成されたクラスターの CA (有効期間 10 年) は期限が近づきつつあるため、
+        多数のクラスターを運用する組織は、管理アカウントで信頼されたアクセスを有効化してダッシュボードを確認し、
+        <span class="highlight">ワーカーノードと外部クライアントの更新計画を早期に開始</span>することを推奨します。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-eks-dashboard-fleet-wide-visibility-certificate-authority-ca-rotation/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-eks-dashboard-fleet-wide-visibility-certificate-authority-ca-rotation/</a></li>
+        <li>ドキュメント: EKS クラスター証明書認証局のローテーション: <a href="https://docs.aws.amazon.com/eks/latest/userguide/certificate-authority-rotation.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/eks/latest/userguide/certificate-authority-rotation.html</a></li>
+        <li>ドキュメント: EKS Dashboard: <a href="https://docs.aws.amazon.com/eks/latest/userguide/eks-dashboard.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/eks/latest/userguide/eks-dashboard.html</a></li>
+      </ul>
+      <p>生成日: 2026 年 10 月 29 日 | AWS News Summary</p>
+    </footer>
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

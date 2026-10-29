@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS IAM Identity Center - Identity Store の変更通知 (Amazon EventBridge 対応)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-right: 8px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 600;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.ba-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.1);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+
+.ba-title {
+  font-weight: 700;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ba-box li { margin: 8px 0; font-size: 14px; }
+
+/* イベントタイプグリッド */
+.event-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.event-card {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+}
+
+.event-card .event-name {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 15px;
+}
+
+.event-card .event-desc {
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+/* 統計カード */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  margin-top: 6px;
+  color: var(--aws-light-gray);
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 8px 0; font-size: 14px; }
+
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* ステップ */
+.step-list { counter-reset: step; }
+
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.step-num {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-body { flex: 1; min-width: 0; }
+
+.step-title {
+  font-weight: 600;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+ul.plain-list { margin: 8px 0; padding-left: 22px; }
+ul.plain-list li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(0, 161, 201, 0.1));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  margin-top: 8px;
+}
+
+@media (max-width: 700px) {
+  .before-after { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS IAM Identity Center</span>
+      <span class="service-badge">Amazon EventBridge</span>
+    </div>
+    <h1>🔔 Identity Store の変更通知が EventBridge に対応</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 10 月 28 日 | ユーザー・グループ・メンバーシップの変更をリアルタイムイベントで配信</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      AWS IAM Identity Center の <span class="highlight">Identity Store</span> が、ユーザー、グループ、グループメンバーシップ、Identity Store 自体の作成・更新・削除時に、<span class="highlight">Amazon EventBridge へリアルタイムイベントを配信</span>する機能をサポートしました。
+      ID のライフサイクルイベントに自動対応でき、セキュリティ・コンプライアンスプロセスを強化できます。
+    </p>
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>Identity Store API を<strong>定期的にポーリング</strong>して差分を比較する必要があった</li>
+          <li>CloudTrail で API 呼び出しは追跡できたが、「ID データに何が起きたか」をイベント単位で把握する手段がなかった</li>
+          <li>オンボーディング / オフボーディングのリアルタイム自動化が困難だった</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ After: イベント駆動型の ID 管理</div>
+        <ul>
+          <li>ID の作成・更新・削除が<strong>リアルタイムイベント</strong>として EventBridge のデフォルトイベントバスに配信</li>
+          <li>EventBridge ルールで Lambda、SNS、SQS などをターゲットに指定し、自動対応ワークフローを構築可能</li>
+          <li>ポーリング不要、変更発生と同時に処理を開始できる</li>
+        </ul>
+      </div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-number">11</div>
+        <div class="stat-label">種類のイベントタイプ<br>(User / Group / Membership / Store)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">$0</div>
+        <div class="stat-label">追加料金なし<br>(標準の EventBridge 料金のみ)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">リアルタイム</div>
+        <div class="stat-label">ポーリング不要の<br>イベント駆動型 ID 管理</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Admin(["👤 管理者 / SCIM プロビジョニング"]) --> IDC["🔐 IAM Identity Center<br/>Identity Store"]
+
+    subgraph Events["📨 変更イベント"]
+        direction LR
+        E1["User<br/>Created / Updated / Deleted"]
+        E2["Group<br/>Created / Updated / Deleted"]
+        E3["GroupMembership<br/>Created / Deleted"]
+        E1 ~~~ E2 ~~~ E3
+    end
+
+    IDC --> Events
+    Events --> EB["🚌 Amazon EventBridge<br/>デフォルトイベントバス"]
+    EB --> Rule{"📋 イベントルール<br/>source: aws.identitystore"}
+
+    Rule --> Lambda["⚡ AWS Lambda<br/>自動化処理"]
+    Rule --> SNS["📣 Amazon SNS<br/>通知"]
+    Rule --> SIEM{{"🛡️ SIEM システム<br/>セキュリティ監査"}}
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+
+    class Admin user
+    class IDC internal
+    class Events layer
+    class E1,E2,E3,EB process
+    class Rule decision
+    class Lambda,SNS,SIEM compute
+      </pre>
+    </div>
+    <p class="diagram-caption">Identity Store で発生した ID の変更が EventBridge のデフォルトイベントバスにリアルタイム配信され、ルールにマッチしたイベントが Lambda や SNS などのターゲットに送信される流れ</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">📨 リアルタイム変更イベントの配信</div>
+      <p style="margin:4px 0; font-size:14px;">ユーザー、グループ、グループメンバーシップ、Identity Store 自体の作成・更新・削除時にイベントを配信。IAM Identity Center インスタンスが有効化されている AWS アカウントのデフォルトイベントバスに自動配信 (組織インスタンスは管理アカウント、アカウントインスタンスは有効化したメンバーアカウント)。イベントソースはすべて <span class="highlight">aws.identitystore</span>、イベント名は <span class="highlight">detail-type</span> フィールドに格納。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🗂️ 11 種類のイベントタイプ</div>
+      <div class="event-grid">
+        <div class="event-card">
+          <div class="event-name">👤 User</div>
+          <div class="event-desc">Created / Updated / Deleted<br>ユーザーの作成・属性更新・削除</div>
+        </div>
+        <div class="event-card">
+          <div class="event-name">👥 Group</div>
+          <div class="event-desc">Created / Updated / Deleted<br>グループの作成・属性更新・削除</div>
+        </div>
+        <div class="event-card">
+          <div class="event-name">🔗 GroupMembership</div>
+          <div class="event-desc">Created / Deleted<br>グループへのユーザー追加・削除</div>
+        </div>
+        <div class="event-card">
+          <div class="event-name">🏪 IdentityStore</div>
+          <div class="event-desc">Created / Updated / Deleted<br>Identity Store 自体の作成・設定更新・削除</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 マルチリージョンレプリケーション対応</div>
+      <p style="margin:4px 0; font-size:14px;">IAM Identity Center インスタンスを追加リージョンにレプリケートしている場合、各追加リージョンのデフォルトイベントバスでもイベントを受信可能。インスタンスの各有効化リージョンでイベントが送信される。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+    <table>
+      <tr><th style="width:30%;">項目</th><th>詳細</th></tr>
+      <tr><td>イベントソース</td><td><code>aws.identitystore</code></td></tr>
+      <tr><td>配信先</td><td>IAM Identity Center インスタンスが有効なアカウント・リージョンのデフォルトイベントバス</td></tr>
+      <tr><td>含まれる情報</td><td>Identity Store の ID、インスタンスの ARN、変更されたユーザー / グループ / メンバーシップの ID と ARN、変更リクエストの ID、変更時刻、送信リージョン</td></tr>
+      <tr><td>含まれない情報</td><td>ユーザー名やメールアドレスなどの属性値、Updated イベントにおける変更内容の詳細</td></tr>
+      <tr><td>配信保証</td><td>少なくとも 1 回 (at-least-once)。重複受信や順序の入れ替わりの可能性あり</td></tr>
+      <tr><td>遡及配信</td><td>なし (ルール作成後の変更のみが対象。バックフィルやリプレイは行われない)</td></tr>
+    </table>
+    <p style="font-size:14px;">💡 属性の現在値が必要な場合は、<span class="highlight">DescribeUser</span> / <span class="highlight">DescribeGroup</span> / <span class="highlight">DescribeGroupMembership</span> の各 Identity Store API を呼び出して取得します。</p>
+
+    <h3>📋 イベントパターンの例 (全イベントにマッチ)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">すべての Identity Store 変更イベント</span>
+      </div>
+      <pre><code class="language-json">{
+  "source": ["aws.identitystore"],
+  "detail-type": [
+    "User Created", "User Updated", "User Deleted",
+    "Group Created", "Group Updated", "Group Deleted",
+    "GroupMembership Created", "GroupMembership Deleted",
+    "IdentityStore Created", "IdentityStore Updated", "IdentityStore Deleted"
+  ]
+}</code></pre>
+    </div>
+    <p style="font-size:14px;">⚠️ CloudTrail 経由の API 呼び出しイベントも同じイベントソース <code>aws.identitystore</code> で配信されるため、<span class="highlight">detail-type にイベント名を明示</span>することで変更通知イベントのみを受信できます。</p>
+
+    <h3>📦 イベント構造の例 (User Updated)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">イベントペイロード例</span>
+      </div>
+      <pre><code class="language-json">{
+  "version": "0",
+  "id": "c22ba61f-32ac-42f1-a59b-f7f667b428ab",
+  "detail-type": "User Updated",
+  "source": "aws.identitystore",
+  "account": "111122223333",
+  "time": "2026-01-02T11:59:59Z",
+  "region": "us-west-2",
+  "resources": ["arn:aws:identitystore::111122223333:..."]
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>IAM Identity Center インスタンスが有効化されている AWS アカウントとリージョンを確認済み (ルールはそこに作成)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><code>events:PutRule</code> や <code>events:PutTargets</code> など、EventBridge ルールとターゲットを作成する権限</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>イベント受信先のターゲット (Lambda 関数、SNS トピック、SQS キューなど) を用意済み</span></div>
+
+    <div class="step-list">
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">イベントパターンの作成</div>
+          <p style="font-size:14px; margin:4px 0;">受信したいイベントを選択するパターンをファイルに保存。この例では下流アプリケーションのアクセス削除を想定し、ユーザー削除とグループからのユーザー削除のみにマッチさせます。</p>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">identity-events.json</span></div>
+            <pre><code class="language-bash">cat &gt; identity-events.json &lt;&lt; 'EOF'
+{
+  "source": ["aws.identitystore"],
+  "detail-type": ["User Deleted", "GroupMembership Deleted"]
+}
+EOF</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">EventBridge ルールの作成</div>
+          <p style="font-size:14px; margin:4px 0;">デフォルトイベントバス上にルールを作成。リージョンには IAM Identity Center インスタンスが有効化されているリージョンを指定します。</p>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+            <pre><code class="language-bash">aws events put-rule \
+  --name identity-change-events \
+  --event-pattern file://identity-events.json \
+  --region us-east-1</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">ターゲットの追加</div>
+          <p style="font-size:14px; margin:4px 0;">この例では Amazon SNS トピックにイベントを送信。CLI でルールを作成する場合は、ターゲットのリソースベースポリシーなどで EventBridge からの送信許可が必要です。</p>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+            <pre><code class="language-bash">aws events put-targets \
+  --rule identity-change-events \
+  --targets "Id"="1","Arn"="arn:aws:sns:us-east-1:111122223333:identity-change-topic" \
+  --region us-east-1</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">ルールのテスト</div>
+          <p style="font-size:14px; margin:4px 0;">ルール作成後約 1 分待ってから、ユーザーをグループに追加するなどの変更を行い、ターゲットが <span class="highlight">GroupMembership Created</span> イベントを受信することを確認。テスト時は CloudWatch Logs ロググループを 2 つ目のターゲットとして追加すると便利です。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💪 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>オンボーディング / オフボーディングの自動化</strong>: グループへの追加・削除をトリガーにリソース作成やアクセス削除を自動実行し、大規模な従業員管理の運用負荷を削減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス対応の強化</strong>: ID の変更をリアルタイムに SIEM へ連携し、監査証跡の即時性と網羅性が向上</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: 標準の Amazon EventBridge 利用料金以外の追加料金なし</span></div>
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>イベント駆動アーキテクチャへの統合</strong>: ポーリング方式から脱却し、Lambda / SNS / SQS と組み合わせたイベント駆動の ID 管理ワークフローを構築可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>変更単位のイベント</strong>: CloudTrail の API 呼び出し記録と異なり「ID データへの変更」そのものがイベントになるため、変更対応ロジックをシンプルに実装可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>マルチリージョン対応</strong>: レプリケートした各リージョンでもイベントを受信でき、リージョン分散ワークロードに対応</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚧 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>配信は少なくとも 1 回 (at-least-once)。同一イベントの複数回受信や、変更発生順と異なる順序での受信の可能性あり</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>配信は前方のみ (forward-looking)。ルール作成以前の変更のバックフィルやリプレイは行われず、ルールにマッチしないイベントも保存されない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>イベントにユーザーやグループの属性 (名前、メールアドレスなど) は含まれず、Updated イベントにも変更内容の詳細は含まれない</span></div>
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚡</span><span>同じイベントを 2 回処理しても副作用がないよう、<strong>冪等性</strong>を考慮したワークフロー設計が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚡</span><span>配信時間は保証されないため、下流システムの正確性維持には Identity Store API との<strong>定期的な突合</strong>を推奨</span></div>
+    <div class="check-item"><span class="warn-icon">⚡</span><span>インスタンス削除時は <code>IdentityStore Deleted</code> イベントの後、内部のユーザー・グループ・メンバーシップの削除イベントが時間差で順次届く</span></div>
+    <div class="check-item"><span class="warn-icon">⚡</span><span>イベント通知と CloudTrail イベントは 1 対 1 に対応しない。変更対応はイベント通知、API 呼び出し元の監査は CloudTrail と使い分ける</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1️⃣ オフボーディング時のアクセス自動削除</div>
+      <p><strong>シナリオ</strong>: 退職者や異動者がグループから削除された際に、下流の SaaS アプリケーションや社内システムのアクセス権を即座に削除したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">イベントパターン</span></div>
+        <pre><code class="language-json">{
+  "source": ["aws.identitystore"],
+  "detail-type": ["User Deleted", "GroupMembership Deleted"]
+}</code></pre>
+      </div>
+      <p>このパターンのルールから Lambda 関数をトリガーし、イベントに含まれるユーザー ID をもとに下流アプリケーションのアクセスを削除する。</p>
+      <div class="effect">✅ <strong>効果</strong>: アクセス削除の遅延による不正アクセスリスクを低減し、オフボーディングプロセスを完全自動化</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2️⃣ SIEM へのリアルタイム連携によるセキュリティ監査</div>
+      <p><strong>シナリオ</strong>: セキュリティチームが、ユーザープロビジョニングやグループ変更のアクティビティをリアルタイムに監視し、不審な変更を即座に検知したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">イベントパターン</span></div>
+        <pre><code class="language-json">{
+  "source": ["aws.identitystore"],
+  "detail-type": [
+    "User Created", "Group Updated", "GroupMembership Created"
+  ]
+}</code></pre>
+      </div>
+      <p>ルールのターゲットに Amazon Data Firehose や Lambda を指定し、SIEM システムにイベントを転送する。</p>
+      <div class="effect">✅ <strong>効果</strong>: 特権グループへの予期しないメンバー追加などを即時に検知し、インシデント対応までの時間を短縮</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3️⃣ 新入社員オンボーディングの自動化</div>
+      <p><strong>シナリオ</strong>: 新入社員が特定の部門グループに追加されたタイミングで、業務アプリケーションのアカウント作成や初期リソースのプロビジョニングを自動実行したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">イベントパターン</span></div>
+        <pre><code class="language-json">{
+  "source": ["aws.identitystore"],
+  "detail-type": ["GroupMembership Created"]
+}</code></pre>
+      </div>
+      <p>イベント受信後、Lambda 関数で <code>DescribeGroupMembership</code> と <code>DescribeUser</code> を呼び出してユーザー属性を取得し、Step Functions でオンボーディングワークフローを起動する。</p>
+      <div class="effect">✅ <strong>効果</strong>: 手動のアカウント発行作業が不要になり、入社初日から必要なリソースを利用可能に</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p style="margin:4px 0; font-size:14px;">変更通知自体に<span class="highlight">追加料金はありません</span>。標準の Amazon EventBridge 利用料金のみが適用されます。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌐 利用可能リージョン</div>
+      <p style="margin:4px 0; font-size:14px;">IAM Identity Center が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用可能。イベントはインスタンスの各有効化リージョンで送信されます。詳細は <a href="https://builder.aws.com/build/capabilities" target="_blank" rel="noopener noreferrer" class="aws-link">AWS capabilities by Region</a> を参照。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <ul class="plain-list">
+      <li><strong>Amazon EventBridge</strong>: 変更イベントの受信基盤。ルールとターゲットを定義してイベント駆動ワークフローを構築</li>
+      <li><strong>AWS Lambda</strong>: イベントをトリガーとした自動化処理の実行基盤</li>
+      <li><strong>Amazon SNS / Amazon SQS</strong>: 通知配信やイベントのキューイングに利用できるターゲット</li>
+      <li><strong>AWS CloudTrail</strong>: Identity Store API 呼び出しの監査ログ。変更対応はイベント通知、呼び出し元の監査は CloudTrail と使い分ける</li>
+      <li><strong>Identity Store API</strong>: <code>DescribeUser</code> / <code>DescribeGroup</code> / <code>DescribeGroupMembership</code> で変更後の現在の属性を取得</li>
+    </ul>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin:0;">
+        Identity Store の EventBridge 変更通知対応により、<span class="highlight">ポーリング不要のイベント駆動型 ID 管理</span>が実現可能になりました。
+        オンボーディング / オフボーディングの自動化や SIEM 連携によるセキュリティ監視を強化したい組織は、まず <code>aws.identitystore</code> をソースとする EventBridge ルールを作成し、重要なイベント (特に <span class="highlight">User Deleted</span> や <span class="highlight">GroupMembership</span> の変更) への自動対応から導入を始めることを推奨します。
+      </p>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul class="plain-list">
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/aws-identity-store-change-notifications/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): AWS Identity Store change notifications</a></li>
+      <li><a href="https://docs.aws.amazon.com/singlesignon/latest/userguide/event-notifications.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: IAM Identity Center event notifications</a></li>
+      <li><a href="https://docs.aws.amazon.com/singlesignon/latest/userguide/setup-event-notifications.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Set up event notifications</a></li>
+      <li><a href="https://docs.aws.amazon.com/eventbridge/latest/ref/events-ref-identitystore.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Identity Store events (EventBridge Events Reference)</a></li>
+      <li><a href="https://aws.amazon.com/eventbridge/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ (Amazon EventBridge)</a></li>
+    </ul>
+    <p>📄 ベースレポート: reports/2026/2026-10-28-aws-identity-store-change-notifications.md</p>
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

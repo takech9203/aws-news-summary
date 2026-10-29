@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Lambda - Durable Functions のライブテレメトリエクスポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.card p { margin: 4px 0; font-size: 14px; }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.ba-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-box ul { margin: 0; padding-left: 4px; list-style: none; }
+.ba-box li {
+  margin: 8px 0;
+  padding-left: 22px;
+  position: relative;
+  font-size: 14px;
+}
+.ba-before li::before { content: "✗"; position: absolute; left: 0; color: #FF6B4A; font-weight: 700; }
+.ba-after li::before { content: "✓"; position: absolute; left: 0; color: #4CAF50; font-weight: 700; }
+
+/* Stats */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px 12px;
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--aws-light-gray);
+}
+
+td code, p code, li code {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+/* Check / cross lists */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label { color: var(--aws-white); font-weight: 600; }
+
+/* Steps */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+.step-content .step-title { color: var(--aws-white); font-weight: 600; margin-bottom: 4px; }
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+/* Merit grid */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+
+.merit-box {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.merit-box h3 { margin-top: 0; font-size: 16px; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+ul.plain { padding-left: 20px; margin: 8px 0; }
+ul.plain li { margin: 6px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { padding-left: 20px; margin: 8px 0; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <span class="service-badge">⚡ AWS Lambda</span>
+    <h1>Durable Functions のライブテレメトリエクスポート</h1>
+    <div class="subtitle">
+      <span class="date">📅 リリース日: 2026 年 10 月 28 日</span> |
+      Durable Execution Telemetry Exporter プラグイン + Telemetry MCP サーバー
+    </div>
+  </div>
+
+  <!-- Overview -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      AWS Lambda durable functions に、実行履歴をライブでエクスポートできる
+      <span class="highlight">Durable Execution Telemetry Exporter プラグイン</span>が追加されました。
+      durable 実行のステップごとの履歴 (実行ステータス、各オペレーションの所要時間、ステップの入出力、エラー情報) を記録し、
+      CloudWatch Logs、S3 (Athena 連携)、DynamoDB、Aurora、OpenSearch Service など
+      <span class="highlight">13 種類の組み込みエクスポーター</span>に自動送信します。
+    </p>
+    <p>
+      あわせてリリースされた <span class="highlight">Telemetry MCP サーバー</span>により、
+      Kiro や Claude Code などの MCP 対応 AI エージェントから
+      「最近失敗した実行を一覧して原因を調べて」といった<span class="highlight">自然言語での照会</span>が可能になります。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-number">13 種類</div>
+        <div class="stat-label">組み込みエクスポーター</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">4 言語</div>
+        <div class="stat-label">TypeScript / Python / Java / Go</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">1 行</div>
+        <div class="stat-label">プラグイン追加だけで導入</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">¥0</div>
+        <div class="stat-label">追加料金なし (送信先費用のみ)</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ Before - アップデート前の課題</div>
+        <ul>
+          <li>1 つの durable 実行が複数の Lambda 呼び出しに分散し、呼び出し単位のログでは実行全体を追跡しにくい</li>
+          <li>実行履歴は標準の保持期間を超えて保存できず、長期的な運用・ビジネス分析が困難</li>
+          <li>外部データストアへの保存には独自の計装コードや収集基盤の実装が必要</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ After - アップデート後の改善</div>
+        <ul>
+          <li>プラグインを 1 行追加するだけで、実行ごとの完全な JSON レコードを自動エクスポート</li>
+          <li>保持期間を超えた長期保存と、運用・ビジネスインサイトの抽出が可能に</li>
+          <li>機密フィールドのマスキングとサンプリングレートでデータ量とプライバシーを制御</li>
+          <li>MCP サーバー経由で AI エージェントが自然言語でテレメトリを照会可能に</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Lambda["⚡ AWS Lambda Durable Function"]
+        direction LR
+        Handler["📝 ハンドラー<br/>durable 実行"]
+        Plugin["🔌 Telemetry Exporter<br/>プラグイン"]
+        Handler --> Plugin
+    end
+
+    subgraph Dest["🗄️ エクスポート先 13 種類"]
+        direction LR
+        CWL["📋 CloudWatch Logs"]
+        S3[("🪣 S3 → Athena")]
+        DDB[("📊 DynamoDB")]
+        OS["🔍 OpenSearch"]
+        EB["📨 EventBridge ほか"]
+        CWL ~~~ S3 ~~~ DDB ~~~ OS ~~~ EB
+    end
+
+    subgraph Agent["🤖 AI エージェント"]
+        direction LR
+        MCP["🔌 Telemetry MCP サーバー"]
+        Kiro["💬 Kiro / Claude Code"]
+        Kiro --> MCP
+    end
+
+    Plugin -->|"テレメトリレコード<br/>JSON"| CWL
+    Plugin --> S3
+    Plugin --> DDB
+    Plugin --> OS
+    Plugin --> EB
+    MCP -.->|"自然言語クエリ<br/>読み取り専用"| DDB
+    MCP -.-> S3
+
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Handler,Plugin compute
+    class S3 storage
+    class DDB database
+    class CWL,OS,EB,MCP,Kiro internal
+    class Lambda,Dest,Agent layer
+      </pre>
+    </div>
+    <p class="diagram-note">
+      Telemetry Exporter プラグインはハンドラーと同一プロセス内で動作し、durable 実行のライフサイクルを購読して実行ごとの累積スナップショットを構築します。
+      レコードは設定したすべてのエクスポーターに並列で送信され、MCP サーバー経由で AI エージェントから読み取り専用で照会できます。
+    </p>
+  </div>
+
+  <!-- Key features -->
+  <div class="section">
+    <h2>🚀 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ Durable Execution Telemetry Exporter プラグイン</div>
+      <p>→ durable 実行ごとに 1 つの完全な JSON レコード (<code>DurableExecutionTelemetryRecord</code>) を生成</p>
+      <p>→ 実行 ARN、実行名、関数名、ステータス、開始・終了時刻、所要時間、入出力、各オペレーションの履歴を含む</p>
+      <p>→ ハンドラーと同一プロセスで動作し、チェックポイントされた状態から呼び出しごとに累積スナップショットを再構築</p>
+      <p>→ TypeScript、Python、Java、Go 向けにオープンソースで提供</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ 13 種類の組み込みエクスポーター</div>
+      <p>→ <span class="highlight">LambdaLogExporter</span>: 関数自身のロググループに出力 (追加 IAM 不要、デフォルト)</p>
+      <p>→ CloudWatchLogs / S3 / DynamoDB / Aurora / Redshift / OpenSearch の各 Exporter</p>
+      <p>→ EventBridge / Firehose / SQS / OTel / Http / File の各 Exporter</p>
+      <p>→ S3Exporter は Hive 形式パーティション <code>year=YYYY/month=MM/day=DD/</code> で書き込み、AWS Glue / Amazon Athena での分析に最適化</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ データ量とプライバシーの制御</div>
+      <p>→ <code>emitMode</code>: <code>on-complete</code> (完了時に 1 回、デフォルト) / <code>on-failure</code> (失敗時のみ、最小オーバーヘッド) / <code>on-change</code> (準リアルタイム)</p>
+      <p>→ <code>samplingRate</code>: 実行 ARN のハッシュに基づく決定的サンプリングで、実行単位の一貫性を保証</p>
+      <p>→ <code>content</code> トランスフォームによる入出力の機密フィールドのマスキング</p>
+      <p>→ エクスポーターごとの <code>maxRecordSizeBytes</code> によるレコードサイズ制御 (超過時は <code>truncated: true</code> フラグ付きで切り詰め)</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ Durable Execution Telemetry MCP サーバー</div>
+      <p>→ ローカル stdio サーバーとして動作し、Kiro、Claude Code、Cursor などの MCP 対応エージェントから照会可能</p>
+      <p>→ 5 つのツールを提供: <code>test_destination</code>、<code>describe_schema</code>、<code>list_executions</code>、<code>get_execution</code>、<code>query</code></p>
+      <p>→ SQL 系の送信先では <code>SELECT</code> / <code>WITH ... SELECT</code> のみ許可される読み取り専用設計</p>
+      <p>→ 設定は環境変数のみで行い、認証情報は標準の AWS SDK プロバイダーチェーンを使用</p>
+    </div>
+  </div>
+
+  <!-- Tech specs -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📋 テレメトリレコードの構造</h3>
+    <table>
+      <tr><th>フィールド</th><th>詳細</th></tr>
+      <tr><td><code>recordType</code> / <code>schemaVersion</code></td><td><code>DurableExecutionTelemetry</code> / <code>1.0</code></td></tr>
+      <tr><td><code>executionArn</code> / <code>executionName</code> / <code>functionName</code></td><td>実行の識別情報</td></tr>
+      <tr><td><code>status</code></td><td>SUCCEEDED、FAILED などの実行ステータス</td></tr>
+      <tr><td><code>startTime</code> / <code>endTime</code> / <code>durationMs</code></td><td>実行の開始・終了時刻と所要時間</td></tr>
+      <tr><td><code>input</code> / <code>output</code></td><td>実行の入出力 (トランスフォームでマスキング可能)</td></tr>
+      <tr><td><code>operations</code></td><td>各オペレーションの名前、タイプ (STEP / WAIT)、ステータス、所要時間の配列</td></tr>
+    </table>
+
+    <h3>🧾 テレメトリレコードの例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">DurableExecutionTelemetryRecord</span>
+      </div>
+      <pre><code class="language-json">{
+  "recordType": "DurableExecutionTelemetry",
+  "schemaVersion": "1.0",
+  "executionName": "abc123",
+  "functionName": "order-processor",
+  "status": "SUCCEEDED",
+  "durationMs": 5414,
+  "operations": [
+    { "name": "validate-order", "type": "STEP", "status": "SUCCEEDED", "durationMs": 250 },
+    { "name": "check-inventory", "type": "STEP", "status": "SUCCEEDED", "durationMs": 350 },
+    { "name": "cool-down", "type": "WAIT", "status": "SUCCEEDED", "durationMs": 5000 },
+    { "name": "charge-payment", "type": "STEP", "status": "SUCCEEDED", "durationMs": 80 }
+  ]
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- Setup -->
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Lambda durable functions を利用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Durable Execution SDK (TypeScript、Python、Java、Go のいずれか) で関数を実装していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>エクスポート先リソース (S3 バケット、DynamoDB テーブルなど) への書き込み権限 (LambdaLogExporter の場合は不要)</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">プラグインのインストール</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">npm でインストール</span></div>
+          <pre><code class="language-bash">npm install @aws/durable-execution-sdk-js-telemetry-exporter</code></pre>
+        </div>
+        <p>TypeScript の場合、npm でテレメトリエクスポータープラグインのパッケージをインストールします。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">ハンドラーへのプラグイン追加</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">TypeScript</span><span class="code-title">1 行でプラグインを有効化</span></div>
+          <pre><code class="language-typescript">import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+import { durableExecutionTelemetry } from "@aws/durable-execution-sdk-js-telemetry-exporter";
+
+export const lambdaHandler = withDurableExecution(handler, {
+  plugins: [durableExecutionTelemetry({})],
+});</code></pre>
+        </div>
+        <p>設定なしの場合、デフォルトの <span class="highlight">LambdaLogExporter</span> が関数自身の CloudWatch ロググループに JSON を出力します (追加の IAM 設定は不要)。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">エクスポート先とサンプリングの設定</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">TypeScript</span><span class="code-title">複数エクスポーター + マスキング + サンプリング</span></div>
+          <pre><code class="language-typescript">const telemetry = durableExecutionTelemetry({
+  emitMode: "on-complete",
+  samplingRate: 0.1,
+  content: {
+    input: (event) => ({ orderId: event.orderId }),
+    output: (result) => ({ status: result.status }),
+  },
+  exporters: [
+    new S3Exporter({ bucket: "my-telemetry-bucket" }),
+    new DynamoDBExporter({ tableName: "durable-execution-telemetry-live" }),
+  ],
+});</code></pre>
+        </div>
+        <p>複数のエクスポーターを設定するとレコードが並列に送信されます。<code>samplingRate</code> でデータ量を制御し、<code>content</code> トランスフォームで機密フィールドをマスキングします。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">MCP サーバーのセットアップ</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">Kiro への MCP サーバー登録</span></div>
+          <pre><code class="language-bash">kiro-cli mcp add \
+  --name durable-telemetry \
+  --command npx \
+  --args "-y,@aws/durable-execution-sdk-js-telemetry-mcp" \
+  --env DURABLE_TELEMETRY_DESTINATION_TYPE=dynamodb \
+  --env DURABLE_TELEMETRY_DYNAMODB_TABLE_NAME=durable-execution-telemetry-live \
+  --env DURABLE_TELEMETRY_REGION=us-east-1 \
+  --scope workspace</code></pre>
+        </div>
+        <p>送信先の種類やテーブル名は環境変数で指定し、認証情報は標準の AWS SDK プロバイダーチェーンから取得されます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Merits -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加費用なし</strong>: プラグインと MCP サーバーは追加料金なしで利用可能 (送信先リソースの費用のみ発生)</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ビジネスインサイトの抽出</strong>: 実行履歴を Athena や Redshift で分析し、注文処理時間や失敗率などの業務指標を把握</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>障害対応の迅速化</strong>: AI エージェント経由で失敗した実行を自然言語で調査でき、MTTR を短縮</span></div>
+      </div>
+      <div class="merit-box">
+        <h3>🔧 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>1 行の設定で導入可能</strong>: カスタム計装コードや別エージェントが不要で、既存の durable functions にすぐ適用</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>決定的サンプリング</strong>: 実行 ARN のハッシュに基づくため、サンプリング対象の実行はすべてのレコードが揃う</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>読み取り専用の安全な AI 連携</strong>: MCP サーバーは SELECT 系クエリのみ許可し、書き込み操作を事前に拒否</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Limitations -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>🚧 制限事項</h3>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>デフォルトでは入出力がそのまま記録されるため、本番環境では <code>content</code> トランスフォームによるマスキング設定が実質必須</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>呼び出しを伴わずに発生する <code>STOPPED</code> や <code>TIMED_OUT</code> 状態はプラグインから観測できず、EventBridge のライフサイクルイベントで補完が必要</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span><code>operationDetail</code> の <code>full-tree</code> モードは <code>pluginsConfig.childOperationsDepth</code> の設定が必要で、リプレイコストが増加</span></div>
+      </div>
+      <div class="merit-box">
+        <h3>🤔 考慮すべき点</h3>
+        <div class="warn-item"><span class="warn-icon">⚠️</span><span>テレメトリ自体は無料だが、送信先のコスト (CloudWatch Logs のインジェスト、DynamoDB の書き込みなど) が発生するため、<code>samplingRate</code> と <code>emitMode</code> で制御する</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠️</span><span>オペレーション名はそのままフィールドとして使用されるため、<code>.</code> を避け、英数字と <code>-</code>、<code>_</code> のみを使用することを推奨</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠️</span><span>レコードサイズが <code>maxRecordSizeBytes</code> を超えると送信先ごとに切り詰めが発生 (オペレーション結果、古いオペレーション、入出力の順)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Use cases -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🌙 ユースケース 1: オンコールエンジニアの障害調査</div>
+      <p><span class="label">シナリオ</span>: 深夜に注文処理ワークフローの失敗アラートが発生し、オンコールエンジニアが迅速に原因を特定したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">Kiro への自然言語での問い合わせ</span></div>
+        <pre><code class="language-plaintext">「過去 1 時間で失敗した order-processor の実行を一覧して、
+最も多い失敗ステップと原因を教えて」</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 各データストアのクエリ言語を知らなくても、AI エージェントが <code>list_executions</code> と <code>get_execution</code> ツールで失敗実行を特定し、エラー内容まで提示するため、調査時間を大幅に短縮できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📊 ユースケース 2: CloudWatch Logs Insights による失敗分析</div>
+      <p><span class="label">シナリオ</span>: 追加インフラなしで、失敗した durable 実行を定常的にモニタリングしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Logs Insights</span><span class="code-title">失敗実行のクエリ</span></div>
+        <pre><code class="language-sql">fields executionName, status, durationMs
+| filter recordType = "DurableExecutionTelemetry" and status = "FAILED"
+| sort durationMs desc</code></pre>
+      </div>
+      <p><span class="label">効果</span>: デフォルトの LambdaLogExporter のみで、IAM 追加設定なしに失敗実行の一覧と所要時間を即座に分析できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📈 ユースケース 3: Athena による長期的なビジネス分析</div>
+      <p><span class="label">シナリオ</span>: アナリストが特定顧客のトランザクション履歴や月次の処理傾向を SQL で分析したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">TypeScript</span><span class="code-title">S3 への長期アーカイブ設定</span></div>
+        <pre><code class="language-typescript">const telemetry = durableExecutionTelemetry({
+  exporters: [new S3Exporter({ bucket: "order-telemetry-archive" })],
+});
+// S3 には year=YYYY/month=MM/day=DD/ 形式のパーティションで保存され、
+// Glue / Athena からそのまま SQL でクエリ可能</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 標準の実行履歴保持期間を超えてデータを保持し、パーティション化されたデータに対する低コストな SQL 分析が可能になる。</p>
+    </div>
+  </div>
+
+  <!-- Pricing & regions -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p>→ プラグインおよび MCP サーバーは<span class="highlight">追加料金なし</span>で利用可能</p>
+      <p>→ エクスポート先リソースの利用料金 (CloudWatch Logs のインジェスト料金、DynamoDB の書き込み料金、S3 のストレージ料金など) は別途発生</p>
+      <p>→ <code>samplingRate</code> と <code>emitMode</code> の設定によりコストを制御可能</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 利用可能リージョン</div>
+      <p>→ Lambda durable functions をサポートするすべての AWS リージョンで利用可能</p>
+    </div>
+  </div>
+
+  <!-- Related services -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <ul class="plain">
+      <li><strong>AWS Lambda durable functions</strong>: 本プラグインの対象機能。最長 1 年間実行できる回復力の高いマルチステップアプリケーションや AI ワークフローを構築できる</li>
+      <li><strong>Amazon CloudWatch Logs</strong>: デフォルトのエクスポート先。Logs Insights で即座にクエリ可能</li>
+      <li><strong>Amazon Athena / Amazon S3</strong>: 長期保存と SQL 分析のためのエクスポート先。Hive 形式パーティションに対応</li>
+      <li><strong>Amazon EventBridge</strong>: テレメトリ連携によるアラートや自動修復のほか、プラグインが観測できない STOPPED / TIMED_OUT 状態の補完にも使用</li>
+      <li><strong>Kiro</strong>: MCP サーバー経由でテレメトリデータを自然言語で照会できる AWS の AI 搭載 IDE</li>
+    </ul>
+  </div>
+
+  <!-- Summary -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      Lambda durable functions の実行履歴を <span class="highlight">1 行の設定で 13 種類の送信先</span>にエクスポートできるようになり、
+      長期保存・分析・AI エージェントによる自然言語での照会まで一気通貫で実現できるようになりました。
+    </p>
+    <div class="flow-diagram" style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:24px 0;">
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px;">📋 デフォルトの<br/>LambdaLogExporter で導入</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px;">🔒 content マスキング +<br/>samplingRate 設定</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px;">🗄️ 用途に応じた<br/>送信先の追加</div>
+    </div>
+    <p>
+      durable functions を本番運用しているチームは、まずデフォルトの LambdaLogExporter で導入し、
+      機密情報のマスキングとサンプリングの設定を行った上で、用途に応じた送信先の追加を検討することを推奨します。
+    </p>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/lambda-durable-telemetry/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/lambda-durable-telemetry/</a></li>
+      <li><a href="https://aws.amazon.com/blogs/compute/observing-aws-lambda-durable-functions-with-the-durable-execution-telemetry-exporter/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: Observing AWS Lambda durable functions with the Durable Execution Telemetry Exporter</a></li>
+      <li><a href="https://docs.aws.amazon.com/durable-execution/sdk-reference/observability/telemetry/exporter/" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Telemetry Exporter のインストール</a></li>
+      <li><a href="https://docs.aws.amazon.com/durable-execution/sdk-reference/observability/telemetry/mcp/" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: MCP サーバーのセットアップ</a></li>
+      <li><a href="https://docs.aws.amazon.com/durable-execution/sdk-reference/observability/telemetry/" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Durable Execution SDK テレメトリ</a></li>
+    </ul>
+    <p>基レポート: reports/2026/2026-10-28-lambda-durable-telemetry.md | 生成日: 2026-10-29</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
