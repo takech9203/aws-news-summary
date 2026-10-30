@@ -5,6 +5,16 @@
 
 ## 2026 年
 
+- [2026-10-29 - Amazon Aurora - ポスト量子 TLS 鍵交換のサポート](2026/2026-10-29-aurora-postgresql-post-quantum-tls-key-exchange.md)
+- [2026-10-29 - AWS Marketplace - サブシダリーアカウント認可 (1 回の出品で複数子会社アカウントからの販売が可能に)](2026/2026-10-29-aws-marketplace-subsidiary-account-authorization.md)
+- [2026-10-29 - AWS DataSync - Enhanced モードが FSx for Windows File Server、FSx for NetApp ONTAP、Red Hat OpenShift Virtualization をサポート](2026/2026-10-29-datasync-enhanced-fsx-openshift.md)
+- [2026-10-29 - Amazon RDS for Oracle / SQL Server - 追加ストレージボリュームのストレージ自動スケーリング対応](2026/2026-10-29-amazon-rds-oracle-sqlserver-autoscaling-additional-storage-volumes.md)
+- [2026-10-29 - Amazon MSK Connect - コネクタプラグインおよびワーカー構成の更新サポート](2026/2026-10-29-amazon-msk-connect-update-plugin-worker-configurations.md)
+- [2026-10-29 - Amazon SageMaker AI - SOCI インデックス付きイメージによるトレーニングジョブの高速起動](2026/2026-10-29-sagemaker-ai-soci-images-training.md)
+- [2026-10-29 - Amazon DynamoDB Accelerator (DAX) - 追加リージョンでの提供開始](2026/2026-10-29-dax-additional-regions.md)
+- [2026-10-29 - AWS Backup - AWS European Sovereign Cloud でのクロスアカウント管理とクロスアカウントバックアップのサポート](2026/2026-10-29-aws-backup-cross-account-esc.md)
+- [2026-10-29 - Amazon Managed Grafana - Grafana バージョン 13.2 へのインプレースアップグレード](2026/2026-10-29-managed-grafana-upgrade-version-13-2.md)
+- [2026-10-29 - AWS Step Functions - ワークフローを AI エージェントのツールとして利用可能に](2026/2026-10-29-step-functions-workflows-ai-agent-tools.md)
 - [2026-10-28 - Amazon ECS - Managed Instances のクロスインスタンス統合と Spot 統合](2026/2026-10-28-ecs-managed-instances-consolidation.md)
 - [2026-10-28 - AWS IAM Identity Center - Identity Store の変更通知 (Amazon EventBridge 対応)](2026/2026-10-28-aws-identity-store-change-notifications.md)
 - [2026-10-28 - Kiro - Kiro for Students が新たに 41 大学へ拡大](2026/2026-10-28-kiro-41-more-universities.md)
@@ -14,9 +24,11 @@
 - [2026-10-28 - AWS Backup - Amazon Redshift の復元テストサポート](2026/2026-10-28-aws-backup-adds-redshift-restore-testing.md)
 - [2026-10-28 - AWS Lambda - Lambda Managed Instances での Seekable OCI (SOCI) レイジーローディングサポート](2026/2026-10-28-aws-lambda-seekable-oci-soci.md)
 - [2026-10-28 - AWS Lambda - Durable Functions のライブテレメトリエクスポート](2026/2026-10-28-lambda-durable-telemetry.md)
+- [2026-10-28 - AWS Agent Registry - 4 つの追加リージョンで利用可能に](2026/2026-10-28-aws-agent-registry-four-regions.md)
 - [2026-10-28 - Amazon OpenSearch Serverless - 次世代 OpenSearch Serverless における時系列コレクションの提供開始](2026/2026-10-28-time-series-collection-next-generation-opensearch-serverless.md)
 - [2026-10-28 - Amazon RDS for Oracle - 2026 年 9 月 Monthly Recommended Patch サポート](2026/2026-10-28-amazon-rds-oracle-september-mrp.md)
 - [2026-10-28 - Amazon EKS - EKS Dashboard によるフリート全体の証明書認証局 (CA) ローテーション可視化](2026/2026-10-28-amazon-eks-dashboard-fleet-wide-visibility-certificate-authority-ca-rotation.md)
+- [2026-10-28 - Kiro - Windows システムワイドインストーラー、Shift 不要のファイルドラッグ、枠付き Mermaid 図](2026/2026-10-28-kiro-changelog-2026-10-28.md)
 - [2026-10-28 - AWS Marketplace - Amazon Business 統合ストアフロント](2026/2026-10-28-marketplace-business-storefront.md)
 - [2026-10-27 - Amazon ECS - NVIDIA Multi-Process Service (MPS) による GPU 共有のサポート](2026/2026-10-27-amazon-ecs-gpu-sharing-nvidia-mps.md)
 - [2026-10-27 - Amazon ElastiCache - データティアリングが R8gd / R7gd ノードで欧州 (スペイン) とアジアパシフィック (ハイデラバード) に拡大](2026/2026-10-27-elasticache-data-tiering-spain.md)

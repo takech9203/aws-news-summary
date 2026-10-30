@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon RDS for Oracle / SQL Server - 追加ストレージボリュームのストレージ自動スケーリング対応</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.service-badge {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 16px;
+}
+
+.date-badge {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--aws-light-gray);
+  font-weight: 500;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 16px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(255, 153, 0, 0.05));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before / After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 {
+  margin-top: 0;
+  font-size: 16px;
+}
+
+.before-box h3 { color: #FF8A73; }
+.after-box h3 { color: #6BCB4A; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.check-icon { color: var(--aws-green); font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: var(--aws-red); font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.feature-card h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: var(--aws-white);
+}
+
+.feature-card ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.feature-card li { margin: 4px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.usecase h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: var(--aws-smile-orange);
+}
+
+.usecase p { margin: 8px 0; font-size: 14px; }
+
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  font-size: 14px;
+  margin-top: 12px;
+}
+
+/* メリットグリッド */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+
+.merit-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.merit-box h3 { margin-top: 0; font-size: 16px; color: var(--aws-smile-orange); }
+
+/* リンク */
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+ul.link-list { padding-left: 20px; font-size: 14px; }
+ul.link-list li { margin: 6px 0; }
+
+/* ステップ */
+.step-label {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  margin-right: 8px;
+}
+
+/* まとめ */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+  font-size: 15px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="service-badges">
+      <span class="service-badge">Amazon RDS for Oracle</span>
+      <span class="service-badge">Amazon RDS for SQL Server</span>
+      <span class="date-badge">📅 2026 年 10 月 29 日</span>
+    </div>
+    <h1>🗄️ 追加ストレージボリュームの<br>ストレージ自動スケーリング対応</h1>
+    <div class="subtitle">最大 3 つの追加ストレージボリュームも、ボリューム単位でダウンタイムなしの自動拡張が可能に</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Amazon RDS for Oracle および Amazon RDS for SQL Server で、<span class="highlight">追加ストレージボリューム (Additional Storage Volumes) に対するストレージ自動スケーリング</span>がサポートされました。これまでプライマリボリュームのみだった自動スケーリングが、最大 3 つまでアタッチできる追加ボリュームにも拡張され、各ボリュームを独立して自動拡張できます。</p>
+    <p>各ボリュームに<span class="highlight">最大ストレージしきい値</span>を設定するだけで、RDS が使用量を継続的に監視し、容量が逼迫すると<span class="highlight">ダウンタイムなし</span>で自動拡張します。新規・既存インスタンスの両方で利用でき、コンソール / AWS CLI / RDS API から設定可能です。</p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">256 TiB</div>
+        <div class="stat-label">インスタンスあたりの最大合計ストレージ容量</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">最大 3 つ</div>
+        <div class="stat-label">アタッチできる追加ストレージボリューム数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0 秒</div>
+        <div class="stat-label">自動拡張によるダウンタイム (再起動不要)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">10% / 5 分</div>
+        <div class="stat-label">空き容量 10% 以下が 5 分継続で自動拡張を開始</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>自動スケーリングはプライマリボリュームのみ対象で、追加ボリュームには適用できなかった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>追加ボリュームの容量は将来需要を予測して手動でプロビジョニングする必要があった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>過小見積もりはストレージ枯渇によるダウンタイムのリスク、過大見積もりは未使用容量の不要なコストが発生</span></div>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span>追加ボリュームごとに最大ストレージしきい値を設定し、自動スケーリングを個別に有効化できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>RDS が各ボリュームを継続監視し、空き容量が少なくなるとダウンタイムなしで自動拡張</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>容量計画の手間と、過小 / 過大プロビジョニングのリスクを軽減</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph RDS["🗄️ RDS DB インスタンス Oracle / SQL Server"]
+        direction LR
+        subgraph Primary["💾 プライマリボリューム"]
+            PV[("📀 Primary<br/>しきい値を個別設定")]
+        end
+        subgraph Additional["💾 追加ストレージボリューム 最大 3 つ"]
+            direction LR
+            V2[("📀 rdsdbdata2<br/>しきい値を個別設定")]
+            V3[("📀 rdsdbdata3<br/>しきい値を個別設定")]
+            V4[("📀 rdsdbdata4<br/>しきい値を個別設定")]
+            V2 ~~~ V3 ~~~ V4
+        end
+    end
+
+    Monitor["🔍 RDS ストレージ監視<br/>空き容量 10% 以下を検知"]
+    Scale["⚡ 自動スケーリング<br/>ボリューム単位で独立実行"]
+    Event["🔔 RDS イベント通知<br/>対象ボリュームを識別"]
+
+    Monitor --> PV
+    Monitor --> V2
+    Monitor --> V3
+    Monitor --> V4
+    Monitor --> Scale
+    Scale -->|ダウンタイムなしで拡張| RDS
+    Scale -.-> Event
+
+    classDef instance fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+
+    class RDS instance
+    class Primary,Additional layer
+    class PV,V2,V3,V4 database
+    class Monitor process
+    class Scale internal
+    class Event warning
+      </pre>
+    </div>
+    <p class="diagram-note">プライマリボリュームと最大 3 つの追加ストレージボリュームそれぞれに最大ストレージしきい値を設定でき、RDS が各ボリュームを独立して監視・自動拡張します。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="feature-card">
+      <h3>1️⃣ ボリューム単位の独立した自動スケーリング</h3>
+      <ul>
+        <li>プライマリに加え、各追加ボリューム (Oracle: rdsdbdata2 / rdsdbdata3 / rdsdbdata4、SQL Server: H: / I: / J: ドライブ) ごとに有効化できる</li>
+        <li>各ボリュームが独自の最大ストレージしきい値を持ち、RDS はボリュームごとに独立して評価・スケーリングを実行</li>
+        <li>トリガー条件・拡張増分・しきい値の制約はプライマリボリュームと同一</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h3>2️⃣ ダウンタイムなしの自動拡張</h3>
+      <ul>
+        <li>空き容量が割り当てストレージの 10% 以下の状態が 5 分以上継続すると、ストレージ変更が自動開始</li>
+        <li>拡張増分は「10 GiB」「割り当てストレージの 10%」「過去 1 時間の FreeStorageSpace メトリクスに基づく 7 時間先の予測増加量」のうち最大の値</li>
+        <li>有効化・設定変更に DB の再起動は不要で、ダウンタイムは発生しない</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h3>3️⃣ ボリュームを識別できるイベント通知</h3>
+      <ul>
+        <li>変更の開始・完了時に RDS-EVENT-0541 / RDS-EVENT-0542 が発行される</li>
+        <li>しきい値への到達・接近やスケーリング不可時には RDS-EVENT-0594 / RDS-EVENT-0595 / RDS-EVENT-0593 が発行され、対象ボリュームを識別可能</li>
+        <li>しきい値接近の通知を避けるには、しきい値を割り当てストレージの 26% 以上大きい値に設定することを推奨</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h3>4️⃣ 新規・既存インスタンスの両方に対応</h3>
+      <ul>
+        <li>新規 DB インスタンス作成時、および既存 DB インスタンスの変更時のどちらでも設定可能</li>
+        <li>AWS Management Console、AWS CLI、RDS API から設定できる</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>📋 技術仕様</h2>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対象エンジン</td><td>RDS for Oracle、RDS for SQL Server</td></tr>
+      <tr><td>追加可能なボリューム数</td><td>最大 3 つ</td></tr>
+      <tr><td>合計ストレージ容量</td><td>インスタンスあたり最大 256 TiB</td></tr>
+      <tr><td>ボリューム名 (Oracle)</td><td>rdsdbdata2、rdsdbdata3、rdsdbdata4</td></tr>
+      <tr><td>ボリューム名 (SQL Server)</td><td>H:、I:、J:</td></tr>
+      <tr><td>対応ストレージタイプ</td><td>gp3、io2 Block Express</td></tr>
+      <tr><td>最小ストレージサイズ</td><td>200 GiB</td></tr>
+      <tr><td>自動スケーリングのトリガー</td><td>空き容量が割り当てストレージの 10% 以下の状態が 5 分以上継続</td></tr>
+      <tr><td>拡張増分</td><td>10 GiB、割り当てストレージの 10%、7 時間先の予測増加量のうち最大値</td></tr>
+      <tr><td>変更回数の制限</td><td>24 時間以内に最大 4 回まで</td></tr>
+    </table>
+
+    <h3>🔧 設定パラメータ</h3>
+    <p><code style="color: var(--aws-smile-orange);">modify-db-instance</code> の <code style="color: var(--aws-smile-orange);">--additional-storage-volumes</code> JSON 配列内で、ボリュームごとに <code style="color: var(--aws-smile-orange);">MaxAllocatedStorage</code> フィールドを設定します。</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">ボリューム設定の例</span>
+      </div>
+      <pre><code class="language-json">[
+  {
+    "VolumeName": "rdsdbdata2",
+    "StorageType": "gp3",
+    "AllocatedStorage": 5000,
+    "MaxAllocatedStorage": 10000
+  }
+]</code></pre>
+    </div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>MaxAllocatedStorage &gt; AllocatedStorage</strong>: 当該ボリュームのストレージ自動スケーリングが<span class="highlight">有効</span>になる</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span><strong>MaxAllocatedStorage = AllocatedStorage</strong>: 当該ボリュームのストレージ自動スケーリングが無効になる</span></div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🚀 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>RDS for Oracle または RDS for SQL Server の DB インスタンスを使用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>追加ストレージボリュームが gp3 または io2 ストレージタイプであること (マグネティックストレージは非対応)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>最大ストレージしきい値は現在の割り当てストレージより 10% 以上大きい値に設定すること (推奨は 26% 以上)</span></div>
+
+    <h3><span class="step-label">STEP 1</span>追加ストレージボリュームの自動スケーリングを有効化</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">既存ボリュームの自動スケーリング有効化</span>
+      </div>
+      <pre><code class="language-bash">aws rds modify-db-instance \
+    --db-instance-identifier mydbinstance \
+    --additional-storage-volumes '[
+        {
+            "VolumeName": "rdsdbdata2",
+            "StorageType": "gp3",
+            "AllocatedStorage": 5000,
+            "MaxAllocatedStorage": 10000
+        }
+    ]'</code></pre>
+    </div>
+    <p style="font-size: 14px;">rdsdbdata2 の最大ストレージしきい値を 10,000 GiB に設定し、自動スケーリングを有効化します。</p>
+
+    <h3><span class="step-label">STEP 2</span>新しい追加ストレージボリュームを自動スケーリング付きで追加</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">新規ボリュームの追加と自動スケーリング設定</span>
+      </div>
+      <pre><code class="language-bash">aws rds modify-db-instance \
+    --db-instance-identifier mydbinstance \
+    --additional-storage-volumes '[
+        {
+            "VolumeName": "rdsdbdata3",
+            "StorageType": "gp3",
+            "AllocatedStorage": 1000,
+            "StorageThroughput": 725,
+            "MaxAllocatedStorage": 5000
+        }
+    ]'</code></pre>
+    </div>
+    <p style="font-size: 14px;">1,000 GiB の gp3 ボリュームを新規追加し、最大 5,000 GiB までの自動スケーリングを有効化します。</p>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>追加ストレージボリュームの追加は <code style="color: var(--aws-smile-orange);">--no-apply-immediately</code> の指定に関係なく即時適用される点に注意</span></div>
+
+    <h3><span class="step-label">STEP 3</span>設定の確認</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">追加ストレージボリューム設定の確認</span>
+      </div>
+      <pre><code class="language-bash">aws rds describe-db-instances \
+    --db-instance-identifier mydbinstance \
+    --query "DBInstances[0].AdditionalStorageVolumes"</code></pre>
+    </div>
+    <p style="font-size: 14px;">各ボリュームの <code style="color: var(--aws-smile-orange);">AllocatedStorage</code> と <code style="color: var(--aws-smile-orange);">MaxAllocatedStorage</code> の値を確認します。コンソールの場合は DB インスタンスの [設定] タブで [Add storage volume] を選択し、[Maximum storage threshold] を設定します。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: 容量計画と手動拡張作業が不要になり、DBA の運用負荷を軽減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト最適化</strong>: 過大なプロビジョニングが不要になり、実使用量に応じた支払いが可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>可用性の向上</strong>: ストレージ枯渇による計画外ダウンタイムのリスクを低減</span></div>
+      </div>
+      <div class="merit-box">
+        <h3>🔧 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ボリューム単位の細かな制御</strong>: データ特性に応じた個別の拡張ポリシーを適用可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ダウンタイムなしの拡張</strong>: 再起動不要で、稼働中のワークロードに影響なし</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>可観測性</strong>: 対象ボリュームを識別できる RDS イベントで通知・監視の自動化が容易</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>自動スケーリングでストレージを縮小することはできない (一度拡張した割り当ては減らせない)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ストレージ変更は 24 時間以内に最大 4 回までで、前回の最適化完了まで次の変更は実行されない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>大規模なデータロードでは自動スケーリングが追いつかず、ストレージフル状態が数時間継続する可能性がある</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>マグネティックストレージでは自動スケーリングを使用できない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>自動スケーリング操作は AWS CloudTrail に記録されない</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>しきい値は現在の割り当てストレージの 10% 以上大きい値が必須、イベント通知を避けるには 26% 以上を推奨</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>io1 / io2 Block Express または gp3 では、IOPS としきい値の比率が許容範囲内である必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>手動のストレージ変更と同時に開始された場合は手動変更が優先され、自動スケーリングはキャンセルされる</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>意図しない大容量への拡張を防ぐため、しきい値は実際の利用傾向に基づいて慎重に設定する</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h3>1. SQL Server のデータとログを分離した構成での自動容量管理</h3>
+      <p><strong>シナリオ</strong>: データファイルをプライマリボリューム、インデックスや tempdb 関連のデータを追加ボリューム (H: ドライブ) に分離。データ増加のペースがドライブごとに異なり、個別の容量管理が負担になっている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws rds modify-db-instance \
+    --db-instance-identifier sqlserver-prod \
+    --max-allocated-storage 8000 \
+    --additional-storage-volumes '[
+        {
+            "VolumeName": "H:",
+            "StorageType": "gp3",
+            "AllocatedStorage": 2000,
+            "MaxAllocatedStorage": 6000
+        }
+    ]'</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: プライマリと H: ドライブが使用状況に応じて独立して自動拡張され、ドライブごとの容量監視と手動拡張作業が不要になる。</div>
+    </div>
+
+    <div class="usecase">
+      <h3>2. Oracle のホットデータとヒストリカルデータの階層化</h3>
+      <p><strong>シナリオ</strong>: 高パフォーマンスが必要なデータを io2 のプライマリボリュームに、増加し続けるヒストリカルデータを低コストな gp3 の追加ボリュームに配置。ヒストリカルデータの増加量が予測しにくい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws rds modify-db-instance \
+    --db-instance-identifier oracle-prod \
+    --additional-storage-volumes '[
+        {
+            "VolumeName": "rdsdbdata2",
+            "StorageType": "gp3",
+            "AllocatedStorage": 10000,
+            "MaxAllocatedStorage": 30000
+        }
+    ]'</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: ヒストリカルデータ用ボリュームが需要に応じて最大 30,000 GiB まで自動拡張され、過大プロビジョニングによるコストと枯渇リスクの両方を回避できる。</div>
+    </div>
+
+    <div class="usecase">
+      <h3>3. 急成長するワークロードでの 256 TiB までの段階的拡張</h3>
+      <p><strong>シナリオ</strong>: 急成長中の SaaS アプリケーションで、単一ボリュームの上限を超えるストレージが必要になる見込み。複数の追加ボリュームを段階的に追加しながら、それぞれの容量管理を自動化したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws rds modify-db-instance \
+    --db-instance-identifier saas-prod \
+    --additional-storage-volumes '[
+        {
+            "VolumeName": "rdsdbdata2",
+            "StorageType": "gp3",
+            "AllocatedStorage": 5000,
+            "MaxAllocatedStorage": 20000
+        },
+        {
+            "VolumeName": "rdsdbdata3",
+            "StorageType": "gp3",
+            "AllocatedStorage": 5000,
+            "MaxAllocatedStorage": 20000
+        }
+    ]'</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 複数ボリュームを組み合わせて最大 256 TiB まで拡張可能な構成を取りつつ、各ボリュームの拡張を自動化し運用負荷を最小限に抑えられる。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>💵 料金</h3>
+        <p style="font-size: 14px; margin: 0;">本機能の利用自体に<span class="highlight">追加料金はかかりません</span>。プロビジョニングされたストレージリソースに対してのみ料金が発生します。自動スケーリングで拡張された場合は、拡張後の割り当て容量に応じた標準の RDS ストレージ料金が適用されます。</p>
+        <ul class="link-list" style="margin-bottom: 0;">
+          <li><a class="aws-link" href="https://aws.amazon.com/rds/oracle/pricing/" target="_blank" rel="noopener noreferrer">RDS for Oracle の料金</a></li>
+          <li><a class="aws-link" href="https://aws.amazon.com/rds/sqlserver/pricing/" target="_blank" rel="noopener noreferrer">RDS for SQL Server の料金</a></li>
+        </ul>
+      </div>
+      <div class="merit-box">
+        <h3>🌏 利用可能リージョン</h3>
+        <p style="font-size: 14px; margin: 0;">すべての <span class="highlight">AWS 商用リージョン</span>および <span class="highlight">AWS GovCloud (US) リージョン</span>で利用可能です。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="feature-card">
+      <h3>🗄️ Amazon RDS ストレージ自動スケーリング</h3>
+      <p style="font-size: 14px; margin: 0;">プライマリボリュームに対する既存の自動スケーリング機能。今回のアップデートで追加ボリュームにも拡張された。</p>
+    </div>
+    <div class="feature-card">
+      <h3>📊 Amazon CloudWatch</h3>
+      <p style="font-size: 14px; margin: 0;">FreeStorageSpace メトリクスによるストレージ使用量の監視。自動スケーリングの予測増分の算出にも利用される。</p>
+    </div>
+    <div class="feature-card">
+      <h3>🔔 Amazon RDS イベント通知</h3>
+      <p style="font-size: 14px; margin: 0;">自動スケーリングの開始・完了やしきい値接近を Amazon SNS 経由で通知可能。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin-top: 0;">RDS for Oracle および RDS for SQL Server の追加ストレージボリュームがストレージ自動スケーリングに対応し、<span class="highlight">最大 256 TiB 構成の大規模データベースでもボリューム単位の容量管理を自動化</span>できるようになりました。</p>
+      <p style="margin-bottom: 0;">追加ストレージボリュームを使用している場合は、各ボリュームに適切な最大ストレージしきい値 (割り当てストレージの <span class="highlight">26% 以上大きい値を推奨</span>) を設定し、ストレージ枯渇リスクと手動運用の負荷を低減することを推奨します。</p>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul class="link-list">
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-rds-oracle-sqlserver-autoscaling-additional-storage-volumes" target="_blank" rel="noopener noreferrer">公式発表 (What's New): Amazon RDS for Oracle / SQL Server - Storage autoscaling on additional storage volumes</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PIOPS.Autoscaling.html" target="_blank" rel="noopener noreferrer">ドキュメント: Managing capacity automatically with Amazon RDS storage autoscaling</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PIOPS.ModifyingExisting.AdditionalVolumes.html" target="_blank" rel="noopener noreferrer">ドキュメント: Adding storage volumes</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/rds/oracle/" target="_blank" rel="noopener noreferrer">Amazon RDS for Oracle 製品ページ</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/rds/sqlserver/" target="_blank" rel="noopener noreferrer">Amazon RDS for SQL Server 製品ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-10-29) を基に作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

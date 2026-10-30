@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Aurora PostgreSQL - ポスト量子 TLS 鍵交換のサポート</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.meta-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.meta-item {
+  background: var(--aws-dark-squid);
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-radius: 6px;
+  padding: 4px 12px;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .box-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .box-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.before-box li, .after-box li { margin-bottom: 8px; }
+
+/* checklist */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+td code, li code, p code {
+  background: rgba(140, 79, 255, 0.15);
+  color: #C5A8FF;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* use case */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase-label {
+  font-weight: 600;
+  color: var(--aws-white);
+}
+
+/* step */
+.step {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0 4px 0;
+  align-items: center;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.step-title {
+  font-weight: 600;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin: 4px 0 12px 40px;
+}
+
+/* key exchange visual */
+.hybrid-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.hybrid-box {
+  border-radius: 8px;
+  padding: 14px 20px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.hybrid-classic {
+  background: rgba(0, 161, 201, 0.15);
+  border: 2px solid var(--aws-teal);
+}
+
+.hybrid-pq {
+  background: rgba(140, 79, 255, 0.15);
+  border: 2px solid var(--aws-purple);
+}
+
+.hybrid-result {
+  background: rgba(29, 129, 2, 0.15);
+  border: 2px solid #4CAF50;
+}
+
+.hybrid-op {
+  color: var(--aws-orange);
+  font-size: 26px;
+  font-weight: bold;
+}
+
+.hybrid-box .hb-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+/* summary box */
+.summary-box {
+  background: rgba(255, 153, 0, 0.1);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin-bottom: 4px; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="service-badge">Amazon Aurora PostgreSQL 互換エディション</div>
+    <h1>🔐 ポスト量子 TLS 鍵交換 PQ-TLS のサポート</h1>
+    <div class="subtitle">量子コンピュータ時代に備えるデータベース接続の暗号化 — <span class="highlight">ssl_groups</span> パラメータで ML-KEM ハイブリッド鍵交換を利用可能に</div>
+    <div class="meta-row">
+      <div class="meta-item">📅 リリース日: 2026 年 10 月 29 日</div>
+      <div class="meta-item">🗄️ 対象: Aurora PostgreSQL 18 以降</div>
+      <div class="meta-item">💰 追加料金なし</div>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Aurora PostgreSQL 18 以降で、クラスターパラメータ <code>ssl_groups</code> を変更することで、NIST 標準化済みのポスト量子鍵カプセル化アルゴリズム <span class="highlight">ML-KEM</span> を組み合わせたハイブリッド鍵交換グループ (<code>X25519MLKEM768</code>、<code>SecP256r1MLKEM768</code>) を選択できるようになりました。</p>
+    <p>将来の量子コンピュータによる解読に備えて現在の暗号化通信を記録しておく <span class="highlight">「Harvest Now, Decrypt Later (今収集して後で解読する)」攻撃</span>への対策として重要です。AWS は CloudFront、KMS、S3、Secrets Manager などで ML-KEM を展開済みであり、今回のアップデートでお客様が所有するデータベースリソースにもポスト量子暗号が拡大しました。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>TLS 鍵交換は古典的な楕円曲線アルゴリズム (X25519、prime256v1 など) のみで、量子コンピュータによる解読リスクに対応できなかった</li>
+          <li>「Harvest Now, Decrypt Later」攻撃に対して、長期保存が必要な機密データの通信を保護する手段がなかった</li>
+          <li>TLS 鍵交換の名前付きグループをデータベース側で制御する手段がなかった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li><code>ssl_groups</code> の変更で ML-KEM ハイブリッド鍵交換グループを含む許可リストから暗号グループを選択可能に</li>
+          <li>セキュリティ要件に合わせて、サーバーが受け入れる鍵交換グループと優先順位を制御可能に</li>
+          <li>動的パラメータのため、DB クラスターの<strong>再起動なし</strong>で適用可能</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>🧩 ハイブリッド鍵交換のしくみ</h3>
+    <div class="hybrid-visual">
+      <div class="hybrid-box hybrid-classic">
+        <div class="hb-title">🔑 古典暗号</div>
+        X25519 / P-256 ECDH
+      </div>
+      <span class="hybrid-op">＋</span>
+      <div class="hybrid-box hybrid-pq">
+        <div class="hb-title">🛡️ ポスト量子暗号</div>
+        ML-KEM-768 FIPS 203
+      </div>
+      <span class="hybrid-op">＝</span>
+      <div class="hybrid-box hybrid-result">
+        <div class="hb-title">✅ ハイブリッド鍵交換</div>
+        どちらかが破られても<br>機密性を維持
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+sequenceDiagram
+    participant C as 💻 PQ 対応クライアント
+    participant A as 🗄️ Aurora PostgreSQL 18
+    participant P as ⚙️ クラスターパラメータグループ
+
+    Note over P: ssl_groups に<br/>X25519MLKEM768 を設定
+    P-->>A: パラメータ適用 再起動不要
+    C->>A: ClientHello TLS 1.3<br/>対応グループを提示
+    A->>A: ssl_groups の優先順位と照合
+    A-->>C: ServerHello<br/>X25519MLKEM768 を選択
+    Note over C,A: ハイブリッド鍵交換<br/>X25519 + ML-KEM-768
+    C->>A: 量子耐性のある暗号化接続で<br/>SQL クエリを実行
+      </pre>
+    </div>
+    <p class="diagram-note">クライアントと Aurora PostgreSQL の間の TLS 1.3 ハンドシェイクにおいて、<code>ssl_groups</code> パラメータで設定した優先順位に基づきハイブリッド鍵交換グループがネゴシエートされる流れを示しています。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ ポスト量子ハイブリッド鍵交換グループのサポート</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>古典的な楕円曲線暗号 (X25519 または P-256) と NIST FIPS 203 で標準化された ML-KEM-768 を組み合わせたハイブリッド方式</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><code>X25519MLKEM768</code> と <code>SecP256r1MLKEM768</code> の 2 つのハイブリッドグループを許可リストから選択可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ML-KEM に万一問題が見つかった場合でも古典暗号による安全性が維持される</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ ssl_groups クラスターパラメータによる柔軟な制御</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>TLS 鍵交換に使用する名前付きグループをコロン区切りのリストで指定</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>リストの順序がサーバー側の優先順位となり、クライアントも対応する最初のグループが接続に使用される</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>動的パラメータのため、変更時に DB クラスターの再起動が不要</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ セキュリティ要件に応じた構成の強制</div>
+      <div class="check-item"><span class="check-icon">✓</span><span><code>ssl_groups</code> は名前付きグループを使用する鍵交換にのみ適用され、RSA 鍵交換を使用する TLS 1.2 暗号スイートでは無視される</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>指定グループのみを使用させるには <code>rds.force_ssl</code> を有効化し、<code>ssl_min_protocol_version</code> を <code>TLSv1.3</code> に設定するか、TLS 1.2 向けに <code>ssl_ciphers</code> を ECDHE ベースに制限</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>ML-KEM グループは TLS 1.3 が必須</span></div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>ssl_groups パラメータの仕様 (Aurora PostgreSQL 18)</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対象エンジン</td><td>Aurora PostgreSQL 互換エディション 18 以降</td></tr>
+      <tr><td>パラメータ種別</td><td>DB クラスターパラメータ (動的、再起動不要)</td></tr>
+      <tr><td>デフォルト値</td><td><code>prime256v1:X25519</code></td></tr>
+      <tr><td>許可リスト</td><td><code>X25519MLKEM768</code>、<code>SecP256r1MLKEM768</code>、<code>X25519</code>、<code>prime256v1</code>、<code>secp384r1</code></td></tr>
+      <tr><td>ML-KEM 利用時の要件</td><td>TLS 1.3 (<code>ssl_min_protocol_version</code> を <code>TLSv1.3</code> に設定して強制可能)</td></tr>
+      <tr><td>優先順位</td><td>リストの記載順がサーバー側の優先順位</td></tr>
+    </table>
+
+    <h3>ハイブリッド鍵交換グループの構成要素</h3>
+    <table>
+      <tr><th>グループ名</th><th>古典アルゴリズム</th><th>ポスト量子アルゴリズム</th></tr>
+      <tr><td><code>X25519MLKEM768</code></td><td>X25519 (Curve25519 ECDH)</td><td>ML-KEM-768 (FIPS 203)</td></tr>
+      <tr><td><code>SecP256r1MLKEM768</code></td><td>P-256 ECDH</td><td>ML-KEM-768 (FIPS 203)</td></tr>
+    </table>
+
+    <h3>パラメータ設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">ポスト量子グループを最優先、古典グループをフォールバックとして許可</span>
+      </div>
+      <pre><code class="language-bash"># DB クラスターパラメータグループでの設定値の例
+ssl_groups = "X25519MLKEM768:SecP256r1MLKEM768:X25519:prime256v1"</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Aurora PostgreSQL 18 以降の DB クラスターを使用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>カスタム DB クラスターパラメータグループを作成し、DB クラスターに関連付けていること (デフォルトのパラメータグループは変更不可)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ML-KEM グループを使用する場合、クライアント側のライブラリ (OpenSSL など) が TLS 1.3 およびハイブリッドポスト量子鍵交換に対応していること</span></div>
+
+    <div class="step"><div class="step-number">1</div><div class="step-title">カスタム DB クラスターパラメータグループの作成</div></div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+      <pre><code class="language-bash">aws rds create-db-cluster-parameter-group \
+    --db-cluster-parameter-group-name my-aurora-pg18-pqtls \
+    --db-parameter-group-family aurora-postgresql18 \
+    --description "Aurora PostgreSQL 18 with PQ-TLS key exchange"</code></pre>
+    </div>
+    <p class="note">既存のカスタムパラメータグループがある場合、このステップは不要です。</p>
+
+    <div class="step"><div class="step-number">2</div><div class="step-title">ssl_groups パラメータの変更</div></div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+      <pre><code class="language-bash">aws rds modify-db-cluster-parameter-group \
+    --db-cluster-parameter-group-name my-aurora-pg18-pqtls \
+    --parameters "ParameterName=ssl_groups,ParameterValue='X25519MLKEM768:X25519:prime256v1',ApplyMethod=immediate"</code></pre>
+    </div>
+    <p class="note">ハイブリッドポスト量子グループ <code>X25519MLKEM768</code> を最優先に設定。動的パラメータのため <code>ApplyMethod=immediate</code> で再起動なしに適用されます。</p>
+
+    <div class="step"><div class="step-number">3</div><div class="step-title">ML-KEM の使用を強制する場合の追加設定</div></div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+      <pre><code class="language-bash">aws rds modify-db-cluster-parameter-group \
+    --db-cluster-parameter-group-name my-aurora-pg18-pqtls \
+    --parameters \
+    "ParameterName=rds.force_ssl,ParameterValue=1,ApplyMethod=immediate" \
+    "ParameterName=ssl_min_protocol_version,ParameterValue=TLSv1.3,ApplyMethod=immediate"</code></pre>
+    </div>
+    <p class="note">SSL/TLS 接続を必須化し、最小プロトコルバージョンを TLS 1.3 に設定。ML-KEM グループは TLS 1.3 が必須のため、指定したポスト量子グループの使用を確実にできます。TLS 1.3 に対応していないクライアントは接続できなくなる点に注意してください。</p>
+
+    <div class="step"><div class="step-number">4</div><div class="step-title">接続の確認</div></div>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">sslinfo 拡張機能で暗号化状態を確認</span></div>
+      <pre><code class="language-sql">-- sslinfo 拡張機能で接続の暗号化状態を確認
+CREATE EXTENSION IF NOT EXISTS sslinfo;
+SELECT ssl_is_used(), ssl_cipher();</code></pre>
+    </div>
+    <p class="note">データベースに接続後、SSL/TLS が使用されていることとネゴシエートされた暗号スイートを確認します。</p>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="before-after">
+      <div class="after-box">
+        <div class="box-title">👍 メリット</div>
+        <ul>
+          <li><strong>長期的なデータ機密性の確保</strong>: 「Harvest Now, Decrypt Later」攻撃対策により、10 年以上の機密性が求められる金融・医療・個人情報のデータ通信を保護</li>
+          <li><strong>コンプライアンス対応の先行</strong>: CISA、NIST などが推奨するポスト量子暗号移行に早期対応</li>
+          <li><strong>追加コストなし</strong>: パラメータ変更のみで利用でき、追加料金は発生しない</li>
+          <li><strong>ハイブリッド方式による安全性</strong>: 古典暗号と ML-KEM のどちらか一方が破られても機密性を維持</li>
+          <li><strong>再起動不要の動的パラメータ</strong>: 本番環境でもダウンタイムなしで段階的に導入可能</li>
+          <li><strong>柔軟な優先順位制御</strong>: PQ 対応クライアントと非対応クライアントが混在する移行期間にも対応</li>
+        </ul>
+      </div>
+      <div class="before-box">
+        <div class="box-title">⚠️ 制約事項・考慮点</div>
+        <ul>
+          <li>Aurora PostgreSQL 18 以降でのみ利用可能 (Aurora MySQL 互換エディションは対象外)</li>
+          <li>ML-KEM グループの使用には TLS 1.3 が必須</li>
+          <li><code>ssl_groups</code> は RSA 鍵交換を使用する TLS 1.2 暗号スイートでは無視される</li>
+          <li>クライアント側ライブラリ (OpenSSL、libpq、JDBC ドライバーなど) の PQ 対応が必要で、未対応クライアントとの互換性を考慮したグループリスト設計が必要</li>
+          <li><code>ssl_min_protocol_version</code> を <code>TLSv1.3</code> にすると TLS 1.3 非対応クライアントが接続不可になるため、事前のクライアント棚卸しが必要</li>
+          <li>ML-KEM の公開鍵と暗号文は古典暗号より大きく、ハンドシェイク時のデータ量がわずかに増加 (接続確立後のクエリ性能への影響はない)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💼 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🏦 ユースケース 1: 金融機関における長期機密データの通信保護</div>
+      <p><span class="usecase-label">シナリオ</span>: 顧客の取引データを Aurora PostgreSQL で管理し、規制により 10 年以上の機密性保持が求められている。将来の量子コンピュータによる解読リスクに今から備えたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">PQ グループのみを許可し TLS 1.3 を強制</span></div>
+        <pre><code class="language-bash">aws rds modify-db-cluster-parameter-group \
+    --db-cluster-parameter-group-name finance-aurora-pg18 \
+    --parameters \
+    "ParameterName=ssl_groups,ParameterValue='X25519MLKEM768:SecP256r1MLKEM768',ApplyMethod=immediate" \
+    "ParameterName=rds.force_ssl,ParameterValue=1,ApplyMethod=immediate" \
+    "ParameterName=ssl_min_protocol_version,ParameterValue=TLSv1.3,ApplyMethod=immediate"</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: すべてのデータベース接続が量子耐性のある鍵交換で保護され、「Harvest Now, Decrypt Later」攻撃のリスクを低減できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔄 ユースケース 2: 段階的なポスト量子暗号への移行</div>
+      <p><span class="usecase-label">シナリオ</span>: PQ 対応クライアントと非対応クライアントが混在する環境で、接続互換性を維持しながら段階的に移行したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">古典グループをフォールバックとして残す</span></div>
+        <pre><code class="language-bash">aws rds modify-db-cluster-parameter-group \
+    --db-cluster-parameter-group-name myapp-aurora-pg18 \
+    --parameters "ParameterName=ssl_groups,ParameterValue='X25519MLKEM768:X25519:prime256v1',ApplyMethod=immediate"</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: PQ 対応クライアントは自動的に <code>X25519MLKEM768</code> で接続し、未対応クライアントは従来の <code>X25519</code> などにフォールバック。ダウンタイムなしで移行を進め、移行完了後に古典グループを削除すれば完全移行できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🏛️ ユースケース 3: 公共機関におけるポスト量子暗号移行計画の実行</div>
+      <p><span class="usecase-label">シナリオ</span>: 政府機関のシステムで、CISA や NIST のガイダンスに沿った暗号インベントリの整備と移行計画を進めており、データベース層の対応を開始したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">移行前のインベントリ作成</span></div>
+        <pre><code class="language-sql">-- 接続ごとの暗号利用状況を確認し、移行前のインベントリを作成
+CREATE EXTENSION IF NOT EXISTS sslinfo;
+SELECT ssl_is_used(), ssl_version(), ssl_cipher();</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 現状の TLS 利用状況を把握した上で計画的に切り替えを実施でき、暗号移行計画のマイルストーンとしてデータベース層の量子耐性化を達成できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p>ポスト量子 TLS 鍵交換の利用に<span class="highlight">追加料金は発生しません</span>。Aurora PostgreSQL の標準料金 (インスタンス、ストレージ、I/O など) のみが適用されます。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 利用可能リージョン</div>
+      <p>公式発表ではリージョンの明記はありません。Aurora PostgreSQL の SSL/TLS サポートはすべての AWS リージョンで利用可能であり、本機能は Aurora PostgreSQL 18 以降が利用可能なリージョンで使用できます。最新の対応状況は公式ドキュメントを確認してください。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>AWS KMS / Amazon S3 / AWS Secrets Manager</strong>: サービスエンドポイントで ML-KEM ハイブリッドポスト量子 TLS を既にサポート。今回のアップデートでデータベース層にも保護が拡大</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>AWS-LC</strong>: AWS のオープンソース暗号ライブラリ。ML-KEM を FIPS 140-3 検証に含めた初のオープンソース暗号モジュール</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>Elastic Load Balancing</strong>: PQ 対応 TLS ポリシーを設定可能。アプリケーション層からデータベース層まで一貫したポスト量子対応を構成できる</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span><strong>DB クラスターパラメータグループ</strong>: <code>ssl_groups</code>、<code>ssl_ciphers</code>、<code>ssl_tls13_ciphers</code>、<code>rds.force_ssl</code> など TLS 関連設定を一元管理</span></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section summary-box">
+    <h2>🎯 まとめ</h2>
+    <p>Aurora PostgreSQL 18 以降でポスト量子 TLS 鍵交換がサポートされ、<code>ssl_groups</code> パラメータの変更のみで ML-KEM を組み合わせたハイブリッド鍵交換を利用できるようになりました。</p>
+    <div class="check-item"><span class="check-icon">✓</span><span>長期的な機密性が求められるシステムでは「Harvest Now, Decrypt Later」攻撃への対策として早期導入を検討する価値がある</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>まずはクライアントライブラリの PQ-TLS 対応状況を確認する</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>古典グループをフォールバックとして残した段階的な移行から始めることを推奨</span></div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/aurora-postgresql-post-quantum-tls-key-exchange/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon Aurora PostgreSQL - Post-Quantum TLS Key Exchange</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraPostgreSQL.Security.html#PostgreSQL.Concepts.General.SSL.Groups" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Aurora PostgreSQL の TLS 鍵交換グループ</a></li>
+      <li><a href="https://aws.amazon.com/security/post-quantum-cryptography/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS ポスト量子暗号への取り組み</a></li>
+      <li><a href="https://aws.amazon.com/rds/aurora/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon Aurora 製品ページ</a></li>
+      <li><a href="https://aws.amazon.com/rds/aurora/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon Aurora 料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-10-29) を元に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
