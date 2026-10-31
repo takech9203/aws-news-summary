@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Glue Data Catalog - Iceberg テーブル最適化が米国西部 (北カリフォルニア) で利用可能に</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.region-badge {
+  display: inline-block;
+  background: rgba(0, 161, 201, 0.2);
+  color: var(--aws-teal);
+  border: 1px solid var(--aws-teal);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+  margin-left: 8px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.card p { margin: 6px 0; font-size: 14px; }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid var(--aws-red);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid var(--aws-green);
+}
+
+.before-box .ba-title { color: #FF6B4A; }
+.after-box .ba-title { color: #4CAF50; }
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.before-after ul { margin: 0; padding-left: 18px; }
+.before-after li { margin: 8px 0; font-size: 14px; }
+
+/* 3 つの最適化タイプのカードグリッド */
+.optimizer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.optimizer-card {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.optimizer-card .opt-icon { font-size: 32px; }
+.optimizer-card .opt-name {
+  font-weight: 700;
+  color: var(--aws-orange);
+  margin: 8px 0 6px 0;
+}
+.optimizer-card .opt-desc { font-size: 13px; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+tr.highlight-row td {
+  background: rgba(255, 153, 0, 0.12);
+  color: var(--aws-white);
+  font-weight: 600;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+.code-note { font-size: 13px; color: var(--aws-light-gray); margin: 4px 0 16px 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label { font-weight: 600; color: var(--aws-white); }
+
+/* リージョン */
+.region-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.region-chip {
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 16px;
+  padding: 5px 14px;
+  font-size: 13px;
+}
+
+.region-chip.new {
+  background: rgba(255, 153, 0, 0.2);
+  border: 2px solid var(--aws-orange);
+  color: var(--aws-orange);
+  font-weight: 700;
+}
+
+/* 関連サービス */
+.related-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.related-card {
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 14px;
+}
+
+.related-card .rel-name {
+  font-weight: 700;
+  color: var(--aws-teal);
+  margin-bottom: 4px;
+}
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* まとめ */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 20px;
+  margin: 8px 0;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 768px) {
+  h1 { font-size: 24px; }
+  .before-after, .optimizer-grid, .related-grid { grid-template-columns: 1fr; }
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS Glue Data Catalog</span><span class="region-badge">🌎 us-west-1 対応</span>
+    </div>
+    <h1>⚙️ Apache Iceberg テーブル最適化が<br>米国西部 (北カリフォルニア) で利用可能に</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 10 月 30 日 | コンパクション / スナップショット保持 / 孤立ファイル削除のリージョン拡大</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>AWS Glue Data Catalog の <span class="highlight">Apache Iceberg テーブル自動最適化機能</span>が、米国西部 (北カリフォルニア) リージョン (us-west-1) で利用可能になりました。Iceberg テーブルに蓄積する<span class="highlight">小さなファイル、古いスナップショット、孤立ファイル</span>をバックグラウンドで自動的に整理し、クエリパフォーマンスとストレージ効率を維持します。</p>
+    <p>テーブル単位の有効化に加え、<span class="highlight">カタログレベルで全 Iceberg テーブルに一括適用</span>でき、実行状況は AWS Glue コンソールと Amazon CloudWatch で監視できます。</p>
+
+    <div class="optimizer-grid">
+      <div class="optimizer-card">
+        <div class="opt-icon">🗜️</div>
+        <div class="opt-name">コンパクション</div>
+        <div class="opt-desc">小さなファイルを統合し、読み取りパフォーマンスを向上</div>
+      </div>
+      <div class="optimizer-card">
+        <div class="opt-icon">🕐</div>
+        <div class="opt-name">スナップショット保持</div>
+        <div class="opt-desc">古いスナップショットと関連ファイルを自動削除</div>
+      </div>
+      <div class="optimizer-card">
+        <div class="opt-icon">🧹</div>
+        <div class="opt-name">孤立ファイル削除</div>
+        <div class="opt-desc">メタデータから参照されないファイルを定期削除</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ アップデート前の課題</div>
+        <ul>
+          <li>us-west-1 ではテーブル最適化が使えず、Spark の <code>rewrite_data_files</code> などで<strong>独自メンテナンスジョブを構築・運用</strong>する必要があった</li>
+          <li>古いスナップショットや孤立ファイルの削除も手動またはスケジュールジョブで実施し、<strong>運用負荷とストレージコストが増大</strong></li>
+          <li>データ所在地要件で us-west-1 を使うワークロードは、他リージョンと同等の自動最適化の恩恵を受けられなかった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <ul>
+          <li>us-west-1 でも<strong> 3 種類の最適化を自動実行</strong>できるようになった</li>
+          <li>テーブル単位に加え、<strong>カタログレベルで一括適用</strong>が可能に</li>
+          <li>実行結果を AWS Glue コンソール、CloudWatch メトリクス、ログで<strong>一元的に監視</strong>できる</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Writer(["✍️ ETL ジョブ / ストリーミング書き込み"]) --> Table
+
+    subgraph S3["🪣 Amazon S3 データレイク"]
+        direction LR
+        Table[("📋 Iceberg テーブル<br/>小さなファイル / 古いスナップショット / 孤立ファイル")]
+        Optimized[("✨ 最適化済みテーブル<br/>大きなファイルに統合")]
+        Table ~~~ Optimized
+    end
+
+    subgraph Glue["⚙️ AWS Glue Data Catalog テーブル最適化"]
+        direction LR
+        Compaction["🗜️ コンパクション<br/>小さなファイルを統合"]
+        Snapshot["🕐 スナップショット保持<br/>古いスナップショットを削除"]
+        Orphan["🧹 孤立ファイル削除<br/>参照されないファイルを削除"]
+        Compaction ~~~ Snapshot ~~~ Orphan
+    end
+
+    Table --> Glue
+    Glue --> Optimized
+
+    Glue -.-> CW["📈 Amazon CloudWatch<br/>メトリクス / ログ"]
+    Optimized --> Query(["🔍 Athena / Redshift / EMR などのクエリエンジン"])
+
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef monitor fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Table,Optimized storage
+    class Compaction,Snapshot,Orphan compute
+    class Writer,Query user
+    class CW monitor
+    class S3,Glue layer
+      </pre>
+    </div>
+    <p class="diagram-caption">Glue Data Catalog のテーブル最適化が Iceberg テーブルを継続的に監視し、3 種類の最適化をバックグラウンドで自動実行する流れ。実行状況は CloudWatch で監視できます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🔧 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🗜️ コンパクション (Compaction)</div>
+      <p>小さなデータファイルを統合・再書き込みし、ストレージ使用量を削減してクエリの読み取りパフォーマンスを向上。デフォルトの <span class="highlight">binpack</span> に加え、<span class="highlight">sort</span> および <span class="highlight">Z-order</span> 戦略をサポートし、スキャンするデータ量を削減してクエリ処理コストを低減します。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🕐 スナップショット保持 (Snapshot Retention)</div>
+      <p>スナップショットは Iceberg テーブルのタイムスタンプ付きバージョン。保持期間と保持数を設定でき、設定より古いスナップショットと関連する基盤ファイルを自動削除してストレージのオーバーヘッドを抑制します。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🧹 孤立ファイル削除 (Orphan File Deletion)</div>
+      <p>テーブル削除や ETL ジョブの失敗などで蓄積した、メタデータから参照されないファイルを定期的に特定・削除し、ストレージコストを削減します。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📚 カタログレベルとテーブルレベルの設定</div>
+      <p>カタログレベルは Lake Formation コンソールまたは AWS Glue の <code>UpdateCatalog</code> API で構成。テーブル単位の有効化・無効化は AWS Glue コンソール、AWS CLI、AWS Glue API で操作できます。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>📋 技術仕様</h2>
+
+    <h3>最適化タイプの比較</h3>
+    <table>
+      <tr><th>最適化タイプ</th><th>対象</th><th>効果</th></tr>
+      <tr><td>🗜️ コンパクション</td><td>小さなデータファイル</td><td>読み取りパフォーマンス向上、スキャン量削減</td></tr>
+      <tr><td>🕐 スナップショット保持</td><td>古いスナップショットと関連ファイル</td><td>ストレージコスト削減、メタデータ管理の簡素化</td></tr>
+      <tr><td>🧹 孤立ファイル削除</td><td>メタデータから参照されないファイル</td><td>ストレージコスト削減</td></tr>
+    </table>
+
+    <h3>コンパクション戦略</h3>
+    <table>
+      <tr><th>戦略</th><th>説明</th></tr>
+      <tr><td>binpack</td><td>デフォルト戦略。小さなファイルを大きなファイルに統合</td></tr>
+      <tr><td>sort</td><td>指定カラムでデータをソートし、フィルタクエリを高速化</td></tr>
+      <tr><td>Z-order</td><td>複数カラムの同時クエリに有効なソート済みデータセットを作成</td></tr>
+    </table>
+
+    <h3>設定操作の方法</h3>
+    <table>
+      <tr><th>設定レベル</th><th>操作方法</th></tr>
+      <tr><td>カタログレベル</td><td>Lake Formation コンソール、AWS Glue <code>UpdateCatalog</code> API</td></tr>
+      <tr><td>テーブルレベル</td><td>AWS Glue コンソール、AWS CLI、AWS Glue API</td></tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Apache Iceberg 形式のテーブルが AWS Glue Data Catalog に登録されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>最適化ジョブが Amazon S3 のデータの読み書きと Glue Data Catalog へのアクセスを行うための IAM ロールを用意していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>米国西部 (北カリフォルニア) リージョンなど、テーブル最適化がサポートされているリージョンを使用していること</span></div>
+
+    <h3>ステップ 1: テーブル単位でコンパクションを有効化</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">コンパクション最適化の作成</span>
+      </div>
+      <pre><code class="language-bash">aws glue create-table-optimizer \
+  --catalog-id &lt;アカウント ID&gt; \
+  --database-name &lt;データベース名&gt; \
+  --table-name &lt;テーブル名&gt; \
+  --type compaction \
+  --table-optimizer-configuration '{
+    "roleArn": "arn:aws:iam::&lt;アカウント ID&gt;:role/&lt;最適化用ロール&gt;",
+    "enabled": true
+  }' \
+  --region us-west-1</code></pre>
+    </div>
+    <p class="code-note">→ 指定した Iceberg テーブルに対してコンパクション最適化を作成・有効化。<code>roleArn</code> には S3 と Glue へのアクセス権限を持つ IAM ロールを指定します。</p>
+
+    <h3>ステップ 2: スナップショット保持と孤立ファイル削除を有効化</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">スナップショット保持最適化の作成</span>
+      </div>
+      <pre><code class="language-bash">aws glue create-table-optimizer \
+  --catalog-id &lt;アカウント ID&gt; \
+  --database-name &lt;データベース名&gt; \
+  --table-name &lt;テーブル名&gt; \
+  --type retention \
+  --table-optimizer-configuration '{
+    "roleArn": "arn:aws:iam::&lt;アカウント ID&gt;:role/&lt;最適化用ロール&gt;",
+    "enabled": true,
+    "retentionConfiguration": {
+      "icebergConfiguration": {
+        "snapshotRetentionPeriodInDays": 5,
+        "numberOfSnapshotsToRetain": 1,
+        "cleanExpiredFiles": true
+      }
+    }
+  }' \
+  --region us-west-1</code></pre>
+    </div>
+    <p class="code-note">→ スナップショットの保持期間と保持数を指定して作成。孤立ファイル削除は <code>--type orphan_file_deletion</code> を指定して同様に作成します。</p>
+
+    <h3>ステップ 3: 最適化の実行状況を確認</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">実行履歴の一覧表示</span>
+      </div>
+      <pre><code class="language-bash">aws glue list-table-optimizer-runs \
+  --catalog-id &lt;アカウント ID&gt; \
+  --database-name &lt;データベース名&gt; \
+  --table-name &lt;テーブル名&gt; \
+  --type compaction \
+  --region us-west-1</code></pre>
+    </div>
+    <p class="code-note">→ 最適化の実行履歴を一覧表示。AWS Glue コンソールや Amazon CloudWatch のメトリクスとログでも監視できます。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: 独自のメンテナンスジョブの構築・運用が不要になり、データエンジニアの工数を削減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ストレージコストの削減</strong>: 古いスナップショットや孤立ファイルを自動削除し、S3 のストレージコストを継続的に抑制</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>クエリコストの低減</strong>: コンパクションによりスキャンするデータ量が減少し、Athena などのクエリ処理コストを低減</span></div>
+
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>クエリパフォーマンスの維持</strong>: 小さなファイルの蓄積によるパフォーマンス劣化を自動的に防止</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>一括設定</strong>: カタログレベルの設定により、Data Catalog 内のすべての Iceberg テーブルへ最適化を一括適用</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>可観測性</strong>: 実行状況を AWS Glue コンソール、CloudWatch メトリクス、ログで監視可能</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>対象は Apache Iceberg テーブルのみであり、他のテーブルフォーマットには適用されない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>利用可能なリージョンは限定されている (下記の利用可能リージョンを参照)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>最適化の実行には IAM ロールの設定など事前準備が必要</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>最適化 (コンパクションなど) の実行には処理量に応じた料金が発生するため、テーブルの書き込み頻度とコストのバランスを考慮する</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>スナップショット保持設定により古いスナップショットが削除されると、削除されたスナップショットへのタイムトラベルクエリは実行できなくなる</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📡 ユースケース 1: ストリーミングデータレイクのパフォーマンス維持</div>
+      <p><span class="label">シナリオ</span>: us-west-1 のデータレイクに IoT センサーデータを数分間隔で継続的に書き込んでおり、小さなファイルが大量に蓄積して Athena のクエリが徐々に遅くなっている。</p>
+      <p><span class="label">実装</span>: 対象テーブルでコンパクション最適化を有効化し、バックグラウンドで小さなファイルを自動統合する。</p>
+      <p><span class="label">効果</span>: 手動メンテナンスなしでクエリパフォーマンスを維持し、スキャン量の削減によりクエリコストも低減できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">💰 ユースケース 2: ストレージコストの自動削減</div>
+      <p><span class="label">シナリオ</span>: 日次の ETL ジョブで Iceberg テーブルを更新しており、スナップショットと不要ファイルが蓄積して S3 のストレージコストが増加している。</p>
+      <p><span class="label">実装</span>: スナップショット保持最適化で保持期間を 5 日間に設定し、孤立ファイル削除最適化もあわせて有効化する。</p>
+      <p><span class="label">効果</span>: 古いスナップショットと参照されないファイルが自動削除され、ストレージコストを継続的に抑制できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📚 ユースケース 3: カタログ全体への最適化の一括適用</div>
+      <p><span class="label">シナリオ</span>: 多数の Iceberg テーブルを運用しており、テーブルごとに最適化を設定する作業が負担になっている。</p>
+      <p><span class="label">実装</span>: Lake Formation コンソールまたは Glue <code>UpdateCatalog</code> API でカタログレベルの最適化設定を構成し、Data Catalog 内のすべての Iceberg テーブルに一括適用する。</p>
+      <p><span class="label">効果</span>: 新規作成されるテーブルを含め、カタログ全体で一貫した最適化ポリシーを少ない運用負荷で維持できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💲 料金</h2>
+    <p>テーブル最適化の実行は AWS Glue の料金体系に基づいて課金されます。コンパクションなどの最適化処理は、処理に使用されたコンピューティングリソース <span class="highlight">(DPU 時間) に応じた従量課金</span>です。最新の料金詳細は <a href="https://aws.amazon.com/glue/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Glue 料金ページ</a> を確認してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>今回のアップデートで<span class="highlight">米国西部 (北カリフォルニア)</span> が追加され、テーブル最適化機能は以下のリージョンで利用可能です (公式ドキュメントに基づく)。</p>
+    <div class="region-grid">
+      <span class="region-chip">アジアパシフィック (東京)</span>
+      <span class="region-chip">アジアパシフィック (ソウル)</span>
+      <span class="region-chip">アジアパシフィック (ムンバイ)</span>
+      <span class="region-chip">アジアパシフィック (シンガポール)</span>
+      <span class="region-chip">アジアパシフィック (シドニー)</span>
+      <span class="region-chip">アジアパシフィック (ジャカルタ)</span>
+      <span class="region-chip">カナダ (中部)</span>
+      <span class="region-chip">欧州 (アイルランド)</span>
+      <span class="region-chip">欧州 (ロンドン)</span>
+      <span class="region-chip">欧州 (フランクフルト)</span>
+      <span class="region-chip">欧州 (ストックホルム)</span>
+      <span class="region-chip">米国東部 (バージニア北部)</span>
+      <span class="region-chip">米国東部 (オハイオ)</span>
+      <span class="region-chip new">🆕 米国西部 (北カリフォルニア) ← 今回追加</span>
+      <span class="region-chip">米国西部 (オレゴン)</span>
+      <span class="region-chip">南米 (サンパウロ)</span>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="related-card">
+        <div class="rel-name">🪣 Amazon S3</div>
+        Iceberg テーブルのデータファイルとメタデータの格納先。最適化によりストレージ使用量が削減される
+      </div>
+      <div class="related-card">
+        <div class="rel-name">🔍 Amazon Athena</div>
+        Iceberg テーブルへのクエリエンジン。コンパクションによりクエリパフォーマンスが向上する
+      </div>
+      <div class="related-card">
+        <div class="rel-name">🏞️ AWS Lake Formation</div>
+        カタログレベルの最適化設定の構成に使用。テーブルへのアクセス権限管理も提供
+      </div>
+      <div class="related-card">
+        <div class="rel-name">📈 Amazon CloudWatch</div>
+        最適化実行のメトリクスとログの監視に使用
+      </div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>✅ まとめ</h2>
+    <div class="summary-box">
+      <p style="margin: 0;">Glue Data Catalog の Apache Iceberg テーブル自動最適化が<span class="highlight">米国西部 (北カリフォルニア) リージョン</span>に拡大し、独自のメンテナンスジョブなしで<span class="highlight">クエリパフォーマンスの維持とストレージコストの削減</span>が可能になりました。us-west-1 で Iceberg ベースのデータレイクを運用している場合は、対象テーブルまたはカタログ全体で最適化を有効化し、CloudWatch で実行状況を監視することを推奨します。</p>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/glue-data-catalog-optimizers-us-west-1/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/glue-data-catalog-optimizers-us-west-1/</a></li>
+      <li><a href="https://docs.aws.amazon.com/glue/latest/dg/table-optimizers.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Optimizing Iceberg tables</a></li>
+      <li><a href="https://docs.aws.amazon.com/glue/latest/dg/regions-optimizers.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Supported Regions for table optimizers</a></li>
+      <li><a href="https://aws.amazon.com/glue/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Glue 製品ページ</a></li>
+      <li><a href="https://aws.amazon.com/glue/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-10-30) をもとに生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

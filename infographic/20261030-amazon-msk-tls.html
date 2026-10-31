@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon MSK - TLS 1.3 によるデータ転送時の暗号化サポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h3 { margin: 0 0 8px 0; }
+.card p { margin: 0; font-size: 14px; }
+.card ul { margin: 8px 0 0 0; padding-left: 20px; font-size: 14px; }
+.card li { margin: 4px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box h3 { color: #FF6B4A; margin-top: 0; }
+.after-box h3 { color: #4CAF50; margin-top: 0; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 4px; list-style: none; font-size: 14px; }
+.before-box li, .after-box li { margin: 8px 0; display: flex; gap: 8px; align-items: flex-start; }
+.before-box li::before { content: "✗"; color: #FF6B4A; font-weight: bold; flex-shrink: 0; }
+.after-box li::before { content: "✓"; color: #4CAF50; font-weight: bold; flex-shrink: 0; }
+
+@media (max-width: 700px) {
+  .before-after { grid-template-columns: 1fr; }
+  .merit-grid { grid-template-columns: 1fr !important; }
+}
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+.flow-step small { color: var(--aws-orange); display: block; font-size: 11px; margin-top: 4px; }
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.ok { color: #4CAF50; font-weight: bold; }
+.ng { color: #FF6B4A; font-weight: bold; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-content h3 { margin: 2px 0 8px 0; }
+.step-content p { margin: 8px 0; font-size: 14px; }
+
+/* メリット */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.merit-box {
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+  border-radius: 8px;
+  padding: 16px;
+}
+.merit-box h3 { margin-top: 0; color: #4CAF50; }
+.merit-box ul { margin: 0; padding-left: 4px; list-style: none; font-size: 14px; }
+.merit-box li { margin: 10px 0; display: flex; gap: 8px; align-items: flex-start; }
+.merit-box li::before { content: "✓"; color: #4CAF50; font-weight: bold; flex-shrink: 0; }
+
+/* 注意事項 */
+.warning-box {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.warning-box h3 { margin-top: 0; color: var(--aws-smile-orange); }
+.warning-box ul { margin: 0; padding-left: 4px; list-style: none; font-size: 14px; }
+.warning-box li { margin: 8px 0; display: flex; gap: 8px; align-items: flex-start; }
+.warning-box li::before { content: "⚠️"; font-size: 13px; flex-shrink: 0; }
+
+.limit-box {
+  background: rgba(209, 50, 18, 0.08);
+  border: 1px solid rgba(209, 50, 18, 0.45);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.limit-box h3 { margin-top: 0; color: #FF6B4A; }
+.limit-box ul { margin: 0; padding-left: 4px; list-style: none; font-size: 14px; }
+.limit-box li { margin: 8px 0; display: flex; gap: 8px; align-items: flex-start; }
+.limit-box li::before { content: "✗"; color: #FF6B4A; font-weight: bold; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase h3 { margin-top: 0; color: var(--aws-smile-orange); }
+.usecase p { font-size: 14px; margin: 8px 0; }
+.usecase .label { color: var(--aws-orange); font-weight: 600; }
+
+/* 統計カード */
+.stat-grid {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.stat-card {
+  flex: 1;
+  min-width: 180px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.2));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+.stat-value { font-size: 26px; font-weight: 700; color: var(--aws-white); }
+.stat-label { font-size: 13px; color: var(--aws-light-gray); margin-top: 6px; }
+
+.note { font-size: 13px; color: var(--aws-light-gray); opacity: 0.85; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0 0 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Amazon MSK</span>
+    <h1>🔐 TLS 1.3 によるデータ転送時の暗号化サポート</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 10 月 30 日 | Amazon Managed Streaming for Apache Kafka (MSK Provisioned)</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      Amazon MSK が、MSK Provisioned クラスターにおけるデータ転送時の暗号化で <span class="highlight">TLS 1.3</span> をサポートしました。
+      クラスターが受け入れる TLS バージョンと暗号スイートは<span class="highlight">名前付き TLS セキュリティポリシー</span>で定義され、条件を満たさない接続は拒否されます。
+    </p>
+    <p>
+      ポリシーの適用は<span class="highlight">明示的なオプトイン方式</span>です。既存クラスターはポリシーを適用するまで一切変更されません。
+      TLS 1.2 / 1.3 の混在モードポリシーを使えば、クライアントを段階的に移行してからポリシーを厳格化できます。
+      TLS 1.3 は<span class="highlight">ポスト量子暗号の前提条件</span>の 1 つであり、「今収集して後で復号する」(harvest-now, decrypt-later) 型の攻撃への備えにもなります。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>😣 Before: アップデート前の課題</h3>
+        <ul>
+          <li>データ転送時の暗号化は TLS 1.2 までしか利用できなかった</li>
+          <li>TLS 1.3 を必須とするコンプライアンス要件や社内セキュリティ標準に対応できなかった</li>
+          <li>受け入れる TLS バージョンや暗号スイートをユーザー側で制御する手段がなかった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>😊 After: アップデート後の改善</h3>
+        <ul>
+          <li>MSK Provisioned クラスターで TLS 1.3 によるデータ転送時の暗号化が利用可能に</li>
+          <li>名前付きセキュリティポリシーで TLS バージョンと暗号スイートを明示的に制御可能に</li>
+          <li>TLS 1.2 / 1.3 混在ポリシーで段階的に移行してから TLS 1.3 のみに厳格化可能に</li>
+          <li>ポスト量子暗号への移行に向けた前提条件を満たせるように</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Clients["👥 クライアントアプリケーション"]
+        direction LR
+        C12["📱 TLS 1.2 のみ対応<br/>クライアント"]
+        C13["📱 TLS 1.3 対応<br/>クライアント"]
+        C12 ~~~ C13
+    end
+
+    subgraph MSK["☁️ Amazon MSK Provisioned クラスター"]
+        Policy{"🛡️ TLS セキュリティポリシー<br/>MSK-TLSv1.3-2026"}
+        subgraph Brokers["🖥️ ブローカー"]
+            direction LR
+            B1["Broker 1"]
+            B2["Broker 2"]
+            B3["Broker 3"]
+            B1 ~~~ B2 ~~~ B3
+        end
+    end
+
+    Reject["⛔ 接続拒否"]
+
+    C12 -->|TLS 1.2 ネゴシエート| Policy
+    C13 -->|TLS 1.3 ネゴシエート| Policy
+    Policy -->|ポリシー適合| Brokers
+    Policy -.->|ポリシー不適合| Reject
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef error fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+
+    class Clients,MSK cloud
+    class C12,C13 input
+    class Policy decision
+    class B1,B2,B3 compute
+    class Reject error
+      </pre>
+    </div>
+    <p class="note">
+      混在モードポリシー MSK-TLSv1.3-2026 では、各接続がクライアントのサポートする最上位の TLS バージョンをネゴシエートし、ポリシーに適合しない接続は拒否されます。
+      ポリシーはクライアントとブローカー間だけでなく、ブローカー間レプリケーションやコントローラーとの通信など、Amazon MSK が管理するすべての暗号化リンクに適用されます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="card">
+      <h3>🛡️ 名前付き TLS セキュリティポリシー</h3>
+      <ul>
+        <li>クラスターが受け入れる TLS プロトコルバージョンと暗号スイートを定義し、条件を満たさない接続は拒否</li>
+        <li>MSK 設定 (Configuration) のプロパティ <span class="highlight">tls.security.policy</span> として適用し、専用 API は不要</li>
+        <li>クライアントとブローカー間、ブローカー間レプリケーション、ブローカーとコントローラー間 (KRaft) または ZooKeeper との通信など、MSK が管理するすべての暗号化リンクに適用</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>🔓 明示的なオプトイン方式</h3>
+      <ul>
+        <li>ポリシーを適用するまで既存クラスターには一切変更が加えられない</li>
+        <li>ポリシー未設定のクラスターは現行の TLS 設定 (MSK-TLS1.2-Default-2026 相当、TLS 1.2 のみ) を維持</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>🪜 段階的な移行パス</h3>
+      <ul>
+        <li>MSK-TLSv1.3-2026 は TLS 1.2 / 1.3 の両方を受け入れる追加型ポリシーで、TLS 1.2 の暗号スイートは削除されない</li>
+        <li>各接続はクライアントがサポートする最上位バージョンをネゴシエート</li>
+        <li>クライアントの移行完了後、MSK-TLSv1.3-Only-2026 を適用して TLS 1.3 のみに制限可能</li>
+      </ul>
+    </div>
+
+    <h3>🪜 移行フロー</h3>
+    <div class="flow-diagram">
+      <div class="flow-step">🔵 MSK-TLS1.2-Default-2026<small>デフォルト / TLS 1.2 のみ</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🟠 MSK-TLSv1.3-2026<small>混在モード / TLS 1.2 + 1.3</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🟢 MSK-TLSv1.3-Only-2026<small>TLS 1.3 のみ</small></div>
+    </div>
+    <p class="note">既存クラスターは隣接するポリシーへ 1 段階ずつのみ移行可能です。デフォルトから TLS 1.3 のみへ直接移行することはできません。</p>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📜 利用可能な TLS セキュリティポリシー</h3>
+    <table>
+      <tr><th>ポリシー名</th><th>TLS 1.2</th><th>TLS 1.3</th><th>説明</th></tr>
+      <tr><td>MSK-TLS1.2-Default-2026</td><td class="ok">✓</td><td>-</td><td>デフォルト。ポリシー未設定時のすべてのクラスターの動作</td></tr>
+      <tr><td>MSK-TLSv1.3-2026</td><td class="ok">✓</td><td class="ok">✓</td><td>追加型。TLS 1.3 を追加し、TLS 1.2 の暗号スイートは削除しない</td></tr>
+      <tr><td>MSK-TLSv1.3-Only-2026</td><td>-</td><td class="ok">✓</td><td>TLS 1.3 のみ。TLS 1.3 をネゴシエートできない接続を拒否</td></tr>
+    </table>
+    <p class="note">ポリシー名は大文字と小文字が区別され、完全一致が必要です。</p>
+
+    <h3>🔑 サポートされる TLS 1.3 暗号スイート</h3>
+    <table>
+      <tr><th>暗号スイート</th><th>MSK-TLSv1.3-2026</th><th>MSK-TLSv1.3-Only-2026</th></tr>
+      <tr><td>TLS_AES_128_GCM_SHA256</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+      <tr><td>TLS_AES_256_GCM_SHA384</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+      <tr><td>TLS_CHACHA20_POLY1305_SHA256</td><td class="ng">非サポート</td><td class="ng">非サポート</td></tr>
+    </table>
+    <p class="note">TLS_CHACHA20_POLY1305_SHA256 のみを提示するクライアントは TLS 1.3 ハンドシェイクを完了できません。ただし、ほとんどの Apache Kafka クライアントはデフォルトで AES-GCM スイートを提示します。</p>
+
+    <h3>📏 前提条件と制約</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対象クラスター</td><td>MSK Provisioned のみ (MSK Serverless は対象外)</td></tr>
+      <tr><td>Apache Kafka バージョン</td><td>3.6 以降</td></tr>
+      <tr><td>ポリシー変更の制約</td><td>既存クラスターは隣接するポリシーへ 1 段階ずつのみ移行可能</td></tr>
+      <tr><td>新規クラスター</td><td>MSK-TLSv1.3-Only-2026 を直接選択可能</td></tr>
+      <tr><td>TLS 1.3 のフォールバック</td><td>TLS 1.3 ハンドシェイク失敗時に TLS 1.2 へはフォールバックしない</td></tr>
+    </table>
+
+    <h3>📝 ポリシー設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Properties</span>
+        <span class="code-title">server.properties</span>
+      </div>
+      <pre><code class="language-properties"># server.properties
+tls.security.policy=MSK-TLSv1.3-2026</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <ul style="font-size: 14px;">
+      <li>MSK Provisioned クラスターであること (MSK Serverless は非対応)</li>
+      <li>Apache Kafka バージョン 3.6 以降を実行していること</li>
+      <li>クラスターが ACTIVE 状態で、他のクラスター操作が進行中でないこと</li>
+      <li>MSK 設定の作成・更新およびクラスター設定の更新権限があること</li>
+      <li>すべてのクライアント、ツール、中間機器 (ファイアウォール、プロキシ等) が適用するポリシーに対応していること</li>
+    </ul>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h3>設定ファイルの作成と MSK 設定の登録</h3>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">MSK 設定の作成</span></div>
+          <pre><code class="language-bash"># server.properties にポリシーを記述
+echo "tls.security.policy=MSK-TLSv1.3-2026" > server.properties
+
+# MSK 設定を作成
+aws kafka create-configuration \
+    --name tls13-additive \
+    --kafka-versions "3.6.0" \
+    --server-properties fileb://server.properties</code></pre>
+        </div>
+        <p>新しい設定リビジョンは既存の設定を置き換えるため、既存の設定に含まれる他のプロパティも server.properties に残す必要があります。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h3>クラスターへの設定適用</h3>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">設定リビジョンの適用</span></div>
+          <pre><code class="language-bash">aws kafka update-cluster-configuration \
+    --cluster-arn &lt;クラスター ARN&gt; \
+    --current-version &lt;現在のクラスターバージョン&gt; \
+    --configuration-info '{"Arn":"&lt;設定 ARN&gt;","Revision":1}'</code></pre>
+        </div>
+        <p>
+          Amazon MSK はローリング再起動を実行し、各ブローカーが 1 回ずつ再起動します。レプリケーションファクターが 3 以上、min.insync.replicas がレプリケーションファクター - 1 以下で、クライアントがリトライする構成であれば、再起動中もクラスターはトラフィックを処理し続けます。
+          AWS CloudFormation の AWS::MSK::Configuration リソースの ServerProperties やマネジメントコンソールからも設定できます。
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h3>適用されたポリシーの確認</h3>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ポリシーと TLS ネゴシエーションの検証</span></div>
+          <pre><code class="language-bash"># クラスターに適用されている設定 ARN とリビジョンを確認
+aws kafka describe-cluster --cluster-arn &lt;クラスター ARN&gt;
+
+# 設定リビジョンの内容を確認
+aws kafka describe-configuration-revision \
+    --arn &lt;設定 ARN&gt; \
+    --revision &lt;リビジョン番号&gt;
+
+# TLS 1.3 でのハンドシェイクを検証
+openssl s_client -connect &lt;ブローカーエンドポイント&gt;:9094 -tls1_3</code></pre>
+        </div>
+        <p>tls.security.policy が存在しない場合、クラスターはデフォルトポリシー MSK-TLS1.2-Default-2026 を使用しています。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <h3>TLS 1.3 のみへの厳格化 (オプション)</h3>
+        <p>
+          クライアントの移行が完了したら、同じ手順で <span class="highlight">tls.security.policy=MSK-TLSv1.3-Only-2026</span> を適用します。
+          MSK-TLS1.2-Default-2026 から MSK-TLSv1.3-Only-2026 へ 1 回で移行することはできず、必ず MSK-TLSv1.3-2026 を経由する必要があります。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>💼 ビジネス面</h3>
+        <ul>
+          <li><strong>コンプライアンス対応</strong>: TLS 1.3 を要求するコンプライアンスフレームワークやエンタープライズセキュリティ標準への準拠が可能に</li>
+          <li><strong>将来への備え</strong>: TLS 1.3 はポスト量子暗号の前提条件の 1 つで、harvest-now, decrypt-later 型攻撃への対策に</li>
+          <li><strong>追加コストなし</strong>: 追加料金なしで、MSK Provisioned が利用可能なすべてのリージョンで提供</li>
+        </ul>
+      </div>
+      <div class="merit-box">
+        <h3>🔧 技術面</h3>
+        <ul>
+          <li><strong>高速かつ安全な暗号化</strong>: ハンドシェイクのラウンドトリップ削減と最新の暗号スイートにより、TLS 1.2 より高速で安全</li>
+          <li><strong>ダウンタイムなしの段階的移行</strong>: 混在モードポリシーと 1 段階ずつのローリング再起動で、稼働させたまま安全に移行</li>
+          <li><strong>一元的な制御</strong>: ブローカーごとの個別設定ではなく、名前付きポリシーでクラスター全体の TLS 設定を一元管理</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="limit-box">
+      <h3>🚫 制限事項</h3>
+      <ul>
+        <li>MSK Serverless では利用できない (MSK Provisioned のみ)</li>
+        <li>Apache Kafka バージョン 3.6 以降が必要</li>
+        <li>既存クラスターのポリシー変更は 1 段階ずつのみ (デフォルトから TLS 1.3 のみへ直接移行は不可)</li>
+        <li>TLS_CHACHA20_POLY1305_SHA256 暗号スイートは非サポート</li>
+        <li>TLS 1.3 ハンドシェイクに失敗した接続は TLS 1.2 にフォールバックしない</li>
+      </ul>
+    </div>
+    <div class="warning-box">
+      <h3>🤔 考慮すべき点</h3>
+      <ul>
+        <li>MSK-TLSv1.3-Only-2026 では TLS 1.3 非対応のクライアントが接続できなくなるため、事前にすべてのクライアントの対応状況を確認する</li>
+        <li>MSK-TLSv1.3-2026 でも、TLS 1.3 を広告するが実装に不備のあるクライアントはハンドシェイクに失敗する。TLS ライブラリの RFC 8446 準拠を確認する</li>
+        <li>クライアントとブローカーの間にあるファイアウォール、プロキシ、ロードバランサー、トラフィック検査アプライアンスも TLS 1.3 対応が必要</li>
+        <li>本番適用の前に、非本番クラスターで MSK-TLSv1.3-2026 を適用してクライアント接続を確認することを推奨</li>
+        <li>Kafka 管理 API (kafka-configs.sh) でブローカーに ssl.* 設定を直接適用しない。ポリシーと競合する設定はブローカーの起動失敗やレプリケーション喪失を引き起こし、復旧に AWS Support が必要になる場合がある</li>
+        <li>ポリシー適用時はローリング再起動が発生するため、高可用性のベストプラクティス (レプリケーションファクター 3 以上など) に従った構成が前提</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h3>1️⃣ 規制業界でのコンプライアンス要件への対応</h3>
+      <p><span class="label">シナリオ</span>: 金融機関が社内セキュリティ標準で TLS 1.3 の使用を義務付けられており、Kafka ベースのストリーミング基盤もその対象となった。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Properties</span><span class="code-title">2 フェーズでの移行</span></div>
+        <pre><code class="language-properties"># フェーズ 1: 混在モードで TLS 1.3 を有効化
+tls.security.policy=MSK-TLSv1.3-2026
+# フェーズ 2: クライアント移行完了後に TLS 1.3 のみへ厳格化
+tls.security.policy=MSK-TLSv1.3-Only-2026</code></pre>
+      </div>
+      <p><span class="label">効果</span>: クラスターを停止することなく段階的に TLS 1.3 への移行を完了し、監査でポリシー名による明確な証跡を示せる。</p>
+    </div>
+
+    <div class="usecase">
+      <h3>2️⃣ 多数のクライアントチームを抱える組織での段階的移行</h3>
+      <p><span class="label">シナリオ</span>: 複数の開発チームがそれぞれ異なる言語・バージョンの Kafka クライアントで同一クラスターに接続しており、全チーム同時の TLS 1.3 移行は現実的でない。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">混在モードポリシーの適用と検証</span></div>
+        <pre><code class="language-bash"># 混在モードポリシーを適用し、各チームが自分のペースで移行
+aws kafka update-cluster-configuration \
+    --cluster-arn &lt;クラスター ARN&gt; \
+    --current-version &lt;現在のバージョン&gt; \
+    --configuration-info '{"Arn":"&lt;設定 ARN&gt;","Revision":1}'
+
+# 各チームはクライアント側で TLS 1.3 を検証
+openssl s_client -connect &lt;ブローカーエンドポイント&gt;:9094 -tls1_3</code></pre>
+      </div>
+      <p><span class="label">効果</span>: TLS 1.2 のみ対応のクライアントも接続を維持したまま、各チームが独立したスケジュールで TLS 1.3 へ移行できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h3>3️⃣ ポスト量子暗号への移行準備</h3>
+      <p><span class="label">シナリオ</span>: 長期保存が必要な機密データを扱う組織が、将来の量子コンピュータによる復号リスク (harvest-now, decrypt-later) に備えたロードマップを策定している。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Properties</span><span class="code-title">新規クラスターへの直接適用</span></div>
+        <pre><code class="language-properties"># TLS 1.3 のみを受け入れるポリシーを新規クラスターに直接適用
+tls.security.policy=MSK-TLSv1.3-Only-2026</code></pre>
+      </div>
+      <p><span class="label">効果</span>: ポスト量子暗号の前提条件である TLS 1.3 への移行を先行して完了し、将来の暗号アルゴリズム移行の基盤を整備できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">既存の MSK Provisioned の料金体系の範囲内で利用可能</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">全リージョン</div>
+        <div class="stat-label">MSK Provisioned が提供されているすべての AWS リージョンで利用可能</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">Kafka 3.6+</div>
+        <div class="stat-label">Apache Kafka 3.6 以降の MSK Provisioned クラスターが対象</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <h3>📜 AWS Certificate Manager (ACM)</h3>
+      <p>MSK ブローカーは ACM のパブリック証明書を使用しており、Amazon Trust Services を信頼するトラストストアであれば追加設定なしで接続できる。</p>
+    </div>
+    <div class="card">
+      <h3>🔑 AWS Key Management Service (KMS)</h3>
+      <p>転送時の暗号化と組み合わせて、保存時の暗号化を KMS キーで透過的に実施できる。</p>
+    </div>
+    <div class="card">
+      <h3>🧱 AWS CloudFormation</h3>
+      <p>AWS::MSK::Configuration リソースの ServerProperties で tls.security.policy を宣言的に管理できる。</p>
+    </div>
+    <div class="card">
+      <h3>🌐 Application Load Balancer / Amazon CloudFront</h3>
+      <p>同様に名前付きセキュリティポリシーで TLS バージョンを制御する方式を採用しており、運用モデルの一貫性がある。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      Amazon MSK の TLS 1.3 サポートは、<span class="highlight">名前付きセキュリティポリシーによるオプトイン方式</span>で提供され、既存クラスターへの影響なく段階的に導入できる設計が特徴です。
+      コンプライアンス要件への対応とポスト量子暗号への備えの両面で価値があるため、MSK Provisioned を利用中の場合は、まず非本番環境で混在モードポリシー
+      <span class="highlight">MSK-TLSv1.3-2026</span> を適用してクライアントの互換性を検証し、計画的な TLS 1.3 移行を開始することを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-msk-tls/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-msk-tls/</a></li>
+      <li><a href="https://docs.aws.amazon.com/msk/latest/developerguide/security.html" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon MSK Security (開発者ガイド)</a></li>
+      <li><a href="https://docs.aws.amazon.com/msk/latest/developerguide/msk-encryption.html" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon MSK Encryption (開発者ガイド)</a></li>
+      <li><a href="https://docs.aws.amazon.com/msk/latest/developerguide/msk-tls-security-policies.html" target="_blank" rel="noopener noreferrer" class="aws-link">TLS security policies for Amazon MSK (開発者ガイド)</a></li>
+      <li><a href="https://aws.amazon.com/msk/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon MSK 料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-10-30-amazon-msk-tls.md) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

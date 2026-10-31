@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Redshift - ハンズオフの自動クロスリージョンバックアップ</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 34px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .release-date {
+      color: var(--aws-smile-orange);
+      font-weight: 600;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 8px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 720px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 { color: #F08070; }
+    .after-box h3 { color: #6FBF5A; }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: var(--aws-green); flex-shrink: 0; }
+    .cross-icon { color: var(--aws-red); flex-shrink: 0; }
+
+    /* Feature cards */
+    .feature-card {
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 14px 18px;
+      margin: 12px 0;
+    }
+
+    .feature-card .feature-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+
+    .feature-card ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .feature-card li { margin: 4px 0; }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+
+    th, td {
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 8px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* Steps */
+    .step {
+      display: flex;
+      gap: 14px;
+      margin: 16px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    .step-content { flex: 1; }
+
+    .step-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 4px;
+    }
+
+    .step-content p { margin: 0; font-size: 14px; }
+
+    /* Use case */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 14px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .usecase p { margin: 6px 0; font-size: 14px; }
+
+    .usecase .label {
+      font-weight: 600;
+      color: var(--aws-white);
+    }
+
+    .usecase ol {
+      margin: 6px 0;
+      padding-left: 22px;
+      font-size: 14px;
+    }
+
+    .usecase ol li { margin: 2px 0; }
+
+    /* Merit grid */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 720px) {
+      .merit-grid { grid-template-columns: 1fr; }
+    }
+
+    .merit-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+
+    .merit-box h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Mermaid container */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* Lists */
+    ul.plain-list { margin: 8px 0; padding-left: 22px; font-size: 14px; }
+    ul.plain-list li { margin: 6px 0; }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    /* Summary box */
+    .summary-box {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 18px 20px;
+      font-size: 15px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { margin: 8px 0; padding-left: 20px; }
+    footer li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <span class="service-badge">Amazon Redshift</span>
+      <h1>🔄 ハンズオフの自動クロスリージョンバックアップ</h1>
+      <div class="subtitle">
+        <span class="release-date">📅 2026 年 10 月 29 日リリース</span> ｜
+        機能: 自動クロスリージョンスナップショットコピー (Automated Cross-Region Backups)
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>
+        Amazon Redshift が、<span class="highlight">プロビジョンドクラスターと Serverless ワークグループの両方</span>を対象とした、ハンズオフ (hands-off) の自動クロスリージョンバックアップを発表しました。機能を有効にすると、最新のスナップショットが<span class="highlight">手動操作なしで継続的かつ増分的に</span>指定した宛先リージョンへ自動コピーされます。
+      </p>
+      <p>
+        大きな特徴は<span class="highlight">ローカルのスナップショットスケジュールから独立して動作する</span>点です。次回のスケジュールされたスナップショット作成を待つことなく、利用可能な最新のスナップショットが常に宛先リージョンへコピーされます。障害時には、宛先リージョンのスナップショットから新しいクラスターまたはワークグループを復元するだけで復旧できます。
+      </p>
+      <p>
+        DR 戦略としてマルチリージョン構成を採用している企業や、規制要件によりリージョン外へのバックアップ保管が求められる金融・公共分野のユーザーにとって、運用負荷を減らしながら復旧目標を確実に満たせる重要なアップデートです。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before: アップデート前の課題</h3>
+          <div class="check-item"><span class="cross-icon">✗</span><span>障害発生時にクロスリージョンコピーを開始するための手動ステップが必要になるケースがあった</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>コピーがローカルのスナップショットスケジュールに依存し、次のスケジュールを待つ必要があった</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>最新のバックアップが宛先リージョンに存在することを保証するための監視・管理の手間がかかっていた</span></div>
+        </div>
+        <div class="after-box">
+          <h3>✅ After: アップデート後の改善</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span>最新のスナップショットが手動操作なしで、継続的かつ増分的に宛先リージョンへ自動コピー</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>スナップショットスケジュールから独立して動作し、次のスケジュールを待たずに最新バックアップを確保</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>プロビジョンドクラスターと Serverless ワークグループの両方で同じ仕組みが利用可能</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>宛先リージョンでのコピー済み自動スナップショットの保持期間を個別に設定可能</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Primary["☁️ プライマリリージョン"]
+        Cluster["🖥️ Redshift クラスター<br/>または Serverless ワークグループ"]
+        Snap[("📸 最新スナップショット")]
+        Cluster -->|自動スナップショット作成| Snap
+    end
+
+    subgraph Dest["☁️ 宛先リージョン"]
+        CopySnap[("📸 コピー済みスナップショット<br/>copy プレフィックス付き")]
+        NewCluster["🖥️ 新しいクラスター<br/>または Serverless ワークグループ"]
+        CopySnap -.->|障害時に復元| NewCluster
+    end
+
+    Snap -->|継続的・増分<br/>自動コピー| CopySnap
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Primary,Dest cloud
+    class Cluster,NewCluster compute
+    class Snap,CopySnap database
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        機能を有効にすると、プライマリリージョンの最新スナップショットが手動操作なしで継続的かつ増分的に宛先リージョンへコピーされます。障害時には、宛先リージョンのコピー済みスナップショットから新しいプロビジョンドクラスターまたは Serverless ワークグループを復元します。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="feature-card">
+        <div class="feature-title">🙌 1. ハンズオフの自動コピー</div>
+        <ul>
+          <li>機能を有効にするだけで、最新のスナップショットが常に自動で宛先リージョンへコピーされる</li>
+          <li>コピーは継続的かつ増分的に行われ、手動操作は一切不要</li>
+          <li>予期しない障害時にも、クロスリージョンコピーを開始するための手動ステップが不要</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">🕐 2. スナップショットスケジュールからの独立</div>
+        <ul>
+          <li>ローカルのスナップショットスケジュールとは独立して動作する</li>
+          <li>次回のスケジュールされたスナップショットを待たず、利用可能な最新のスナップショットがコピーされる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">🖥️ 3. プロビジョンドと Serverless の両対応</div>
+        <ul>
+          <li>プロビジョンドクラスターと Serverless ワークグループの両方で利用可能</li>
+          <li>宛先リージョンでは、新しいプロビジョンドクラスターまたは Serverless ワークグループとして復元できる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-title">⏳ 4. 柔軟な保持期間設定</div>
+        <ul>
+          <li>宛先リージョンにコピーされた自動スナップショットの保持期間を設定できる</li>
+          <li>ユーザースナップショット (手動スナップショット) は、手動で削除するまで保持される</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対象</td><td>プロビジョンドクラスター、Serverless ワークグループ</td></tr>
+        <tr><td>コピー方式</td><td>継続的・増分的な自動コピー</td></tr>
+        <tr><td>コピー対象</td><td>利用可能な最新のスナップショット</td></tr>
+        <tr><td>宛先リージョン</td><td>クラスターまたはワークグループごとに設定</td></tr>
+        <tr><td>コピー済みスナップショットの命名</td><td>宛先リージョンで名前に copy プレフィックスが付与される</td></tr>
+        <tr><td>自動スナップショットの保持期間</td><td>宛先リージョンで個別に設定可能</td></tr>
+        <tr><td>ユーザースナップショットの保持</td><td>手動で削除するまで保持</td></tr>
+        <tr><td>復元方法</td><td>宛先リージョンで新しいプロビジョンドクラスターまたは Serverless ワークグループへ復元</td></tr>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>📋 前提条件</h3>
+      <ul class="plain-list">
+        <li>Amazon Redshift のプロビジョンドクラスターまたは Serverless ワークグループが存在すること</li>
+        <li>バックアップのコピー先とする宛先リージョンを決定していること</li>
+        <li>スナップショット操作に必要な IAM 権限を持っていること</li>
+      </ul>
+
+      <h3>🚀 手順</h3>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <div class="step-title">自動クロスリージョンスナップショットコピーの有効化</div>
+          <p>クラスターまたはワークグループごとに機能を有効にします。Amazon Redshift コンソールの対象クラスターまたはワークグループの設定から有効化できます。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <div class="step-title">宛先リージョンと保持期間の設定</div>
+          <p>コピー先となる宛先リージョンを選択し、宛先リージョンにおけるコピー済み自動スナップショットの保持期間を設定します。ユーザースナップショットは手動で削除するまで保持されます。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <div class="step-title">コピー済みスナップショットの確認</div>
+          <p>宛先リージョンで、copy プレフィックスが付与されたスナップショットがコピーされていることを確認します。</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">宛先リージョンでスナップショットの一覧を確認する例</span>
+            </div>
+            <pre><code class="language-bash"># 宛先リージョンでスナップショットの一覧を確認する例
+aws redshift describe-cluster-snapshots --region &lt;宛先リージョン&gt;</code></pre>
+          </div>
+          <p>describe-cluster-snapshots コマンドにより、宛先リージョンに存在するスナップショットの一覧と詳細を確認できます。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <div class="step-title">障害時の復元</div>
+          <p>障害発生時は、宛先リージョンのコピー済みスナップショットから新しいプロビジョンドクラスターまたは Serverless ワークグループを復元します。詳細は<a href="https://docs.aws.amazon.com/redshift/latest/mgmt/working-with-snapshot-restore-cluster-from-snapshot.html" target="_blank" rel="noopener noreferrer" class="aws-link">スナップショットからのクラスター復元のドキュメント</a>を参照してください。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <div class="merit-grid">
+        <div class="merit-box">
+          <h3>💼 ビジネス面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>事業継続性の強化</strong>: 最新のバックアップが常に別リージョンに確保され、リージョン規模の障害への備えが強化される</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: バックアップコピーの監視や手動操作が不要になり、運用チームの負荷が軽減される</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス対応</strong>: リージョン外へのバックアップ保管を求める規制要件への対応が容易になる</span></div>
+        </div>
+        <div class="merit-box">
+          <h3>⚙️ 技術面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>手動介入の排除</strong>: 障害時にクロスリージョンコピーを開始する手動ステップが不要で、人的ミスのリスクを低減</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>最新データの保護</strong>: スナップショットスケジュールに依存せず、利用可能な最新のスナップショットが常にコピーされる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>増分コピーによる効率化</strong>: 継続的かつ増分的なコピーにより、効率的にバックアップが転送される</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <h3>🚧 制限事項</h3>
+      <div class="check-item"><span class="cross-icon">!</span><span>コピー済みスナップショットには宛先リージョンで copy プレフィックスが付与されるため、スナップショット名に依存する自動化スクリプトは確認が必要</span></div>
+      <div class="check-item"><span class="cross-icon">!</span><span>復元は宛先リージョンでの新しいプロビジョンドクラスターまたは Serverless ワークグループの作成となる</span></div>
+
+      <h3>🤔 考慮すべき点</h3>
+      <div class="check-item"><span class="cross-icon">!</span><span>宛先リージョンでのバックアップストレージ料金とリージョン間のデータ転送料金が発生するため、保持期間の設計がコストに影響する</span></div>
+      <div class="check-item"><span class="cross-icon">!</span><span>ユーザースナップショットは手動で削除するまで保持されるため、不要になったスナップショットの削除運用を検討する必要がある</span></div>
+      <div class="check-item"><span class="cross-icon">!</span><span>復旧手順 (宛先リージョンでの復元) を事前にテストし、DR 計画に組み込むことが推奨される</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">🌋 ユースケース 1: リージョン障害に備えたディザスタリカバリ</div>
+        <p><span class="label">シナリオ</span>: 基幹データウェアハウスを単一リージョンで運用しており、リージョン規模の障害発生時にもデータを確実に復旧できる体制を整えたい。</p>
+        <p><span class="label">実装例</span>:</p>
+        <ol>
+          <li>本番クラスターで自動クロスリージョンスナップショットコピーを有効化</li>
+          <li>DR 用の宛先リージョンと保持期間を設定</li>
+          <li>定期的に宛先リージョンでの復元テストを実施</li>
+        </ol>
+        <p><span class="label">効果</span>: 最新のスナップショットが常に DR リージョンに存在するため、障害発生時は復元操作のみで復旧でき、復旧時間と手順が大幅に簡素化される。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🏦 ユースケース 2: 規制要件への対応</div>
+        <p><span class="label">シナリオ</span>: 金融業界の規制により、バックアップデータを地理的に離れた場所に保管することが求められている。</p>
+        <p><span class="label">実装例</span>:</p>
+        <ol>
+          <li>コンプライアンス要件を満たす宛先リージョンを選定</li>
+          <li>自動クロスリージョンスナップショットコピーを有効化</li>
+          <li>要件に応じた保持期間を宛先リージョンで設定</li>
+        </ol>
+        <p><span class="label">効果</span>: 手動運用なしで規制要件を継続的に満たすことができ、監査対応の証跡としても活用できる。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🧩 ユースケース 3: Serverless ワークグループのバックアップ戦略統一</div>
+        <p><span class="label">シナリオ</span>: プロビジョンドクラスターと Serverless ワークグループが混在する環境で、バックアップ戦略を統一したい。</p>
+        <p><span class="label">実装例</span>:</p>
+        <ol>
+          <li>プロビジョンドクラスターと Serverless ワークグループの両方で機能を有効化</li>
+          <li>共通の宛先リージョンと保持期間ポリシーを適用</li>
+          <li>宛先リージョンで copy プレフィックス付きスナップショットを一元的に監視</li>
+        </ol>
+        <p><span class="label">効果</span>: デプロイ形態によらず同一のクロスリージョンバックアップ体制を構築でき、運用の標準化が進む。</p>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>
+        自動クロスリージョンバックアップの利用に伴い、<span class="highlight">宛先リージョンでのバックアップストレージ料金</span>と<span class="highlight">リージョン間のデータ転送料金</span>が発生します。詳細は <a href="https://aws.amazon.com/redshift/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon Redshift の料金ページ</a>の「Backup and storage」および「Data transfer」セクションを参照してください。
+      </p>
+    </div>
+
+    <!-- 利用可能リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>すべての <span class="highlight">AWS 商用リージョン</span>および <span class="highlight">AWS GovCloud (US) リージョン</span>で利用可能です。</p>
+    </div>
+
+    <!-- 関連サービス・機能 -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <ul class="plain-list">
+        <li><strong>Amazon Redshift Serverless</strong>: 本機能はプロビジョンドクラスターだけでなく Serverless ワークグループでも利用可能</li>
+        <li><strong>AWS Backup</strong>: Amazon Redshift のスナップショット管理を一元化するマネージドサービスで、組織全体のデータ保護戦略と組み合わせて利用できる</li>
+        <li><strong>Amazon S3</strong>: Redshift のスナップショットは、Redshift が管理する S3 バケットに暗号化された状態で保存される</li>
+      </ul>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <div class="summary-box">
+        Amazon Redshift の自動クロスリージョンバックアップにより、最新のスナップショットが<span class="highlight">手動操作なしで継続的かつ増分的に</span>宛先リージョンへコピーされるようになりました。プロビジョンドクラスターと Serverless ワークグループの両方に対応しており、DR 体制の構築と運用が大幅に簡素化されます。マルチリージョンでの事業継続性が求められる環境では、<span class="highlight">本機能の有効化と宛先リージョンでの復元テストの実施</span>を推奨します。
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典・参考リンク</p>
+      <ul>
+        <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/10/redshift-automated-cross-region-backups/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/10/redshift-automated-cross-region-backups/</a></li>
+        <li>ドキュメント: Amazon Redshift のスナップショットとバックアップ: <a href="https://docs.aws.amazon.com/redshift/latest/mgmt/working-with-snapshots.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/redshift/latest/mgmt/working-with-snapshots.html</a></li>
+        <li>ドキュメント: スナップショットからのクラスター復元: <a href="https://docs.aws.amazon.com/redshift/latest/mgmt/working-with-snapshot-restore-cluster-from-snapshot.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/redshift/latest/mgmt/working-with-snapshot-restore-cluster-from-snapshot.html</a></li>
+        <li>料金ページ: <a href="https://aws.amazon.com/redshift/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/redshift/pricing/</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-10-29) を基に生成されています。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
