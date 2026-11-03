@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Lambda - セルフマネージド Kafka ESM で Queues for Apache Kafka をサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 18px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box h3 { color: #FF6B4A; margin-top: 0; }
+.after-box h3 { color: #4CAF50; margin-top: 0; }
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+.before-box li, .after-box li {
+  margin: 8px 0;
+  padding-left: 24px;
+  position: relative;
+  font-size: 14.5px;
+}
+.before-box li::before {
+  content: "✗";
+  position: absolute;
+  left: 0;
+  color: #FF6B4A;
+  font-weight: bold;
+}
+.after-box li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #4CAF50;
+  font-weight: bold;
+}
+
+/* 統計カード */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+.table-wrap { overflow-x: auto; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* チェックリスト */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 15px;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { font-size: 16px; flex-shrink: 0; }
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-title { color: var(--aws-white); font-weight: 600; margin-bottom: 4px; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase p { margin: 8px 0; font-size: 14.5px; }
+.usecase-effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13.5px;
+  color: var(--aws-smile-orange);
+}
+
+ul.plain { padding-left: 20px; margin: 8px 0; }
+ul.plain li { margin: 6px 0; font-size: 15px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12.5px;
+  color: var(--aws-light-gray);
+}
+footer ul { padding-left: 18px; margin: 8px 0; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">⚡ AWS Lambda</span>
+    <h1>セルフマネージド Kafka イベントソースで<br>Queues for Apache Kafka をサポート</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 2 日 | 機能: キュー消費モード (Queue Consumption Mode)</div>
+  </div>
+
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>AWS Lambda がセルフマネージド Apache Kafka イベントソースマッピング (ESM) において、<span class="highlight">Queues for Apache Kafka (KIP-932 シェアグループ)</span> をサポートしました。シェアグループは Apache Kafka 4.2 で一般提供された機能で、お客様自身が運用する Kafka クラスターや Confluent Cloud などのマネージドサービスで利用できます。</p>
+    <p>複数のイベントポーラーが同一パーティションから同時にメッセージを消費できるようになり、<span class="highlight">並列度がトピックのパーティション数から切り離されます</span>。プロデューサー、トピック設定、関数コードを変更することなく、トラフィックスパイク時のスループット向上と処理の回復力向上を実現できます。</p>
+    <p>画像・動画エンコーディング、不正検知、通知配信、テレメトリ取り込みなど、各イベントを独立した作業単位として扱い、厳密な順序性よりも処理速度を重視するワークロードに適しています。なお、キューモードはパーティション内の順序性を保証しません。</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">最大 10</div>
+        <div class="stat-label">イベントポーラーあたりの同時 Lambda 呼び出し</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">複数</div>
+        <div class="stat-label">同一パーティションから同時消費できるポーラー数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">Kafka 4.2</div>
+        <div class="stat-label">KIP-932 シェアグループが一般提供されたバージョン</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <ul>
+          <li>各パーティションは 1 コンシューマーのみに割り当てられ、並列度の上限がパーティション数に制限されていた</li>
+          <li>高い並列度にはトピックのオーバーパーティショニングが必要だった</li>
+          <li>あるいは Amazon SQS など別キューイングシステムへの転送が必要で、追加インフラとプロデューサーコードの維持が負担だった</li>
+          <li>処理が遅い・失敗したイベントが同一パーティションの後続イベントをブロックしていた</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <ul>
+          <li>複数のイベントポーラーが同一パーティションから同時に消費でき、並列度がパーティション数から独立</li>
+          <li>各ポーラーが最大 10 の同時呼び出しをサポートし、スパイク時のスループットが向上</li>
+          <li>遅延・失敗イベントが他のイベントの処理を妨げず、回復力が向上</li>
+          <li>プロデューサー、トピック設定、関数コードの変更不要。ESM の設定変更のみで移行可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Before["📦 従来: コンシューマーグループモード"]
+        direction LR
+        subgraph TopicA["📚 Kafka トピック"]
+            P1["🗂️ パーティション 1"]
+            P2["🗂️ パーティション 2"]
+            P1 ~~~ P2
+        end
+        EP1["📡 イベントポーラー 1"]
+        EP2["📡 イベントポーラー 2"]
+        L1["⚡ Lambda 関数"]
+        P1 --> EP1
+        P2 --> EP2
+        EP1 --> L1
+        EP2 --> L1
+    end
+
+    subgraph After["✨ 新機能: キューモード シェアグループ"]
+        direction LR
+        subgraph TopicB["📚 Kafka トピック"]
+            P3["🗂️ パーティション 1"]
+        end
+        EP3["📡 イベントポーラー 1"]
+        EP4["📡 イベントポーラー 2"]
+        EP5["📡 イベントポーラー 3"]
+        L2["⚡ Lambda 関数<br/>ポーラーごとに最大 10 同時呼び出し"]
+        P3 --> EP3
+        P3 --> EP4
+        P3 --> EP5
+        EP3 --> L2
+        EP4 --> L2
+        EP5 --> L2
+    end
+
+    Before ~~~ After
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef topic fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef partition fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef poller fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef lambda fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+
+    class Before,After layer
+    class TopicA,TopicB topic
+    class P1,P2,P3 partition
+    class EP1,EP2,EP3,EP4,EP5 poller
+    class L1,L2 lambda
+      </pre>
+    </div>
+    <p>従来のコンシューマーグループモードでは 1 パーティションに 1 イベントポーラーが割り当てられ並列度がパーティション数に制限されていましたが、キューモードでは複数のイベントポーラーが同一パーティションから同時に消費でき、並列度がパーティション数から切り離されます。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔧 主要機能</h2>
+    <div class="card">
+      <div class="card-title">1️⃣ キュー消費モード (Queue Consumption Mode)</div>
+      <p style="margin:0; font-size:14.5px;">Apache Kafka 4.2 で一般提供された KIP-932 シェアグループを基盤とした新しい消費モード。ESM 作成時に <code class="inline">ConsumptionMode</code> を <code class="inline">Queue</code> に設定することで有効化。コンソール、Lambda API、AWS CLI、CloudFormation、SAM、CDK から設定可能。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">2️⃣ パーティション数に依存しない並列スケーリング</div>
+      <p style="margin:0; font-size:14.5px;">複数のイベントポーラーが同一パーティションから同時に消費可能。各イベントポーラーは最大 10 の同時 Lambda 呼び出しをサポートし、パーティション数を増やすことなくスループットを拡張できる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">3️⃣ 処理の回復力向上</div>
+      <p style="margin:0; font-size:14.5px;">処理が遅い、または失敗したイベントが同一パーティション内の他のイベントをブロックしない。各イベントを独立した作業単位として処理。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">4️⃣ 既存環境への非侵襲的な導入</div>
+      <p style="margin:0; font-size:14.5px;">プロデューサー、トピック設定、関数コードの変更が不要。セルフマネージドクラスターのほか、Confluent Cloud などのマネージドサービスにも対応。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📊 技術仕様: 消費モードの比較</h2>
+    <div class="table-wrap">
+      <table>
+        <tr>
+          <th>項目</th>
+          <th>コンシューマーグループモード</th>
+          <th>キューモード</th>
+        </tr>
+        <tr>
+          <td>基盤プロトコル</td>
+          <td>Kafka コンシューマーグループ</td>
+          <td>Kafka シェアグループ (KIP-932)</td>
+        </tr>
+        <tr>
+          <td>パーティションあたりのポーラー数</td>
+          <td>1</td>
+          <td>複数</td>
+        </tr>
+        <tr>
+          <td>ポーラーあたりの同時呼び出し</td>
+          <td>1</td>
+          <td>最大 10</td>
+        </tr>
+        <tr>
+          <td>並列度の上限</td>
+          <td>パーティション数に依存</td>
+          <td>パーティション数から独立</td>
+        </tr>
+        <tr>
+          <td>パーティション内の順序保証</td>
+          <td>あり ✓</td>
+          <td>なし ✗</td>
+        </tr>
+        <tr>
+          <td>必要な Kafka バージョン</td>
+          <td>制限なし</td>
+          <td>シェアグループ有効なクラスター (Apache Kafka 4.2 以降など)</td>
+        </tr>
+        <tr>
+          <td>適したワークロード</td>
+          <td>順序性が必要な処理</td>
+          <td>順序性不要で処理速度を重視する処理</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>🔄 API 変更履歴</h3>
+    <div class="table-wrap">
+      <table>
+        <tr>
+          <th>日付</th>
+          <th>サービス</th>
+          <th>変更内容</th>
+        </tr>
+        <tr>
+          <td>2026/10/30</td>
+          <td><a href="https://awsapichanges.com/archive/changes/c2b1d5-lambda.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Lambda</a></td>
+          <td>5 updated api methods - <code class="inline">SelfManagedKafkaEventSourceConfig</code> に <code class="inline">ConsumptionMode</code> パラメータが追加され、セルフマネージド Kafka トピックをキューとして消費する設定が可能に</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+    <h3>📋 前提条件</h3>
+    <ul class="plain">
+      <li>シェアグループが有効な Kafka クラスター (Apache Kafka 4.2 以降、または Confluent Cloud などの対応マネージドサービス)</li>
+      <li>Kafka クラスターへのネットワーク接続と認証情報 (AWS Secrets Manager に保存)</li>
+      <li>イベントを処理する Lambda 関数</li>
+    </ul>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">Kafka クラスターでシェアグループを有効化</div>
+        <p style="margin:4px 0; font-size:14.5px;">Apache Kafka 4.2 以降のクラスターでシェアグループ機能が有効になっていることを確認します。マネージドサービスを利用している場合は、プロバイダーのドキュメントに従って設定します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">ConsumptionMode を Queue に設定して ESM を作成</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">ESM の作成</span>
+          </div>
+          <pre><code class="language-bash">aws lambda create-event-source-mapping \
+  --function-name my-kafka-processor \
+  --topics my-topic \
+  --self-managed-event-source '{"Endpoints":{"KAFKA_BOOTSTRAP_SERVERS":["broker1.example.com:9092","broker2.example.com:9092"]}}' \
+  --self-managed-kafka-event-source-config '{"ConsumptionMode":"Queue"}' \
+  --source-access-configurations '[{"Type":"SASL_SCRAM_512_AUTH","URI":"arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:kafka-credentials"}]'</code></pre>
+        </div>
+        <p style="margin:4px 0; font-size:14px;"><code class="inline">--self-managed-kafka-event-source-config</code> で <code class="inline">ConsumptionMode</code> を <code class="inline">Queue</code> に設定することで、シェアグループベースのキュー消費モードが有効になります。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">動作確認</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">ESM の確認</span>
+          </div>
+          <pre><code class="language-bash">aws lambda get-event-source-mapping --uuid &lt;ESM の UUID&gt;</code></pre>
+        </div>
+        <p style="margin:4px 0; font-size:14px;"><code class="inline">State</code> が <code class="inline">Enabled</code> になり、<code class="inline">SelfManagedKafkaEventSourceConfig</code> の <code class="inline">ConsumptionMode</code> が <code class="inline">Queue</code> と表示されることを確認します。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:var(--aws-white);">インフラストラクチャコストの削減</strong>: 並列度向上のためのオーバーパーティショニングや、別のキューイングシステムの運用が不要になる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:var(--aws-white);">トラフィックスパイクへの対応力向上</strong>: パーティション数を変更せずにスループットを拡張でき、需要変動に迅速に対応できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:var(--aws-white);">移行コストの最小化</strong>: プロデューサー、トピック設定、関数コードの変更が不要なため、既存システムへの影響を最小限に抑えて導入できる</span></div>
+    <h3>🔬 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:var(--aws-white);">並列度とパーティション数の分離</strong>: 複数のイベントポーラーが同一パーティションから同時に消費でき、ポーラーごとに最大 10 の同時呼び出しが可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:var(--aws-white);">処理の回復力向上</strong>: 遅延または失敗したイベントが同一パーティション内の他のイベントの処理をブロックしない</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:var(--aws-white);">標準仕様への準拠</strong>: KIP-932 シェアグループという標準機能を基盤としており、特定ベンダーへのロックインがない</span></div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>キューモードはパーティション内のメッセージ順序を保証しないため、厳密な順序性が必要なワークロードには適さない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>シェアグループが有効な Kafka クラスター (Apache Kafka 4.2 以降など) が必要であり、古いバージョンのクラスターでは利用できない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>本アップデートの対象はセルフマネージド Kafka ESM であり、発表時点で Amazon MSK ESM は対象として言及されていない</span></div>
+    <h3>🤔 考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>順序性が必要なワークロードとそうでないワークロードを見極め、トピックごとに適切な消費モードを選択する必要がある</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>同時呼び出し数が増加するため、Lambda の同時実行数クォータやダウンストリームシステムの処理能力を考慮する必要がある</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>プロビジョンドモードを設定している場合は Event Poller Unit (EPU) の課金が発生するため、コストへの影響を確認する</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🎬 ユースケース 1: 画像・動画エンコーディングパイプライン</div>
+      <p><strong style="color:var(--aws-white);">シナリオ</strong>: メディア配信サービスで、アップロードされた動画のエンコーディングジョブを Kafka トピック経由で Lambda に連携。各ジョブは独立しており順序性は不要だが、アップロードが集中する時間帯にパーティション数がボトルネックとなり処理が遅延。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">実装例</span>
+        </div>
+        <pre><code class="language-bash">aws lambda create-event-source-mapping \
+  --function-name video-encoder \
+  --topics encoding-jobs \
+  --self-managed-event-source '{"Endpoints":{"KAFKA_BOOTSTRAP_SERVERS":["broker.example.com:9092"]}}' \
+  --self-managed-kafka-event-source-config '{"ConsumptionMode":"Queue"}'</code></pre>
+      </div>
+      <div class="usecase-effect">✅ <strong>効果</strong>: パーティション数を増やすことなく複数のイベントポーラーが並列にジョブを消費し、ピーク時のエンコーディング遅延を削減できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🛡️ ユースケース 2: リアルタイム不正検知</div>
+      <p><strong style="color:var(--aws-white);">シナリオ</strong>: 決済プラットフォームで、取引イベントを Kafka 経由で不正検知の Lambda 関数に送信。一部の複雑な取引の分析に時間がかかると、同一パーティションの後続取引の検知が遅延してしまう。</p>
+      <p style="font-size:14px;"><strong style="color:var(--aws-white);">実装例</strong>: ESM の <code class="inline">ConsumptionMode</code> を <code class="inline">Queue</code> に設定し、各取引イベントを独立した作業単位として処理する。処理が遅いイベントがあっても他のイベントの検知は並行して進行する。</p>
+      <div class="usecase-effect">✅ <strong>効果</strong>: 分析に時間のかかる取引が他の取引の検知をブロックしなくなり、不正検知全体のレイテンシーと回復力が改善する。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔀 ユースケース 3: 別キューイングシステムからの統合</div>
+      <p><strong style="color:var(--aws-white);">シナリオ</strong>: 高い並列度を得るために、Kafka のトラフィックの一部を別のキューイングシステムへ転送して Lambda で処理しており、転送用のインフラストラクチャとプロデューサーコードの維持が負担になっている。</p>
+      <p style="font-size:14px;"><strong style="color:var(--aws-white);">実装例</strong>:</p>
+      <ul class="plain" style="font-size:14px;">
+        <li>1. 転送先キュー向けの ESM と同等の処理を行う Lambda 関数を確認</li>
+        <li>2. Kafka トピックに対して <code class="inline">ConsumptionMode</code> を <code class="inline">Queue</code> にした ESM を作成</li>
+        <li>3. 動作確認後、転送用インフラストラクチャとプロデューサーの転送コードを廃止</li>
+      </ul>
+      <div class="usecase-effect">✅ <strong>効果</strong>: Kafka から直接高並列処理が可能になり、転送用インフラストラクチャの運用コストとプロデューサーコードの保守負担を削減できる。</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>標準の Lambda 料金が適用されます。<span class="highlight">キューモード自体の追加料金はありません</span>。</p>
+    <p>セルフマネージド Kafka ESM で<a href="https://docs.aws.amazon.com/lambda/latest/dg/kafka-scaling-modes.html#kafka-provisioned-mode" target="_blank" rel="noopener noreferrer" class="aws-link">プロビジョンドモード</a>を設定している場合は、Event Poller Unit (EPU) の使用量に対する課金も発生します。</p>
+    <p>詳細は <a href="https://aws.amazon.com/lambda/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Lambda 料金ページ</a>を参照してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>セルフマネージド Kafka ESM が利用可能な<span class="highlight">すべての AWS 商用リージョン</span>で利用できます。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">📨 Amazon MSK</div>
+      <p style="margin:0; font-size:14.5px;">AWS のマネージド Kafka サービス。本アップデートはセルフマネージド Kafka ESM が対象であり、MSK ESM は発表時点で対象として言及されていない。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📬 Amazon SQS</div>
+      <p style="margin:0; font-size:14.5px;">AWS のマネージドキューイングサービス。従来は高並列処理のために Kafka から SQS へトラフィックを移すケースがあったが、本機能により Kafka のまま高並列処理が可能になる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔐 AWS Secrets Manager</div>
+      <p style="margin:0; font-size:14.5px;">Kafka クラスターへの認証情報の保存に使用。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🏗️ AWS CloudFormation / AWS SAM / AWS CDK</div>
+      <p style="margin:0; font-size:14.5px;">ESM の <code class="inline">ConsumptionMode</code> 設定を IaC で管理可能。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>Lambda のセルフマネージド Kafka ESM がシェアグループベースのキュー消費モードをサポートしたことで、<span class="highlight">並列度がパーティション数から切り離され</span>、プロデューサーや関数コードを変更せずにスループットと処理の回復力を向上できるようになりました。</p>
+    <p>順序性を必要としない Kafka ワークロードでオーバーパーティショニングや別キューイングシステムへの転送を行っている場合は、Apache Kafka 4.2 以降への移行と <code class="inline">ConsumptionMode</code> を <code class="inline">Queue</code> に設定した ESM の導入を検討することを推奨します。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-lambda-queue-kafka-esm/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li><a href="https://aws.amazon.com/blogs/compute/introducing-queue-consumption-mode-for-apache-kafka-in-aws-lambda/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: Introducing queue consumption mode for Apache Kafka in AWS Lambda</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/polling-kafka-queue.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Using queues with Kafka event source mappings</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/with-kafka.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Lambda とセルフマネージド Apache Kafka の使用</a></li>
+      <li><a href="https://cwiki.apache.org/confluence/spaces/KAFKA/pages/255070434/KIP-932+Queues+for+Kafka" target="_blank" rel="noopener noreferrer" class="aws-link">KIP-932: Queues for Kafka</a></li>
+      <li><a href="https://aws.amazon.com/lambda/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Lambda 料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-02) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

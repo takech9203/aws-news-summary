@@ -5,6 +5,20 @@
 
 ## 2026 年
 
+- [2026-11-03 - Amazon RDS for Oracle - M8i および R8i インスタンスの提供リージョン拡大](2026/2026-11-03-rds-oracle-m8i-r8i-instances-new-regions.md)
+- [2026-11-02 - Amazon Connect Customer - Wait ブロックの Cases / External Tool イベントサポート](2026/2026-11-02-connect-wait-block-cases-tool-events.md)
+- [2026-11-02 - Amazon EC2 / Amazon Inspector - EC2 AMI の脆弱性スキャン対応](2026/2026-11-02-ec2-amis-scanned-through-inspector.md)
+- [2026-11-02 - Amazon CloudFront - AWS Service Quotas によるセルフサービスクォータ引き上げ](2026/2026-11-02-cloudfront-self-service-quotas.md)
+- [2026-11-02 - Kiro - Lean による自身のエージェントハーネスのプロパティ証明](2026/2026-11-02-kiro-harness-properties-in-lean.md)
+- [2026-11-02 - AWS Lambda - セルフマネージド Kafka イベントソースにおける Queues for Apache Kafka サポート](2026/2026-11-02-aws-lambda-queue-kafka-esm.md)
+- [2026-11-02 - Amazon Quick - デスクトップアプリで組織の既存サインイン方式を利用可能に](2026/2026-11-02-amazon-quick-desktop-organization-sign-in.md)
+- [2026-11-02 - Amazon Aurora - Aurora MySQL 8.4.10 の一般提供開始](2026/2026-11-02-amazon-aurora-mysql-8410-available.md)
+- [2026-11-02 - Amazon Textract - テキスト検出モデルのアップデート](2026/2026-11-02-textract-text-detection-model.md)
+- [2026-11-02 - Amazon RDS - スナップショット単位の課金可視化 (Per Snapshot Billing)](2026/2026-11-02-amazon-rds-per-snapshot-billing.md)
+- [2026-11-02 - Amazon Textract - アジアパシフィック (東京) および欧州 (チューリッヒ) リージョンで利用可能に](2026/2026-11-02-textract-tokyo-zurich.md)
+- [2026-11-02 - Amazon Aurora - Aurora MySQL 3.14 (MySQL 8.0.46 互換) の一般提供開始](2026/2026-11-02-amazon-aurora-mysql-314-available.md)
+- [2026-11-02 - Kiro - Claude Haiku 5.5 が AWS GovCloud (US) で利用可能に](2026/2026-11-02-kiro-haiku-5-5-aws-govcloud-us.md)
+- [2026-11-02 - Amazon Connect Customer - フローでの Model Context Protocol (MCP) ツールサポート](2026/2026-11-02-connect-flows-mcp-tools.md)
 - [2026-10-30 - Kiro - 仕様ハードニング (Specification Hardening) によるセキュリティ要件のシフトレフト](2026/2026-10-30-kiro-spec-it-safe.md)
 - [2026-10-30 - Amazon Bedrock - OpenAI Daybreak Red が AWS GovCloud (US-East) で利用可能に](2026/2026-10-30-openai-daybreak-red-govcloud-east.md)
 - [2026-10-30 - Amazon RDS for Oracle - JVM、Spatial、Locator、OLAP オプション利用時の自動マイナーバージョンアップグレード必須要件を撤廃](2026/2026-10-30-oracle-jvm-spatial-locator-olap-options-amvu-optional.md)
