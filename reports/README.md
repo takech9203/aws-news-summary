@@ -5,6 +5,13 @@
 
 ## 2026 年
 
+- [2026-11-03 - Amazon Connect Customer (Cases) - ケースから開始する新規メールスレッドでの宛先メールアドレス自動入力](2026/2026-11-03-amazon-connect-cases-email-addresses.md)
+- [2026-11-03 - AWS Transform for mainframe - リイマジンモダナイゼーションワークフローの改善](2026/2026-11-03-aws-transform-mainframe-reimagine.md)
+- [2026-11-03 - Amazon EKS - EKS Capability for Argo CD が Argo CD Notifications をサポート](2026/2026-11-03-amazon-eks-argo-cd-notifications.md)
+- [2026-11-03 - Kiro - Kiro CLI 3.0 で V3 がデフォルトに、Classic とデスクトップアプリは廃止](2026/2026-11-03-kiro-changelog-2026-11-03.md)
+- [2026-11-03 - Amazon Connect Customer - メールの一時停止・再開機能](2026/2026-11-03-connect-pause-resume-email.md)
+- [2026-11-03 - Amazon RDS for SQL Server - 最新の累積更新プログラム CU および GDR 更新のサポート](2026/2026-11-03-amazon-rds-supports-latest-cumulative-update-gdr-microsoft-sql-server.md)
+- [2026-11-03 - AWS Config - 10 種類の新しいリソースタイプをサポート](2026/2026-11-03-aws-config-new-resource-types.md)
 - [2026-11-03 - Amazon RDS for Oracle - M8i および R8i インスタンスの提供リージョン拡大](2026/2026-11-03-rds-oracle-m8i-r8i-instances-new-regions.md)
 - [2026-11-02 - Amazon Connect Customer - Wait ブロックの Cases / External Tool イベントサポート](2026/2026-11-02-connect-wait-block-cases-tool-events.md)
 - [2026-11-02 - Amazon EC2 / Amazon Inspector - EC2 AMI の脆弱性スキャン対応](2026/2026-11-02-ec2-amis-scanned-through-inspector.md)
