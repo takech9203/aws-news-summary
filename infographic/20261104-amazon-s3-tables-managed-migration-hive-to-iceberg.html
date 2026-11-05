@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon S3 Tables - Hive テーブルから Iceberg へのマネージド移行</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.4;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 8px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .card ul {
+      margin: 8px 0 0 0;
+      padding-left: 20px;
+    }
+
+    .card li {
+      margin: 6px 0;
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3 {
+      color: #FF7A59;
+      margin-top: 0;
+    }
+
+    .after-box h3 {
+      color: #6BCB4A;
+      margin-top: 0;
+    }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .before-box li, .after-box li {
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    /* 統計カード */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 20px 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.3;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* フロー図 */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-squid-ink);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+      color: var(--aws-white);
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon {
+      color: #6BCB4A;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .cross-icon {
+      color: #FF7A59;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .warn-icon {
+      color: var(--aws-smile-orange);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    /* テーブル */
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .spec-table th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      text-align: left;
+      padding: 10px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .spec-table td {
+      padding: 10px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--aws-light-gray);
+    }
+
+    .spec-table td:first-child {
+      white-space: nowrap;
+      font-weight: 600;
+      color: var(--aws-white);
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    code.inline {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-smile-orange);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 14px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .usecase ol {
+      margin: 8px 0;
+      padding-left: 22px;
+      font-size: 14px;
+    }
+
+    .usecase li {
+      margin: 4px 0;
+    }
+
+    .usecase-effect {
+      margin-top: 10px;
+      font-size: 14px;
+      background: rgba(29, 129, 2, 0.15);
+      border-radius: 6px;
+      padding: 8px 12px;
+    }
+
+    /* リージョン */
+    .region-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .region-tag {
+      background: rgba(0, 161, 201, 0.15);
+      border: 1px solid var(--aws-teal);
+      color: var(--aws-white);
+      border-radius: 16px;
+      padding: 6px 14px;
+      font-size: 13px;
+    }
+
+    .region-tag.tokyo {
+      background: rgba(255, 153, 0, 0.2);
+      border-color: var(--aws-orange);
+      font-weight: 700;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    footer li {
+      margin: 4px 0;
+    }
+
+    @media (max-width: 700px) {
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+      h1 {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div class="service-badge">🪣 Amazon S3 Tables</div>
+      <h1>🧊 Apache Hive テーブルから Apache Iceberg へのマネージド移行</h1>
+      <div class="subtitle">📅 リリース日: 2026 年 11 月 4 日 | 機能: Hive → Iceberg マネージド移行</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        Amazon S3 Tables が、<span class="highlight">Apache Hive テーブルを Apache Iceberg テーブルへ変換するマネージド移行機能</span>を発表。AWS Glue Data Catalog に登録された Parquet 形式の Hive テーブルを対象に、<strong>検証、互換性チェック、型変換、ZSTD 再圧縮、コンパクション</strong>までを S3 Tables が一括実行します。本番ワークロードを稼働させたまま、コンソールまたは API の操作だけで安全に移行できます。
+      </p>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">数週間 → 不要</div>
+          <div class="stat-label">テーブルごとの移行パイプライン構築</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">数分間のみ</div>
+          <div class="stat-label">カットオーバー時の書き込み停止時間</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">変換は無料</div>
+          <div class="stat-label">コピーされたデータ分のみ課金</div>
+        </div>
+      </div>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before: アップデート前の課題</h3>
+          <ul>
+            <li>テーブルごとにカスタム移行パイプラインの構築が必要で、<strong>数週間</strong>かかることがあった</li>
+            <li>増分同期やロールバックの仕組みを<strong>自前で設計・実装</strong>する必要があった</li>
+            <li>移行後のファイル最適化 (圧縮形式の変更やコンパクション) も<strong>別途作業</strong>が必要だった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ After: アップデート後の改善</h3>
+          <ul>
+            <li>S3 Tables が<strong>検証・変換・データコピーをマネージドで実行</strong>、パイプライン構築が不要に</li>
+            <li>本番ワークロードを中断せずに移行でき、<strong>各ステップの検査・増分同期・ソースへの復帰</strong>が可能に</li>
+            <li>Snappy → <strong>ZSTD 再圧縮とコンパクションを自動実行</strong>し、ストレージコスト削減・クエリ高速化を実現</li>
+            <li>移行後の Iceberg テーブルは<strong>データ増加に合わせて自動最適化</strong>され続ける</li>
+          </ul>
+        </div>
+      </div>
+
+      <p>
+        🎯 <strong>対象ユーザー</strong>: Hive ベースのデータレイクを運用し、Iceberg への移行を検討しているデータエンジニアリングチームやアナリティクス基盤の管理者
+      </p>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Source["📂 移行元"]
+        Glue["🗂️ AWS Glue Data Catalog<br/>Hive テーブル Parquet 形式"]
+        SrcData[("🪣 S3 ソースデータ")]
+    end
+
+    subgraph Migration["⚙️ S3 Tables マネージド移行"]
+        Validate{"✅ 検証<br/>互換性チェック"}
+        Copy["📦 初期コピー<br/>型変換 / ZSTD 再圧縮 / コンパクション"]
+        Sync["🔄 増分同期<br/>変更分のみ繰り返しコピー"]
+        Complete["🏁 カットオーバー<br/>読み書き可能に昇格"]
+    end
+
+    subgraph Dest["🧊 移行先"]
+        Iceberg[("🧊 S3 Tables<br/>Iceberg テーブル")]
+        Query["🔍 Athena / SageMaker<br/>Iceberg REST 互換エンジン"]
+    end
+
+    Report["📋 互換性レポート<br/>S3 バケットに出力"]
+
+    Glue --> Validate
+    SrcData --> Validate
+    Validate --> Report
+    Validate --> Copy
+    Copy --> Sync
+    Sync --> Complete
+    Complete --> Iceberg
+    Iceberg --> Query
+
+    classDef source fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef storage fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class Glue,SrcData source
+    class Copy,Sync,Complete,Report process
+    class Validate decision
+    class Iceberg,Query storage
+    class Source,Migration,Dest layer
+        </pre>
+      </div>
+      <p style="font-size: 14px;">
+        Glue に登録された Hive テーブルを S3 Tables のマネージド移行が検証・コピー・同期し、カットオーバー後に Iceberg テーブルとして読み書き可能になる流れを示しています。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="card">
+        <div class="card-title">✅ 1. マネージドな検証と互換性チェック</div>
+        <ul>
+          <li>データコピー前に、対象となるすべてのソースオブジェクトを特定し、<strong>互換性レポートを生成</strong></li>
+          <li>レポートは指定した S3 バケットに <code class="inline">tableCompatibilityReport</code>、<code class="inline">objectCompatibilityReport</code>、<code class="inline">objectMigrationReport</code> のプレフィックスで出力</li>
+          <li><code class="inline">unmatchedSourceFieldsPolicy</code> や <code class="inline">incompatibleValuesPolicy</code> などの移行ポリシーで、非互換データ検出時の動作 (例: <code class="inline">fail</code>) を制御可能</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔄 2. 無停止の移行と増分同期</div>
+        <ul>
+          <li>移行中、移行先の Iceberg テーブルは読み取り専用となり、<strong>ソース側への書き込みは継続可能</strong></li>
+          <li><code class="inline">sync-table-migration</code> により変更分のみを何度でも同期でき、差分を最小化してからカットオーバー</li>
+          <li>ソースへの書き込み停止が必要なのは<strong>カットオーバー時の数分間のみ</strong></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🚀 3. ストレージとクエリ性能の自動最適化</div>
+        <ul>
+          <li>ソースが Snappy 圧縮の場合、<strong>Zstandard (ZSTD) へ再圧縮</strong>し、ファイルをコンパクション</li>
+          <li>ストレージコストの削減、オブジェクト数の削減、クエリの高速化を実現</li>
+          <li>移行後も S3 Tables の自動メンテナンス (コンパクション、スナップショット管理) により継続的に最適化</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🤖 4. AI エージェントによる移行の自動化</div>
+        <ul>
+          <li>Agent Toolkit for AWS (GitHub: aws/agent-toolkit-for-aws) に移行用スキル <code class="inline">migrating-hive-tables-to-s3-tables</code> が提供</li>
+          <li>Kiro などの AI エージェントが <strong>IAM ポリシーの分析・推奨、移行計画の検証、API 呼び出しの実行、進捗監視</strong>を自律的に実施可能</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <div class="flow-diagram">
+        <div class="flow-step">🚀 Start<br/>移行開始・検証・初期コピー</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🔄 Sync<br/>増分同期 (繰り返し可)</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🏁 Complete<br/>カットオーバー</div>
+      </div>
+
+      <table class="spec-table">
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>移行元</td><td>AWS Glue Data Catalog に登録された Parquet 形式の Hive テーブル</td></tr>
+        <tr><td>移行先</td><td>S3 Tables の Apache Iceberg テーブル (Iceberg v2 / Parquet / ZSTD)</td></tr>
+        <tr><td>スコープ</td><td>同一 AWS アカウント・同一リージョン内 (ローンチ時点)</td></tr>
+        <tr><td>移行フロー</td><td>Start → Sync → Complete の 3 ステップ</td></tr>
+        <tr><td>移行中の移行先テーブル</td><td>読み取り専用 (カットオーバーで読み書き可能に昇格)</td></tr>
+        <tr><td>書き込み停止時間</td><td>カットオーバー時の数分間のみ</td></tr>
+        <tr><td>レポート出力</td><td>互換性レポート・移行レポートを S3 バケットに出力</td></tr>
+        <tr><td>操作方法</td><td>AWS マネジメントコンソール、S3 Tables 移行 API (AWS CLI / SDK)</td></tr>
+      </table>
+
+      <h3>💻 API 操作の例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">S3 Tables 移行 API</span>
+        </div>
+        <pre><code class="language-bash"># 移行の開始 (移行先テーブル定義、ソース指定、ポリシー、レポート出力先を JSON で指定)
+aws s3tables start-table-migration \
+  --cli-input-json file://migration-config.json
+
+# ソース側の変更分を移行先に同期 (何度でも実行可能)
+aws s3tables sync-table-migration \
+  --table-bucket-arn arn:aws:s3tables:ap-northeast-1:123456789012:bucket/my-table-bucket \
+  --namespace analytics \
+  --name sales_data</code></pre>
+      </div>
+      <p style="font-size: 14px;">
+        <code class="inline">start-table-migration</code> の入力 JSON には、IAM ロール ARN、移行先テーブル (テーブルバケット ARN、名前空間、テーブル名、KMS 暗号化、ストレージクラス、スキーマ、ソート順)、Glue ソーステーブル、メンテナンス設定、移行ポリシー、レポート出力先を指定します。
+      </p>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>📝 設定方法</h2>
+
+      <h3>📌 前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>移行元の Hive テーブルが AWS Glue Data Catalog に登録されており、データ形式が Parquet であること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>移行先の S3 テーブルバケットが移行元と同一アカウント・同一リージョンに存在すること (ローンチ時点の制約)</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>移行ジョブがソースデータの読み取りと移行先テーブルへの書き込みを行うための IAM ロールが用意されていること</span></div>
+
+      <h3>1️⃣ ステップ 1: 移行先テーブルの作成と移行の開始</h3>
+      <p style="font-size: 14px;">
+        コンソールの場合、S3 コンソールで移行先のテーブルバケットを選択し、[Create table from migration] を選択。名前空間とテーブル名を定義すると、最適化されたデフォルト設定が適用されます。CLI の場合は以下を実行します。
+      </p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">移行の開始</span>
+        </div>
+        <pre><code class="language-bash">aws s3tables start-table-migration --cli-input-json file://migration-config.json</code></pre>
+      </div>
+      <p style="font-size: 14px;">指定した Glue ソーステーブルの検証と互換性チェックを行い、問題がなければ移行先 Iceberg テーブルへの初期コピーを開始します。</p>
+
+      <h3>2️⃣ ステップ 2: 互換性レポートの確認と増分同期</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">増分同期</span>
+        </div>
+        <pre><code class="language-bash">aws s3tables sync-table-migration \
+  --table-bucket-arn &lt;テーブルバケット ARN&gt; \
+  --namespace &lt;名前空間&gt; \
+  --name &lt;テーブル名&gt;</code></pre>
+      </div>
+      <p style="font-size: 14px;">S3 バケットに出力された互換性レポートと移行レポートを確認し、ソース側で発生した変更を増分同期。各同期は変更分のみをコピーするため、必要な回数だけ繰り返して差分を最小化できます。</p>
+
+      <h3>3️⃣ ステップ 3: カットオーバーの実行</h3>
+      <p style="font-size: 14px;">
+        ソースへの書き込みを数分間停止し、移行を完了 (Complete) します。移行先の Iceberg テーブルが読み書き可能に昇格し、<strong>Amazon Athena、Amazon SageMaker Unified Studio、Iceberg REST API 互換のクエリエンジン</strong>から利用できるようになります。
+      </p>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+
+      <h3>💼 ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>移行期間の大幅短縮</strong>: テーブルごとに数週間かかっていたパイプライン構築が不要になり、データレイクモダナイゼーションを加速</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト効率</strong>: Hive から Iceberg への変換自体は無料で、コピーされたデータ分のみ課金。ZSTD 再圧縮とコンパクションによりストレージコストも削減</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>事業継続性</strong>: 本番ワークロードを稼働させたまま移行でき、書き込み停止はカットオーバー時の数分間のみ</span></div>
+
+      <h3>🔬 技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>リスク低減の仕組み</strong>: 事前の互換性レポート、各ステップの検査、繰り返しの増分同期、元のソースデータへの復帰が可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>移行後の自動最適化</strong>: S3 Tables の自動メンテナンスにより、データ増加に合わせて継続的に最適化</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>AI エージェント対応</strong>: Agent Toolkit for AWS の移行スキルにより、移行ワークフロー全体を AI エージェントに委任可能</span></div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>🚫 制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>移行元は AWS Glue に登録された <strong>Parquet 形式の Hive テーブルに限定</strong> (他のファイル形式は対象外)</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>ローンチ時点では<strong>同一 AWS アカウント・同一リージョン内</strong>の移行のみサポート</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>利用可能リージョンは米国、アジアパシフィック、欧州の一部リージョンに限定 (東京リージョンは対応)</span></div>
+
+      <h3>🤔 考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>移行中は移行先テーブルが読み取り専用となるため、カットオーバーは業務影響の少ない時間帯に計画する</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>移行ポリシー (<code class="inline">unmatchedSourceFieldsPolicy</code>、<code class="inline">incompatibleValuesPolicy</code>) により非互換データ検出時の挙動が変わるため、事前に互換性レポートを確認する</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>コピーされるデータ量に応じた課金が発生するため、大規模テーブルの移行時はコストを事前に見積もる</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">📚 1. Hive ベースのデータレイクの段階的モダナイゼーション</div>
+        <p style="font-size: 14px; margin: 4px 0;"><strong>シナリオ</strong>: 数百の Hive テーブルを持つデータレイクを運用しており、ACID トランザクションやスキーマ進化のために Iceberg への移行を計画している。</p>
+        <ol>
+          <li>互換性レポートで全テーブルの移行可否を事前評価</li>
+          <li>優先度の高いテーブルから <code class="inline">start-table-migration</code> で順次移行</li>
+          <li><code class="inline">sync-table-migration</code> で差分を同期しながら段階的にカットオーバー</li>
+        </ol>
+        <div class="usecase-effect">✅ <strong>効果</strong>: テーブルごとのパイプライン開発が不要になり、移行プロジェクト全体の期間とコストを大幅に削減できる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">📊 2. 本番稼働中の分析基盤の無停止移行</div>
+        <p style="font-size: 14px; margin: 4px 0;"><strong>シナリオ</strong>: 日次バッチと BI ダッシュボードが稼働する本番テーブルを、サービスを止めずに Iceberg へ移行したい。</p>
+        <ol>
+          <li>本番書き込みを継続したまま初期コピーを実行</li>
+          <li>カットオーバー直前まで増分同期を繰り返して差分を最小化</li>
+          <li>業務影響の少ない時間帯に数分間の書き込み停止でカットオーバー</li>
+          <li>Athena などのクエリ先を新しい Iceberg テーブルに切り替え</li>
+        </ol>
+        <div class="usecase-effect">✅ <strong>効果</strong>: 書き込み停止をカットオーバー時の数分間に抑え、分析業務への影響を最小化できる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🤖 3. AI エージェントによる移行ワークフローの自動化</div>
+        <p style="font-size: 14px; margin: 4px 0;"><strong>シナリオ</strong>: 多数のテーブル移行を少人数のチームで効率的に進めるため、移行作業を AI エージェントに委任したい。</p>
+        <ol>
+          <li>Agent Toolkit for AWS の <code class="inline">migrating-hive-tables-to-s3-tables</code> スキルを導入</li>
+          <li>Kiro などのエージェントに IAM ポリシーの分析・推奨と移行計画の検証を依頼</li>
+          <li>エージェントが Start → Sync → Complete の API を実行し、進捗を監視</li>
+        </ol>
+        <div class="usecase-effect">✅ <strong>効果</strong>: 移行の計画から実行、監視までを自動化し、運用負荷を軽減しながら移行を大規模に展開できる。</div>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <div class="check-item"><span class="check-icon">✓</span><span>Hive から Iceberg への<strong>変換自体に追加料金はかからない</strong>。移行ジョブがコピーしたデータに対してのみ課金</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>S3 Intelligent-Tiering に保存されているソースオブジェクトは、<strong>現在のアクセス階層を維持</strong></span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>移行後は S3 Tables の通常の料金 (ストレージ、リクエスト、メンテナンスなど) が適用。詳細は Amazon S3 の料金ページを参照</span></div>
+    </div>
+
+    <!-- 利用可能リージョン -->
+    <div class="section">
+      <h2>🌏 利用可能リージョン</h2>
+      <div class="region-grid">
+        <span class="region-tag">🇺🇸 米国東部 (バージニア北部)</span>
+        <span class="region-tag">🇺🇸 米国東部 (オハイオ)</span>
+        <span class="region-tag">🇺🇸 米国西部 (オレゴン)</span>
+        <span class="region-tag">🇮🇳 アジアパシフィック (ムンバイ)</span>
+        <span class="region-tag">🇸🇬 アジアパシフィック (シンガポール)</span>
+        <span class="region-tag">🇦🇺 アジアパシフィック (シドニー)</span>
+        <span class="region-tag tokyo">🇯🇵 アジアパシフィック (東京)</span>
+        <span class="region-tag">🇩🇪 欧州 (フランクフルト)</span>
+        <span class="region-tag">🇮🇪 欧州 (アイルランド)</span>
+        <span class="region-tag">🇸🇪 欧州 (ストックホルム)</span>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <div class="card-title">🗂️ AWS Glue Data Catalog</div>
+        <p style="margin: 0; font-size: 14px;">移行元の Hive テーブルを管理するカタログ。移行対象テーブルは Glue に登録されている必要がある</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🔍 Amazon Athena / Amazon SageMaker Unified Studio</div>
+        <p style="margin: 0; font-size: 14px;">移行後の Iceberg テーブルに対するクエリエンジンとして利用可能</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🤖 Agent Toolkit for AWS</div>
+        <p style="margin: 0; font-size: 14px;">移行ワークフローを AI エージェントで自動化するためのスキルを提供</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🪣 S3 Intelligent-Tiering</div>
+        <p style="margin: 0; font-size: 14px;">ソースオブジェクトのアクセス階層が移行後も維持されるストレージクラス</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📌 まとめ</h2>
+      <p>
+        従来テーブルごとに<span class="highlight">数週間を要した Hive から Iceberg への移行</span>が、検証・コピー・同期・カットオーバーまで<span class="highlight">一貫したマネージドワークフロー</span>で実行可能になりました。<strong>東京リージョンでも利用可能</strong>なため、Hive ベースのデータレイクを運用しているチームは、まず互換性レポートで移行可否を評価し、優先度の高いテーブルから段階的な移行を検討することを推奨します。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-s3-tables-managed-migration-hive-to-iceberg/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+        <li><a href="https://aws.amazon.com/blogs/aws/amazon-s3-tables-now-offer-managed-migration-of-apache-hive-tables-to-apache-iceberg/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: Amazon S3 Tables now offer managed migration of Apache Hive tables to Apache Iceberg</a></li>
+        <li><a href="https://aws.amazon.com/s3/features/tables/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon S3 Tables</a></li>
+        <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables-migrate.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: S3 Tables の移行</a></li>
+        <li><a href="https://github.com/aws/agent-toolkit-for-aws" target="_blank" rel="noopener noreferrer" class="aws-link">Agent Toolkit for AWS (GitHub)</a></li>
+        <li><a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+      </ul>
+      <p>生成日: 2026 年 11 月 5 日 | レポート: 2026-11-04-amazon-s3-tables-managed-migration-hive-to-iceberg.md</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

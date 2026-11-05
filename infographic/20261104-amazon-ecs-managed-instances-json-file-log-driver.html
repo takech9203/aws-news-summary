@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon ECS - Managed Daemons による json-file ログ収集</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    .release-date {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-left: 8px;
+      margin-bottom: 12px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.4;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .card p, .card ul {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .card ul {
+      padding-left: 20px;
+    }
+
+    /* Before/After 比較 */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 { color: #FF6B4A; }
+    .after-box h3 { color: #4CAF50; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li {
+      margin: 8px 0;
+    }
+
+    @media (max-width: 700px) {
+      .before-after { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+    }
+
+    /* フロー図 */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-squid-ink);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--aws-light-gray);
+    }
+
+    code.inline {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 16px 0;
+    }
+
+    .usecase h3 {
+      margin-top: 0;
+      color: var(--aws-smile-orange);
+      font-size: 17px;
+    }
+
+    .usecase p {
+      font-size: 14px;
+      margin: 8px 0;
+    }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 3px solid #4CAF50;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-top: 12px;
+    }
+
+    /* ステップ */
+    .step {
+      display: flex;
+      gap: 14px;
+      margin: 16px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    .step-content { flex: 1; min-width: 0; }
+
+    .step-content h4 {
+      margin: 4px 0 8px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .step-content p {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 700px) {
+      .two-col { grid-template-columns: 1fr; }
+    }
+
+    .note-box {
+      background: rgba(0, 161, 201, 0.1);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul {
+      padding-left: 20px;
+      margin: 8px 0;
+    }
+
+    footer li {
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div>
+        <span class="service-badge">Amazon ECS</span>
+        <span class="release-date">📅 2026 年 11 月 4 日リリース</span>
+      </div>
+      <h1>🪵 Managed Daemons による json-file ログ収集</h1>
+      <div class="subtitle">ECS Managed Instances で json-file ログドライバーをサポート。Managed Daemons のログドライバーボリュームで、ホスト権限なしに任意の可観測性エージェントがアプリケーションログを収集可能に</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        Amazon ECS は、<span class="highlight">ECS Managed Instances 上のアプリケーションコンテナで json-file ログドライバー</span>をサポートし、あわせて <span class="highlight">ECS Managed Daemons 向けに「ログドライバーボリューム」</span>を導入しました。2 つの機能を組み合わせることで、Managed Daemons として実行する任意の可観測性エージェントがアプリケーションコンテナのログファイルを直接読み取り、任意の送信先に転送できます。
+      </p>
+      <p>
+        json-file は Fluent Bit や Fluentd など多くの可観測性エージェントがネイティブに読み取れる標準的な Docker ログ形式のため、<strong>既存のログ収集パイプラインをほぼそのまま ECS Managed Instances に持ち込めます</strong>。デーモンはボリュームマウント経由でログにアクセスするため、ホストのバインドマウントパスの指定やルート権限は不要です。
+      </p>
+      <div class="note-box">
+        🎯 <strong>対象ユーザー</strong>: ECS Managed Instances を利用しつつ、CloudWatch Logs 以外のログ基盤 (OpenSearch、Splunk、Datadog などのサードパーティ SaaS) や独自のログ収集エージェントを使いたいプラットフォームチーム・運用チーム
+      </div>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before: アップデート前の課題</h3>
+          <ul>
+            <li>ECS Managed Instances では json-file ログドライバーが利用できず、ファイルベースのログ収集を前提とするエージェントを使いにくかった</li>
+            <li>デーモンがアプリケーションログを読むには、ホストのバインドマウントパスやルート権限といったホスト依存の設定が必要だった</li>
+            <li>どのディレクトリにどのコンテナのログがあるかをエージェント側で管理する必要があり、ログの発生元コンテナの特定が煩雑だった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ After: アップデート後の改善</h3>
+          <ul>
+            <li><code class="inline">logConfiguration</code> に json-file を指定するだけで、標準の Docker json-file 形式でログがローカルに書き込まれる</li>
+            <li>ログドライバーボリューム (<code class="inline">logDriverVolumeConfiguration</code>) を定義して <code class="inline">mountPoints</code> でマウントするだけで、ホストパス指定やルート権限なしにログファイルへアクセス可能</li>
+            <li>インスタンスごとに 1 つのデーモンで、json-file を使用するすべてのアプリケーションコンテナのログをまとめて収集</li>
+            <li>コンテナ ID ごとの専用ディレクトリにログが保存され、発生元コンテナまで容易にトレース可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Instance["🖥️ ECS Managed Instance"]
+        subgraph Apps["📦 アプリケーションタスク"]
+            direction LR
+            C1["🧩 コンテナ A<br/>json-file ログドライバー"]
+            C2["🧩 コンテナ B<br/>json-file ログドライバー"]
+            C1 ~~~ C2
+        end
+        subgraph Vol["🗂️ ログドライバーボリューム"]
+            direction LR
+            D1[("📄 コンテナ A の<br/>ログディレクトリ")]
+            D2[("📄 コンテナ B の<br/>ログディレクトリ")]
+            D1 ~~~ D2
+        end
+        subgraph Daemon["🛠️ ECS Managed Daemon"]
+            Agent["📡 可観測性エージェント<br/>例: Fluent Bit"]
+        end
+    end
+    Dest{{"☁️ 任意のログ送信先<br/>CloudWatch Logs / OpenSearch / SaaS"}}
+
+    C1 -->|ログ書き込み| D1
+    C2 -->|ログ書き込み| D2
+    D1 -.->|ボリュームマウントで読み取り| Agent
+    D2 -.->|ボリュームマウントで読み取り| Agent
+    Agent -->|転送| Dest
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef app fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef storage fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef daemon fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef external fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Instance boundary
+    class Apps,Vol,Daemon layer
+    class C1,C2 app
+    class D1,D2 storage
+    class Agent daemon
+    class Dest external
+        </pre>
+      </div>
+      <p class="diagram-caption">アプリケーションコンテナが json-file 形式で書き込んだログを、Managed Daemon がログドライバーボリューム経由で読み取り、任意の送信先へ転送する流れ</p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚙️ 主要機能</h2>
+
+      <div class="card">
+        <h4>1️⃣ ECS Managed Instances での json-file ログドライバーサポート</h4>
+        <ul>
+          <li>アプリケーションタスク定義の <code class="inline">logConfiguration</code> で <code class="inline">json-file</code> を指定可能</li>
+          <li>標準的な Docker json-file 形式でログがインスタンスのローカルに書き込まれる</li>
+          <li>多くの可観測性エージェントがネイティブに読み取れるため、既存エージェントを流用しやすい</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>2️⃣ Managed Daemons 向けログドライバーボリューム</h4>
+        <ul>
+          <li>デーモンタスク定義のボリュームで <code class="inline">logDriverVolumeConfiguration</code> を指定 (サポートされる <code class="inline">driver</code> は <code class="inline">json-file</code> のみ)</li>
+          <li>ホストのバインドマウントパスやルート権限なしで、アプリケーションコンテナのログファイルにアクセス可能</li>
+          <li>同一ボリュームで <code class="inline">host</code> と <code class="inline">logDriverVolumeConfiguration</code> の同時指定は不可</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>3️⃣ コンテナ単位のログディレクトリ管理</h4>
+        <ul>
+          <li>コンテナ ID を名前とするディレクトリに <code class="inline">&lt;container-id&gt;-json.log</code> とローテーション済みログファイルを格納</li>
+          <li>ログはコンテナが削除されるまで保持され、削除時に該当ディレクトリも削除される</li>
+          <li>ディレクトリ名からログの発生元コンテナを特定でき、トレーサビリティが向上</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>4️⃣ 1 デーモンでインスタンス全体のログを収集</h4>
+        <ul>
+          <li>インスタンスごとに 1 つの Managed Daemon で、json-file を使用するすべてのアプリケーションコンテナのログを収集可能</li>
+          <li>CloudWatch Logs、Amazon OpenSearch Service、サードパーティ SaaS など任意の送信先に転送できる</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <h3>ログドライバーボリュームの仕様</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対象環境</td><td>ECS Managed Instances 上の ECS Managed Daemons</td></tr>
+        <tr><td>サポートされるドライバー</td><td><code class="inline">json-file</code> のみ</td></tr>
+        <tr><td>ログの格納構造</td><td>コンテナ ID ごとのディレクトリに <code class="inline">&lt;container-id&gt;-json.log</code> とローテーション済みファイル</td></tr>
+        <tr><td>ログの保持期間</td><td>コンテナが削除されるまで (削除時にディレクトリも削除)</td></tr>
+        <tr><td>アクセス方法</td><td>デーモンコンテナの <code class="inline">mountPoints</code> でボリュームをマウント</td></tr>
+        <tr><td>必要権限</td><td>ホストバインドマウントパスの指定やルート権限は不要</td></tr>
+        <tr><td>対象ログ</td><td><code class="inline">logConfiguration</code> に <code class="inline">json-file</code> を指定したコンテナのみ (他のログドライバー使用コンテナは対象外)</td></tr>
+        <tr><td>設定手段</td><td>AWS マネジメントコンソール、AWS CLI、API、AWS SDK、AWS CloudFormation</td></tr>
+      </table>
+
+      <h3>デーモンタスク定義の設定例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">ログドライバーボリュームを持つデーモンタスク定義</span>
+        </div>
+        <pre><code class="language-json">{
+    "family": "log-collector-daemon",
+    "containerDefinitions": [{
+        "name": "log-reader",
+        "image": "public.ecr.aws/my-company/log-reader:latest",
+        "essential": true,
+        "mountPoints": [{
+            "sourceVolume": "app-logs",
+            "containerPath": "/var/log/tasks"
+        }]
+    }],
+    "volumes": [{
+        "name": "app-logs",
+        "logDriverVolumeConfiguration": {
+            "driver": "json-file"
+        }
+    }]
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>ECS Managed Instances を使用する ECS クラスターが構成済みであること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ECS Managed Daemons が利用可能なリージョンであること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ログ収集エージェントのコンテナイメージ (Fluent Bit など) が利用可能であること</span></div>
+
+      <div class="flow-diagram">
+        <div class="flow-step">📦 アプリタスク定義で<br/>json-file を指定</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📝 ログドライバー<br/>ボリューム付き<br/>デーモン定義を登録</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🚀 Managed Daemon を<br/>デプロイして<br/>ログ転送を確認</div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h4>アプリケーションタスク定義で json-file ログドライバーを指定</h4>
+          <p>アプリケーションコンテナのログドライバーを <code class="inline">json-file</code> に設定します。これにより、コンテナのログが標準の Docker json-file 形式でインスタンスのローカルに書き込まれます。</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">JSON</span>
+              <span class="code-title">アプリケーションタスク定義</span>
+            </div>
+            <pre><code class="language-json">{
+    "containerDefinitions": [{
+        "name": "my-app",
+        "image": "my-app:latest",
+        "logConfiguration": {
+            "logDriver": "json-file"
+        }
+    }]
+}</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h4>ログドライバーボリュームを持つデーモンタスク定義を登録</h4>
+          <p><code class="inline">logDriverVolumeConfiguration</code> を含むボリュームを定義し、デーモンコンテナの <code class="inline">mountPoints</code> でマウントしたデーモンタスク定義 (前述の設定例を参照) を登録します。</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">デーモンタスク定義の登録</span>
+            </div>
+            <pre><code class="language-bash">aws ecs register-daemon-task-definition \
+    --cli-input-json file://daemon-taskdef.json</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h4>Managed Daemon をデプロイしてログ転送を確認</h4>
+          <p>デーモンタスク定義をクラスターの Managed Daemon として設定すると、各 Managed Instance 上でデーモンが起動します。マウントしたパス (例: <code class="inline">/var/log/tasks</code>) 配下のコンテナ ID ディレクトリからログファイルを読み取り、エージェントの設定に従って任意の送信先へ転送されることを確認します。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <div class="two-col">
+        <div>
+          <h3>💼 ビジネス面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>既存ログ基盤の継続利用</strong>: 既存の可観測性ツールやサードパーティ SaaS をそのまま利用でき、移行時にログ収集パイプラインを作り直す必要がない</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: 本機能自体に追加料金は発生せず、利用中のリージョンでそのまま利用できる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の削減</strong>: インスタンスごとに 1 つのデーモンで全コンテナのログを収集でき、エージェント運用がシンプルになる</span></div>
+        </div>
+        <div>
+          <h3>⚙️ 技術面</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>権限の最小化</strong>: ホストバインドマウントやルート権限が不要になり、最小権限の原則に沿ったログ収集構成を実現</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>標準形式による高い互換性</strong>: Docker 標準の json-file 形式のため、多くのエージェントが追加開発なしでログを読み取れる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>トレーサビリティの向上</strong>: コンテナ ID ごとのディレクトリ構造により、ログと発生元コンテナの対応付けが容易</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <h3>制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>ログドライバーボリュームでサポートされる <code class="inline">driver</code> は <code class="inline">json-file</code> のみ</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>ボリュームに書き込まれるのは <code class="inline">json-file</code> ログドライバーを指定したコンテナのログのみで、awslogs など他のドライバーを使用するコンテナのログは含まれない</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>同一ボリュームで <code class="inline">host</code> と <code class="inline">logDriverVolumeConfiguration</code> を同時に指定することはできない</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>コンテナが停止して ECS により削除されると該当ディレクトリも削除されるため、削除前にログを読み取る必要がある</span></div>
+
+      <h3>考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>ログはコンテナ削除まで保持されるため、エージェントの収集間隔や障害時の復旧時間を考慮し、ログの取りこぼしが発生しない設計にする</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>json-file 形式のログはインスタンスのローカルストレージを消費するため、ログ量が多いワークロードではローテーションやストレージ容量を考慮する</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>CloudWatch Logs への直接送信で十分な場合は、従来どおり awslogs ログドライバーの利用も選択肢となる</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h3>📡 ユースケース 1: Fluent Bit によるサードパーティログ基盤への転送</h3>
+        <p><strong>シナリオ</strong>: 全社のログ基盤として Datadog や Splunk などの SaaS を利用しており、ECS Managed Instances 上のアプリケーションログも同じ基盤に集約したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <span class="code-title">Fluent Bit デーモンタスク定義</span>
+          </div>
+          <pre><code class="language-json">{
+    "family": "fluent-bit-daemon",
+    "containerDefinitions": [{
+        "name": "fluent-bit",
+        "image": "public.ecr.aws/aws-observability/aws-for-fluent-bit:stable",
+        "essential": true,
+        "mountPoints": [{
+            "sourceVolume": "app-logs",
+            "containerPath": "/var/log/tasks",
+            "readOnly": true
+        }]
+    }],
+    "volumes": [{
+        "name": "app-logs",
+        "logDriverVolumeConfiguration": {
+            "driver": "json-file"
+        }
+    }]
+}</code></pre>
+        </div>
+        <p class="effect">✅ <strong>効果</strong>: ホスト権限なしで全アプリケーションコンテナのログを収集し、既存の SaaS ログ基盤へ統一的に転送できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h3>🔄 ユースケース 2: EC2 ベース ECS からの移行</h3>
+        <p><strong>シナリオ</strong>: EC2 起動タイプの ECS クラスターで json-file ログとファイル収集型エージェントを利用しており、インフラ管理を削減するために ECS Managed Instances へ移行したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <span class="code-title">既存アプリのタスク定義をそのまま利用</span>
+          </div>
+          <pre><code class="language-json">{
+    "containerDefinitions": [{
+        "name": "legacy-app",
+        "image": "legacy-app:latest",
+        "logConfiguration": {
+            "logDriver": "json-file"
+        }
+    }]
+}</code></pre>
+        </div>
+        <p class="effect">✅ <strong>効果</strong>: 既存のログ収集アーキテクチャ (json-file + ファイル収集エージェント) を変更せずに ECS Managed Instances へ移行でき、移行リスクとコストを低減できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h3>🔍 ユースケース 3: コンテナ単位のログ分析とトラブルシューティング</h3>
+        <p><strong>シナリオ</strong>: 同一インスタンス上で多数のタスクが稼働しており、障害発生時に特定コンテナのログだけを迅速に抽出・分析したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">デーモンコンテナ内でのログ確認例</span>
+          </div>
+          <pre><code class="language-bash"># デーモンコンテナ内でのログ確認例
+ls /var/log/tasks/
+cat /var/log/tasks/&lt;container-id&gt;/&lt;container-id&gt;-json.log</code></pre>
+        </div>
+        <p class="effect">✅ <strong>効果</strong>: コンテナ ID ごとのディレクトリ構造により、対象コンテナのログファイルを直接特定でき、障害調査の時間を短縮できる。</p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金と利用可能リージョン</h2>
+      <div class="two-col">
+        <div class="card">
+          <h4>💵 料金</h4>
+          <p>本機能に<strong>追加料金はありません</strong>。ECS Managed Instances の通常の料金 (基盤となる EC2 インスタンスの料金と管理料金) のみが適用されます。収集したログを CloudWatch Logs やその他のサービスに送信する場合は、送信先サービスの料金が別途発生します。</p>
+        </div>
+        <div class="card">
+          <h4>🌏 利用可能リージョン</h4>
+          <p>Amazon ECS Managed Instances および Managed Daemons が提供されている<strong>すべての AWS 商用リージョン</strong>で利用可能です。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <h4>🖥️ Amazon ECS Managed Instances</h4>
+        <p>AWS がインスタンスのプロビジョニングと運用を管理する ECS のコンピューティングオプション。本機能の前提となる実行環境。</p>
+      </div>
+      <div class="card">
+        <h4>🛠️ Amazon ECS Managed Daemons</h4>
+        <p>各 Managed Instance 上で自動的に実行されるデーモンタスク。ログ収集・監視・セキュリティエージェントの実行基盤。</p>
+      </div>
+      <div class="card">
+        <h4>📊 Amazon CloudWatch Logs</h4>
+        <p>awslogs ログドライバーによる直接送信や、エージェント経由の転送先として利用可能なログ管理サービス。</p>
+      </div>
+      <div class="card">
+        <h4>📡 AWS for Fluent Bit</h4>
+        <p>AWS が提供する Fluent Bit ディストリビューション。ファイルベースのログ収集エージェントとして本機能と組み合わせて利用可能。</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        ECS Managed Instances での json-file ログドライバーサポートと Managed Daemons のログドライバーボリュームにより、<span class="highlight">ホスト権限なしで任意の可観測性エージェントによるログ収集</span>が可能になりました。CloudWatch Logs 以外のログ基盤を利用している場合や、EC2 ベースの ECS からの移行を検討している場合は、既存のログ収集アーキテクチャを維持したまま ECS Managed Instances を採用できるため、デーモンタスク定義での <code class="inline">logDriverVolumeConfiguration</code> の活用を検討することを推奨します。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典・参考リンク</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-ecs-managed-instances-json-file-log-driver/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon ECS Managed Instances json-file log driver</a></li>
+        <li><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/managed-daemons-task-definitions.html#managed-daemons-volumes" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Managed Daemons のタスク定義とボリューム</a></li>
+        <li><a href="https://aws.amazon.com/ecs/managed-instances/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon ECS Managed Instances</a></li>
+        <li><a href="https://aws.amazon.com/ecs/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon ECS 製品ページ</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-11-04) をもとに作成されています。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
