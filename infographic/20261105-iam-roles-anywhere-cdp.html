@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS IAM Roles Anywhere - 証明書失効の自動チェック機能</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.release-meta span {
+  background: var(--aws-dark-squid);
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-radius: 6px;
+  padding: 4px 12px;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover {
+  color: var(--aws-smile-orange);
+}
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.ba-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-box ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.ba-box li {
+  margin: 8px 0;
+  padding-left: 24px;
+  position: relative;
+  font-size: 14px;
+}
+
+.ba-before li::before {
+  content: "✗";
+  position: absolute;
+  left: 0;
+  color: #FF6B4A;
+  font-weight: bold;
+}
+
+.ba-after li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #4CAF50;
+  font-weight: bold;
+}
+
+/* 統計カード */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .stats-row { grid-template-columns: 1fr; }
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(255, 153, 0, 0.05));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  margin-top: 6px;
+  color: var(--aws-light-gray);
+}
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 12px 0;
+}
+
+.spec-table th, .spec-table td {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-white);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.spec-table td:first-child {
+  color: var(--aws-white);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .spec-table td:first-child { white-space: normal; }
+}
+
+.table-wrap { overflow-x: auto; }
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+
+.code-title {
+  color: var(--aws-light-gray);
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+code.inline {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+}
+
+/* ユースケース */
+.usecase {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(255, 153, 0, 0.04));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.usecase .label {
+  color: var(--aws-white);
+  font-weight: 600;
+}
+
+/* フェイルクローズ注意枠 */
+.alert-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+  border-left: 4px solid var(--aws-red);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.alert-box .alert-title {
+  color: #FF6B4A;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+  align-items: flex-start;
+}
+
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.step-body { flex: 1; min-width: 0; }
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+ul.plain {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+ul.plain li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+footer li { margin: 4px 0; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="service-badge">AWS IAM Roles Anywhere</div>
+    <h1>🔐 証明書失効の自動チェック機能</h1>
+    <div class="subtitle">CRL 配布ポイント (CDP) による自動失効チェックをサポート</div>
+    <div class="release-meta">
+      <span>📅 リリース日: 2026 年 11 月 5 日</span>
+      <span>🌍 すべての商用 AWS リージョン</span>
+      <span>💰 追加料金なし</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      AWS IAM Roles Anywhere が、証明書失効リスト (CRL) 配布ポイント (CDP) を利用した<span class="highlight">自動失効チェック</span>をサポートしました。トラストアンカーで有効化すると、認証に使用される X.509 証明書に埋め込まれた CDP の URL から CRL を自動ダウンロードし、<span class="highlight">失効済み証明書による認証情報のリクエストを拒否</span>します。
+    </p>
+    <p>
+      IAM Roles Anywhere は、オンプレミスサーバーやコンテナ、IoT デバイスなど AWS 外部のワークロードが X.509 証明書を使って IAM ロールの一時認証情報を取得できるサービスです。今回のアップデートで、失効チェックを認証局 (CA) と常に同期した状態に保てるようになり、<span class="highlight">CRL の手動インポートと再インポートという運用負荷が解消</span>されます。AWS Private CA だけでなく、独自の PKI で発行した証明書でも利用できます (パブリックにアクセス可能な CDP の URL が条件)。
+    </p>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ Before: 手動 CRL 管理</div>
+        <ul>
+          <li>失効チェックには CA が生成した CRL を <code class="inline">ImportCrl</code> API または CLI で手動インポートが必要</li>
+          <li>CA が CRL を更新するたびに再インポートの運用作業が発生</li>
+          <li>インポート済み CRL は <code class="inline">nextUpdate</code> 期限後も使用され続け、古い失効情報で判定されるリスク</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ After: 自動失効チェック</div>
+        <ul>
+          <li>トラストアンカーの <code class="inline">crlDpRevocationEnabled</code> を有効化するだけで、証明書ごとの追加設定なしに自動化</li>
+          <li>CRL を定期的に自動ダウンロード・更新し、手動インポート・再インポートが不要に</li>
+          <li>CA の最新の失効情報と同期を維持し、失効済み証明書による認証情報の発行を確実に防止</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">最大 30 分</div>
+        <div class="stat-label">CA の CRL 公開から失効チェックへの反映時間</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">設定 1 つ</div>
+        <div class="stat-label"><code class="inline">crlDpRevocationEnabled</code> の有効化のみで自動化</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">追加料金なしで利用可能</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <p>自動失効チェック有効時の <code class="inline">CreateSession</code> の流れです。IAM Roles Anywhere が証明書内の CDP の URL から CRL を取得して失効状態を確認し、失効済み証明書によるリクエストを拒否します。</p>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+sequenceDiagram
+    participant W as 🖥️ 外部ワークロード
+    participant RA as 🔐 IAM Roles Anywhere
+    participant CDP as 🌐 CRL 配布ポイント
+    participant STS as 🎫 AWS STS
+
+    W->>RA: CreateSession 証明書を提示
+    RA->>RA: 証明書内の CDP URL を読み取り
+    RA->>CDP: CRL をダウンロード
+    CDP-->>RA: 最新の CRL
+    RA->>RA: 失効状態をチェック
+    alt 証明書が有効
+        RA->>STS: ロールの引き受け
+        STS-->>RA: 一時認証情報
+        RA-->>W: 一時認証情報を発行
+    else 証明書が失効済み
+        RA-->>W: リクエストを拒否
+    end
+      </pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">🔍 CDP による自動失効チェック</div>
+      <ul class="plain">
+        <li>認証に使用される証明書に埋め込まれた CRL 配布ポイントの URL を IAM Roles Anywhere が自動的に読み取る</li>
+        <li>対応する CRL をダウンロードし、証明書チェーン内の各証明書について失効状態をチェックする</li>
+        <li>失効済み証明書による <code class="inline">CreateSession</code> リクエストを拒否し、認証情報を発行しない</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🔄 CRL の自動更新</div>
+      <ul class="plain">
+        <li>配布ポイントから取得した CRL を定期的に自動更新する</li>
+        <li>CA が更新した CRL は、公開後<span class="highlight">最大 30 分以内</span>に失効チェックへ反映される</li>
+        <li>CRL の <code class="inline">nextUpdate</code> 期限内であれば、一時的に配布ポイントへ到達できなくても既存の CRL で失効チェックを継続する</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🎛️ トラストアンカー単位の有効化</div>
+      <ul class="plain">
+        <li>トラストアンカーの設定 <code class="inline">crlDpRevocationEnabled</code> で制御する (デフォルトは無効)</li>
+        <li>有効化すると、そのトラストアンカーで認証されるすべてのリクエストに適用される</li>
+        <li>IAM Roles Anywhere コンソール、AWS SDK、AWS CLI から有効化できる</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🔗 既存の CRL インポート機能との併用</div>
+      <ul class="plain">
+        <li>手動インポートした CRL と自動失効チェックは併用可能</li>
+        <li>併用時は、どちらか一方のリストに記載されている証明書は失効済みとして扱われる</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+    <h3>CDP の要件と動作</h3>
+    <div class="table-wrap">
+      <table class="spec-table">
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>有効化設定</td><td>トラストアンカーの <code class="inline">crlDpRevocationEnabled</code> を <code class="inline">true</code> に設定 (デフォルトは <code class="inline">false</code>)</td></tr>
+        <tr><td>対象 URL スキーム</td><td>HTTP または HTTPS のみ (LDAP などは無視される)</td></tr>
+        <tr><td>チェック対象の URL 数</td><td>証明書ごとに最大 5 つの CDP URL</td></tr>
+        <tr><td>URL 長</td><td>2,048 文字以内</td></tr>
+        <tr><td>ポート</td><td>HTTP は 80、HTTPS は 443 のデフォルトポートのみ</td></tr>
+        <tr><td>アクセス性</td><td>ホスト名がパブリック IP アドレスに解決され、インターネットから到達可能であること</td></tr>
+        <tr><td>リダイレクト</td><td>非対応 (URL が CRL を直接返す必要がある)</td></tr>
+        <tr><td>CRL サイズ</td><td>1 MB 以内の単一の CRL</td></tr>
+        <tr><td>CRL 更新の反映</td><td>CA による CRL 公開後、最大 30 分で反映</td></tr>
+        <tr><td>間接 CRL</td><td>非対応 (証明書を発行した CA 自身が発行・署名した CRL のみ対応)</td></tr>
+        <tr><td>OCSP</td><td>非対応 (IAM Roles Anywhere は OCSP による失効チェックをサポートしない)</td></tr>
+      </table>
+    </div>
+
+    <h3>🚫 フェイルクローズ動作</h3>
+    <div class="alert-box">
+      <div class="alert-title">⚠️ 失効状態を確認できない場合はリクエストを拒否</div>
+      <p style="margin: 0; font-size: 14px;">
+        チェック対象の配布ポイントから有効な CRL を取得できず、過去にダウンロードした有効な CRL も存在しない場合、IAM Roles Anywhere は失効状態を確認できないため <code class="inline">CreateSession</code> リクエストを拒否します。失効状態が確認できない状態で認証情報が発行されることはありません。
+      </p>
+    </div>
+
+    <h3>📜 API 変更履歴</h3>
+    <div class="table-wrap">
+      <table class="spec-table">
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/11/04</td>
+          <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/f6d89d-rolesanywhere.html" target="_blank" rel="noopener noreferrer">IAM Roles Anywhere</a></td>
+          <td>9 updated api methods - CRL 配布ポイントによる自動失効チェックを有効化する <code class="inline">crlDpRevocationEnabled</code> フィールドを追加</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>IAM Roles Anywhere のトラストアンカーが設定済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>認証に使用する証明書に CDP の URL が含まれていること (AWS Private CA または独自 PKI で発行)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>CDP の URL がインターネットからパブリックにアクセス可能で、配布ポイントの要件を満たしていること</span></div>
+
+    <h3>手順</h3>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">証明書の CDP URL を確認する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">CDP URL の確認</span>
+          </div>
+          <pre><code class="language-bash">openssl x509 -text -noout -in certificate.pem | grep -A 4 "CRL Distribution Points"</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;"><code class="inline">X509v3 CRL Distribution Points</code> 拡張に HTTP または HTTPS の URL が表示されれば、自動失効チェックの対象になります。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">トラストアンカーで自動失効チェックを有効化する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">自動失効チェックの有効化</span>
+          </div>
+          <pre><code class="language-bash">aws rolesanywhere update-trust-anchor \
+  --trust-anchor-id &lt;トラストアンカー ID&gt; \
+  --crl-dp-revocation-enabled</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">この設定は、該当トラストアンカーで認証されるすべてのリクエストに適用されます。コンソールの場合は、トラストアンカーの編集画面から有効化できます。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">動作を確認する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">credential helper による動作確認</span>
+          </div>
+          <pre><code class="language-bash">./aws_signing_helper credential-process \
+  --certificate certificate.pem \
+  --private-key private-key.pem \
+  --trust-anchor-arn &lt;トラストアンカー ARN&gt; \
+  --profile-arn &lt;プロファイル ARN&gt; \
+  --role-arn &lt;ロール ARN&gt;</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">有効な証明書では認証情報が発行され、CA で失効させた証明書ではリクエストが拒否されることを確認します。なお、配布ポイントの URL を初めて処理する際は <code class="inline">CreateSession</code> リクエスト中に CRL をダウンロードするため、初回リクエストのレイテンシーが増加する場合があります。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">運用負荷の削減</strong>: CRL の手動インポートと CA 更新のたびの再インポートが不要になり、PKI 運用チームの作業負担を軽減できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">セキュリティポスチャの向上</strong>: 失効チェックが CA と自動的に同期されるため、失効済み証明書による不正アクセスのリスクを低減できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">追加コストなし</strong>: 追加料金なしで利用でき、セキュリティ強化に伴うコスト増加がない</span></div>
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">CA との自動同期</strong>: CA が公開した最新の CRL が最大 30 分で失効チェックに反映され、人手による更新遅延がなくなる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">フェイルクローズ設計</strong>: 失効状態を確認できない場合はリクエストを拒否するため、不確実な状態で認証情報が発行されない</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">PKI の選択肢が広い</strong>: AWS Private CA に加えて独自 PKI でも利用でき、既存の証明書基盤をそのまま活用できる</span></div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>CDP の URL はインターネットからパブリックにアクセス可能である必要があり、プライベートネットワーク内のみで公開される CRL は利用できない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>OCSP による失効チェックはサポートされない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>間接 CRL (証明書を発行した CA と異なる主体が発行する CRL) はサポートされず、CRL 発行者フィールドを含む配布ポイントはスキップされる</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>チェック対象は証明書ごとに最大 5 つの HTTP/HTTPS URL で、CRL は 1 MB 以内である必要がある</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>自動検出された配布ポイントはアカウント内のリソースとして作成されないため、個別に表示・管理できない</span></div>
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>配布ポイントが要件を満たさず、有効な CRL が過去のダウンロードにも存在しない場合、<code class="inline">CreateSession</code> が拒否される。有効化前に CDP の URL の到達性と応答速度を確認することが重要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>CA は前の CRL の <code class="inline">nextUpdate</code> 期限が切れる前に、更新した CRL を各配布ポイントへ公開する必要がある。期限切れの CRL は使用されず、新しい CRL を取得できなければリクエストが拒否される</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>AWS Private CA を使用する場合、CRL は Amazon S3 バケットに公開されるため、S3 の CRL 公開先が配布ポイントの要件 (パブリックアクセス可能であることなど) を満たすよう設定する必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>初めて処理される配布ポイントの URL では、初回の <code class="inline">CreateSession</code> リクエストにレイテンシーが追加される</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1️⃣ オンプレミスサーバーの証明書失効管理の自動化</div>
+      <p><span class="label">シナリオ</span>: オンプレミスのアプリケーションサーバー群が IAM Roles Anywhere で AWS リソースにアクセスしており、社内 PKI が発行する証明書の失効情報を手動で CRL インポートして管理している。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">自動失効チェックへの移行</span>
+        </div>
+        <pre><code class="language-bash"># 既存の手動 CRL インポート運用から自動失効チェックへ移行
+aws rolesanywhere update-trust-anchor \
+  --trust-anchor-id ta-example1234567890 \
+  --crl-dp-revocation-enabled</code></pre>
+      </div>
+      <p><span class="label">効果</span>: CA が CRL を更新するたびに行っていた再インポート作業が不要になり、退職者や漏えいした証明書の失効が最大 30 分で自動的に反映される。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2️⃣ AWS Private CA と組み合わせたハイブリッド環境のセキュリティ強化</div>
+      <p><span class="label">シナリオ</span>: AWS Private CA で発行した証明書を使用して、ハイブリッド環境のワークロードが IAM Roles Anywhere 経由で AWS にアクセスしている。インシデント発生時に、漏えいした証明書からの認証を迅速に遮断したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">証明書の失効のみでインシデント対応が完結</span>
+        </div>
+        <pre><code class="language-bash"># AWS Private CA で証明書を失効させる
+aws acm-pca revoke-certificate \
+  --certificate-authority-arn &lt;CA の ARN&gt; \
+  --certificate-serial &lt;証明書のシリアル番号&gt; \
+  --revocation-reason "KEY_COMPROMISE"
+
+# AWS Private CA が S3 に公開する CRL を IAM Roles Anywhere が自動取得
+# 追加の運用作業は不要</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 証明書の失効操作のみでインシデント対応が完結し、IAM Roles Anywhere 側での CRL インポート作業なしに失効済み証明書からの認証情報発行を防止できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3️⃣ 手動インポート CRL との併用による多層防御</div>
+      <p><span class="label">シナリオ</span>: 複数の CA を利用しており、一部の CA の CRL はパブリックな CDP で公開できないため手動インポートを継続しつつ、CDP を公開できる CA は自動失効チェックへ移行したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">手動インポートと自動チェックの併用</span>
+        </div>
+        <pre><code class="language-bash"># CDP を公開できない CA の CRL は従来どおり手動インポート
+aws rolesanywhere import-crl \
+  --name internal-ca-crl \
+  --crl-data fileb://crl.der \
+  --trust-anchor-arn &lt;トラストアンカー ARN&gt;
+
+# トラストアンカーでは自動失効チェックも有効化
+aws rolesanywhere update-trust-anchor \
+  --trust-anchor-id ta-example1234567890 \
+  --crl-dp-revocation-enabled</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 手動インポートと自動チェックを併用でき、どちらか一方のリストに記載された証明書は失効済みとして扱われるため、CA ごとの運用形態に合わせた柔軟な失効管理が実現する。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>追加料金なしで利用できます。IAM Roles Anywhere 自体も追加料金なしで利用でき、ワークロードがアクセスする AWS サービスの利用料金のみが発生します。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>すべての商用 AWS リージョンで利用可能です。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🏛️ AWS Private Certificate Authority</div>
+      <p style="margin: 0; font-size: 14px;">プライベート証明書の発行と CRL の S3 への自動公開を行う CA サービス。発行した証明書の CDP を自動失効チェックに利用できる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">👤 AWS IAM</div>
+      <p style="margin: 0; font-size: 14px;">IAM Roles Anywhere が引き受ける IAM ロールと信頼ポリシーを管理するサービス。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🎫 AWS STS</div>
+      <p style="margin: 0; font-size: 14px;">IAM Roles Anywhere が発行する一時認証情報の基盤となるトークンサービス。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🪣 Amazon S3</div>
+      <p style="margin: 0; font-size: 14px;">AWS Private CA 利用時に CRL の配布ポイントとして機能するストレージサービス。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>✅ まとめ</h2>
+    <p>
+      IAM Roles Anywhere の自動失効チェックにより、<span class="highlight">CRL の手動インポートという運用負荷が解消</span>され、失効チェックを CA と常に同期した状態に保てるようになりました。現在 CRL を手動インポートしている環境や、失効チェックを行っていない環境では、証明書の CDP の URL が要件を満たすことを確認したうえで、トラストアンカーの <code class="inline">crlDpRevocationEnabled</code> の有効化を検討することを推奨します。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/iam-roles-anywhere-cdp/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/rolesanywhere/latest/userguide/trust-model.html#crl-distribution-point-revocation" target="_blank" rel="noopener noreferrer">ドキュメント: IAM Roles Anywhere の失効チェック</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/iam/roles-anywhere" target="_blank" rel="noopener noreferrer">IAM Roles Anywhere 製品ページ</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/privateca/latest/userguide/crl-planning.html" target="_blank" rel="noopener noreferrer">AWS Private CA: CRL の計画</a></li>
+      <li><a class="aws-link" href="https://awsapichanges.com/archive/changes/f6d89d-rolesanywhere.html" target="_blank" rel="noopener noreferrer">AWS API Changes: IAM Roles Anywhere</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-11-05-iam-roles-anywhere-cdp.md) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
