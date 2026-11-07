@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kiro IDE 1.4.121 - Compaction Hooks、ワークフロー実行検索、サブエージェントの Memory アクセス</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.version-badge {
+  display: inline-block;
+  background: rgba(140, 79, 255, 0.25);
+  color: var(--aws-purple);
+  border: 1px solid var(--aws-purple);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+  margin-left: 8px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.card p, .card ul {
+  margin: 0;
+  font-size: 14px;
+}
+
+.card ul { padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 {
+  margin-top: 0;
+  font-size: 16px;
+}
+
+.before-box h3 { color: #FF6B5B; }
+.after-box h3 { color: #4CAF50; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B5B; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 12px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 16px 0;
+}
+
+.usecase h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label { font-weight: 600; color: var(--aws-white); }
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-content h4 {
+  margin: 4px 0 6px 0;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.step-content p { margin: 0; font-size: 14px; }
+
+/* メリットグリッド */
+.benefit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.benefit-col h3 { margin-top: 0; }
+
+/* 関連サービス */
+.related-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 720px) {
+  .before-after, .benefit-grid, .related-grid { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <span class="service-badge">Kiro</span>
+      <span class="version-badge">IDE 1.4.121</span>
+    </div>
+    <h1>🪝 Compaction Hooks、ワークフロー実行検索、サブエージェントの Memory アクセス</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 5 日 | 🖥️ Kiro (AWS が提供する AI 搭載 IDE)</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Kiro IDE 1.4.121 がリリースされ、会話のコンパクション (圧縮) の前後に Hook を実行できる新しいトリガー
+      <span class="highlight">Pre Compaction Hook</span> と <span class="highlight">Post Compaction Hook</span> が追加されました。
+      コンパクションとは、会話履歴が長くなった際に Kiro が古い履歴を要約に置き換えてコンテキストを節約する処理です。
+      今回のアップデートにより、この処理のライフサイクルにユーザー独自の処理を組み込めるようになりました。
+    </p>
+    <p>
+      また、<span class="highlight">Workflow Runs ビューへの検索機能</span>の追加、コンパクトなワークフロー実行カード、
+      Web ページ取得時に Markdown 形式をサイトへ要求する改善、<span class="highlight">サブエージェントによる読み取り専用の Memory アクセス</span>も含まれています。
+      さらに、Agent Focus の停止問題、MCP トークンリフレッシュ障害時の再サインイン強制、非常に大きなセッションが開けない問題などの修正も行われています。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <ul>
+          <li>コンパクションは自動実行のため、要約で重要なコンテキストが失われてもユーザーが介入・補完する手段がなかった</li>
+          <li>コンパクション前の会話履歴の保存や、実行可否の制御ができなかった</li>
+          <li>Workflow Runs ビューに検索機能がなく、実行数が増えると目的の実行を見つけにくかった</li>
+          <li>サブエージェントは親セッションの Memory にアクセスできず、親エージェントが蓄積したコンテキストを活用できなかった</li>
+          <li>Web ページの取得結果でコードブロックやリンクの構造が失われることがあった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <ul>
+          <li>Pre Compaction Hook により、要約の書き込み前に処理を実行し、終了コード 2 でコンパクション自体をキャンセル可能に</li>
+          <li>Post Compaction Hook により、要約への置き換え後に Hook の出力を会話へ追加し、要約から漏れた情報を保持可能に</li>
+          <li>Workflow Runs ビューで実行の名前、ステータス、記録された実行時間による絞り込みが可能に</li>
+          <li>サブエージェントが親セッションのローカルメモリを読み取り専用で参照可能に</li>
+          <li>Markdown を提供するサイトではコードブロックとリンクが保持されるように</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ コンパクション Hook の実行フロー</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Start(["💬 会話履歴が上限に接近"]) --> Pre["🪝 Pre Compaction Hook 実行"]
+    Pre --> Check{"終了コードの判定"}
+    Check -->|"終了コード 2"| Cancel["🚫 コンパクションをキャンセル<br/>エラー出力を理由として表示"]
+    Check -->|"それ以外"| Compact["📝 要約を作成し<br/>古い履歴を置き換え"]
+    Compact --> Post["🪝 Post Compaction Hook 実行"]
+    Post --> Append["➕ Hook の出力を会話に追加<br/>要約から漏れた情報を補完"]
+    Append --> Done(["✅ エージェントが会話を継続"])
+    Cancel --> Done2(["↩️ 元の会話履歴のまま継続"])
+
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class Pre,Post process
+    class Compact,Append internal
+    class Check decision
+    class Cancel warning
+    class Start,Done,Done2 input
+      </pre>
+    </div>
+    <p class="diagram-note">
+      Kiro が会話を自動コンパクションする際の Hook 実行フローです。Pre Compaction Hook は要約の書き込み前に実行されて終了コード 2 でキャンセルでき、Post Compaction Hook は要約への置き換え後に実行されて出力が会話に追加されます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <h4>🪝 1. Pre Compaction Hook (コンパクション前トリガー)</h4>
+      <ul>
+        <li>Hook エディターの「Compaction Hooks」グループに追加された新しいトリガー</li>
+        <li>Kiro が会話を自動コンパクションする際、要約が書き込まれる前に実行される</li>
+        <li>終了コード 2 で終了するとコンパクションをキャンセルでき、その際の標準エラー出力がキャンセル理由として表示される</li>
+        <li>matcher (対象を絞り込む条件) は指定できない</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🪝 2. Post Compaction Hook (コンパクション後トリガー)</h4>
+      <ul>
+        <li>要約が古い会話履歴を置き換えた後に実行される</li>
+        <li>Hook の出力が会話に追加されるため、要約から漏れた情報をエージェントに保持させることができる</li>
+        <li>matcher は指定できない</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🔍 3. Workflow Runs ビューの検索</h4>
+      <ul>
+        <li>Workflows を有効にしている場合、「Search workflows」フィールドで実行の名前、ステータス、記録された実行時間による絞り込みが可能</li>
+        <li>「Clear search」の選択または Escape キーで全件表示に戻る</li>
+        <li>Recipes ビューの初期サイズが小さくなり、実行一覧の表示領域が拡大</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🗂️ 4. コンパクトなワークフロー実行カード</h4>
+      <ul>
+        <li>Workflow Runs ビュー、チャット、セッションヘッダーのドロップダウンで、実行カードが記録された実行時間を表示する共通のコンパクトレイアウトに</li>
+        <li>カードにホバーまたはフォーカスすると Pause、Resume、Stop が表示され、カードからステップを開くことも可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🌐 5. Web ページの Markdown 取得</h4>
+      <ul>
+        <li>Kiro が Web ページを取得する際、サイトに対して Markdown または HTML を要求するように</li>
+        <li>Markdown を提供するサイトでは、コードブロックとリンクが保持される</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🧠 6. サブエージェントの読み取り専用 Memory アクセス</h4>
+      <ul>
+        <li>Kiro がディスパッチしたサブエージェントが、親セッションで利用可能なローカルメモリを読み取れるように</li>
+        <li>サブエージェントはメモリの追加、変更、削除はできない (読み取り専用)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 主な修正 -->
+  <div class="section">
+    <h2>🔧 主な修正</h2>
+    <div class="check-item"><span class="check-icon">✓</span><span>接続が完了しないエディターウィンドウのエージェントがあっても、Agent Focus がリフレッシュ中に停止しなくなった</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>MCP サーバーのトークンリフレッシュが失敗しても、新しいサインインを強制されなくなった。ツール呼び出しは失敗するが、サーバーはサインイン状態を維持する</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>終了コード 2 で終了する Pre Tool Use Hook が、標準エラー出力に何も書き込まなくてもツール呼び出しをブロックするようになった</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ファイル編集時にドル記号のシーケンスが置換パターンとして展開されず、そのまま書き込まれるようになった</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>最後のツール呼び出しの後にモデルがテキストを返さない場合、再試行を繰り返さずにターンが正常に終了するようになった</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>非常に大きなセッションが内部エラーで失敗せずに開けるようになった</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ターン上限に達したサブエージェントが、成功に見える空の結果ではなく、未完了の作業を親エージェントに報告するようになった</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>サインアウト状態でプロンプトを送信すると、認証エラーでターンが失敗する代わりに、すぐにサインインメッセージが表示されるようになった</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>別の Kiro ウィンドウを開いても、実行中のウィンドウの Kiro Logs および Kiro - MCP Logs ビューの履歴が失われなくなった</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Windows では、オートコンプリートが PowerShell プロセスを起動せずにエディターから電源状態を読み取るようになり、拡張機能のロード時にコードページコマンドを実行しなくなった</span></div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>📋 技術仕様: Compaction Hooks</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>項目</th>
+          <th>Pre Compaction Hook</th>
+          <th>Post Compaction Hook</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>実行タイミング</td>
+          <td>要約が書き込まれる前</td>
+          <td>要約が古い履歴を置き換えた後</td>
+        </tr>
+        <tr>
+          <td>コンパクションのキャンセル</td>
+          <td>可能 (終了コード 2)</td>
+          <td>不可</td>
+        </tr>
+        <tr>
+          <td>キャンセル時の表示</td>
+          <td>標準エラー出力が理由として表示</td>
+          <td>-</td>
+        </tr>
+        <tr>
+          <td>出力の扱い</td>
+          <td>-</td>
+          <td>会話に追加され、エージェントが保持</td>
+        </tr>
+        <tr>
+          <td>matcher の指定</td>
+          <td>不可</td>
+          <td>不可</td>
+        </tr>
+        <tr>
+          <td>設定場所</td>
+          <td colspan="2">Hook エディターの Compaction Hooks グループ</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size: 14px;">
+      💡 同日リリースの <span class="highlight">Kiro CLI 3.1.0</span> でも、CLI V3 セッション向けに同様の <code>PreCompact</code> / <code>PostCompact</code> Hook が追加されています。CLI 版では手動・自動どちらのコンパクションでも実行されます。
+    </p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Kiro IDE 1.4.121 以降がインストールされていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Workflow Runs 検索を利用する場合は、Workflows 機能が有効になっていること</span></div>
+
+    <h3>手順</h3>
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h4>Kiro IDE を最新バージョンに更新</h4>
+        <p>Kiro IDE を再起動するか、アップデートを確認して 1.4.121 以降に更新します。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h4>Hook エディターで Compaction Hook を作成</h4>
+        <p>Hook エディターを開き、「Compaction Hooks」グループから「Pre Compaction」または「Post Compaction」トリガーを選択して Hook を作成します。matcher は指定できないため、トリガーとコマンドのみを設定します。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h4>Hook の動作を実装</h4>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">Pre Compaction Hook の例: 特定条件でコンパクションをキャンセル</span>
+      </div>
+      <pre><code class="language-bash">#!/bin/bash
+# Pre Compaction Hook の例: 特定条件でコンパクションをキャンセルする
+if [ -f ".kiro-no-compact" ]; then
+  echo "コンパクションは .kiro-no-compact により禁止されています" >&2
+  exit 2
+fi
+exit 0</code></pre>
+    </div>
+    <p style="font-size: 14px;">
+      このスクリプトは、ワークスペースに <code>.kiro-no-compact</code> ファイルが存在する場合に終了コード 2 で終了し、コンパクションをキャンセルします。標準エラー出力の内容がキャンセル理由として表示されます。
+    </p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="benefit-grid">
+      <div class="benefit-col">
+        <h3>📈 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンテキスト損失の防止</strong>: 長時間の開発セッションで重要な決定事項や指示が要約により失われるリスクを低減し、手戻りを削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ワークフロー運用の効率化</strong>: 実行数が多い環境でも検索により目的の実行へ素早くアクセスでき、監視・運用コストを削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>サブエージェント活用の促進</strong>: 親セッションのメモリをサブエージェントが参照でき、タスク分割時のコンテキスト共有が容易に</span></div>
+      </div>
+      <div class="benefit-col">
+        <h3>⚙️ 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コンパクションのライフサイクル制御</strong>: Hook により履歴保存、監査ログの記録、条件付きキャンセルなどを自動化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>要約の補完</strong>: Post Compaction Hook の出力が会話に追加され、プロジェクト固有の重要情報を要約後も確実に保持</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>取得コンテンツの品質向上</strong>: Markdown 対応サイトからの Web 取得でコードブロックとリンク構造が保持され、エージェントの参照精度が向上</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Pre Compaction / Post Compaction トリガーは matcher を指定できない (すべてのコンパクションで実行される)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>IDE の Compaction Hooks は Kiro が会話を自動コンパクションする場合に実行される</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>サブエージェントの Memory アクセスは読み取り専用であり、追加・変更・削除はできない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Web ページの Markdown 取得は、サイト側が Markdown を提供している場合にのみ効果がある</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>Pre Compaction Hook でコンパクションをキャンセルし続けると、会話履歴が増え続けてコンテキスト上限に影響する可能性がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>Post Compaction Hook の出力は会話に追加されるため、出力が大きすぎるとコンパクションによる節約効果が薄れる</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>Hook スクリプトの実行時間や失敗時の挙動を考慮し、シンプルで堅牢な実装にすることが望ましい</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>💾 ユースケース 1: コンパクション前の会話履歴のバックアップ</h4>
+      <p><span class="label">シナリオ</span>: 長時間のリファクタリング作業で、コンパクションにより過去の設計判断の詳細が失われることを避けたい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Pre Compaction Hook: タイムスタンプ付きで記録</span>
+        </div>
+        <pre><code class="language-bash">#!/bin/bash
+# Pre Compaction Hook: コンパクション前にタイムスタンプ付きで記録を残す
+mkdir -p ~/.kiro-compaction-logs
+date "+%Y-%m-%d %H:%M:%S compaction triggered" >> ~/.kiro-compaction-logs/history.log
+exit 0</code></pre>
+      </div>
+      <p><span class="label">効果</span>: コンパクションの発生タイミングを記録し、必要に応じて外部ツールで会話のアーカイブ処理を連動できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>📌 ユースケース 2: 要約から漏れやすい規約情報の再注入</h4>
+      <p><span class="label">シナリオ</span>: プロジェクト固有のコーディング規約やブランチ運用ルールが、コンパクションの要約で省略されてしまう。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">Post Compaction Hook: 重要な規約を会話に再注入</span>
+        </div>
+        <pre><code class="language-bash">#!/bin/bash
+# Post Compaction Hook: 重要な規約を会話に再注入する
+cat .kiro/compaction-reminder.md
+exit 0</code></pre>
+      </div>
+      <p><span class="label">効果</span>: Hook の標準出力が会話に追加されるため、コンパクション後もエージェントが規約を確実に参照し続けられる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>🔎 ユースケース 3: 多数のワークフロー実行からの素早い絞り込み</h4>
+      <p><span class="label">シナリオ</span>: 複数のワークフローを日常的に実行しており、失敗した実行や特定の名前の実行をすぐに見つけたい。</p>
+      <p><span class="label">操作</span>: Workflow Runs ビューの Search workflows フィールドに実行名、ステータス、実行時間などのキーワードを入力して絞り込む。Escape キーまたは Clear search で全件表示に戻す。</p>
+      <p><span class="label">効果</span>: 実行一覧をスクロールせずに目的の実行へ到達でき、カード上の Pause / Resume / Stop で直接操作できる。</p>
+    </div>
+  </div>
+
+  <!-- リージョン・関連サービス -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>グローバル (Kiro はリージョンに依存しないサービスとして提供)</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="card">
+        <h4>🪝 Kiro Hooks</h4>
+        <p>エージェントのライフサイクルイベントで任意の処理を実行する仕組み。今回 Compaction Hooks グループが追加された。</p>
+      </div>
+      <div class="card">
+        <h4>⌨️ Kiro CLI 3.1.0</h4>
+        <p>同日リリースの CLI バージョンで、V3 セッション向けに PreCompact / PostCompact Hook とセッションクレジット表示が追加された。</p>
+      </div>
+      <div class="card">
+        <h4>🔁 Kiro Workflows</h4>
+        <p>計画を提示してから実行するワークフロー機能。今回 Workflow Runs ビューの検索とコンパクトな実行カードが追加された。</p>
+      </div>
+      <div class="card">
+        <h4>🧠 Kiro Memory</h4>
+        <p>リポジトリのコンテキストをセッションをまたいで保持する機能。今回サブエージェントからの読み取り専用アクセスが可能になった。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>✅ まとめ</h2>
+    <p>
+      Kiro IDE 1.4.121 は、会話コンパクションの前後に Hook を実行できる <span class="highlight">Pre Compaction / Post Compaction トリガー</span>を導入し、
+      長時間セッションでのコンテキスト管理をユーザーが制御できるようにした重要なアップデートです。
+      Workflow Runs の検索やサブエージェントの Memory 読み取りも日常的な開発体験を向上させます。
+      長時間のエージェントセッションを運用しているユーザーは、まず <span class="highlight">Post Compaction Hook で重要情報の再注入</span>を試すことを推奨します。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a href="https://kiro.dev/changelog/" target="_blank" rel="noopener noreferrer" class="aws-link">Kiro Changelog</a></li>
+      <li><a href="https://kiro.dev/docs/hooks/types/#pre-compaction" target="_blank" rel="noopener noreferrer" class="aws-link">Kiro Hooks Types ドキュメント - Pre Compaction</a></li>
+      <li><a href="https://kiro.dev/docs/workflows/manage/#find-and-inspect-a-run" target="_blank" rel="noopener noreferrer" class="aws-link">Kiro Workflows ドキュメント - 実行の検索と確認</a></li>
+      <li><a href="https://kiro.dev/docs/memory/#ide" target="_blank" rel="noopener noreferrer" class="aws-link">Kiro Memory ドキュメント - IDE</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-05-kiro-changelog-2026-11-05.md) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
