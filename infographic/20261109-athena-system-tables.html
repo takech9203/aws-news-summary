@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Athena - システムテーブルによる可観測性・監査・使用状況分析</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.date-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--aws-light-gray);
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-left: 8px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.card li { margin: 4px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF8A73; }
+.after-box h3 { color: #6FD35A; }
+
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 6px 0; font-size: 14px; }
+
+/* 表 */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th, td {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-white);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+td code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #6FD35A; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+.warn-icon { font-size: 16px; flex-shrink: 0; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid { display: flex; justify-content: center; }
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+/* 統計カード */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.2));
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-white);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <span class="service-badge">Amazon Athena</span>
+      <span class="date-badge">📅 2026 年 11 月 9 日</span>
+    </div>
+    <h1>📊 Athena システムテーブル登場</h1>
+    <div class="subtitle">使用状況データを Apache Iceberg テーブルに自動蓄積 — 可観測性・監査・使用状況分析を ETL 不要で実現</div>
+  </div>
+
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>Amazon Athena が、使用状況データを自動的にキャプチャして<span class="highlight">可観測性、使用状況分析、監査</span>に活用できる<strong>システムテーブル</strong>を発表しました。有効化すると、アカウント内の<strong>すべてのワークグループ</strong>を対象に、クエリ完了から数分以内に使用状況データが利用可能になります。</p>
+    <p>データはサービス管理の読み取り専用 <span class="highlight">Apache Iceberg テーブル</span>として Amazon S3 Tables に保存され、スキーマ定義、パーティショニング、コンパクション、スナップショット管理は AWS が代行します。Athena だけでなく DuckDB、Amazon Redshift、Amazon EMR など Iceberg 互換の任意のエンジンからクエリできます。</p>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">数分以内</div>
+        <div class="stat-label">クエリ完了からデータ利用可能まで</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">ETL 不要</div>
+        <div class="stat-label">カスタムパイプラインの構築・維持が不要</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">配信無料</div>
+        <div class="stat-label">システムテーブルへのデータ配信は無料</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <ul>
+          <li>使用状況データの取得に GetQueryExecution API、CloudWatch メトリクス、CloudTrail ログの組み合わせが必要</li>
+          <li>ワークグループ横断の SQL 分析にはカスタム ETL パイプラインの構築・維持が必要</li>
+          <li>コスト配分ダッシュボードや監査レポートに独自のデータ収集基盤の開発が必要</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <ul>
+          <li>使用状況データが Iceberg テーブルとして自動蓄積され、SQL で直接検索・フィルタリング・集計・結合が可能</li>
+          <li>query_executions テーブルからワークグループ別・ユーザー別・テーブル別のスキャン量を集計可能</li>
+          <li>AWS Agent Toolkit のスキルで、AI エージェントから自然言語で分析・最適化推奨を取得可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Account["☁️ AWS アカウント"]
+        subgraph AthenaSvc["⚙️ Amazon Athena"]
+            WG1["👥 ワークグループ A"]
+            WG2["👥 ワークグループ B"]
+            Ingest["🔄 システムテーブル配信<br/>バッチ書き込み・完全管理"]
+        end
+        subgraph S3T["🪣 Amazon S3 Tables"]
+            QE[("📋 query_executions<br/>Apache Iceberg 形式")]
+        end
+        Glue["📚 AWS Glue Data Catalog<br/>s3tablescatalog 統合"]
+    end
+
+    User(["👤 ユーザー"]) --> WG1
+    User --> WG2
+    WG1 --> Ingest
+    WG2 --> Ingest
+    Ingest --> QE
+    QE --> Glue
+    Glue --> Athena["🔍 Athena SQL 分析"]
+    Glue --> Other["🦆 DuckDB / Redshift / EMR<br/>Iceberg 互換エンジン"]
+    Glue --> Agent["🤖 AI エージェント<br/>AWS Agent Toolkit スキル"]
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Account cloud
+    class AthenaSvc,S3T layer
+    class WG1,WG2 compute
+    class QE database
+    class User user
+    class Ingest,Glue internal
+    class Athena,Other,Agent process
+      </pre>
+    </div>
+    <p class="diagram-note">すべてのワークグループのクエリ実行データが、Athena により自動的に S3 Tables 上の Iceberg テーブルへバッチ配信され、AWS Glue Data Catalog 経由で Athena や Iceberg 互換エンジン、AI エージェントから分析できます。</p>
+  </div>
+
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">📋 query_executions システムテーブル</div>
+      <ul>
+        <li>成功・失敗を問わず、完了した各クエリにつき 1 行を記録</li>
+        <li>クエリ識別情報 (実行 ID、クエリ文字列、送信時刻)、コンテキスト (ワークグループ、カタログ、データベース、テーブル)、送信者の principal ARN を含む</li>
+        <li>パフォーマンス情報 (総実行時間、プランニング時間、キュー時間)、リソース消費 (スキャンバイト数、DPU 数)、実行結果 (成功 / 失敗 / キャンセル、エラー詳細) を含む</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🧊 サービス管理の Iceberg テーブル</div>
+      <ul>
+        <li>S3 Tables バケット aws-athena にデータを保存し、スキーマ定義・進化、パーティショニング、コンパクション、スナップショット管理を AWS が代行</li>
+        <li>配信されたデータは不変 (イミュータブル) で、各レコードは厳密に 1 回だけ配信される (exactly-once)</li>
+        <li>保持期間は S3 Tables のレコード有効期限機能で設定可能 (最短 1 日、上限なし)</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔄 オープンフォーマットによる相互運用性</div>
+      <ul>
+        <li>Apache Iceberg 形式のため、Athena に加えて DuckDB、Amazon Redshift、Amazon EMR などの互換エンジンからクエリ可能</li>
+        <li>AWS Glue Data Catalog との統合により、IAM や AWS Lake Formation でテーブル・列・行レベルのアクセス制御を適用可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🤖 AI エージェント連携</div>
+      <ul>
+        <li>AWS Agent Toolkit がシステムテーブルをクエリするスキルを提供し、使用パターンの把握や最適化の推奨を自然言語で取得可能</li>
+        <li>MCP 対応エージェントから IAM 認証情報を使って接続でき、すべての API 呼び出しは CloudTrail に記録される</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対象範囲</td><td>アカウント・リージョン単位で有効化。既存および将来のすべてのワークグループをカバー</td></tr>
+      <tr><td>保存先</td><td>S3 Tables バケット aws-athena 内の metadata 名前空間</td></tr>
+      <tr><td>フォーマット</td><td>Apache Iceberg (読み取り専用、行の挿入・更新・削除は不可)</td></tr>
+      <tr><td>配信</td><td>クエリ完了から数分以内、固定頻度のバッチ配信、exactly-once</td></tr>
+      <tr><td>暗号化</td><td>デフォルトは SSE-S3。カスタマーマネージド KMS キーも指定可能 (テーブル作成後は変更不可)</td></tr>
+      <tr><td>保持期間</td><td>デフォルト設定なし (無期限)。S3 Tables のレコード有効期限で設定 (最短 1 日)</td></tr>
+      <tr><td>クエリ方法</td><td><code>SELECT * FROM "s3tablescatalog/aws-athena"."metadata"."query_executions"</code></td></tr>
+    </table>
+
+    <h3>📡 API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/11/06</td>
+        <td><a href="https://awsapichanges.com/archive/changes/76ccee-athena.html" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon Athena</a></td>
+        <td>5 new 2 updated api methods - CreateSystemTableConfiguration、UpdateSystemTableConfiguration、DeleteSystemTableConfiguration、GetSystemTableConfiguration、ListSystemTableStatuses を追加</td>
+      </tr>
+    </table>
+
+    <h3>🔐 管理者に必要な IAM 権限 (抜粋)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">IAM ポリシー例</span>
+      </div>
+      <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageSystemTableConfiguration",
+      "Effect": "Allow",
+      "Action": [
+        "athena:CreateSystemTableConfiguration",
+        "athena:UpdateSystemTableConfiguration",
+        "athena:DeleteSystemTableConfiguration",
+        "athena:GetSystemTableConfiguration"
+      ],
+      "Resource": "arn:aws:athena:&lt;REGION&gt;:&lt;ACCOUNT&gt;:system-table/ALL"
+    },
+    {
+      "Sid": "CreateSystemTablesBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3tables:CreateTableBucket",
+        "s3tables:PutTableBucketPolicy"
+      ],
+      "Resource": "arn:aws:s3tables:&lt;REGION&gt;:&lt;ACCOUNT&gt;:bucket/aws-athena"
+    }
+  ]
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Athena と Amazon S3 Tables が利用可能なリージョンであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>システムテーブルをクエリするには、S3 Tables バケットを AWS Glue Data Catalog と統合済みであること (アカウント・リージョンごとに 1 回の作業)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>管理者がシステムテーブル管理用の IAM 権限を持っていること</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">システムテーブルを有効化する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash">aws athena create-system-table-configuration \
+    --table-name ALL</code></pre>
+        </div>
+        <p>Athena が S3 Tables バケット aws-athena をアカウント内にプロビジョニングし、使用状況データの配信を開始します。カスタマーマネージド KMS キーで暗号化する場合は <code>--kms-key-arn</code> オプションでキー ARN を指定します。コンソールの場合は [Administration] - [System tables] から [Configure] を選択します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">設定とテーブルの状態を確認する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash">aws athena get-system-table-configuration --table-name ALL
+aws athena list-system-table-statuses</code></pre>
+        </div>
+        <p>現在のシステムテーブル設定と、物理テーブルごとの有効化状態を確認します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">システムテーブルをクエリする</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">ワークグループ別スキャン量の集計</span></div>
+          <pre><code class="language-sql">SELECT work_group_name,
+       SUM(data_scanned_bytes) / 1e12 AS scanned_tb
+FROM "s3tablescatalog/aws-athena"."metadata"."query_executions"
+WHERE submission_date_time &gt;= DATE '2026-11-01'
+GROUP BY work_group_name
+ORDER BY scanned_tb DESC;</code></pre>
+        </div>
+        <p>システムテーブルはパーティション化されているため、パーティション列でフィルタリングするとスキャン量を削減できます。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト配分の簡素化</strong>: スキャンバイト数の集計がそのままチームや部門へのチャージバック / ショーバックに利用できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>監査・コンプライアンス対応</strong>: 「誰が、いつ、どのテーブルにアクセスしたか」を SQL で追跡でき、数か月から数年のデータ保持が可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: カスタム ETL パイプラインの構築・維持が不要になり、分析基盤の開発工数を削減</span></div>
+
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>完全マネージド</strong>: スキーマ管理、パーティショニング、コンパクション、スナップショット管理を AWS が代行</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>オープンフォーマット</strong>: Apache Iceberg 形式のため、DuckDB や Redshift、EMR など既存の分析ツールチェーンにそのまま組み込める</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ガバナンス統合</strong>: Glue Data Catalog と Lake Formation により、列レベル・行レベルの細かなアクセス制御を適用できる</span></div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>単一アカウント・単一リージョン内のみサポート。クロスアカウント・クロスリージョンの集約には非対応</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>配信されたデータは不変で、行単位の挿入・更新・削除はできない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>デフォルトの保持期間が設定されないため、ストレージコスト管理には S3 Tables のレコード有効期限の設定が必要</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>クエリには S3 Tables バケットと AWS Glue Data Catalog の統合が必要</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>KMS キーはテーブル作成後に変更できない (変更にはテーブルの削除と再作成が必要で、既存データは失われる)</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>クエリ文字列には PII や独自ロジックなどの機密情報が含まれる可能性があるため、Lake Formation の列レベル権限などでアクセスを制限することが推奨される</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>無効化している期間のデータはキャプチャされず、再有効化してもバックフィルされない</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>無効化直前に送信されたクエリは query_executions に記録されない場合がある</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">💰 ユースケース 1: ワークグループ別のコスト配分ダッシュボード</div>
+      <p><strong>シナリオ</strong>: プラットフォームチームが、部門ごとの Athena 利用コストを可視化してチャージバックを行いたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">月別・ワークグループ別スキャン量</span></div>
+        <pre><code class="language-sql">SELECT work_group_name,
+       DATE_TRUNC('month', submission_date_time) AS month,
+       SUM(data_scanned_bytes) / 1e12 AS scanned_tb
+FROM "s3tablescatalog/aws-athena"."metadata"."query_executions"
+GROUP BY work_group_name, DATE_TRUNC('month', submission_date_time);</code></pre>
+      </div>
+      <p><strong>効果</strong>: カスタム ETL なしで、ワークグループ別・月別のスキャン量からコストを按分でき、正確なコスト配分レポートを迅速に作成できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📉 ユースケース 2: パフォーマンス劣化の検出</div>
+      <p><strong>シナリオ</strong>: データエンジニアリングチームが、クエリ実行時間の悪化やキャパシティ逼迫を早期に検出したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">直近 7 日間の最遅クエリ</span></div>
+        <pre><code class="language-sql">SELECT query_execution_id,
+       total_execution_time_ms,
+       query_queue_time_ms
+FROM "s3tablescatalog/aws-athena"."metadata"."query_executions"
+WHERE submission_date_time &gt;= CURRENT_DATE - INTERVAL '7' DAY
+ORDER BY total_execution_time_ms DESC
+LIMIT 50;</code></pre>
+      </div>
+      <p><strong>効果</strong>: 最遅クエリやキュー時間の傾向を把握し、ワークグループのキャパシティ調整やクエリ最適化の判断材料にできる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔍 ユースケース 3: 監査とアクセス追跡</div>
+      <p><strong>シナリオ</strong>: セキュリティチームが、機密データを含む特定のテーブルに誰がアクセスしたかを定期的に監査したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">SQL</span><span class="code-title">特定テーブルへのアクセス履歴</span></div>
+        <pre><code class="language-sql">SELECT principal_arn,
+       submission_date_time,
+       query_string
+FROM "s3tablescatalog/aws-athena"."metadata"."query_executions"
+WHERE query_string LIKE '%sensitive_table%'
+ORDER BY submission_date_time DESC;</code></pre>
+      </div>
+      <p><strong>効果</strong>: 特定テーブルへのアクセス履歴と実行者を SQL だけで特定でき、コンプライアンス要件に応じた長期保持と組み合わせて監査対応を効率化できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>システムテーブルへの<span class="highlight">データ配信自体は無料</span>です。課金対象は以下のとおりです。</p>
+    <div class="card">
+      <ul>
+        <li><strong>S3 Tables ストレージ</strong>: 保持するデータに対して標準の S3 Tables ストレージ料金とメンテナンス料金が発生</li>
+        <li><strong>クエリ料金</strong>: Athena でシステムテーブルをクエリする際は標準の Athena クエリ料金 (スキャン量ベース) が発生。DuckDB、Redshift、EMR など他のエンジンはそれぞれの料金体系に従う</li>
+      </ul>
+    </div>
+    <p>保持期間を S3 Tables のレコード有効期限で適切に設定することで、ストレージコストを管理できます。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>Athena と Amazon S3 Tables の両方が利用可能なすべての AWS リージョンで利用できます。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <ul>
+        <li><strong>Amazon S3 Tables</strong>: システムテーブルの保存先。レコード有効期限による保持期間管理や自動コンパクションを提供</li>
+        <li><strong>AWS Glue Data Catalog</strong>: システムテーブルの検出とクエリに必要なカタログ統合を提供</li>
+        <li><strong>AWS Lake Formation</strong>: システムテーブルに対するテーブル・列・行レベルの細かなアクセス制御を提供</li>
+        <li><strong>AWS Agent Toolkit</strong>: システムテーブルをクエリして使用パターンや最適化推奨を提示する AI エージェント用スキルを提供</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>Athena の使用状況データが、<span class="highlight">ETL 不要で SQL 分析可能な Iceberg テーブル</span>として自動蓄積されるようになり、コスト配分、パフォーマンス分析、監査が大幅に容易になりました。</p>
+    <div class="check-item"><span class="check-icon">✓</span><span>Athena を複数チームで利用している組織は、コンソールまたは API からシステムテーブルの有効化を推奨</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>S3 Tables のレコード有効期限で保持期間を設定し、ストレージコストを管理</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>クエリ文字列に機密情報が含まれる可能性があるため、Lake Formation によるアクセス制御の設計も合わせて検討</span></div>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/athena-system-tables/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li><a href="https://aws.amazon.com/blogs/big-data/amazon-athena-introduces-system-tables-for-query-execution-observability/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog</a></li>
+      <li><a href="https://docs.aws.amazon.com/athena/latest/ug/athena-system-tables.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント (Use Athena system tables)</a></li>
+      <li><a href="https://github.com/aws/agent-toolkit-for-aws/tree/main/skills/specialized-skills/system-table-skills" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Agent Toolkit - System Table Skills</a></li>
+      <li><a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ (Amazon S3 の料金)</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-09-athena-system-tables.md) を基に作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

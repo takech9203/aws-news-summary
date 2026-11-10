@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon EKS Auto Mode と Karpenter が Dynamic Resource Allocation (DRA) をサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.date-badge {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h3 { margin-top: 0; }
+.card p { margin: 6px 0 0 0; font-size: 14.5px; }
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 720px) {
+  .feature-grid { grid-template-columns: 1fr; }
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.ba-box {
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 14.5px;
+}
+.ba-before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.ba-before .ba-title { color: #FF8A73; }
+.ba-after .ba-title { color: #7FD95E; }
+.ba-box ul { margin: 0; padding-left: 0; list-style: none; }
+.ba-box li {
+  margin: 8px 0;
+  padding-left: 22px;
+  position: relative;
+}
+.ba-before li::before { content: "✗"; color: var(--aws-red); position: absolute; left: 0; font-weight: 700; }
+.ba-after li::before { content: "✓"; color: #7FD95E; position: absolute; left: 0; font-weight: 700; }
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+.table-wrap { overflow-x: auto; }
+
+/* Check / cross lists */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px 0;
+  font-size: 14.5px;
+}
+.check-icon { color: #7FD95E; font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+.warn-icon { font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+
+/* Flow diagram */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Mermaid container */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase h3 { margin-top: 0; color: var(--aws-smile-orange); }
+.usecase p { font-size: 14.5px; margin: 8px 0; }
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 10px 12px;
+  border-radius: 4px;
+  margin-top: 12px;
+}
+
+/* Stats */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-white);
+}
+.stat-label { font-size: 13px; margin-top: 4px; }
+
+/* Steps */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-content h3 { margin: 4px 0 8px 0; }
+.step-content p { font-size: 14.5px; margin: 6px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+ul.plain { margin: 8px 0; padding-left: 20px; }
+ul.plain li { margin: 6px 0; font-size: 14.5px; }
+
+.note-box {
+  background: rgba(255, 153, 0, 0.1);
+  border-left: 4px solid var(--aws-orange);
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin: 14px 0;
+  font-size: 14.5px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="service-badge">☁️ Amazon EKS</div>
+    <h1>EKS Auto Mode と Karpenter が<br>Dynamic Resource Allocation (DRA) をサポート</h1>
+    <div class="subtitle">📅 リリース日: <span class="date-badge">2026 年 11 月 9 日</span> | NVIDIA GPU と EFA の属性ベース割り当て・トポロジー整合・Pod 間共有を動的プロビジョニングと組み合わせ可能に</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon EKS は、<span class="highlight">EKS Auto Mode と Karpenter</span> の使用時に、NVIDIA GPU と Elastic Fabric Adapter (EFA) ネットワークデバイスに対する <span class="highlight">Dynamic Resource Allocation (DRA)</span> をサポートしました。DRA は Kubernetes 1.34 で一般提供された機能で、デバイスプラグインの制限を解消し、<strong>属性ベースのデバイス選択</strong>、<strong>トポロジーを考慮した割り当て</strong>、<strong>Pod 間でのデバイス共有</strong>を可能にします。
+    </p>
+    <p>
+      ユーザーが ResourceClaim / ResourceClaimTemplate でモデルやアーキテクチャなどの属性を宣言すると、Karpenter が条件に一致する<span class="highlight">最低コストのインスタンスを自動起動</span> (スケールフロムゼロ対応) します。EKS Auto Mode では NVIDIA DRA ドライバーと EFA DRA ドライバー (DRANET) が<span class="highlight">ノードランタイムに組み込み済み</span>のため、ドライバーのインストールや管理は不要です。
+    </p>
+
+    <div class="flow-diagram">
+      <div class="flow-step">📝 ResourceClaim<br>属性を宣言</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🧭 スケジューラー<br>属性で評価</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">⚙️ Karpenter<br>最低コストを選択</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🖥️ GPU / EFA ノード<br>自動起動・割り当て</div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ Before: デバイスプラグインの制限</div>
+        <ul>
+          <li>整数カウント (<code>nvidia.com/gpu</code> など) のみで、GPU モデルやアーキテクチャによるフィルタリング不可</li>
+          <li>コンテナや Pod 間でのデバイス共有ができない</li>
+          <li>GPU と EFA をまたぐ PCIe / NUMA トポロジー割り当てを表現できず、カスタムスケジューラー拡張が必要</li>
+          <li>DRA には既存ノードが必要で、ResourceClaim からのゼロスケールアウトが不可能</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ After: DRA サポートで実現</div>
+        <ul>
+          <li>ResourceClaim の属性を Karpenter が評価し、最低コストの EC2 を自動起動 (スケールフロムゼロ)</li>
+          <li>共有 ResourceClaim で複数 Pod が同一 GPU を共有可能</li>
+          <li>PCIe アラインされた GPU + EFA のトポロジー整合割り当てが標準機能に</li>
+          <li>Auto Mode は DRA ドライバー組み込み済みで導入・運用不要</li>
+          <li>DRA ノードとデバイスプラグインノードを自動分離し、オーバーサブスクリプションを防止</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph User["👤 ユーザー定義"]
+        direction LR
+        DC["📋 DeviceClass<br/>デバイスカテゴリ定義"]
+        RC["📝 ResourceClaim /<br/>ResourceClaimTemplate<br/>モデル・属性・PCIe 整合を指定"]
+        Pod["📦 Pod<br/>DRA オブジェクトを参照"]
+        DC ~~~ RC ~~~ Pod
+    end
+
+    subgraph EKS["☁️ Amazon EKS Auto Mode / Karpenter"]
+        Sched["🧭 Kubernetes スケジューラー<br/>ResourceSlice の属性で評価"]
+        Karp["⚙️ Karpenter<br/>クレームを満たす<br/>最低コストのインスタンスを選択"]
+    end
+
+    subgraph Node["🖥️ EC2 GPU インスタンス"]
+        direction LR
+        NVDRA["🔌 NVIDIA DRA ドライバー<br/>Auto Mode は組み込み済み"]
+        DRANET["🔌 EFA DRA ドライバー<br/>DRANET"]
+        GPU["🎮 NVIDIA GPU"]
+        EFA["🌐 EFA デバイス"]
+        NVDRA ~~~ DRANET
+        GPU ~~~ EFA
+    end
+
+    Pod --> Sched
+    RC --> Sched
+    Sched --> Karp
+    Karp -->|"ノードを起動"| Node
+    NVDRA --> GPU
+    DRANET --> EFA
+    GPU <-.->|"PCIe アライン"| EFA
+
+    classDef user fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class User,EKS,Node layer
+    class DC,RC,Pod user
+    class Sched,Karp process
+    class NVDRA,DRANET,GPU,EFA internal
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      ユーザーが DeviceClass と ResourceClaim / ResourceClaimTemplate で必要なデバイスを宣言すると、Karpenter が保留中のクレームを評価して条件に一致する最低コストの EC2 インスタンスを起動し、組み込みの DRA ドライバーが GPU と EFA デバイスを Pod に割り当てます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="feature-grid">
+      <div class="card">
+        <h3>🎯 属性ベースのデバイス選択</h3>
+        <p>DRA ドライバーが ResourceSlice でデバイス属性を公開。ResourceClaim で GPU のモデルやアーキテクチャを <span class="highlight">CEL 式</span>で指定でき、「整数カウントのみ」から宣言的で表現力の高い要求方式に進化。</p>
+      </div>
+      <div class="card">
+        <h3>🔗 トポロジー整合 GPU / EFA 割り当て</h3>
+        <p>同一 PCIe スイッチや NUMA ドメイン上のデバイスの組み合わせを保証。分散トレーニングで GPU と近接する EFA をペアで割り当て、通信性能を最適化。GPU と EFA の両方で DRA が必要。</p>
+      </div>
+      <div class="card">
+        <h3>🤝 Pod 間での GPU 共有</h3>
+        <p>複数の Pod が同じ ResourceClaim を参照して同一 GPU を共有 (同一ノードにスケジュール)。Auto Mode ではタイムスライシング / MIG は利用不可 (必要な場合は Karpenter を使用)。EFA は共有不可。</p>
+      </div>
+      <div class="card">
+        <h3>🚀 Karpenter の DRA 動的プロビジョニング</h3>
+        <p>Karpenter 1.15 以降がインスタンスのデバイスメタデータを同梱し、保留中のクレームを評価してノードを起動。<span class="highlight">スケールフロムゼロ</span>対応。アルファ機能のため <code>settings.enableDRA: true</code> などで有効化。</p>
+      </div>
+      <div class="card">
+        <h3>🛡️ Auto Mode の組み込みドライバーと安全機構</h3>
+        <p>NVIDIA DRA ドライバーと DRANET が組み込み済みで導入・運用不要。ノードはデバイスタイプごとに DRA / デバイスプラグインの役割を終生維持し、サイレントなオーバーサブスクリプションを防止。DeviceClass はユーザーが作成。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📋 サポート条件</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対象デバイス</td><td>NVIDIA GPU、EFA ネットワークデバイス</td></tr>
+        <tr><td>EKS Auto Mode</td><td>Kubernetes バージョン 1.36 以降で DRA をサポート</td></tr>
+        <tr><td>Karpenter</td><td>すべての Kubernetes バージョンでサポート。動的プロビジョニングは Karpenter 1.15 以降 (アルファ、フィーチャーゲートで有効化)</td></tr>
+        <tr><td>EKS 全般の DRA 対応</td><td>Kubernetes 1.33 以降で利用可能、上流の既知の問題のため 1.34 以降を推奨</td></tr>
+        <tr><td>DRA ドライバー</td><td>NVIDIA DRA ドライバー、EFA DRA ドライバー (DRANET)、Neuron DRA ドライバー</td></tr>
+        <tr><td>対応 AMI</td><td>EKS 最適化 AL2023 AMI、Bottlerocket AMI</td></tr>
+        <tr><td>Trainium / Inferentia</td><td>EKS Auto Mode では DRA 非対応 (Neuron デバイスプラグインを使用)</td></tr>
+        <tr><td>g7e インスタンス</td><td>DRA のデバイスメタデータ未提供のため動的プロビジョニング非対応 (NVIDIA デバイスプラグインを使用)</td></tr>
+      </table>
+    </div>
+
+    <h3>⚖️ DRA とデバイスプラグインの比較</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>観点</th><th>デバイスプラグイン</th><th>DRA</th></tr>
+        <tr><td>デバイス要求方法</td><td>拡張リソースの整数カウント (<code>nvidia.com/gpu</code> など)</td><td>ResourceClaim / ResourceClaimTemplate + DeviceClass</td></tr>
+        <tr><td>属性ベースの選択</td><td>❌ 不可</td><td>✅ CEL 式によるモデル・アーキテクチャ等の指定が可能</td></tr>
+        <tr><td>Pod 間のデバイス共有</td><td>❌ 不可</td><td>✅ 共有 ResourceClaim で可能 (対応ドライバーのみ)</td></tr>
+        <tr><td>トポロジー整合割り当て</td><td>❌ デバイスタイプをまたぐ表現は不可</td><td>✅ PCIe スイッチ / NUMA ドメイン単位で可能</td></tr>
+        <tr><td>GPU パーティショニング</td><td>静的</td><td>MIG やタイムスライシングの動的な分割・共有 (環境による)</td></tr>
+      </table>
+    </div>
+
+    <h3>🔀 ResourceClaim と ResourceClaimTemplate の使い分け</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>動作</th><th>ResourceClaim</th><th>ResourceClaimTemplate</th></tr>
+        <tr><td>作成</td><td>ユーザーが事前に手動作成</td><td>Pod ごとに Kubernetes が自動生成</td></tr>
+        <tr><td>ライフサイクル</td><td>明示的に削除するまで存続</td><td>生成されたクレームは Pod に連動して削除</td></tr>
+        <tr><td>Pod 間のデバイス共有</td><td>✅ 可能 (複数 Pod が同じクレームを参照)</td><td>❌ 不可 (Pod ごとに個別のクレーム)</td></tr>
+        <tr><td>Pod 仕様のフィールド</td><td><code>resourceClaimName</code></td><td><code>resourceClaimTemplateName</code></td></tr>
+      </table>
+    </div>
+
+    <h3>🚩 Karpenter の DRA フィーチャーゲート設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">YAML</span>
+        <span class="code-title">Karpenter Helm チャートの values 設定</span>
+      </div>
+      <pre><code class="language-yaml"># Karpenter Helm チャートの values 設定
+settings:
+  # NVIDIA GPU と EFA の両方の DRA を有効化
+  # DRANVIDIAGPU と DRAEFA の AWS フィーチャーゲートが有効になり
+  # ignoreDRARequests が false に設定される
+  enableDRA: true
+
+# 片方のドライバーのみ使用する場合は個別のゲートを使用
+# (enableDRA と個別ゲートの併用は不可)
+# settings:
+#   awsFeatureGates:
+#     draNVIDIAGPU: true
+#     draEFA: false</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法 (EKS Auto Mode の場合)</h2>
+
+    <div class="note-box">
+      <strong>前提条件</strong>: EKS Auto Mode は Kubernetes 1.36 以降のクラスターが必要。Karpenter の動的プロビジョニングには Karpenter 1.15 以降とフィーチャーゲートの有効化が必要 (静的 NodePool は追加設定なし)。Karpenter / マネージドノードグループ / セルフマネージドノードでは DRA ドライバーのインストールと、同一ノード上での同一デバイスタイプのデバイスプラグインとの共存回避をユーザー自身が管理。
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h3>DeviceClass の作成</h3>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">NVIDIA GPU 用 DeviceClass</span></div>
+          <pre><code class="language-bash">cat &lt;&lt;EOF | kubectl apply -f -
+apiVersion: resource.k8s.io/v1
+kind: DeviceClass
+metadata:
+  name: gpu.nvidia.com
+spec:
+  selectors:
+    - cel:
+        expression: device.driver == 'gpu.nvidia.com'
+EOF</code></pre>
+        </div>
+        <p>Auto Mode は DRA ドライバーを組み込みで提供しますが、DeviceClass は作成しないため、ユーザー自身が作成します。上流ドライバーの Helm チャートと同じ名前を使用すると、ドライバーを自己管理するクラスターとの間でクレームの可搬性を維持できます。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h3>ResourceClaimTemplate の作成</h3>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">Pod ごとに GPU を 1 つ割り当て</span></div>
+          <pre><code class="language-bash">cat &lt;&lt;EOF | kubectl apply -f -
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: single-gpu
+spec:
+  spec:
+    devices:
+      requests:
+        - name: gpu
+          exactly:
+            deviceClassName: gpu.nvidia.com
+            allocationMode: ExactCount
+            count: 1
+EOF</code></pre>
+        </div>
+        <p>CEL 式のセレクターを追加すると、GPU のモデルやアーキテクチャなどの属性で割り当て対象を絞り込むこともできます。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h3>ワークロードから DRA オブジェクトを参照</h3>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">GPU ワークロードの Pod 定義</span></div>
+          <pre><code class="language-bash">cat &lt;&lt;EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-workload
+spec:
+  containers:
+    - name: app
+      image: nvidia/cuda:13.0.1-base-ubuntu24.04
+      command: ["nvidia-smi"]
+      resources:
+        claims:
+          - name: gpu
+  resourceClaims:
+    - name: gpu
+      resourceClaimTemplateName: single-gpu
+EOF</code></pre>
+        </div>
+        <p>Pod の <code>resourceClaims</code> で ResourceClaimTemplate を参照すると、EKS Auto Mode がクレームを満たすインスタンスを起動し、NVIDIA DRA ドライバーを有効化して GPU を割り当てます。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <h3>Karpenter の場合: フィーチャーゲートの有効化</h3>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">Helm による DRA 有効化</span></div>
+          <pre><code class="language-bash">helm upgrade karpenter oci://public.ecr.aws/karpenter/karpenter \
+  --namespace kube-system \
+  --reset-then-reuse-values \
+  --set settings.enableDRA=true</code></pre>
+        </div>
+        <p>以前のチャートバージョンが <code>settings.ignoreDRARequests</code> を <code>true</code> にデフォルト設定しているため、<code>--reuse-values</code> ではなく <code>--reset-then-reuse-values</code> (Helm 3.14 以降が必要) を使用します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト最適化</strong>: Karpenter が最低コストのインスタンスを自動選択し、スケールフロムゼロにも対応するため、高価な GPU インスタンスの無駄な常時稼働を削減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の削減</strong>: EKS Auto Mode では DRA ドライバーが組み込み済みで、インストール・設定・アップグレードが不要</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>学習時間短縮</strong>: PCIe アラインされた GPU と EFA の割り当てにより分散トレーニングの通信効率が向上し、ジョブ完了時間の短縮が期待できる</span></div>
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>宣言的で表現力の高いデバイス要求</strong>: CEL 式で GPU のモデルやアーキテクチャの属性ベース選択ができ、カスタムスケジューラー拡張が不要</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>トポロジー整合割り当て</strong>: 同一 PCIe スイッチ / NUMA ドメイン上の GPU と EFA のペア割り当てを標準機能で実現</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>安全な移行</strong>: デバイスタイプごとに DRA ノードとデバイスプラグインノードを自動分離し、サイレントオーバーサブスクリプションを防止</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>デバイス共有</strong>: 共有 ResourceClaim により複数 Pod で同一 GPU を安全に共有可能</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>EKS Auto Mode の DRA は Kubernetes 1.36 以降が必要 (それ以前のバージョンではデバイスプラグインを使用)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>Auto Mode では DRA 経由のタイムスライシングと MIG による GPU 共有は利用不可 (共有 ResourceClaim のみ)。タイムスライシングが必要な場合は Karpenter を使用</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>Auto Mode の DRA 対象は NVIDIA GPU と EFA のみ。Trainium / Inferentia は Neuron デバイスプラグインを使用</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span><code>ComputeDomain</code> を使用する Multi-Node NVLink ワークロードは動的プロビジョニング非対応 (静的キャパシティ、マネージドノードグループ、セルフマネージドノードが必要)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span><code>g7e</code> インスタンスファミリーは DRA のデバイスメタデータ未提供のため動的プロビジョニング対象外</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>Karpenter の DRA 動的プロビジョニングはアルファ機能でデフォルト無効。メタデータを同梱するインスタンスタイプのみ評価可能</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>AWS GovCloud (US) リージョンと中国リージョンでは利用不可</span></div>
+    <h3>🤔 考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>Auto Mode のノードはデバイスタイプごとに役割を終生維持するため、デバイスプラグインから DRA への移行にはノードの置き換えが必要 (Capacity Reservation / Capacity Block 利用時はスケールダウン後にスケールアップ)</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span><code>settings.enableDRA</code> は NVIDIA と EFA の両ドライバー稼働が前提。片方のみの場合は個別ゲート (<code>draNVIDIAGPU</code> / <code>draEFA</code>) を有効化</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>動的プロビジョニング + 静的ネットワークインターフェイス設定 + トポロジー整合割り当ての 3 つの併用は動作未定義 (Pod が Pending のまま残る可能性)。カスタムインターフェイスレイアウトと EFA DRA の併用には静的キャパシティを使用</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>EFA の動的プロビジョニングではパブリック IP が割り当てられないため、NAT ゲートウェイ付きプライベートサブネットまたは AWS PrivateLink エンドポイント付きサブネットで実行</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>DeviceClass が存在しないクレームは割り当てられず Pod が Pending のままになるため、展開前に DeviceClass の作成を確認</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>Karpenter / マネージドノードグループ / セルフマネージドノードでは、同一デバイスタイプの DRA ドライバーとデバイスプラグインの共存回避をユーザー自身が管理</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h3>1️⃣ 分散トレーニングにおけるトポロジー整合割り当て</h3>
+      <p><strong>シナリオ</strong>: 大規模言語モデルの分散トレーニングで、ノード間通信に EFA を使用。GPU と EFA が PCIe トポロジー上で離れていると GPUDirect RDMA の性能が低下するため、トポロジーを考慮した割り当てを行いたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">GPU と EFA の PCIe 整合割り当て</span></div>
+        <pre><code class="language-yaml">apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: gpu-efa-aligned
+spec:
+  spec:
+    devices:
+      requests:
+        - name: gpu
+          exactly:
+            deviceClassName: gpu.nvidia.com
+            allocationMode: ExactCount
+            count: 1
+        - name: efa
+          exactly:
+            deviceClassName: efa.dra.net
+            allocationMode: ExactCount
+            count: 1
+      constraints:
+        - requests: ["gpu", "efa"]
+          matchAttribute: "dra.net/pcieRoot"</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: 同一 PCIe ルート配下の GPU と EFA がペアで割り当てられ、GPU と NIC 間の通信パスが最短になり、分散トレーニングの通信パフォーマンスが最適化される。</p>
+    </div>
+
+    <div class="usecase">
+      <h3>2️⃣ 推論ワークロードでの GPU 共有によるコスト削減</h3>
+      <p><strong>シナリオ</strong>: 複数の軽量な推論サービスがそれぞれ GPU 全体を占有しており、GPU 使用率が低く、コストが課題になっている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">共有 ResourceClaim による GPU 共有</span></div>
+        <pre><code class="language-yaml">apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: shared-gpu
+spec:
+  devices:
+    requests:
+      - name: gpu
+        exactly:
+          deviceClassName: gpu.nvidia.com
+          allocationMode: ExactCount
+          count: 1
+---
+# 複数の推論 Pod が resourceClaimName: shared-gpu を参照</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: 複数の推論 Pod が同一 GPU を共有して同じノードにスケジュールされるため、GPU 使用率が向上しインスタンス数を削減できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h3>3️⃣ 特定 GPU モデルを指定したスケールフロムゼロ</h3>
+      <p><strong>シナリオ</strong>: バッチ推論ジョブで特定の GPU アーキテクチャが必要だが、ジョブ実行時以外は GPU ノードを保持したくない。従来はデバイスプラグインの整数カウントでは GPU モデルを指定できず、NodePool のインスタンスタイプ制限で代替していた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">CEL 式による GPU モデル指定</span></div>
+        <pre><code class="language-yaml">apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: specific-gpu
+spec:
+  spec:
+    devices:
+      requests:
+        - name: gpu
+          exactly:
+            deviceClassName: gpu.nvidia.com
+            allocationMode: ExactCount
+            count: 1
+            selectors:
+              - cel:
+                  expression: device.attributes["gpu.nvidia.com"].productName.contains("L40S")</code></pre>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: CEL 式で GPU モデルを直接指定でき、Karpenter が条件を満たす最低コストのインスタンスをゼロから起動。ジョブ完了後はノードが削除され、GPU コストをジョブ実行時間に限定できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p><span class="highlight">DRA サポート自体に追加料金はありません</span>。以下の既存の料金体系が適用されます。</p>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">EKS Auto Mode</div>
+        <div class="stat-label">EKS クラスター料金 + Auto Mode 管理料金 + EC2 インスタンス料金</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">Karpenter</div>
+        <div class="stat-label">オープンソースで無料。起動される GPU / EFA 対応 EC2 インスタンスの料金のみ発生</div>
+      </div>
+    </div>
+    <p style="font-size: 14px;">詳細は <a href="https://aws.amazon.com/eks/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon EKS 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>AWS GovCloud (US) リージョンと中国リージョンを除く、<span class="highlight">すべての AWS リージョン</span>で利用可能です (🇯🇵 東京・大阪リージョンを含む)。</p>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>Karpenter</strong>: すべての Kubernetes バージョンで利用可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>EKS Auto Mode</strong>: Kubernetes バージョン 1.36 以降で利用可能</span></div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card"><h3>☁️ Amazon EKS Auto Mode</h3><p>コンピューティング、ストレージ、ネットワーキングを AWS が管理する EKS の運用モード。今回のアップデートで DRA ドライバーが組み込みに。</p></div>
+    <div class="card"><h3>⚙️ Karpenter</h3><p>Kubernetes ネイティブのノードプロビジョニングツール。バージョン 1.15 以降で DRA の動的プロビジョニングに対応。</p></div>
+    <div class="card"><h3>🌐 Elastic Fabric Adapter (EFA)</h3><p>HPC や機械学習向けの低レイテンシー・高スループットなネットワークインターフェイス。DRANET ドライバーによる DRA 管理に対応。</p></div>
+    <div class="card"><h3>🎮 Amazon EC2 GPU インスタンス</h3><p>P 系・G 系インスタンスなど、NVIDIA GPU を搭載したインスタンス。DRA の属性ベース選択の対象。</p></div>
+    <div class="card"><h3>🧠 AWS Trainium / Inferentia</h3><p>Neuron DRA ドライバーによる DRA 管理が可能 (ただし EKS Auto Mode では Neuron デバイスプラグインを使用)。</p></div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      EKS Auto Mode と Karpenter が DRA に対応したことで、GPU や EFA を使う機械学習ワークロードにおいて、<span class="highlight">属性ベースのデバイス選択</span>、<span class="highlight">Pod 間の GPU 共有</span>、<span class="highlight">PCIe アラインされたトポロジー整合割り当て</span>と、動的なノードプロビジョニングを組み合わせられるようになりました。
+    </p>
+    <div class="check-item"><span class="check-icon">✓</span><span>EKS Auto Mode はドライバーが組み込み済みのため導入障壁が低く、Kubernetes 1.36 以降のクラスターでの新規 GPU ワークロードには DRA の採用を推奨</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Karpenter の動的プロビジョニングはアルファ機能のため、フィーチャーゲートの設定と制限事項を確認した上で検証環境から導入することを推奨</span></div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-eks-auto-mode-karpenter-dra/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon EKS Auto Mode and Karpenter now support Dynamic Resource Allocation</a></li>
+      <li><a href="https://docs.aws.amazon.com/eks/latest/userguide/device-management.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Manage hardware devices on Amazon EKS</a></li>
+      <li><a href="https://karpenter.sh/docs/tasks/dra/" target="_blank" rel="noopener noreferrer" class="aws-link">Karpenter ドキュメント: Utilizing GPUs and EFAs with Dynamic Resource Allocation</a></li>
+      <li><a href="https://aws.amazon.com/eks/auto-mode/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon EKS Auto Mode</a></li>
+      <li><a href="https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/" target="_blank" rel="noopener noreferrer" class="aws-link">Kubernetes ドキュメント: Dynamic Resource Allocation</a></li>
+      <li><a href="https://aws.amazon.com/eks/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon EKS 料金ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-09-amazon-eks-auto-mode-karpenter-dra.md) を基に作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

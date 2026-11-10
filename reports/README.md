@@ -5,6 +5,23 @@
 
 ## 2026 年
 
+- [2026-11-10 - Amazon Bedrock AgentCore - Web Search API](2026/2026-11-10-amazon-bedrock-agentcore-web-search-api.md)
+- [2026-11-09 - Amazon DocumentDB - Serverless プラットフォームバージョン 4 による最大 35% のスループット向上](2026/2026-11-09-documentdb-serverless-platform-version-4.md)
+- [2026-11-09 - Amazon Bedrock - Claude Mythos 5.2 が AWS GovCloud (US) の対象顧客向けに提供開始](2026/2026-11-09-bedrock-claude-mythos-5-2-govcloud.md)
+- [2026-11-09 - AWS Nitro Sandboxes - Amazon EKS、ECS、EC2 でのハードウェア分離された Pod、タスク、VM](2026/2026-11-09-nitro-sandboxes-eks-ecs-ec2.md)
+- [2026-11-09 - Amazon FSx - Amazon S3 Access Points for Amazon FSx の利用可能リージョン拡大](2026/2026-11-09-s3-access-points-fsx-regions.md)
+- [2026-11-09 - AWS Analytics サービス - Workday Data Cloud との双方向ゼロコピー統合](2026/2026-11-09-aws-analytics-workday-data-cloud.md)
+- [2026-11-09 - Amazon Athena - システムテーブルによる可観測性・監査・使用状況分析](2026/2026-11-09-athena-system-tables.md)
+- [2026-11-09 - Amazon Route 53 - Profiles の VPC あたり複数 Profile サポート](2026/2026-11-09-route-53-profiles-multiple-per-vpc.md)
+- [2026-11-09 - AWS Quick - Amazon Quick から AWS Quick への名称変更](2026/2026-11-09-amazon-quick-aws-quick.md)
+- [2026-11-09 - AWS STS - クロスパーティションフェデレーション](2026/2026-11-09-aws-sts-cross-partition.md)
+- [2026-11-09 - Amazon EKS - EKS Auto Mode と Karpenter の Dynamic Resource Allocation (DRA) サポート](2026/2026-11-09-amazon-eks-auto-mode-karpenter-dra.md)
+- [2026-11-09 - Amazon Bedrock - Claude Fable 5.2 が AWS GovCloud (US) で利用可能に](2026/2026-11-09-claude-fable-5-2-aws-govcloud.md)
+- [2026-11-09 - Amazon Neptune Analytics - データレイク上のグラフ分析のためのオープンソース UI](2026/2026-11-09-aws-graphover-datalakes-generally-available.md)
+- [2026-11-09 - Amazon CloudWatch Logs - アカウントレベル保持ポリシー](2026/2026-11-09-amazon-cloudwatch-log-retention.md)
+- [2026-11-09 - Amazon Connect Customer - 評価フォームテンプレート](2026/2026-11-09-amazon-connect-customer-evaluation-form-templates.md)
+- [2026-11-09 - AWS Glue - 人気 SaaS アプリケーション向け 100 種類の新しいネイティブコネクタ](2026/2026-11-09-aws-glue-adds-100-new-native-connectors.md)
+- [2026-11-09 - Amazon Bedrock - Claude Fable 5.2 の AWS 提供開始](2026/2026-11-09-claude-fable-5-2-aws.md)
 - [2026-11-06 - AWS Elemental MediaConvert - AWS Elemental Inference Smart Subtitles とのネイティブ統合](2026/2026-11-06-mediaconvert-elemental-smart-subtitles.md)
 - [2026-11-06 - AWS Glue Data Catalog - Apache Iceberg REST カタログフェデレーションにおける catalog-vended credentials サポート](2026/2026-11-06-glue-catalog-vended-credentials-iceberg.md)
 - [2026-11-06 - Kiro - Auto におけるモデルカスケーディング](2026/2026-11-06-kiro-model-cascade.md)

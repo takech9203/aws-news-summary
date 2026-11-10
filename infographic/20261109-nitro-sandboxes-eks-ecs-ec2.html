@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Nitro Sandboxes - EKS、ECS、EC2 でのハードウェア分離</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 8px 0 4px;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.card p, .card ul { margin: 6px 0; font-size: 14px; }
+.card ul { padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 14px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .box-title { color: #FF8A73; font-weight: 700; margin-bottom: 8px; font-size: 15px; }
+.after-box .box-title { color: #6BC95A; font-weight: 700; margin-bottom: 8px; font-size: 15px; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 6px 0; }
+
+/* Stats */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+.stat-label { font-size: 13px; margin-top: 6px; }
+
+/* Flow diagram */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Check / cross list */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+.check-icon { color: #6BC95A; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 13px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+}
+
+.note-box {
+  background: rgba(0, 161, 201, 0.1);
+  border-left: 4px solid var(--aws-teal);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <span class="service-badge">Amazon EC2</span>
+      <span class="service-badge">Amazon EKS</span>
+      <span class="service-badge">Amazon ECS</span>
+      <span class="service-badge">AWS Nitro System</span>
+    </div>
+    <h1>🛡️ AWS Nitro Sandboxes</h1>
+    <div class="subtitle">EKS Pod、ECS タスク、軽量 VM にハードウェア分離境界を 1 行で適用</div>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 9 日</div>
+  </div>
+
+  <!-- Overview -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      <span class="highlight">AWS Nitro Sandboxes</span> は、Nitro Hypervisor が管理する<span class="highlight">軽量 VM</span> として、EKS Pod、ECS タスク、AI エージェントなどのワークロードを<span class="highlight">ハードウェア分離された専用 VM</span> 内で実行できる新機能です。単一の EC2 インスタンスを複数のワークロードで安全に共有しながら、EC2 インスタンス間と同等の分離境界を実現します。
+    </p>
+    <div class="flow-diagram">
+      <div class="flow-step">📝 Pod / タスクに<br/>1 行追加</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📦 専用の<br/>Nitro Sandbox 起動</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🛡️ Nitro Hypervisor が<br/>分離を強制</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔑 Attestation で<br/>完全性を証明</div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">1 行</div>
+        <div class="stat-label">EKS / ECS での有効化に必要な変更量</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">EC2 / EKS / ECS の通常料金のみ</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">5 倍</div>
+        <div class="stat-label">インスタンス vCPU 数に対する全サンドボックス合計 vCPU の上限</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>コンテナや Pod は同一ノードで Linux カーネルを共有し、コンテナエスケープやカーネル脆弱性の影響が他ワークロードへ波及するリスク</li>
+          <li>VM レベルの分離には専用 EC2 インスタンスか、オーバーヘッドの大きいネスト仮想化が必要で非効率</li>
+          <li>LLM 生成コードなど信頼できないコードに、ハードウェア分離をコンテナ単位で手軽に適用する手段がなかった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>EKS Pod、ECS タスク、軽量 VM それぞれに Nitro Hypervisor が強制するハードウェア分離境界を付与</li>
+          <li>単一 EC2 インスタンスを安全に共有し、使用率向上とコスト削減を両立</li>
+          <li>暗号学的 Attestation により、完全性を証明したワークロードにのみシークレットを解放 (KMS キーポリシー条件)</li>
+          <li>1 行の変更で有効化。Pod Identity、VPC CNI、EBS/EFS/S3、CloudWatch はそのまま動作</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Parent["🖥️ EC2 親インスタンス Nitro ベース"]
+        subgraph HostSide["⚙️ 親インスタンス側"]
+            SHIM["🔗 containerd-shim<br/>nitro-sandbox-v2"]
+            VMM["🚀 Firecracker VMM"]
+        end
+        subgraph SB1["📦 Nitro Sandbox 1"]
+            POD["☸️ EKS Pod<br/>専用ゲストカーネル"]
+        end
+        subgraph SB2["📦 Nitro Sandbox 2"]
+            TASK["📋 ECS タスク<br/>専用ゲストカーネル"]
+        end
+        subgraph SB3["📦 Nitro Sandbox 3"]
+            AGENT["🤖 AI エージェント<br/>LLM 生成コード実行"]
+        end
+    end
+
+    HV["🛡️ Nitro Hypervisor<br/>ハードウェア分離を強制"]
+    KMS["🔑 AWS KMS<br/>Attestation 条件付きキーポリシー"]
+
+    SHIM --> VMM
+    VMM --> SB1
+    VMM --> SB2
+    VMM --> SB3
+    HV --- Parent
+    SB1 -.->|"Attestation 検証"| KMS
+    SB1 ~~~ SB2 ~~~ SB3
+
+    classDef parent fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef host fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef sandbox fill:none,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef workload fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef infra fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef security fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+
+    class Parent parent
+    class HostSide host
+    class SB1,SB2,SB3 sandbox
+    class POD,TASK,AGENT,SHIM,VMM workload
+    class HV infra
+    class KMS security
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      単一の EC2 親インスタンス上で、各 Pod、タスク、エージェントがそれぞれ専用の Nitro Sandbox (軽量 VM) 内で動作し、Nitro Hypervisor がサンドボックス間および親インスタンスとの間のハードウェア分離を強制します。Confidential モードでは Attestation の測定値を AWS KMS キーポリシーで検証し、整合性を証明したサンドボックスにのみシークレットを解放できます。
+    </p>
+  </div>
+
+  <!-- Key features -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🛡️ Nitro Hypervisor によるハードウェア分離</div>
+      <ul>
+        <li>各サンドボックスは親インスタンスと並行して動作する<span class="highlight">第 1 レベルのハードウェア仮想化ゲスト</span> (ネスト仮想化やエミュレーションを使用しない)</li>
+        <li>親が vCPU、メモリ、I/O を提供し、Nitro System が分離境界を強制。サンドボックス内のコードは他のサンドボックスや親にアクセス不可</li>
+        <li>AWS が維持・パッチ適用する最小化ハイパーバイザーが信頼モデルの基盤。自組織のオペレーターからもワークロードを分離可能</li>
+        <li>Intel、AMD、AWS Graviton プロセッサで動作</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔐 Confidential モードと Direct モード</div>
+      <ul>
+        <li><strong>Confidential (デフォルト)</strong>: サンドボックスのメモリを親の外に移動し、親から読み取り不可。NSM による Attestation を提供。シークレットを扱うワークロードに推奨</li>
+        <li><strong>Direct</strong>: 親がメモリを共有し Attestation なし。構成がシンプルで I/O スループットが高い。親とサンドボックスを同一の信頼できる主体が運用する場合に使用</li>
+        <li>モードは作成時に選択し、実行中の変更は不可</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔑 暗号学的 Attestation によるシークレット保護</div>
+      <ul>
+        <li>起動時に内容を NSM に測定し、改変されていないコードの実行を証明</li>
+        <li>KMS キーポリシーの <span class="highlight">kms:RecipientAttestation:PCR</span> 条件で、測定値が期待値と一致するサンドボックスにのみデータキーを解放。親は測定値を偽造できない</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">☸️ EKS の Isolated / Confidential Pod</div>
+      <ul>
+        <li>Pod spec の <span class="highlight">runtimeClassName</span> に <code>isolated-sandbox</code> または <code>confidential-sandbox</code> を設定するだけで Pod 単位にオプトイン</li>
+        <li>シム (containerd-shim-nitro-sandbox-v2) が Pod 用 Firecracker microVM を起動し、サンドボックス内の専用 containerd がコンテナを管理</li>
+        <li>Cedar ポリシーでコンテナ受け入れ、exec、ログストリーミングなどを制御 (ポリシーは Attestation レジスタに測定)</li>
+        <li>OCI 準拠のイメージ暗号化 (KMS で復号) と AWS Signer による署名検証をサポート</li>
+        <li>Pod Identity、VPC CNI、EBS/EFS CSI、CloudWatch などの EKS ネイティブ機能がそのまま動作</li>
+        <li><code>sandbox.amazonaws.com/network-isolated: "true"</code> アノテーションで、生成コードのネットワークアクセスを遮断可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 ECS Managed Instances の Isolated / Confidential タスク</div>
+      <ul>
+        <li>ECS Managed Instances の信頼実行機能として提供。各タスクが専用の軽量 VM 内で動作</li>
+        <li>AWS Fargate と同様の分離保証を実現しつつ、インスタンスタイプ選択、ビンパッキング、キャパシティ予約の柔軟性を維持</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🖥️ EC2 での直接利用 (セルフマネージド)</div>
+      <ul>
+        <li>独自の AMI、オーケストレーション、VMM で直接制御可能。Amazon Linux と Firecracker をネイティブサポート、QEMU などへのパッチも提供</li>
+        <li>Firecracker は Nitro Enclaves ドライバーを使い、標準の virtio-pci デバイスモデルのサンドボックスを作成・起動</li>
+        <li>ゲストは通常の virtio-pci デバイスを認識するため、サンドボックス固有のコードは不要</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Technical specs -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>Nitro Sandboxes の主な仕様</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>分離方式</td><td>Nitro Hypervisor による第 1 レベルのハードウェア仮想化 (ネスト仮想化ではない)</td></tr>
+      <tr><td>モード</td><td>Confidential (デフォルト、Attestation あり) / Direct (Attestation なし、高 I/O スループット)</td></tr>
+      <tr><td>対応プロセッサ</td><td>Intel、AMD、AWS Graviton</td></tr>
+      <tr><td>対応インスタンス</td><td>AWS Nitro Enclaves 対応タイプ (M5 - M9g、C5 - C9gd、R5 - R9gd、X2 系、I 系、G5/G6/G7 系など。最小サイズと metal は除外が多い)</td></tr>
+      <tr><td>vCPU 上限</td><td>全サンドボックス合計でインスタンス vCPU 数の 5 倍まで (例: 4 vCPU なら合計 20 vCPU)</td></tr>
+      <tr><td>メモリ</td><td>起動時に親から全量を提供 (オーバーコミットなし)。終了時に親へ返却</td></tr>
+      <tr><td>ブロックストレージ</td><td>virtio-blk (インスタンスストア / EBS)。実行中リサイズ可。同時アタッチは 1 サンドボックスのみ</td></tr>
+      <tr><td>ネットワーク</td><td>virtio-net による VPC 接続と IMDS アクセス。サンドボックスごとに独立したネットワークスタック</td></tr>
+      <tr><td>ホスト通信</td><td>virtio-vsock (Attestation トラフィックの中継などに使用)</td></tr>
+      <tr><td>デバイスホットプラグ</td><td>有効化時に追加可能 (取り外し不可)。インスタンスのデバイス上限を消費</td></tr>
+      <tr><td>GPU パススルー</td><td>現時点では利用不可</td></tr>
+      <tr><td>サイズ変更</td><td>実行中の vCPU / メモリ変更は不可 (終了して再作成)</td></tr>
+    </table>
+
+    <h3>EKS Isolated / Confidential Pod のモード比較</h3>
+    <table>
+      <tr><th>項目</th><th>Isolated モード</th><th>Confidential モード</th></tr>
+      <tr><td>RuntimeClass</td><td><code>isolated-sandbox</code></td><td><code>confidential-sandbox</code></td></tr>
+      <tr><td>信頼モデル</td><td>親インスタンスを信頼し、ゲストを信頼しない</td><td>親インスタンスを信頼せず、ゲストが信頼境界</td></tr>
+      <tr><td>保護対象</td><td>侵害されたコンテナからノードと他の Pod を保護</td><td>ノード運用者や侵害された親インスタンスからワークロードデータを保護</td></tr>
+      <tr><td>exec / stdin / ログ</td><td>すべて許可 (親から完全な可観測性)</td><td>exec、stdin、プロセス一覧は拒否</td></tr>
+      <tr><td>ポリシー</td><td>コンテナ受け入れフィールドを固定しない</td><td>イメージダイジェスト、引数、環境変数、マウントなど全フィールドを固定</td></tr>
+      <tr><td>オーバーレイ FS</td><td>非暗号化 (起動高速化)</td><td>暗号化イメージを KMS で復号</td></tr>
+    </table>
+
+    <h3>KMS キーポリシーでの Attestation 条件の例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">KMS キーポリシー条件</span>
+      </div>
+      <pre><code class="language-json">{
+  "Effect": "Allow",
+  "Principal": { "AWS": "arn:aws:iam::123456789012:role/sandbox-workload-role" },
+  "Action": "kms:Decrypt",
+  "Resource": "*",
+  "Condition": {
+    "StringEqualsIgnoreCase": {
+      "kms:RecipientAttestation:PCR0": "&lt;期待する PCR0 測定値&gt;"
+    }
+  }
+}</code></pre>
+    </div>
+    <p style="font-size: 14px;">PCR (Platform Configuration Register) の測定値が期待値と一致するサンドボックスにのみ復号を許可します。Confidential モードの機密性保証を完結させるには、この検証の構成が必須です。</p>
+
+    <div class="note-box">
+      📌 <strong>API 変更履歴</strong>: 本アップデートは EKS の RuntimeClass、ECS Managed Instances のタスク設定、EC2 の既存の Enclave オプションを通じて提供されており、awsapichanges.com では対応する API 変更エントリは確認できませんでした (2026 年 11 月 10 日時点)。
+    </div>
+  </div>
+
+  <!-- Setup -->
+  <div class="section">
+    <h2>🚀 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Nitro Sandboxes をサポートするインスタンスタイプ (AWS Nitro Enclaves 対応タイプ) を使用</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>EKS: Isolated / Confidential Pod に対応したクラスターとノード設定</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ECS: Amazon ECS Managed Instances を使用</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>EC2 直接利用: Enclave オプションを有効化し、ゲストイメージと VMM (Firecracker 推奨) を準備</span></div>
+
+    <h3>ステップ 1: EKS Pod でサンドボックスを有効化</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">YAML</span>
+        <span class="code-title">Pod spec に 1 行追加</span>
+      </div>
+      <pre><code class="language-yaml">apiVersion: v1
+kind: Pod
+metadata:
+  name: sandboxed-pod
+spec:
+  runtimeClassName: isolated-sandbox  # または confidential-sandbox
+  containers:
+    - name: app
+      image: 123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/app:latest</code></pre>
+    </div>
+    <p style="font-size: 14px;"><code>runtimeClassName</code> を 1 行追加するだけで、この Pod が専用の Nitro Sandbox 内で起動します。設定のない Pod は従来どおりデフォルトのコンテナランタイムで動作します。</p>
+
+    <h3>ステップ 2: EC2 で直接利用する場合のインスタンス起動</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">Enclave オプションを有効化して起動</span>
+      </div>
+      <pre><code class="language-bash">aws ec2 run-instances \
+  --image-id ami-xxxxxxxxxxxxxxxxx \
+  --instance-type m7i.xlarge \
+  --enclave-options Enabled=true</code></pre>
+    </div>
+
+    <h3>ステップ 3: Firecracker でサンドボックスを起動</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">sandbox.json - 空の enclave オブジェクトで Nitro Sandbox 化</span>
+      </div>
+      <pre><code class="language-json">{
+    "boot-source": { "kernel_image_path": "sandbox-image" },
+    "machine-config": { "vcpu_count": 2, "mem_size_mib": 2048 },
+    "drives": [
+        { "drive_id": "rootfs", "path_on_host": "rootfs.ext4",
+          "is_root_device": true, "is_read_only": false }
+    ],
+    "network-interfaces": [
+        { "iface_id": "eth0", "host_dev_name": "tap0" }
+    ],
+    "enclave": {}
+}</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">Firecracker 起動</span>
+      </div>
+      <pre><code class="language-bash">firecracker --config-file sandbox.json</code></pre>
+    </div>
+    <p style="font-size: 14px;">空の <code>"enclave": {}</code> で Confidential モード (デフォルト)。Direct モードは <code>"enclave": { "direct_mode": true }</code> を設定します。</p>
+
+    <h3>ステップ 4: Attestation によるシークレット解放の構成</h3>
+    <p style="font-size: 14px;">Confidential モードのワークロードがシークレットを受け取る前に、KMS キーポリシーの <code>kms:RecipientAttestation:PCR&lt;PCR_ID&gt;</code> 条件で Attestation ドキュメントを検証するように構成します。サンドボックスが <code>kms:Decrypt</code> を呼び出すと、測定値が一致する場合にのみキーが解放されます。</p>
+  </div>
+
+  <!-- Benefits / Constraints -->
+  <div class="section">
+    <h2>💡 メリットと制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">✅ ビジネス面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト効率と分離の両立</strong>: 専用インスタンス不要で VM 相当の分離を実現し、インスタンス共有で使用率向上とコスト削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加料金なし</strong>: 既存の EC2 インスタンス料金の範囲内で分離を強化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>規制対応の強化</strong>: Attestation + KMS で、完全性を証明してからシークレットを受け取る構成を実現</span></div>
+        <h3>✅ 技術面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>導入の容易さ</strong>: 1 行の変更で有効化。既存の EKS / ECS 機能がそのまま動作</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ネイティブに近いパフォーマンス</strong>: エミュレーションやネスト仮想化のオーバーヘッドなし</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>自組織の運用者からの保護</strong>: Confidential モードでは親からメモリを読み取れない</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ゲスト側の変更不要</strong>: 標準の virtio-pci デバイスモデルを提供</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">⚠️ 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>Nitro Enclaves 対応インスタンスタイプのみ (最小サイズや metal は対象外が多い)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>GPU パススルーは現時点で利用不可</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>合計 vCPU はインスタンスの 5 倍まで。メモリはオーバーコミットされない</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>実行中の vCPU / メモリ変更不可。デバイスのホットアンプラグ不可</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ブロックデバイスは同時に 1 サンドボックスのみアタッチ可能</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>Confidential モードでは virtio-rng を利用不可 (ゲスト自身のエントロピーソースを使用)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>Firecracker 以外の VMM での Attestation / Confidential モードにはパッチ適用が必要</span></div>
+        <h3>⚠️ 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>親のネットワークスタックは共有リソース。conntrack や DNS の枯渇対策としてサンドボックスごとの上限 / レート制限が必要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>分離はセキュリティ境界でありパフォーマンス予約ではない。vCPU はタイムシェアされるため密度とサイジングの設計が必要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>KMS キーポリシーで PCR 検証を構成しないと、機密性保証が不完全になる</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>ネットワーク分離アノテーションは vsock 経由のゲスト側ポート到達を遮断しない</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>責任共有モデル: AWS は Nitro Hypervisor / 境界 / ゲストイメージ、顧客はコンテナイメージ / Cedar ポリシー / KMS キーポリシー / アプリコードに責任</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Use cases -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🤖 1. AI エージェントの LLM 生成コードの安全な実行</div>
+      <p><strong>シナリオ</strong>: LLM が生成した信頼できないコードを実行しつつ、他のエージェントセッションや基盤自体への影響を遮断したい。</p>
+      <p><strong>実装</strong>: セッションごとの Pod に <code>runtimeClassName: isolated-sandbox</code> を設定。ネットワーク不要なコード実行 Pod には <code>network-isolated</code> アノテーションを付与し、単一 EC2 インスタンスに多数のセッションをビンパッキング。</p>
+      <p class="effect">💡 <strong>効果</strong>: 生成コードが暴走や悪意ある挙動を示しても他セッションや親インスタンスに影響せず、インスタンス共有でコストも削減。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🏢 2. マルチテナント SaaS のテナント間分離</div>
+      <p><strong>シナリオ</strong>: 同一クラスターで実行するテナントワークロード間の、コンテナエスケープやカーネル脆弱性によるデータ漏えいリスクを排除したい。</p>
+      <p><strong>実装</strong>: EKS では <code>isolated-sandbox</code>、ECS では Managed Instances の Isolated タスクを適用。既存の Pod Identity、VPC CNI、ストレージ構成は維持し、テナント専用インスタンス構成から共有インスタンス構成へ移行。</p>
+      <p class="effect">💡 <strong>効果</strong>: Fargate 相当の分離保証を得ながら、インスタンスタイプ選択とビンパッキングによるコスト効率を維持。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🏦 3. 規制対象ワークロードの Attestation 付き実行</div>
+      <p><strong>シナリオ</strong>: 金融・医療などで、ノード運用者からもデータを保護し、改変されていないコードだけがシークレットにアクセスできることを証明したい。</p>
+      <p><strong>実装</strong>: <code>confidential-sandbox</code> を設定し、コンテナイメージを OCI 仕様で暗号化 + AWS Signer で署名。KMS キーポリシーに PCR 条件を設定し、Cedar ポリシーでイメージダイジェストや引数、マウントを固定。</p>
+      <p class="effect">💡 <strong>効果</strong>: 内部者リスクを含む脅威モデルに対応した、監査可能な実行環境を実現。</p>
+    </div>
+  </div>
+
+  <!-- Pricing & Regions -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">💵 料金</div>
+        <p>Nitro Sandboxes は<span class="highlight">追加料金なし</span>。通常の EC2 インスタンス、EKS クラスター、ECS の利用料金のみが発生します。親インスタンスの vCPU とメモリをサンドボックスに割り当てる方式のため、インスタンスサイズの設計がコストに直結します。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🌍 利用可能リージョン</div>
+        <p>すべての <span class="highlight">AWS 商用リージョン</span>で、Nitro ベースのほとんどの EC2 インスタンス (Nitro Enclaves 対応インスタンスタイプ) において利用可能です。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Related services -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <table>
+      <tr><th>サービス / 機能</th><th>関係</th></tr>
+      <tr><td>AWS Nitro System</td><td>分離境界と Attestation を提供する基盤技術。すべての EC2 インスタンスを分離しているのと同じ技術の上に構築</td></tr>
+      <tr><td>AWS Nitro Enclaves</td><td>同じ基盤上の機能。単一 vsock チャネルのみで親と接続する小さなジョブ向け。Nitro Sandboxes は仮想ネットワークやブロックデバイスなど幅広い仮想ハードウェアを利用できる点が異なる</td></tr>
+      <tr><td>Firecracker</td><td>推奨 VMM。KVM microVM の代替として Nitro Sandbox の作成・起動・管理を行う</td></tr>
+      <tr><td>AWS KMS</td><td>Attestation 条件付きキーポリシーで、完全性を証明したサンドボックスにのみシークレットを解放</td></tr>
+      <tr><td>AWS Lambda MicroVMs</td><td>テナント間分離を保ちつつサーバー / ネットワーク管理をオフロードしたい場合の選択肢</td></tr>
+      <tr><td>EC2 ネスト仮想化</td><td>独自のハイパーバイザーを完全に制御して実行する必要があるワークロード向けの選択肢</td></tr>
+      <tr><td>Amazon ECS Managed Instances</td><td>ECS で Isolated / Confidential タスクを利用するための前提となるコンピューティング管理機能</td></tr>
+    </table>
+  </div>
+
+  <!-- Summary -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      AWS Nitro Sandboxes により、EKS Pod、ECS タスク、軽量 VM のそれぞれに Nitro Hypervisor が強制するハードウェア分離境界を、<span class="highlight">追加料金なし・1 行の変更</span>で適用できるようになりました。LLM 生成コードの実行やマルチテナント環境など、これまで専用インスタンスやネスト仮想化が必要だったシナリオで、<span class="highlight">分離性とコスト効率を両立</span>できる重要なアップデートです。AI エージェント基盤やマルチテナントワークロードを運用している場合は、対応インスタンスタイプと vCPU / メモリのサイジング制約を確認したうえで、Isolated モードからの導入を検討してください。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典 / 参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/nitro-sandboxes-eks-ecs-ec2/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): AWS Nitro Sandboxes</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/amazon-ec2-nitro-sandboxes.html" target="_blank" rel="noopener noreferrer">ドキュメント: Isolate workloads with AWS Nitro Sandboxes (EC2 User Guide)</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/eks/latest/userguide/sandboxing.html" target="_blank" rel="noopener noreferrer">ドキュメント: Sandboxing on Amazon EKS with isolated and confidential pods (EKS User Guide)</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/isolated-confidential-tasks.html" target="_blank" rel="noopener noreferrer">ドキュメント: Isolated and confidential tasks (ECS Developer Guide)</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/ec2/nitro/" target="_blank" rel="noopener noreferrer">AWS Nitro System</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/confidential-computing/" target="_blank" rel="noopener noreferrer">Confidential computing on AWS</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-09-nitro-sandboxes-eks-ecs-ec2.md) を基に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
