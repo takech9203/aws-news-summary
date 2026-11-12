@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon S3 Tables - サーバーアクセスログのサポート</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.header-meta {
+  text-align: right;
+  font-size: 14px;
+  color: var(--aws-light-gray);
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.lead {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+  margin: 12px 0 28px;
+}
+
+h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.ba-card {
+  border-radius: 8px;
+  padding: 16px;
+}
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.ba-before .ba-title { color: #FF8A73; }
+.ba-after .ba-title { color: #6FCB5A; }
+.ba-card ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.ba-card li { margin: 6px 0; font-size: 14px; }
+
+/* Feature cards */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+.feature-card ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.feature-card li { margin: 4px 0; font-size: 14px; }
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+td {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+code.inline {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #FFD28A;
+}
+
+/* Check / cross lists */
+.check-item, .cross-item, .note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+.check-icon { color: #6FCB5A; font-size: 17px; line-height: 1.5; }
+.cross-icon { color: #FF8A73; font-size: 17px; line-height: 1.5; }
+.note-icon { color: var(--aws-smile-orange); font-size: 17px; line-height: 1.5; }
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .effect {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 153, 0, 0.35);
+  font-size: 14px;
+}
+
+/* Stats */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 760px) {
+  .stats-row { grid-template-columns: 1fr; }
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.2));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-white);
+  line-height: 1.3;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 4px;
+}
+
+/* Code block */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+.diagram-caption {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* Steps */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+.step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.step-body { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-body p { margin: 4px 0; font-size: 14px; }
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.related-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+.related-card strong { color: var(--aws-teal); }
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(0, 161, 201, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  font-size: 15px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0 0; padding-left: 18px; }
+footer li { margin: 4px 0; }
+
+.table-scroll { overflow-x: auto; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <span class="service-badge">Amazon S3 Tables</span>
+      <h1>📝 S3 Tables がサーバーアクセスログをサポート</h1>
+    </div>
+    <div class="header-meta">
+      📅 リリース日: 2026 年 11 月 10 日<br>
+      機能: Server Access Logging
+    </div>
+  </div>
+
+  <p class="lead">
+    Amazon S3 Tables が<span class="highlight">サーバーアクセスログ (Server Access Logging)</span> をサポートしました。テーブルバケットへのリクエストをリクエストレベルで記録し、<strong>セキュリティ監査・アクセス分析・コスト配分</strong>に活用できます。ログは標準の S3 サーバーアクセスログと同じ形式のため、Amazon Athena や DuckDB など既存の分析ワークフローをそのまま再利用できます。
+  </p>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value">25 フィールド</div>
+      <div class="stat-label">各ログレコードに含まれる詳細情報 (操作、テーブル名、処理時間など)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">配信無料</div>
+      <div class="stat-label">ログ配信に追加料金なし。ログファイルの保存料金のみ発生</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">2 つの新 API</div>
+      <div class="stat-label">PutTableBucketLogging / GetTableBucketLogging</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      テーブルバケットでログ記録を有効化すると、S3 はバケット内の<span class="highlight">すべてのテーブルとネームスペース</span>を対象としたログを、同一アカウント・同一リージョン内の汎用バケットに配信します。各ログレコードには、リクエスト元、操作、テーブル名、ネームスペース、レスポンスステータス、リクエストのタイミングなどが含まれます。
+    </p>
+    <div class="before-after">
+      <div class="ba-card ba-before">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>テーブルバケットへのリクエストをサーバーアクセスログで記録できず、汎用バケットとの間で監査手法に差異があった</li>
+          <li>テーブル単位・ネームスペース単位のアクセス傾向の把握は CloudTrail 依存で、レイテンシーやバイト数などリクエストレベルの詳細な分析が難しかった</li>
+          <li>データレイクのコスト配分やアクセス分析を行う標準的なログソースが不足していた</li>
+        </ul>
+      </div>
+      <div class="ba-card ba-after">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>テーブルバケット単位でログを有効化し、すべてのテーブル・ネームスペースへのリクエストを記録可能に</li>
+          <li>リクエスト元、操作、テーブル名、ネームスペース、HTTP ステータス、処理時間などを含む詳細なログが汎用バケットに配信される</li>
+          <li>標準の S3 サーバーアクセスログと同じ形式のため、Amazon Athena や DuckDB など既存の分析基盤を流用できる</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Clients["👥 クライアント"]
+        direction LR
+        Engine["⚙️ クエリエンジン<br/>Athena / EMR / Spark"]
+        App["🖥️ アプリケーション<br/>AWS CLI / SDK"]
+        Engine ~~~ App
+    end
+
+    subgraph S3Tables["🪣 S3 テーブルバケット"]
+        NS["📁 ネームスペース"]
+        TBL["📋 Iceberg テーブル"]
+        NS --> TBL
+    end
+
+    subgraph Logging["📝 サーバーアクセスログ"]
+        GPB[("🗄️ 汎用バケット<br/>同一アカウント・同一リージョン")]
+    end
+
+    subgraph Analysis["🔍 ログ分析"]
+        direction LR
+        Athena["🔎 Amazon Athena"]
+        Duck["🦆 DuckDB"]
+        Athena ~~~ Duck
+    end
+
+    Clients -->|テーブル操作・データアクセス| S3Tables
+    S3Tables -.->|ログレコードを配信<br/>ベストエフォート| GPB
+    GPB --> Analysis
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Clients,S3Tables,Logging,Analysis boundary
+    class Engine,App input
+    class NS,TBL process
+    class GPB storage
+    class Athena,Duck internal
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      テーブルバケットへのすべてのリクエストがログレコードとして同一アカウント・同一リージョンの汎用バケットに配信され、Amazon Athena や DuckDB で分析できます。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">1️⃣ テーブルバケット単位のログ記録</div>
+      <ul>
+        <li>ログ記録はテーブルバケットレベルで有効化・無効化 (デフォルトは無効)</li>
+        <li>有効化すると、バケット内のすべてのネームスペースとテーブルへのリクエストを記録</li>
+        <li>ネームスペース単位・テーブル単位での個別設定は不可</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">2️⃣ 詳細なログレコード</div>
+      <ul>
+        <li>各ログレコードは 1 リクエストを表し、<strong>25 のフィールド</strong>を含む</li>
+        <li>主なフィールド: テーブルバケット ARN、テーブル ARN、ネームスペース名、テーブル名、リクエスト元 IAM アイデンティティ、操作、HTTP ステータス、エラーコード、送信バイト数、処理時間、TLS バージョンなど</li>
+        <li><code class="inline">operation</code> フィールドは S3 Tables API / Iceberg REST カタログリクエストでは <code class="inline">S3Tables.{ActionName}</code> 形式、テーブルストレージへのリクエストでは <code class="inline">REST.{HTTP_method}.{resource_type}</code> 形式</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">3️⃣ 既存の分析ワークフローとの互換性</div>
+      <ul>
+        <li>標準の S3 サーバーアクセスログと同じスペース区切りテキスト形式を採用</li>
+        <li>Amazon Athena や DuckDB などのクエリエンジンで既存の分析手法を再利用可能</li>
+        <li>ログオブジェクトのキーは常に日付でパーティション化。<code class="inline">EventTime</code> (リクエスト日時) または <code class="inline">DeliveryTime</code> (配信日時) を選択可能</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">4️⃣ 新しい API の追加</div>
+      <ul>
+        <li><code class="inline">PutTableBucketLogging</code>: ログ記録の有効化・更新・無効化</li>
+        <li><code class="inline">GetTableBucketLogging</code>: 現在のログ記録設定の取得</li>
+        <li>AWS Management Console、AWS CLI、AWS SDK、AWS CloudFormation から設定可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📋 ログ配信の仕様</h3>
+    <div class="table-scroll">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>設定単位</td><td>テーブルバケットレベルのみ (テーブル・ネームスペース単位は不可)</td></tr>
+        <tr><td>配信先</td><td>同一アカウント・同一リージョンの汎用バケット (クロスアカウント・クロスリージョンは不可)</td></tr>
+        <tr><td>配信先バケットの要件</td><td>SSE-S3 のデフォルト暗号化が必要 (SSE-KMS / DSSE-KMS は不可)、S3 Object Lock 無効、Requester Pays 無効</td></tr>
+        <tr><td>ログ形式</td><td>スペース区切りテキスト形式 (25 フィールド)</td></tr>
+        <tr><td>キー形式</td><td><code class="inline">{targetPrefix}{accountId}/{region}/{tableBucketName}/{YYYY}/{MM}/{DD}/...</code> (常に日付パーティション)</td></tr>
+        <tr><td>配信特性</td><td>ベストエフォート配信 (通常は数時間以内、完全性は保証されない)</td></tr>
+        <tr><td>CloudWatch Logs 配信</td><td>非対応 (汎用バケットへの配信のみ)</td></tr>
+      </table>
+    </div>
+
+    <h3>🧾 ログレコードの主なフィールド</h3>
+    <div class="table-scroll">
+      <table>
+        <tr><th>フィールド</th><th>説明</th><th>例</th></tr>
+        <tr><td><code class="inline">table_bucket_arn</code></td><td>リクエストを受けたテーブルバケットの ARN</td><td><code class="inline">arn:aws:s3tables:us-east-2:111122223333:bucket/demo-bucket</code></td></tr>
+        <tr><td><code class="inline">namespace_name</code></td><td>リクエスト対象のネームスペース</td><td><code class="inline">sal_ns</code></td></tr>
+        <tr><td><code class="inline">table_name</code></td><td>リクエスト対象のテーブル名</td><td><code class="inline">events</code></td></tr>
+        <tr><td><code class="inline">requester</code></td><td>リクエスト元の IAM アイデンティティ</td><td><code class="inline">arn:aws:sts::111122223333:assumed-role/Admin/session</code></td></tr>
+        <tr><td><code class="inline">operation</code></td><td>実行された操作</td><td><code class="inline">S3Tables.GetTable</code></td></tr>
+        <tr><td><code class="inline">http_status</code></td><td>レスポンスの HTTP ステータスコード</td><td><code class="inline">200</code></td></tr>
+        <tr><td><code class="inline">total_time</code></td><td>リクエスト処理の合計時間 (ミリ秒)</td><td><code class="inline">49</code></td></tr>
+      </table>
+    </div>
+
+    <h3>🗂️ API 変更履歴</h3>
+    <div class="table-scroll">
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/11/10</td>
+          <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/465577-s3tables.html" target="_blank" rel="noopener noreferrer">s3tables</a></td>
+          <td>2 new api methods - <code class="inline">PutTableBucketLogging</code> と <code class="inline">GetTableBucketLogging</code> の追加によるテーブルバケットのサーバーアクセスログサポート</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>🔐 配信先バケットのバケットポリシー</h3>
+    <p style="font-size: 14px;">
+      ログはロギングサービスプリンシパル <code class="inline">logging.s3.amazonaws.com</code> によって配信されるため、配信先の汎用バケットに <code class="inline">s3:PutObject</code> 権限を付与する必要があります。コンソールから有効化した場合は自動で設定されますが、CLI / SDK / REST API の場合は手動で追加します。
+    </p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">配信先バケットのバケットポリシー</span>
+      </div>
+      <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "S3TablesServerAccessLogsPolicy",
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "logging.s3.amazonaws.com"
+            },
+            "Action": "s3:PutObject",
+            "Resource": "arn:aws:s3:::amzn-s3-demo-logging-bucket/logs/*",
+            "Condition": {
+                "ArnLike": {
+                    "aws:SourceArn": "arn:aws:s3tables:us-east-1:111122223333:bucket/amzn-s3-demo-table-bucket"
+                },
+                "StringEquals": {
+                    "aws:SourceAccount": "111122223333"
+                }
+            }
+        }
+    ]
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>S3 Tables のテーブルバケットが作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>同一アカウント・同一リージョンに配信先の汎用バケットが存在し、SSE-S3 のデフォルト暗号化を使用していること (Object Lock と Requester Pays は無効)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>設定を行う IAM ユーザーまたはロールに <code class="inline">s3tables:PutTableBucketLogging</code> および <code class="inline">s3tables:GetTableBucketLogging</code> 権限があること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>配信先バケットにロギングサービスプリンシパルへの <code class="inline">s3:PutObject</code> 権限を付与するバケットポリシーが設定されていること</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-body">
+        <div class="step-title">サーバーアクセスログの有効化</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI でログ記録を有効化</span>
+          </div>
+          <pre><code class="language-bash">aws s3tables put-table-bucket-logging \
+    --table-bucket-arn arn:aws:s3tables:us-east-1:111122223333:bucket/amzn-s3-demo-table-bucket \
+    --table-bucket-logging-status '{
+        "loggingEnabled": {
+            "targetBucket": "amzn-s3-demo-logging-bucket",
+            "targetPrefix": "logs/",
+            "targetObjectKeyFormat": {
+                "partitionedPrefix": {
+                    "partitionDateSource": "EventTime"
+                }
+            }
+        }
+    }'</code></pre>
+        </div>
+        <p>
+          汎用バケット <code class="inline">amzn-s3-demo-logging-bucket</code> の <code class="inline">logs/</code> プレフィックス配下にログを配信するよう設定します。<code class="inline">partitionDateSource</code> に <code class="inline">EventTime</code> を指定するとリクエスト発生日時、<code class="inline">DeliveryTime</code> を指定すると配信日時でパーティション化されます。プレフィックスの後にスラッシュは自動で追加されないため、末尾に <code class="inline">/</code> を含めることが推奨されます。
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-body">
+        <div class="step-title">ログ記録設定の確認</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">現在の設定を取得</span>
+          </div>
+          <pre><code class="language-bash">aws s3tables get-table-bucket-logging \
+    --table-bucket-arn arn:aws:s3tables:us-east-1:111122223333:bucket/amzn-s3-demo-table-bucket</code></pre>
+        </div>
+        <p>
+          ログ記録が有効な場合は <code class="inline">loggingEnabled</code> 要素に配信先バケットとプレフィックスが表示され、無効な場合は空の <code class="inline">tableBucketLoggingStatus</code> が返されます。
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-body">
+        <div class="step-title">ログの分析 (Amazon Athena の例)</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">Athena 外部テーブルの作成</span>
+          </div>
+          <pre><code class="language-sql">CREATE EXTERNAL TABLE s3_tables_access_logs_db.s3_tables_logs(
+  `table_bucket_arn` STRING,
+  `request_time` STRING,
+  `table_arn` STRING,
+  `namespace_name` STRING,
+  `table_name` STRING,
+  `key` STRING,
+  `object_size` BIGINT,
+  `remote_ip` STRING,
+  `requester` STRING,
+  `request_id` STRING,
+  `operation` STRING,
+  `http_status` STRING,
+  `error_code` STRING,
+  `bytes_sent` BIGINT,
+  `total_time` STRING,
+  `turnaround_time` STRING,
+  `referer` STRING,
+  `user_agent` STRING,
+  `signature_version` STRING,
+  `cipher_suite` STRING,
+  `authentication_type` STRING,
+  `host_header` STRING,
+  `tls_version` STRING,
+  `request_time_iso` STRING,
+  `source_region` STRING)
+PARTITIONED BY (`timestamp` string)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.RegexSerDe'
+WITH SERDEPROPERTIES (
+  'input.regex'='([^ ]*) \\[(.*?)\\] ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) (\"[^\"]*\"|-) (\"[^\"]*\"|-) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*).*$')
+STORED AS INPUTFORMAT 'org.apache.hadoop.mapred.TextInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+LOCATION 's3://amzn-s3-demo-logging-bucket/logs/111122223333/us-east-1/amzn-s3-demo-table-bucket/'
+TBLPROPERTIES (
+  'projection.enabled'='true',
+  'projection.timestamp.format'='yyyy/MM/dd',
+  'projection.timestamp.interval'='1',
+  'projection.timestamp.interval.unit'='DAYS',
+  'projection.timestamp.range'='2026/01/01,NOW',
+  'projection.timestamp.type'='date',
+  'storage.location.template'='s3://amzn-s3-demo-logging-bucket/logs/111122223333/us-east-1/amzn-s3-demo-table-bucket/${timestamp}')</code></pre>
+        </div>
+        <p>
+          パーティション射影 (Partition Projection) により日付パーティションが自動で解決されるため、パーティションの追加操作は不要です。テーブル作成後は SQL クエリでアクセス傾向やエラーの分析を実行できます。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>セキュリティ監査の強化</strong>: 誰がどのテーブルにいつアクセスしたかをリクエストレベルで記録でき、コンプライアンス要件への対応が容易になる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト配分の可視化</strong>: テーブル名・ネームスペース・リクエスト元の情報を使い、データレイクの利用状況を部門やチーム単位で把握できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなしで導入可能</strong>: ログ配信自体は無料で、ログファイルの保存料金のみで利用できる</span></div>
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>既存ワークフローの再利用</strong>: 標準の S3 サーバーアクセスログと同じ形式のため、Amazon Athena や DuckDB を使った既存の分析パイプラインをそのまま適用できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>詳細なリクエスト情報</strong>: 処理時間、送信バイト数、HTTP ステータス、TLS バージョンなど 25 フィールドの詳細情報により、パフォーマンス分析やトラブルシューティングが可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な設定方法</strong>: コンソール、AWS CLI、AWS SDK、AWS CloudFormation のいずれからでも設定でき、IaC による管理にも対応</span></div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>ログ記録はテーブルバケットレベルのみで、ネームスペース単位・テーブル単位の設定はできない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>配信先は同一アカウント・同一リージョンの汎用バケットに限定 (クロスアカウント・クロスリージョン配信、CloudWatch Logs への配信は非対応)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>配信先バケットは SSE-S3 のデフォルト暗号化が必須で、SSE-KMS / DSSE-KMS、S3 Object Lock、Requester Pays は使用できない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>AWS マネージドテーブルではサーバーアクセスログを有効化できない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span><code class="inline">SimplePrefix</code> 形式のログオブジェクトキーはサポートされない (常に日付パーティション形式)</span></div>
+    <h3>🤔 考慮すべき点</h3>
+    <div class="note-item"><span class="note-icon">⚠</span><span>ログ配信はベストエフォートであり、完全性・適時性は保証されない。完全な監査証跡が必要な場合は AWS CloudTrail を併用する</span></div>
+    <div class="note-item"><span class="note-icon">⚠</span><span>ログ記録設定の変更が反映されるまで時間がかかる場合がある (有効化後、配信開始まで数時間かかることがある)</span></div>
+    <div class="note-item"><span class="note-icon">⚠</span><span>ログオブジェクトは蓄積され続けるため、S3 ライフサイクルルールによる保持期間の管理を推奨</span></div>
+    <div class="note-item"><span class="note-icon">⚠</span><span>配信先の汎用バケットを削除するとログレコードは通知なく破棄されるため、配信先バケットの管理に注意が必要</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🔒 ユースケース 1: データレイクのセキュリティ監査</div>
+      <p><strong>シナリオ</strong>: 金融機関のデータ基盤チームが、S3 Tables 上の顧客データテーブルへのアクセスを定期的に監査し、想定外のアクセスを検出したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">特定テーブルへのアクセス元を集計</span>
+        </div>
+        <pre><code class="language-sql">SELECT requester, operation, COUNT(*) AS request_count
+FROM s3_tables_access_logs_db.s3_tables_logs
+WHERE table_name = 'customer_transactions'
+GROUP BY requester, operation
+ORDER BY request_count DESC;</code></pre>
+      </div>
+      <p class="effect">✨ <strong>効果</strong>: テーブル単位でアクセス元の IAM アイデンティティと操作内容を定期的にレビューでき、最小権限の原則の検証や不審なアクセスの早期発見につながる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">💰 ユースケース 2: 部門別のコスト配分</div>
+      <p><strong>シナリオ</strong>: 複数の部門が共有するデータレイクで、どの部門がどのテーブルをどれだけ利用しているかを把握し、コストを按分したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">ネームスペース別・リクエスト元別の利用量を集計</span>
+        </div>
+        <pre><code class="language-sql">SELECT namespace_name, requester,
+       COUNT(*) AS requests,
+       SUM(bytes_sent) AS total_bytes_sent
+FROM s3_tables_access_logs_db.s3_tables_logs
+GROUP BY namespace_name, requester
+ORDER BY total_bytes_sent DESC;</code></pre>
+      </div>
+      <p class="effect">✨ <strong>効果</strong>: ネームスペースやリクエスト元ごとの利用量を定量化でき、部門別のコスト配分やチャージバックの根拠として活用できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📈 ユースケース 3: クエリエラーとパフォーマンスの分析</div>
+      <p><strong>シナリオ</strong>: 分析基盤の運用チームが、S3 Tables へのリクエストで発生しているエラーや遅延を可視化し、パフォーマンス改善につなげたい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">SQL</span>
+          <span class="code-title">エラー発生状況と処理時間を分析</span>
+        </div>
+        <pre><code class="language-sql">SELECT operation, http_status, error_code,
+       COUNT(*) AS cnt,
+       AVG(CAST(total_time AS BIGINT)) AS avg_total_time_ms
+FROM s3_tables_access_logs_db.s3_tables_logs
+WHERE http_status != '200'
+GROUP BY operation, http_status, error_code
+ORDER BY cnt DESC;</code></pre>
+      </div>
+      <p class="effect">✨ <strong>効果</strong>: エラーコードや処理時間の傾向から、権限不足や設定ミス、パフォーマンスボトルネックを特定し、運用改善のサイクルを回せる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💵 料金</h2>
+    <p>
+      サーバーアクセスログの<span class="highlight">生成・配信に追加料金はかかりません</span>。配信先の汎用バケットに対する標準の Amazon S3 料金 (配信されたログファイルのストレージ、リクエスト、ログファイルへのアクセスに伴うデータ転送) のみが発生します。ログファイルはいつでも削除でき、S3 ライフサイクルルールで自動削除を設定することも可能です。
+    </p>
+    <p style="font-size: 14px;">
+      最新の料金は <a class="aws-link" href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer">Amazon S3 の料金ページ</a> を参照してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>
+      S3 Tables が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。対象リージョンの一覧は <a class="aws-link" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables-regions-quotas.html#s3-tables-regions" target="_blank" rel="noopener noreferrer">S3 Tables のリージョンとクォータ</a> を参照してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-card"><strong>Amazon S3 Tables</strong>: Apache Iceberg 形式の分析用テーブルをフルマネージドで提供するストレージ。今回のアップデートの対象サービス</div>
+    <div class="related-card"><strong>AWS CloudTrail</strong>: S3 Tables のすべての API 呼び出しをイベントとして記録。完全な監査証跡が必要な場合はサーバーアクセスログと併用する</div>
+    <div class="related-card"><strong>Amazon Athena</strong>: 配信されたサーバーアクセスログを SQL で分析するためのサーバーレスクエリサービス</div>
+    <div class="related-card"><strong>S3 ライフサイクル</strong>: 配信先バケットに蓄積されるログオブジェクトの保持期間管理に使用</div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      S3 Tables のサーバーアクセスログ対応により、テーブルバケットへのリクエストを<strong>リクエストレベルで記録</strong>し、セキュリティ監査、アクセス分析、コスト配分に活用できるようになりました。<strong>ログ配信は無料</strong>で、標準の S3 サーバーアクセスログと同じ形式のため<strong>既存の分析ワークフローを再利用</strong>できます。S3 Tables を本番運用している場合は、監査要件やコスト可視化の観点からログの有効化を検討し、完全な監査証跡が必要な場合は <strong>AWS CloudTrail との併用</strong>を推奨します。
+    </div>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-s3-tables-server-access-logging/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): Amazon S3 Tables - Server Access Logging</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables-server-logs.html" target="_blank" rel="noopener noreferrer">ドキュメント: Logging requests for S3 Tables using server access logging</a></li>
+      <li><a class="aws-link" href="https://awsapichanges.com/archive/changes/465577-s3tables.html" target="_blank" rel="noopener noreferrer">AWS API Changes: s3tables</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/s3/features/tables/" target="_blank" rel="noopener noreferrer">Amazon S3 Tables 製品ページ</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer">Amazon S3 料金ページ</a></li>
+    </ul>
+    <p style="margin-top: 12px;">本インフォグラフィックは AWS News レポート (2026-11-10-amazon-s3-tables-server-access-logging.md) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon EKS Auto Mode が Pod 単位のセキュリティグループに対応</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: var(--aws-smile-orange);
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.ba-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-box ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.ba-box li {
+  margin: 8px 0;
+  padding-left: 22px;
+  position: relative;
+  font-size: 14px;
+}
+
+.ba-before li::before {
+  content: "✗";
+  position: absolute;
+  left: 0;
+  color: #FF6B4A;
+  font-weight: bold;
+}
+
+.ba-after li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #4CAF50;
+  font-weight: bold;
+}
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+
+.feature-card .feature-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.feature-card p, .feature-card ul {
+  margin: 0;
+  font-size: 14px;
+}
+
+.feature-card ul {
+  padding-left: 20px;
+  margin-top: 6px;
+}
+
+.feature-card li { margin: 4px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-body { flex: 1; min-width: 0; }
+
+.step-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.step-body p { margin: 6px 0; font-size: 14px; }
+
+/* メリット・デメリット */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+.check-item strong { color: var(--aws-white); }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 14px 0;
+}
+
+.usecase .uc-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.uc-effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.uc-effect strong { color: #4CAF50; }
+
+/* 統計カード */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  margin-top: 6px;
+  color: var(--aws-light-gray);
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 14px 0;
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+.note-box {
+  background: rgba(0, 161, 201, 0.1);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 14px 0;
+  font-size: 14px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="service-badge">☁️ Amazon EKS (EKS Auto Mode)</div>
+    <h1>EKS Auto Mode が Pod 単位のセキュリティグループに対応</h1>
+    <div class="subtitle">
+      <span class="date">📅 リリース日: 2026 年 11 月 11 日</span> ｜
+      機能: Security groups for Pods (Pod 単位のセキュリティグループ割り当て)
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon EKS Auto Mode が <span class="highlight">security groups for Pods</span> をサポートしました。
+      個々の Pod に専用の EC2 セキュリティグループルールを適用でき、同一ノード上で稼働する異なるワークロードに異なるセキュリティグループを割り当てられます。
+      アプリケーションごとに個別のノードプールを作成することなく、<span class="highlight">Pod レベルのネットワークセグメンテーション</span>を実現できます。
+    </p>
+    <p>
+      対象の Pod は <code class="inline">SecurityGroupPolicy</code> リソースで定義し、ポリシーに一致した Pod には
+      ノードのトランクインターフェイスにアタッチされた専用の<span class="highlight">ブランチ ENI</span> が割り当てられます。
+      実装には Kubernetes の Dynamic Resource Allocation (DRA) を活用しています。
+      ポリシーに一致しない Pod は従来どおりノードのセキュリティグループを使用します。
+    </p>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>Pod 単位でセキュリティグループを割り当てる手段がなく、Pod はノードのセキュリティグループを共有</li>
+          <li>NodeClass の podSecurityGroupSelectorTerms はノード上の全 Pod に同一セットを適用。ワークロード分離にはノードプール分割が必要</li>
+          <li>RDS や ElastiCache へのアクセスを特定ワークロードのみに限定することが困難</li>
+          <li>VPC CNI 版の security groups for Pods は EKS Auto Mode ノードには適用不可</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>同一ノード上の Pod ごとに異なるセキュリティグループを割り当て可能。ノードプール分割なしでセグメンテーション実現</li>
+          <li>SecurityGroupPolicy で Pod ラベルまたはサービスアカウントラベルによる柔軟な対象選択</li>
+          <li>セキュリティグループで接続を許可するデータストアへのアクセスを該当 Pod のみに限定</li>
+          <li>非 Auto Mode クラスターと同等の運用モデルを EKS Auto Mode でも利用可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    SGP["📜 SecurityGroupPolicy<br/>podSelector app=payment"]
+    Webhook["⚙️ アドミッション Webhook<br/>リソースクレームを自動注入"]
+
+    subgraph Node["🖥️ EKS Auto Mode ノード"]
+        direction LR
+        PodA["📦 Pod A<br/>app=payment"]
+        PodB["📦 Pod B<br/>ポリシー非対象"]
+        PodA ~~~ PodB
+    end
+
+    subgraph ENI["🔌 ネットワークインターフェイス"]
+        direction LR
+        Branch["🌿 ブランチ ENI<br/>専用セキュリティグループ"]
+        NodeENI["🔗 ノード ENI<br/>ノードのセキュリティグループ"]
+        Branch ~~~ NodeENI
+    end
+
+    RDS[("🗄️ Amazon RDS")]
+    Cache[("⚡ Amazon ElastiCache")]
+    Other["🌐 その他の VPC リソース"]
+
+    SGP -.-> Webhook
+    Webhook -.->|"Pod を選択"| PodA
+    PodA --> Branch
+    PodB --> NodeENI
+    Branch --> RDS
+    Branch --> Cache
+    NodeENI --> Other
+
+    classDef policy fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class SGP policy
+    class Webhook internal
+    class PodA,PodB,Branch,NodeENI,Other process
+    class RDS,Cache storage
+    class Node,ENI layer
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      💡 <code class="inline">SecurityGroupPolicy</code> に一致した Pod A には専用のブランチ ENI が割り当てられ、指定したセキュリティグループのみが適用されます。ポリシーに一致しない Pod B は従来どおりノードのセキュリティグループを使用します。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">📜 1. SecurityGroupPolicy リソースによる Pod 単位の割り当て</div>
+      <ul>
+        <li><code class="inline">eks.amazonaws.com/v1</code> API グループの <code class="inline">SecurityGroupPolicy</code> で対象 Pod とセキュリティグループを宣言的に定義</li>
+        <li><code class="inline">podSelector</code>、<code class="inline">serviceAccountSelector</code>、またはその両方で対象を選択。両方設定時は両方に一致する Pod のみ対象</li>
+        <li>アドミッション Webhook がリソースクレームを自動注入するため、Pod スペック自体の変更は不要</li>
+        <li>ポリシーに一致しない Pod はノードのセキュリティグループを引き続き使用</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🌿 2. ブランチ ENI による独立したトラフィック評価</div>
+      <ul>
+        <li>一致した Pod にはノードのトランクインターフェイスにアタッチされた専用ブランチ ENI を割り当て</li>
+        <li>Pod の送受信トラフィックは、ノードのセキュリティグループとは独立してブランチ ENI 上の指定セキュリティグループで評価</li>
+        <li>同一ノード上の Pod 間トラフィックにも適用 (オープンソース VPC CNI の standard モードとは異なる動作)</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🎯 3. 柔軟なセキュリティグループ選択</div>
+      <ul>
+        <li><code class="inline">securityGroupSelectorTerms</code> で ID、名前、タグのいずれかにより指定 (1 タームに最大 30 個、各タームは OR 評価)</li>
+        <li><code class="inline">name</code> や <code class="inline">tags</code> によるタームは動的に再解決されるため、ポリシーを編集しなくても実効セキュリティグループが変化し得る</li>
+        <li><code class="inline">nodeSelector</code> (<code class="inline">karpenter.sh/nodepool</code> キーのみ) で特定の NodePool にポリシーを限定可能</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🔗 4. ネイティブ DRA によるオプトイン方式 (代替手段)</div>
+      <ul>
+        <li>各 <code class="inline">SecurityGroupPolicy</code> に対してコントローラーが <code class="inline">ResourceClaimTemplate</code> を自動生成</li>
+        <li>Pod スペックの <code class="inline">resourceClaims</code> からテンプレートを直接参照し、ラベルマッチングを使わず明示的に関連付けることも可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📊 機能の比較</h3>
+    <table>
+      <tr><th>メカニズム</th><th>API グループ</th><th>動作</th></tr>
+      <tr>
+        <td>NodeClass <code class="inline">podSecurityGroupSelectorTerms</code></td>
+        <td><code class="inline">eks.amazonaws.com/v1</code></td>
+        <td>EKS Auto Mode。ノード上のすべての Pod に同一のセキュリティグループを適用</td>
+      </tr>
+      <tr>
+        <td><code class="inline">SecurityGroupPolicy</code> (今回のアップデート)</td>
+        <td><code class="inline">eks.amazonaws.com/v1</code></td>
+        <td>EKS Auto Mode。Pod ごとに異なるセキュリティグループを適用</td>
+      </tr>
+      <tr>
+        <td><code class="inline">SecurityGroupPolicy</code> (VPC CNI)</td>
+        <td><code class="inline">vpcresources.k8s.aws/v1beta1</code></td>
+        <td>非 Auto Mode クラスター用。スペックは今回の API と互換性なし</td>
+      </tr>
+    </table>
+
+    <h3>📏 主な仕様と制限値</h3>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">K8s 1.36+</div>
+        <div class="stat-label">対象: Kubernetes 1.36 以降の EKS Auto Mode クラスター</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">最大 1 つ</div>
+        <div class="stat-label">Pod ごとのポリシー数 (複数一致は拒否)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">最大 16 個</div>
+        <div class="stat-label">ポリシーあたりのセキュリティグループ解決上限</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">5 個以下</div>
+        <div class="stat-label">ノードあたりの推奨ポリシー数 (超過でスケジューリング遅延リスク)</div>
+      </div>
+    </div>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>ENI あたりのセキュリティグループクォータ</td><td>デフォルト 5 個 (VPC クォータ。16 個まで引き上げ可能)</td></tr>
+      <tr><td><code class="inline">securityGroupSelectorTerms</code></td><td>最大 30 ターム、タグ指定は 1 タームあたり最大 20 キーバリューペア</td></tr>
+      <tr><td>追加 IAM 権限</td><td>クラスターロールに <code class="inline">ec2:CreateNetworkInterfacePermission</code> が必要</td></tr>
+    </table>
+
+    <h3>📄 SecurityGroupPolicy の定義例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">YAML</span>
+        <span class="code-title">SecurityGroupPolicy 定義例</span>
+      </div>
+      <pre><code class="language-yaml">apiVersion: eks.amazonaws.com/v1
+kind: SecurityGroupPolicy
+metadata:
+  name: my-sgp
+  namespace: my-namespace
+spec:
+  podSelector:
+    matchLabels:
+      app: my-app
+  securityGroupSelectorTerms:
+    - id: sg-0123456789abcdef0</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Kubernetes 1.36 以降で稼働する EKS Auto Mode クラスター</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>クラスターの IAM ロールに <code class="inline">AmazonEKSNetworkingPolicy</code> 管理ポリシーに加えて <code class="inline">ec2:CreateNetworkInterfacePermission</code> を許可するポリシーステートメントを付与</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Pod に適用するセキュリティグループをクラスターの VPC に作成済みであること</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-body">
+        <div class="step-title">セキュリティグループの準備</div>
+        <p>EKS Auto Mode は同一ノード上の Pod 間トラフィックにもセキュリティグループを適用するため、同じポリシー配下の Pod 同士が通信する場合は自己参照のインバウンドルールを追加します。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">自己参照インバウンドルールの追加</span></div>
+          <pre><code class="language-bash"># 同一ポリシー配下の Pod 間通信が必要な場合、自己参照のインバウンドルールを追加
+aws ec2 authorize-security-group-ingress --group-id sg-0123456789abcdef0 \
+  --source-group sg-0123456789abcdef0 --protocol -1</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-body">
+        <div class="step-title">SecurityGroupPolicy の作成</div>
+        <p><code class="inline">podSelector</code> または <code class="inline">serviceAccountSelector</code> で対象 Pod を、<code class="inline">securityGroupSelectorTerms</code> で適用するセキュリティグループを指定して適用します。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">kubectl apply -f my-sgp.yaml</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-body">
+        <div class="step-title">ポリシーの解決状態の確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">kubectl get securitygrouppolicies.eks.amazonaws.com my-sgp -n my-namespace -o yaml</code></pre>
+        </div>
+        <p><code class="inline">status.securityGroups</code> に解決された ID が、<code class="inline">status.conditions[]</code> の <code class="inline">SecurityGroupsResolved</code> に解決結果が表示されます。<code class="inline">False</code> の場合は <code class="inline">reason</code> フィールド (<code class="inline">no_sgs_matched</code>、<code class="inline">sg_quota_exceeded</code>、<code class="inline">invalid_spec</code>、<code class="inline">resolution_error</code>) で失敗原因を確認できます。</p>
+        <div class="note-box">⚠️ 解決に失敗したポリシーに一致する Pod は、ノードのセキュリティグループで起動されるのではなく Pending のままになる点に注意してください。</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-body">
+        <div class="step-title">Pod へのリソースクレーム注入の確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span></div>
+          <pre><code class="language-bash">kubectl get pod &lt;pod-name&gt; -o jsonpath='{.spec.resourceClaims}'</code></pre>
+        </div>
+        <p>結果が空の場合は、Pod のラベルが同一ネームスペース内のどの <code class="inline">SecurityGroupPolicy</code> にも一致していないことを示します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>インフラコストの最適化</strong>: ワークロードの分離のためだけにノードプールを分割する必要がなくなり、ノードの集約率を高められる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス対応の強化</strong>: 決済処理や個人情報を扱うワークロードへのネットワークアクセスを Pod 単位で制御でき、監査要件に対応しやすくなる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: EKS Auto Mode の一部として追加料金なしで利用可能</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>既存の AWS ネットワーク制御との統合</strong>: セキュリティグループで接続を許可する RDS や ElastiCache などに対し、VPC 内の他リソースと同じモデルでアクセス制御できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>宣言的かつ Pod スペック変更不要</strong>: <code class="inline">SecurityGroupPolicy</code> を適用するだけで、アドミッション Webhook が対象 Pod に自動的にリソースクレームを注入する</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>同一ノード内トラフィックの確実な制御</strong>: 同一ノード上の Pod 間通信にもセキュリティグループが適用され、意図しない水平方向のアクセスを防止できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>非 Auto Mode からの移行が容易</strong>: VPC CNI 版から <code class="inline">podSelector</code> と <code class="inline">serviceAccountSelector</code> をそのまま引き継げるフィールドマッピングが用意されている</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>🚧 制限事項</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>Kubernetes 1.36 以降の EKS Auto Mode クラスターでのみ利用可能</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>1 つの Pod に一致できるポリシーは最大 1 つ。複数ポリシーに一致した Pod は拒否されるため、セレクターはポリシー間で重複しないように設計が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>ポリシーが解決できるセキュリティグループは最大 16 個だが、ENI あたりの VPC クォータはデフォルト 5 個。6 個以上を使用する場合は事前のクォータ引き上げが必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>IPv6 クラスターで <code class="inline">enableV4Egress</code> が有効 (デフォルト) の場合、Pod の IPv4 エグレストラフィックはノードの ENI 経由となり、Pod のセキュリティグループでは評価されない</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>代替 CNI プラグインやネットワークポリシープラグインとの併用は不可 (EKS Auto Mode 組み込みネットワーキングの Pod にのみ適用)</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>トランク対応インスタンスタイプのうち ENI スロットが 2 つしかないものでは、本機能と Pod 用の個別サブネット機能を同時に利用できない</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">💭</span><span>ブランチ ENI はノードの ENI スロットと IP アドレスを消費するため、ノードの実効 <code class="inline">maxPods</code> が低下する。既存の NodePool で導入する場合はノードのリサイクルが推奨される</span></div>
+    <div class="check-item"><span class="warn-icon">💭</span><span>同一ノードを対象とするポリシーは 5 個以下に抑えることを強く推奨。超過するとスケジューリング遅延や、大規模環境での Karpenter と kube-scheduler のリソース消費増加のリスク</span></div>
+    <div class="check-item"><span class="warn-icon">💭</span><span>IMDS、EKS Pod Identity Agent、kubelet のヘルスチェック、CoreDNS といったノードローカルエンドポイントとの通信はセキュリティグループ評価の対象外 (固定の例外セットで、カスタマイズ不可)</span></div>
+    <div class="check-item"><span class="warn-icon">💭</span><span>クラスターを 1.36 以降にアップグレードした直後は、コントロールプレーンコンポーネントの再起動完了まで数分間、本機能が利用できない場合がある</span></div>
+    <div class="check-item"><span class="warn-icon">💭</span><span>EKS Auto Mode を無効化する前に、ポリシー配下の Pod を終了させてすべての <code class="inline">SecurityGroupPolicy</code> を削除しておくことが推奨される</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="uc-title">💳 ユースケース 1: 決済ワークロードのデータベースアクセス制限</div>
+      <p><strong>シナリオ</strong>: 同一クラスター上で決済処理アプリケーションと一般的な Web アプリケーションが稼働しており、決済用の Amazon RDS データベースには決済処理 Pod のみがアクセスできるようにしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-yaml">apiVersion: eks.amazonaws.com/v1
+kind: SecurityGroupPolicy
+metadata:
+  name: payment-sgp
+  namespace: payment
+spec:
+  podSelector:
+    matchLabels:
+      app: payment-api
+  securityGroupSelectorTerms:
+    - id: sg-payment0123456789</code></pre>
+      </div>
+      <p>RDS のセキュリティグループで <code class="inline">sg-payment0123456789</code> からのインバウンドのみを許可します。</p>
+      <div class="uc-effect"><strong>効果</strong>: 決済処理 Pod だけがデータベースに到達でき、同一ノード上の他の Pod からのアクセスはネットワークレベルで遮断される。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">💰 ユースケース 2: ノードプール分割からの統合によるコスト削減</div>
+      <p><strong>シナリオ</strong>: これまでセキュリティ要件の異なるワークロードごとにノードプールを分割し、ノードレベルのセキュリティグループで分離していたため、ノードの集約率が低くコストがかさんでいた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-yaml">apiVersion: eks.amazonaws.com/v1
+kind: SecurityGroupPolicy
+metadata:
+  name: internal-api-sgp
+  namespace: backend
+spec:
+  serviceAccountSelector:
+    matchLabels:
+      security-tier: internal
+  securityGroupSelectorTerms:
+    - tags:
+        Team: platform</code></pre>
+      </div>
+      <div class="uc-effect"><strong>効果</strong>: 複数のワークロードを同一ノードプールに統合しつつ Pod 単位の分離を維持でき、ノード台数と運用対象の NodePool 数を削減できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="uc-title">🔄 ユースケース 3: 非 Auto Mode クラスターからの移行</div>
+      <p><strong>シナリオ</strong>: マネージドノードグループで VPC CNI 版の security groups for Pods を利用しており、EKS Auto Mode への移行後も同等の Pod 単位のネットワーク制御を維持したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">移行前後のスペック比較</span></div>
+        <pre><code class="language-yaml"># 移行前 vpcresources.k8s.aws/v1beta1
+spec:
+  securityGroups:
+    groupIds:
+      - sg-0123456789abcdef0
+
+# 移行後 eks.amazonaws.com/v1
+spec:
+  securityGroupSelectorTerms:
+    - id: sg-0123456789abcdef0</code></pre>
+      </div>
+      <div class="uc-effect"><strong>効果</strong>: <code class="inline">podSelector</code> と <code class="inline">serviceAccountSelector</code> はそのまま引き継げるため、最小限のマニフェスト変更で移行可能。移行期間中は両方の API グループのポリシーを併存させることで、Auto Mode ノードと非 Auto Mode ノードの両方で Pod を保護できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>料金</strong>: Security groups for Pods は EKS Auto Mode の一部として追加料金なしで利用できます。EKS Auto Mode 自体の料金 (管理対象の EC2 インスタンスに対する管理料金) と、EC2 インスタンスなどの基盤リソースの料金は通常どおり発生します。</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>リージョン</strong>: EKS Auto Mode が利用可能なすべての AWS リージョンで利用できます。</span></div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">🧩 Amazon VPC CNI の security groups for Pods</div>
+      <p>非 Auto Mode クラスター向けの同等機能。<code class="inline">vpcresources.k8s.aws/v1beta1</code> API グループを使用し、スペックの互換性はないが移行パスが用意されている。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🖥️ NodeClass の podSecurityGroupSelectorTerms</div>
+      <p>ノード上のすべての Pod に同一のセキュリティグループを適用する EKS Auto Mode の既存機能。本機能と併用可能。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">⚙️ Kubernetes Dynamic Resource Allocation (DRA)</div>
+      <p>本機能の実装基盤。ブランチ ENI のスロットをデバイスとしてスケジューラーが割り当てる。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🗄️ Amazon RDS / Amazon ElastiCache</div>
+      <p>セキュリティグループでアクセスを許可するデータストア。本機能により Pod 単位でのアクセス制御が可能になる。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      EKS Auto Mode でも Pod 単位のセキュリティグループ割り当てが可能になり、非 Auto Mode クラスターとの機能差分が 1 つ解消されました。
+      セキュリティグループベースでアクセス制御しているデータストアを利用する環境や、分離要件のためにノードプールを分割している環境では、
+      クラスターの <span class="highlight">Kubernetes 1.36 以降</span>へのアップグレードと <code class="inline">SecurityGroupPolicy</code> の導入を検討する価値があります。
+    </p>
+    <p>
+      導入時は、<span class="highlight">Pod あたり 1 ポリシーの制約</span>、<span class="highlight">ENI あたりのセキュリティグループクォータ (デフォルト 5 個)</span>、
+      <span class="highlight">ノードの実効 maxPods への影響</span>を事前に確認してください。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-eks-auto-mode-security-groups-for-pods/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-eks-auto-mode-security-groups-for-pods/</a></li>
+      <li>ドキュメント: Assign security groups to individual Pods in EKS Auto Mode: <a href="https://docs.aws.amazon.com/eks/latest/userguide/auto-sgp.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/eks/latest/userguide/auto-sgp.html</a></li>
+      <li>Amazon EKS Auto Mode 製品ページ: <a href="https://aws.amazon.com/eks/auto-mode/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/eks/auto-mode/</a></li>
+      <li>Amazon EKS 料金ページ: <a href="https://aws.amazon.com/eks/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/eks/pricing/</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-11-11) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
