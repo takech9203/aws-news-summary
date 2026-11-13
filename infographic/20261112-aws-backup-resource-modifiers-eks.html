@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Backup - Amazon EKS リストア時のリソースモディファイアサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.release-date {
+  display: inline-block;
+  color: var(--aws-light-gray);
+  font-size: 14px;
+  margin-left: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .ba-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+.ba-list { margin: 0; padding-left: 0; list-style: none; }
+.ba-list li { margin: 8px 0; padding-left: 24px; position: relative; font-size: 14px; }
+.before-box .ba-list li::before { content: "✗"; position: absolute; left: 0; color: #FF6B4A; font-weight: 700; }
+.after-box .ba-list li::before { content: "✓"; position: absolute; left: 0; color: #4CAF50; font-weight: 700; }
+
+/* Flow diagram */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0 8px 0;
+}
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 16px;
+  text-align: center;
+  min-width: 110px;
+  font-size: 14px;
+  color: var(--aws-white);
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+  vertical-align: top;
+}
+td code, li code, p code {
+  background: rgba(255, 153, 0, 0.12);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+}
+
+/* Check / cross lists */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+.check-icon { color: #4CAF50; font-size: 16px; line-height: 1.6; }
+.cross-icon { color: #FF6B4A; font-size: 16px; line-height: 1.6; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; line-height: 1.6; }
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid { display: flex; justify-content: center; }
+
+/* Use case */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase p { margin: 8px 0; font-size: 14px; }
+.usecase-label { font-weight: 700; color: var(--aws-white); }
+
+/* Steps */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+.step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+.step-body { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+
+/* Note box */
+.note-box {
+  background: rgba(255, 173, 51, 0.1);
+  border: 1px solid rgba(255, 173, 51, 0.5);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 14px 0;
+  font-size: 14px;
+}
+.note-box .note-title { color: var(--aws-smile-orange); font-weight: 700; margin-bottom: 6px; }
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+.region-badge {
+  display: inline-block;
+  background: rgba(0, 161, 201, 0.15);
+  border: 1px solid var(--aws-teal);
+  color: var(--aws-teal);
+  border-radius: 16px;
+  padding: 4px 12px;
+  margin: 4px 6px 4px 0;
+  font-size: 13px;
+}
+
+ul.plain-list { margin: 8px 0; padding-left: 20px; }
+ul.plain-list li { margin: 6px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS Backup</span>
+      <span class="release-date">📅 リリース日: 2026 年 11 月 12 日</span>
+    </div>
+    <h1>☸️ Amazon EKS リストア時の<br>リソースモディファイアサポート</h1>
+    <div class="subtitle">YAML で定義した変換ルールをリストア時に自動適用し、クロスアカウント・クロスリージョン DR を自動化</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>AWS Backup が、Amazon EKS バックアップのリストア時に<span class="highlight">リソースモディファイア (Resource Modifiers)</span> をサポートしました。リソースモディファイアは、リストア中に Kubernetes オブジェクトを変換するルールセットです。YAML ファイルで変換ルールを一度定義しておけば、AWS Backup がリストアプロセス中に自動的にルールを適用します。変換は<span class="highlight">メモリ内で適用</span>されるため、元のバックアップデータは変更されません。</p>
+    <p>クロスアカウント・クロスリージョンにコピーされたバックアップのリストアで特に有効です。IAM ロール、データベースエンドポイント、Amazon ECR レジストリ URI など、ソース環境への参照をリストア時に自動で書き換えられるため、ディザスタリカバリ (DR) ワークフローの信頼性が向上します。</p>
+
+    <div class="flow-diagram">
+      <div class="flow-step">📝 YAML で<br>ルール定義</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🪣 S3 に<br>アップロード</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">⚡ リストアジョブ<br>開始</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🩹 メモリ内で<br>自動変換</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">☸️ ターゲット<br>EKS へリストア</div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul class="ba-list">
+          <li>クロスアカウント・クロスリージョンリストア後、ECR イメージ URI、DB エンドポイント、ストレージクラス名などを手動で特定して修正</li>
+          <li>手作業は時間がかかりミスが発生しやすく、DR の復旧時間 (RTO) を悪化させる要因に</li>
+          <li>リストアのたびに同じ修正作業を繰り返す必要があり、DR 手順の自動化が困難</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul class="ba-list">
+          <li>変換ルールを YAML で一度定義すれば、AWS Backup がリストア中に自動適用</li>
+          <li>JSON Patch 形式の <code>add</code> / <code>remove</code> / <code>replace</code> 操作で任意のフィールドを書き換え可能</li>
+          <li>リストア後の手動修正が不要になり、クロスアカウント・クロスリージョン DR の信頼性と再現性が向上</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 ユーザー"])
+
+    subgraph Setup["📄 事前準備"]
+        YAML["📝 リソースモディファイアファイル YAML<br/>version: v1 / 最大 1 MB"]
+        S3[("🪣 Amazon S3 バケット<br/>リストアジョブと同一アカウント・リージョン")]
+        YAML --> S3
+    end
+
+    subgraph Backup["⚙️ AWS Backup"]
+        Job["⚡ StartRestoreJob<br/>resourceModifiers に S3 URI を指定"]
+        Rules{"🔧 ルール適用<br/>conditions で対象を選択"}
+        Patch["🩹 パッチ適用<br/>add / remove / replace<br/>メモリ内で変換"]
+        Job --> Rules --> Patch
+    end
+
+    subgraph Target["☸️ リストア先"]
+        EKS["☸️ ターゲット EKS クラスター<br/>変換済みオブジェクトを非破壊リストア"]
+    end
+
+    RP["📦 EKS 複合リカバリポイント<br/>バックアップデータは変更されない"]
+
+    User -->|リストアジョブ開始| Job
+    S3 -.->|ジョブ開始時に 1 回読み込み| Job
+    RP --> Rules
+    Patch --> EKS
+    Patch -.->|成功 / 失敗を通知| SNS["📣 Amazon SNS<br/>MODIFICATION_SUCCESS / FAILED"]
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Setup,Backup,Target layer
+    class YAML,RP input
+    class S3 storage
+    class Job,Patch process
+    class Rules decision
+    class EKS,SNS internal
+    class User user
+      </pre>
+    </div>
+    <p style="font-size: 14px;">S3 に配置した YAML ファイルの変換ルールを、AWS Backup がリストアジョブ開始時に 1 回読み込み、リカバリポイント内の Kubernetes オブジェクトにメモリ内でパッチを適用してからターゲットクラスターへリストアする流れを示しています。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⭐ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">📝 1. YAML による変換ルールの宣言的定義</div>
+      <ul class="plain-list">
+        <li><code>version: v1</code> と <code>resourceModifierRules</code> から成る YAML ファイルで変換ルールを定義</li>
+        <li>ファイルを Amazon S3 にアップロードし、リストアジョブ開始時に <code>resourceModifiers</code> メタデータキーで S3 URI を渡す</li>
+        <li>AWS Backup はジョブ開始時にファイルを 1 回だけ読み込み、そのコピーをリストア全体で使用 (開始後のファイル変更や削除はジョブに影響しない)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🎯 2. conditions による対象オブジェクトの柔軟な選択</div>
+      <ul class="plain-list">
+        <li><code>groupResource</code>: <code>apps/v1/deployments</code> のような group/version/resource 形式で対象リソース種別を指定</li>
+        <li><code>resourceNameRegex</code>: RE2 構文の正規表現でオブジェクト名を完全一致で選択</li>
+        <li><code>namespaces</code>: バックアップ時点のネームスペース名のリストで絞り込み</li>
+        <li><code>labelSelector</code>: ラベルのキーと値の完全一致で絞り込み</li>
+        <li>各ルールは少なくとも 1 つの条件が必須。複数指定時は<span class="highlight">すべての条件に一致</span>するオブジェクトのみが対象</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🩹 3. JSON Patch 形式のパッチ操作</div>
+      <ul class="plain-list">
+        <li><code>add</code>、<code>remove</code>、<code>replace</code> の 3 種類の操作をサポート。<code>path</code> は JSON Pointer 構文 (配列インデックス含む) で指定</li>
+        <li>配列末尾への追加は <code>-</code> インデックス (例: <code>/spec/template/spec/containers/-</code>) を使用可能</li>
+        <li>パッチとルールは記載順に適用され、同じ <code>path</code> を対象とする場合は最後のものが有効 (最も具体的なルールを最後に記載)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">📣 4. SNS 通知による変更結果の可視化</div>
+      <ul class="plain-list">
+        <li><code>EKS_RESTORE_MODIFICATION_SUCCESS</code>: ルールに一致したオブジェクトにすべてのパッチが正常適用された</li>
+        <li><code>EKS_RESTORE_MODIFICATION_FAILED</code>: パッチの適用に失敗した (成功した変更のみ適用された状態でリストアが試行される)</li>
+        <li>変更失敗があってもジョブステータスは変わらず、ステータスメッセージに追記される</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📄 リソースモディファイアファイルの要件</h3>
+    <table>
+      <tr><th style="width: 30%;">項目</th><th>詳細</th></tr>
+      <tr><td>ファイル形式</td><td>UTF-8 の有効な YAML、<code>version: v1</code> が必須</td></tr>
+      <tr><td>最大サイズ</td><td>1 MB</td></tr>
+      <tr><td>禁止事項</td><td>YAML アンカー・エイリアスの使用、重複キー</td></tr>
+      <tr><td>配置場所</td><td>リストアジョブと同一アカウント・同一リージョンの S3 バケット</td></tr>
+      <tr><td>必要な権限</td><td><code>StartRestoreJob</code> を呼び出すプリンシパルに対象ファイルへの <code>s3:GetObject</code> 権限 (<code>iam-role-arn</code> で渡すロールではない点に注意)</td></tr>
+      <tr><td>検証タイミング</td><td>ジョブ送信時に検証され、ファイルが欠落・アクセス不可・無効な場合はジョブ開始前に拒否</td></tr>
+      <tr><td>指定方法</td><td>リストアメタデータの <code>resourceModifiers</code> キーに S3 URI を指定 (省略可能)</td></tr>
+    </table>
+
+    <h3>📐 リソースモディファイアファイルのスキーマ</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">YAML</span>
+        <span class="code-title">リソースモディファイアファイルのスキーマ</span>
+      </div>
+      <pre><code class="language-yaml">version: v1
+resourceModifierRules:
+  - conditions:
+      groupResource: apps/v1/deployments   # group/version/resource 形式
+      resourceNameRegex: "my-app.*"        # RE2 構文、名前全体に一致
+      namespaces:
+        - production
+      labelSelector:
+        matchLabels:
+          app: payment
+    patches:
+      - operation: replace
+        path: "/spec/storageClassName"
+        value: "new-sc"
+      - operation: remove
+        path: "/metadata/uid"</code></pre>
+    </div>
+
+    <h3>🩹 パッチ操作の仕様</h3>
+    <table>
+      <tr><th>操作</th><th>説明</th><th>value</th></tr>
+      <tr><td><code>add</code></td><td>パスの最終フィールドを追加。配列はインデックス位置に挿入、<code>-</code> で末尾に追加</td><td>必須 (null 不可)</td></tr>
+      <tr><td><code>replace</code></td><td>既存フィールドの値を置換</td><td>必須 (null 不可)</td></tr>
+      <tr><td><code>remove</code></td><td>既存フィールドを削除</td><td>指定不可</td></tr>
+    </table>
+
+    <div class="note-box">
+      <div class="note-title">⚠️ 注意点</div>
+      パッチの親パスはオブジェクト上に既に存在している必要があります。たとえば <code>labels</code> マップを持たないオブジェクトに <code>/metadata/labels/team</code> を <code>add</code> すると失敗します。パスにワイルドカードは使用できないため、複数の配列要素を変更する場合はインデックスごとにパッチを記述します。スタンドアロンの JSON Patch とは異なり、1 つの操作が失敗しても AWS Backup は残りの操作を続行します。
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Backup で Amazon EKS の複合リカバリポイント (EKS クラスター状態 + 永続ボリューム) を取得済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>リストアジョブと同一アカウント・同一リージョンに S3 バケットがあること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><code>StartRestoreJob</code> を呼び出すプリンシパルがリソースモディファイアファイルへの <code>s3:GetObject</code> 権限を持つこと</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>リストア用 IAM ロール (例: <code>AWSBackupServiceRolePolicyForRestores</code> がアタッチされたロール) が用意されていること</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-body">
+        <div class="step-title">リソースモディファイアファイルを作成</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">YAML</span>
+            <span class="code-title">modifiers.yaml: クロスアカウント・クロスリージョンリストア用の例</span>
+          </div>
+          <pre><code class="language-yaml"># アカウント 111122223333 / us-east-1 から
+# アカウント 444455556666 / us-west-2 へのリストア
+version: v1
+resourceModifierRules:
+  - conditions:
+      groupResource: apps/v1/deployments
+      namespaces:
+        - production
+      labelSelector:
+        matchLabels:
+          app: payment
+    patches:
+      - operation: replace
+        path: "/spec/template/spec/containers/0/image"
+        value: "444455556666.dkr.ecr.us-west-2.amazonaws.com/payment-service:v2.1.0"
+      - operation: replace
+        path: "/spec/template/spec/containers/0/env/0/value"
+        value: "payment-db.cluster-dst789.us-west-2.rds.amazonaws.com"
+      - operation: add
+        path: "/metadata/annotations/backup.aws.com~1restored-from"
+        value: "arn:aws:backup:us-east-1:111122223333:recovery-point:rp-abc123"</code></pre>
+        </div>
+        <p style="font-size: 14px;"><code>production</code> ネームスペースの <code>app: payment</code> ラベルを持つ Deployment を対象に、コンテナイメージをリストア先アカウントの ECR URI へ、データベースエンドポイントをリストア先リージョンの RDS エンドポイントへ置換し、リストア元のリカバリポイントを示す注釈を追加するルールです。JSON Pointer では <code>~1</code> がキー名中のスラッシュ <code>/</code> のエスケープシーケンスとなるため、<code>backup.aws.com~1restored-from</code> は注釈キー <code>backup.aws.com/restored-from</code> を指します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-body">
+        <div class="step-title">ファイルを S3 にアップロード</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">S3 へのアップロード</span>
+          </div>
+          <pre><code class="language-bash">aws s3 cp modifiers.yaml s3://my-backup-bucket/restore-configs/account-modifiers.yaml</code></pre>
+        </div>
+        <p style="font-size: 14px;">リストアジョブを実行するアカウント・リージョンと同じ S3 バケットにアップロードします。AWS Backup はユーザーのネットワークからではなくユーザーに代わってファイルを読み取るため、特定の VPC エンドポイントや IP 範囲にアクセスを制限するバケットポリシーは、IAM 権限が正しくても読み取りをブロックします。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-body">
+        <div class="step-title">resourceModifiers を指定してリストアジョブを開始</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">リストアジョブの開始</span>
+          </div>
+          <pre><code class="language-bash">aws backup start-restore-job \
+    --recovery-point-arn "arn:aws:backup:us-west-2:444455556666:recovery-point:composite:eks/my-cluster-20261110" \
+    --iam-role-arn "arn:aws:iam::444455556666:role/AWSBackupDefaultServiceRole" \
+    --metadata '{"clusterName":"dr-cluster","newCluster":"false","resourceModifiers":"s3://my-backup-bucket/restore-configs/account-modifiers.yaml"}' \
+    --resource-type "EKS"</code></pre>
+        </div>
+        <p style="font-size: 14px;"><code>StartRestoreJob</code> のメタデータに <code>resourceModifiers</code> キーで S3 URI を渡します。AWS Backup はジョブ送信時にファイルを検証し、問題があればジョブ開始前に拒否します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-body">
+        <div class="step-title">リストア結果と変更結果を確認</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">リストアジョブの進捗確認</span>
+          </div>
+          <pre><code class="language-bash">aws backup describe-restore-job --restore-job-id &lt;restore-job-id&gt;</code></pre>
+        </div>
+        <p style="font-size: 14px;">変更の成否をオブジェクト単位で把握するには、SNS イベント通知 (<code>EKS_RESTORE_MODIFICATION_SUCCESS</code> / <code>EKS_RESTORE_MODIFICATION_FAILED</code>) を購読します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">💼 ビジネス面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">RTO の短縮</strong>: リストア後の手動修正作業が不要になり、クロスアカウント・クロスリージョン DR の復旧時間を短縮</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">DR 手順の自動化と標準化</strong>: 変換ルールをコード (YAML) として管理でき、属人化を排除しリストアテストの再現性を確保</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">ヒューマンエラーの削減</strong>: 手作業での参照修正に伴う修正漏れや誤修正のリスクを低減</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">⚙️ 技術面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">非破壊的な変換</strong>: 変換はメモリ内で適用され、元のバックアップデータ (リカバリポイント) は一切変更されない</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">柔軟な対象選択</strong>: リソース種別、名前の正規表現、ネームスペース、ラベルセレクタの組み合わせで変換対象を精密に制御</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">可観測性</strong>: SNS 通知でオブジェクト単位の成功・失敗を追跡でき、ジョブステータスメッセージでも確認可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ファイルは最大 1 MB で、YAML アンカー・エイリアスや重複キーは使用できない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>パッチのパスにワイルドカードは使用できず、複数の配列要素を変更するにはインデックスごとにパッチを記述する必要がある</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span><code>resourceNameRegex</code> は RE2 構文のため、先読み・後読み (lookaround) や後方参照は使用できない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>S3 バケットはリストアジョブと同一アカウント・同一リージョンに配置する必要がある</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>実行時にパッチが失敗しても後続の操作は継続されるため、オブジェクトが部分的に変更された状態でリストアされる可能性がある</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>AWS Backup は変更後のオブジェクトが Kubernetes 的に有効かどうかを検証しない。必須フィールドの削除や型の不一致があるとクラスター側でオブジェクトが拒否され、リストアが失敗する。<span class="highlight">本番利用前に非本番環境でルールをテスト</span>することが推奨されている</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>ルールは記載順に適用され、最も具体的な一致が優先されるわけではないため、具体的なルールほど後に記載する必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span><code>s3:GetObject</code> 権限が必要なのは <code>StartRestoreJob</code> を呼び出すプリンシパル (API 呼び出し元) であり、<code>iam-role-arn</code> で渡すロールではない点に注意</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>IRSA (IAM Roles for Service Accounts) の OIDC プロバイダー参照はリソースモディファイアだけでは解決できない場合があり、クロスクラスターの可搬性が必要なワークロードには EKS Pod Identity の利用が推奨されている</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🌏 ユースケース 1: クロスリージョン DR でのエンドポイント・イメージ URI の書き換え</div>
+      <p><span class="usecase-label">シナリオ</span>: us-east-1 の本番 EKS クラスターのバックアップを us-west-2 にコピーしており、DR 発動時に us-west-2 でリストアする。コンテナイメージの ECR URI と RDS エンドポイントが us-east-1 を指したままではアプリケーションが起動しない。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-yaml">version: v1
+resourceModifierRules:
+  - conditions:
+      groupResource: apps/v1/deployments
+    patches:
+      - operation: replace
+        path: "/spec/template/spec/containers/0/image"
+        value: "444455556666.dkr.ecr.us-west-2.amazonaws.com/payment-service:v2.1.0"
+      - operation: replace
+        path: "/spec/template/spec/containers/0/env/0/value"
+        value: "payment-db.cluster-dst789.us-west-2.rds.amazonaws.com"</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: DR リストアと同時にリージョン固有の参照が書き換わり、リストア後の手動修正なしでアプリケーションを起動できる。RTO が短縮され、DR テストの自動化も容易になる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔄 ユースケース 2: 同一クラスター内でのネームスペース付け替えリストア</div>
+      <p><span class="usecase-label">シナリオ</span>: 本番ネームスペースのバックアップを、同じクラスター内の検証用ネームスペースとしてリストアし、本番に影響を与えずにデータ検証やトラブルシューティングを行いたい。EKS リストアは非破壊的で既存オブジェクトを上書きしないため、同名ネームスペースへのそのままのリストアでは既存オブジェクトがスキップされてしまう。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">実装例 (AWS Storage Blog 紹介のアプローチ)</span></div>
+        <pre><code class="language-yaml"># リストア先ネームスペースを付け替えるアプローチ
+# (metadata.namespace 等を書き換えるルールを定義)
+version: v1
+resourceModifierRules:
+  - conditions:
+      groupResource: v1/namespaces
+      resourceNameRegex: "production"
+    patches:
+      - operation: replace
+        path: "/metadata/name"
+        value: "production-restore-test"</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 稼働中のワークロードに影響を与えずに、同一クラスター内でバックアップデータの検証やリストアテストを実施できる。詳細な手順は AWS Storage Blog の記事を参照。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">💾 ユースケース 3: ストレージクラス名の変換</div>
+      <p><span class="usecase-label">シナリオ</span>: リストア先クラスターではソースクラスターと異なる CSI ドライバー・ストレージクラス構成を採用しており、PVC が参照するストレージクラス名をリストア時に変換したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-yaml">version: v1
+resourceModifierRules:
+  - conditions:
+      groupResource: v1/persistentvolumeclaims
+    patches:
+      - operation: replace
+        path: "/spec/storageClassName"
+        value: "gp3-encrypted"</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: リストア先クラスターのストレージ構成に合わせて PVC を自動変換でき、ストレージクラス不一致によるボリュームプロビジョニング失敗を防止できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="two-col">
+    <div class="section" style="margin-bottom: 24px;">
+      <h2>💰 料金</h2>
+      <p style="font-size: 14px;">リソースモディファイア機能自体に<span class="highlight">追加料金はありません</span> (What's New での言及なし)。AWS Backup の通常のバックアップストレージ料金とリストア料金が適用されます。また、リソースモディファイアファイルを格納する Amazon S3 の標準料金 (ストレージ・リクエスト) が別途発生します。</p>
+      <p style="font-size: 14px;">詳細は <a href="https://aws.amazon.com/backup/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Backup の料金ページ</a> を参照してください。</p>
+    </div>
+    <div class="section" style="margin-bottom: 24px;">
+      <h2>🌍 利用可能リージョン</h2>
+      <p style="font-size: 14px;">AWS Backup が Amazon EKS バックアップをサポートする以下のリージョンで利用可能です。</p>
+      <div>
+        <span class="region-badge">✅ すべての商用 AWS リージョン</span>
+        <span class="region-badge">✅ AWS GovCloud (US) リージョン</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">☸️ Amazon EKS</div>
+      <p style="font-size: 14px; margin: 0;">リストア対象の Kubernetes マネージドサービス。EKS バックアップはクラスター状態と永続ボリュームを含む複合リカバリポイントとして管理される。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🪣 Amazon S3</div>
+      <p style="font-size: 14px; margin: 0;">リソースモディファイアファイルの配置場所。リストアジョブと同一アカウント・リージョンのバケットが必要。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📣 Amazon SNS</div>
+      <p style="font-size: 14px; margin: 0;">変更の成功・失敗をオブジェクト単位で通知する <code>EKS_RESTORE_MODIFICATION_SUCCESS</code> / <code>EKS_RESTORE_MODIFICATION_FAILED</code> イベントを配信。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔐 EKS Pod Identity</div>
+      <p style="font-size: 14px; margin: 0;">クロスクラスターリストアの可搬性を高める IAM 連携方式。OIDC プロバイダーに依存する IRSA の代替として推奨。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔒 AWS Backup 論理的エアギャップボールト</div>
+      <p style="font-size: 14px; margin: 0;">EKS バックアップのクロスアカウント共有・リストアと組み合わせることで、ランサムウェア対策を含む DR 戦略を強化できる。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>リソースモディファイアにより、これまで手作業で行っていたクロスアカウント・クロスリージョンリストア後の参照修正 (ECR URI、データベースエンドポイント、ストレージクラス名など) を <span class="highlight">YAML ベースのルールで自動化</span>できるようになりました。EKS の DR 戦略を運用している場合は、既存のリストア手順にリソースモディファイアを組み込み、<span class="highlight">非本番環境でのリストアテスト</span>でルールの動作を検証することを推奨します。</p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-backup-resource-modifiers-eks/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): AWS Backup resource modifiers for EKS</a></li>
+      <li><a href="https://aws.amazon.com/blogs/storage/remap-amazon-eks-namespaces-on-restore-with-aws-backup-resource-modifiers/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: Remap Amazon EKS namespaces on restore with AWS Backup resource modifiers</a></li>
+      <li><a href="https://docs.aws.amazon.com/aws-backup/latest/devguide/restoring-eks.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Restore an Amazon EKS cluster (Restore customizations)</a></li>
+      <li><a href="https://aws.amazon.com/backup/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Backup 料金ページ</a></li>
+    </ul>
+    <p>作成日: 2026 年 11 月 13 日 | ソース: AWS News レポート (2026-11-12-aws-backup-resource-modifiers-eks.md)</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

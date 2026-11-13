@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Backup - 論理的エアギャップボールトの Amazon EBS Snapshots Archive サポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  margin-right: 8px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.45);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+
+.before-box h3, .after-box h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+}
+
+.before-box h3 { color: #FF8A73; }
+.after-box h3 { color: #6FCF54; }
+
+.ba-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.cross-icon { color: var(--aws-red); flex-shrink: 0; }
+.check-icon { color: #6FCF54; flex-shrink: 0; }
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.feature-card h3 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+}
+
+.feature-card ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.feature-card li { margin: 6px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+.code-note {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin: 4px 0 16px 0;
+}
+
+/* メリット・デメリット */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+
+.merit-box {
+  background: rgba(29, 129, 2, 0.1);
+  border: 1px solid rgba(29, 129, 2, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.caution-box {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.merit-box h3, .caution-box h3 { margin: 0 0 10px 0; font-size: 16px; }
+.merit-box h3 { color: #6FCF54; }
+.caution-box h3 { color: var(--aws-smile-orange); }
+
+.merit-box ul, .caution-box ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.merit-box li, .caution-box li { margin: 6px 0; }
+
+/* ユースケース */
+.usecase {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(255, 173, 51, 0.06));
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.usecase h3 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase .uc-flow {
+  background: rgba(26, 36, 47, 0.7);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 10px 0;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+  line-height: 1.8;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.uc-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--aws-squid-ink);
+  background: var(--aws-smile-orange);
+  border-radius: 4px;
+  padding: 1px 8px;
+  margin-right: 6px;
+}
+
+/* リンク */
+.aws-link { color: var(--aws-teal); text-decoration: none; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+ul.link-list { padding-left: 20px; margin: 0; font-size: 14px; }
+ul.link-list li { margin: 8px 0; word-break: break-all; }
+
+/* 関連サービス */
+.related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.related-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 13px;
+}
+
+.related-card strong {
+  display: block;
+  color: var(--aws-teal);
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+/* まとめ */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">AWS Backup</span>
+    <span class="service-badge" style="background: var(--aws-teal);">Amazon EBS</span>
+    <h1>🔒 論理的エアギャップボールトが EBS Snapshots Archive をサポート</h1>
+    <div class="subtitle">エアギャップ保護と低コストの長期保持を両立 — <span class="release-date">📅 リリース日: 2026 年 11 月 12 日</span></div>
+  </div>
+
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      AWS Backup の<span class="highlight">論理的エアギャップボールト</span> (logically air-gapped vault) が、
+      <span class="highlight">Amazon EBS Snapshots Archive</span> をサポートしました。
+      ボールト内の Amazon EBS バックアップを、アクセス頻度の低いスナップショット向けの低コストストレージ階層へ移行できます。
+    </p>
+    <p>
+      論理的エアギャップボールトは、<strong style="color: var(--aws-white);">コンプライアンスモードのボールトロックが常に有効</strong>な不変 (イミュータブル) バックアップ用の特殊なボールトです。
+      暗号化による分離、AWS RAM を通じたアカウント間共有、共有先アカウントからの直接復元をサポートします。
+      今回のアップデートで、ランサムウェア対策と長期保持コストの最適化を同時に実現できるようになりました。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>ボールト内の EBS バックアップはアーカイブ階層へ移行できず、ウォームストレージ料金で保持し続ける必要があった</span></div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>数年単位の長期保持ではアクセス頻度が低いのにストレージコストが高止まり</span></div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>コスト最適化のためにエアギャップ保護を諦めて標準ボールトを選ぶトレードオフが発生</span></div>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <div class="ba-item"><span class="check-icon">✓</span><span>EBS バックアップを EBS Snapshots Archive へ移行し、エアギャップ保護と低コスト長期保持を両立</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>ライフサイクル設定でウォームストレージ期間を指定するだけで移行を自動化</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>コピー先だけでなく、プライマリバックアップターゲットとして使用する場合もアーカイブ設定が可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    EBS[("💾 Amazon EBS<br/>ボリューム")] --> Rule
+
+    subgraph Plan["📋 バックアッププラン"]
+        Rule["⚙️ バックアップルール<br/>月次以下の頻度"]
+    end
+
+    subgraph LAG["🔒 論理的エアギャップボールト<br/>ボールトロック コンプライアンスモード"]
+        Warm["🌡️ ウォームストレージ<br/>標準階層"]
+        Archive["🧊 EBS Snapshots Archive<br/>低コスト階層"]
+        Warm -->|ウォームストレージ期間<br/>経過後に自動移行| Archive
+    end
+
+    Rule -->|バックアップまたはコピー| Warm
+    Other(["🏢 共有先アカウント"]) -.->|AWS RAM 共有<br/>直接復元| LAG
+
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class EBS database
+    class Rule process
+    class Warm storage
+    class Archive storage
+    class Plan,LAG layer
+    class Other user
+      </pre>
+    </div>
+    <p class="diagram-note">
+      月次以下の頻度で実行されるバックアップルールにより、Amazon EBS バックアップが論理的エアギャップボールトに保存され、
+      指定したウォームストレージ期間の経過後に EBS Snapshots Archive 階層へ自動的に移行されます。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="feature-card">
+      <h3>1️⃣ 論理的エアギャップボールト内での EBS スナップショットアーカイブ</h3>
+      <ul>
+        <li>ボールトに保存した Amazon EBS バックアップを、低コストの EBS Snapshots Archive 階層へ移行可能</li>
+        <li>ボールトへのコピー完了後、設定したウォームストレージ期間の経過を経てアーカイブ階層に移行</li>
+        <li>アーカイブ後もコンプライアンスモードのボールトロックによる不変性と、暗号化による分離は維持</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h3>2️⃣ ライフサイクル設定による自動移行</h3>
+      <ul>
+        <li>月次以下の頻度のバックアップルールで、コピーアクションの宛先に論理的エアギャップボールトを指定し、コピーライフサイクルで「Archive Amazon EBS snapshots」を選択</li>
+        <li>ウォームストレージに保持する期間と、合計保持期間を設定</li>
+        <li>プライマリバックアップターゲットとして使用する場合は、バックアップルールのライフサイクルでアーカイブを設定</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <h3>3️⃣ コンソール・CLI・SDK からの利用</h3>
+      <ul>
+        <li>AWS Backup コンソール、AWS CLI、AWS SDK のいずれからも設定可能</li>
+        <li>既存プランの更新 (<code style="color: var(--aws-smile-orange);">update-backup-plan</code>) または新規作成 (<code style="color: var(--aws-smile-orange);">create-backup-plan</code>) で対応</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3 style="margin-top: 0;">📐 ライフサイクル要件</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対象リソース</td><td>Amazon EBS バックアップ (スナップショット)</td></tr>
+      <tr><td>バックアップルールの頻度</td><td>月次以下 (月 1 回またはそれより低頻度)</td></tr>
+      <tr><td>合計保持期間</td><td>ウォームストレージ期間より <span class="highlight">90 日以上長く</span>設定する必要がある</td></tr>
+      <tr><td>保持期間の範囲</td><td>ボールトの最小保持期間と最大保持期間の範囲内であること</td></tr>
+      <tr><td>ボールトの最小保持期間</td><td>7 日以上で設定 (論理的エアギャップボールト共通の仕様)</td></tr>
+      <tr><td>暗号化</td><td>AWS 所有キー (デフォルト) またはカスタマーマネージドキー</td></tr>
+      <tr><td>課金区分</td><td>ボールト内のストレージ・データ転送はすべて「AWS Backup」として課金</td></tr>
+    </table>
+
+    <h3>🔄 API 変更履歴</h3>
+    <p style="font-size: 14px;">
+      今回のアップデートに関連する直近の AWS Backup API 変更は、awsapichanges.com では確認されていません (2026 年 11 月 13 日時点)。
+      既存のバックアッププラン API のライフサイクル設定で対応します。
+    </p>
+
+    <h3>🔑 カスタマーマネージドキー使用時のキーポリシー</h3>
+    <p style="font-size: 14px;">
+      ボールトをカスタマーマネージドキー (CMK) で暗号化している場合、このアーカイブオプションを有効化する前に<span class="highlight">キーポリシーの更新が必要</span>です。
+      詳細は <a class="aws-link" href="https://docs.aws.amazon.com/aws-backup/latest/devguide/logicallyairgappedvault.html" target="_blank" rel="noopener noreferrer">公式ドキュメントのキーポリシー設定</a>を参照してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3 style="margin-top: 0;">✅ 前提条件</h3>
+    <ul style="font-size: 14px;">
+      <li>論理的エアギャップボールトが利用可能なリージョンであること (中国リージョンおよび AWS GovCloud (US) では利用不可)</li>
+      <li>EBS Snapshots Archive が利用可能なリージョンであること</li>
+      <li>CMK 暗号化のボールトを使用する場合は、事前にキーポリシーを更新していること</li>
+    </ul>
+
+    <h3>ステップ 1: 論理的エアギャップボールトの作成 (未作成の場合)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">論理的エアギャップボールトの作成</span>
+      </div>
+      <pre><code class="language-bash">aws backup create-logically-air-gapped-backup-vault \
+  --backup-vault-name MyLAGVault \
+  --min-retention-days 30 \
+  --max-retention-days 3650</code></pre>
+    </div>
+    <p class="code-note">最小保持期間 30 日、最大保持期間 3,650 日のボールトを作成します。ボールトロックはコンプライアンスモードで自動的に有効化されます。</p>
+
+    <h3>ステップ 2: バックアッププランでアーカイブ付きコピーを設定</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">コピーライフサイクルでアーカイブを有効化</span>
+      </div>
+      <pre><code class="language-bash">aws backup update-backup-plan \
+  --backup-plan-id &lt;plan-id&gt; \
+  --backup-plan '{
+    "BackupPlanName": "MonthlyEBSPlan",
+    "Rules": [{
+      "RuleName": "MonthlyToLAGVault",
+      "TargetBackupVaultName": "Default",
+      "ScheduleExpression": "cron(0 5 1 * ? *)",
+      "Lifecycle": {"DeleteAfterDays": 455},
+      "CopyActions": [{
+        "DestinationBackupVaultArn": "arn:aws:backup:ap-northeast-1:123456789012:backup-vault:MyLAGVault",
+        "Lifecycle": {
+          "OptInToArchiveForSupportedResources": true,
+          "MoveToColdStorageAfterDays": 90,
+          "DeleteAfterDays": 455
+        }
+      }]
+    }]
+  }'</code></pre>
+    </div>
+    <p class="code-note">
+      毎月 1 日実行のルールに、論理的エアギャップボールトへのコピーアクションを追加。ウォームストレージに 90 日間保持した後アーカイブ階層へ移行し、
+      合計 455 日間保持します (合計保持期間はウォームストレージ期間 + 90 日以上が必要)。
+    </p>
+
+    <h3>ステップ 3: 移行状況の確認</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">リカバリポイントの一覧表示</span>
+      </div>
+      <pre><code class="language-bash">aws backup list-recovery-points-by-backup-vault \
+  --backup-vault-name MyLAGVault</code></pre>
+    </div>
+    <p class="code-note">
+      各リカバリポイントのライフサイクル状態を確認します。ボールト内のリカバリポイント ARN は
+      <code style="color: var(--aws-smile-orange);">arn:aws:backup:{region}:{account-id}:recovery-point:*</code> 形式になる点に注意してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>💼 ビジネス面</h3>
+        <ul>
+          <li><strong>ストレージコストの削減</strong>: アクセス頻度の低い長期保持バックアップを低コストのアーカイブ階層へ移行</li>
+          <li><strong>コンプライアンス対応</strong>: 不変バックアップによる長期保持要件 (監査・規制対応) をコストを抑えながら達成</li>
+          <li><strong>セキュリティとコストの両立</strong>: エアギャップ保護をコスト最適化のために諦める必要がない</li>
+        </ul>
+      </div>
+      <div class="merit-box">
+        <h3>🔬 技術面</h3>
+        <ul>
+          <li><strong>ライフサイクルの自動化</strong>: ウォームストレージ期間の設定だけで移行が自動実行</li>
+          <li><strong>一貫した管理</strong>: バックアッププランの一元管理でアーカイブ設定が完結し、個別のスナップショット操作が不要</li>
+          <li><strong>迅速なリカバリ体制の維持</strong>: AWS RAM 共有と直接復元はそのまま利用でき、RTO 短縮に貢献</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <div class="caution-box" style="margin-top: 0;">
+      <h3>🚫 制限事項</h3>
+      <ul>
+        <li>アーカイブ階層へ移行した EBS バックアップは、<strong>別のボールトや別リージョンへコピー不可</strong> (Multi-party approval による復元アクセスバックアップボールトからのコピーも不可)。別アカウント・別リージョンにコピーを保持したい場合は、ウォームストレージにある間にコピーする必要がある</li>
+        <li>アーカイブ対象は<strong>月次以下の頻度</strong>で実行されるバックアップルールに限定 (EBS Snapshots Archive 共通の要件)</li>
+        <li>合計保持期間はウォームストレージ期間より <strong>90 日以上長く</strong>設定する必要がある</li>
+      </ul>
+    </div>
+    <div class="caution-box">
+      <h3>🤔 考慮すべき点</h3>
+      <ul>
+        <li>アーカイブ階層からの復元はウォームストレージからの復元より時間がかかるため、RTO 要件と照らして移行タイミングを設計する</li>
+        <li>CMK 暗号化のボールトでは、アーカイブ有効化前にキーポリシーの更新が必要</li>
+        <li>ボールトロックがコンプライアンスモードで固定されるため、保持期間の設計は慎重に行う</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h3>🏦 ユースケース 1: ランサムウェア対策と長期保持の両立</h3>
+      <p><span class="uc-label">シナリオ</span>金融機関が規制要件により EBS ボリュームのバックアップを 7 年間保持する必要があり、同時にランサムウェア攻撃からバックアップを保護したい。</p>
+      <div class="uc-flow">月次バックアップルール → 論理的エアギャップボールトへコピー<br>→ ウォームストレージ 90 日 → アーカイブ階層へ自動移行 → 合計保持期間 7 年</div>
+      <p><span class="uc-label">効果</span>不変かつ分離されたバックアップを低コストで 7 年間保持でき、規制要件とセキュリティ要件を同時に満たせる。</p>
+    </div>
+
+    <div class="usecase">
+      <h3>🏢 ユースケース 2: 組織全体のバックアップコスト最適化</h3>
+      <p><span class="uc-label">シナリオ</span>AWS Organizations 配下の多数のアカウントで論理的エアギャップボールトを運用しており、長期保持バックアップのストレージコストが増大している。</p>
+      <div class="uc-flow">AWS Organizations のバックアップポリシーで<br>月次ルールのコピーライフサイクルにアーカイブ設定を一括適用</div>
+      <p><span class="uc-label">効果</span>組織全体で一貫したアーカイブポリシーを適用し、セキュリティ水準を維持したままストレージコストを削減できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h3>🚨 ユースケース 3: 共有ボールトによる迅速な復旧体制</h3>
+      <p><span class="uc-label">シナリオ</span>本番アカウント侵害に備え、別の復旧用アカウントからバックアップを直接復元できる体制を構築したい。直近のバックアップは迅速に復元し、古いバックアップは低コストで保持したい。</p>
+      <div class="uc-flow">論理的エアギャップボールトを AWS RAM で復旧用アカウントに共有<br>直近 90 日分: ウォームストレージ (迅速な復元)<br>90 日以降: アーカイブ階層 (低コスト保持)</div>
+      <p><span class="uc-label">効果</span>インシデント時は直近のウォームストレージ上のバックアップから迅速に復旧しつつ、長期保持分のコストを最適化できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p style="font-size: 14px;">
+      論理的エアギャップボールト内のストレージおよびデータ転送の料金は、すべて<span class="highlight">「AWS Backup」の課金</span>として発生します。
+      EBS Snapshots Archive はウォームストレージ (標準階層) よりも低コストのストレージ階層であり、アクセス頻度の低い長期保持バックアップのコストを削減できます。
+      アーカイブ階層からの復元には取り出しに関する料金と時間が発生するため、詳細は
+      <a class="aws-link" href="https://aws.amazon.com/backup/pricing/" target="_blank" rel="noopener noreferrer">AWS Backup 料金ページ</a>を参照してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p style="font-size: 14px;">
+      論理的エアギャップボールトと Amazon EBS Snapshots Archive の<span class="highlight">両方が利用可能なすべての AWS リージョン</span>で利用できます。
+      なお、論理的エアギャップボールトは中国 (北京)、中国 (寧夏)、AWS GovCloud (US-East)、AWS GovCloud (US-West) では現在利用できません。
+      最新の対応状況は <a class="aws-link" href="https://docs.aws.amazon.com/aws-backup/latest/devguide/backup-feature-availability.html#features-by-region" target="_blank" rel="noopener noreferrer">リージョン別機能可用性</a>を確認してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="related-card">
+        <strong>🧊 Amazon EBS Snapshots Archive</strong>
+        アクセス頻度の低いスナップショット向けの低コストストレージ階層。今回のアップデートで論理的エアギャップボールトからの移行先として利用可能に。
+      </div>
+      <div class="related-card">
+        <strong>🔐 AWS Backup Vault Lock</strong>
+        バックアップの不変性を保証する機能。論理的エアギャップボールトではコンプライアンスモードが常に有効。
+      </div>
+      <div class="related-card">
+        <strong>🤝 AWS RAM</strong>
+        論理的エアギャップボールトをアカウント間で共有し、共有先アカウントからの直接復元を可能にするリソース共有サービス。
+      </div>
+      <div class="related-card">
+        <strong>📋 AWS Backup Audit Manager</strong>
+        特定リソースのバックアップが論理的エアギャップボールトに保存されていることを監査するコントロールを提供。
+      </div>
+    </div>
+  </div>
+
+  <div class="section summary-box">
+    <h2>📌 まとめ</h2>
+    <p style="margin: 0; font-size: 15px;">
+      論理的エアギャップボールトが EBS Snapshots Archive をサポートしたことで、
+      <strong style="color: var(--aws-white);">ランサムウェア対策としてのエアギャップ保護と、長期保持バックアップのコスト最適化を両立</strong>できるようになりました。
+      論理的エアギャップボールトで EBS バックアップを長期保持している場合は、月次以下のバックアップルールのライフサイクル設定を見直し、
+      アーカイブ階層の活用によるコスト削減を検討することを推奨します。
+      アーカイブ後は別ボールト・別リージョンへのコピーができなくなるため、
+      <strong style="color: var(--aws-smile-orange);">コピー戦略はウォームストレージ期間中に完了するよう設計</strong>してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>📚 参考リンク</h2>
+    <ul class="link-list">
+      <li>📰 <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-backup-lag-vault-ebs-archive/" target="_blank" rel="noopener noreferrer">公式発表 (What's New)</a></li>
+      <li>📖 <a class="aws-link" href="https://docs.aws.amazon.com/aws-backup/latest/devguide/logicallyairgappedvault.html" target="_blank" rel="noopener noreferrer">ドキュメント: Logically air-gapped vault</a></li>
+      <li>🌏 <a class="aws-link" href="https://docs.aws.amazon.com/aws-backup/latest/devguide/backup-feature-availability.html#features-by-region" target="_blank" rel="noopener noreferrer">ドキュメント: リージョン別機能可用性</a></li>
+      <li>💰 <a class="aws-link" href="https://aws.amazon.com/backup/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a></li>
+    </ul>
+  </div>
+
+  <footer>
+    <p>📎 出典: <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-backup-lag-vault-ebs-archive/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/11/aws-backup-lag-vault-ebs-archive/</a></p>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-12-aws-backup-lag-vault-ebs-archive.md) をもとに生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#FF9900',
+      primaryTextColor: '#232F3E',
+      primaryBorderColor: '#FF9900',
+      lineColor: '#FF9900',
+      secondaryColor: '#F5F5F5',
+      tertiaryColor: '#FAFAFA',
+      background: '#FFFFFF',
+      mainBkg: '#FFF3E0',
+      nodeBorder: '#FF9900',
+      clusterBkg: '#FFF8E1',
+      clusterBorder: '#FF9900',
+      edgeLabelBackground: '#FFFFFF',
+      textColor: '#232F3E'
+    }
+  });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
