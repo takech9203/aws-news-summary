@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Batch on EKS - Linux capabilities / seccomp / Pod レベルセキュリティ設定サポート</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    .date-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-left: 8px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.4;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 8px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    code.inline {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 760px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3 { color: #FF8A73; margin-top: 0; }
+    .after-box h3 { color: #6BC95B; margin-top: 0; }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: #6BC95B; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+
+    /* 機能カード */
+    .feature-card {
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .feature-card h3 { margin: 0 0 8px 0; font-size: 16px; }
+    .feature-card ul { margin: 0; padding-left: 20px; font-size: 14px; }
+    .feature-card li { margin: 4px 0; }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--aws-light-gray);
+    }
+
+    .new-badge {
+      display: inline-block;
+      background: var(--aws-green);
+      color: var(--aws-white);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 1px 8px;
+      border-radius: 10px;
+      margin-left: 4px;
+    }
+
+    .ok { color: #6BC95B; font-weight: 700; }
+    .na { color: rgba(213, 219, 219, 0.4); }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* ステップ */
+    .step {
+      display: flex;
+      gap: 14px;
+      margin: 16px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .step-content { flex: 1; min-width: 0; }
+    .step-content h3 { margin-top: 0; }
+    .step-content p { font-size: 14px; margin: 8px 0 0 0; }
+
+    /* メリット/デメリット */
+    .pros-cons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 760px) {
+      .pros-cons { grid-template-columns: 1fr; }
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .usecase h3 { margin-top: 0; color: var(--aws-smile-orange); font-size: 16px; }
+    .usecase p { font-size: 14px; margin: 8px 0; }
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 3px solid var(--aws-green);
+      padding: 8px 12px;
+      border-radius: 0 6px 6px 0;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    /* 関連サービス */
+    .related-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 760px) {
+      .related-grid { grid-template-columns: 1fr; }
+    }
+
+    .related-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 14px;
+    }
+
+    .related-card strong { color: var(--aws-white); display: block; margin-bottom: 4px; }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    /* まとめ */
+    .summary-box {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+      border: 1px solid rgba(255, 153, 0, 0.5);
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    ul.plain { padding-left: 20px; margin: 8px 0; }
+    ul.plain li { margin: 6px 0; font-size: 15px; }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { padding-left: 20px; margin: 8px 0; }
+    footer li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div>
+        <span class="service-badge">⚙️ AWS Batch (Amazon EKS)</span>
+        <span class="date-badge">📅 2026 年 11 月 13 日</span>
+      </div>
+      <h1>🔒 AWS Batch on EKS が Linux capabilities・seccomp・Pod レベルセキュリティ設定をサポート</h1>
+      <div class="subtitle">Kubernetes セキュリティコンテキスト設定の拡張により、Pod Security Standards の restricted プロファイル環境でもバッチジョブを実行可能に</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📝 概要</h2>
+      <p>AWS Batch が、Amazon EKS 上で実行するジョブ定義において、追加の <span class="highlight">Kubernetes セキュリティコンテキスト設定</span>をサポートしました。コンテナレベルで <code class="inline">Linux capabilities</code> と <code class="inline">seccomp プロファイル</code>を指定できるようになったほか、<code class="inline">fsGroup</code> などの Pod レベルのセキュリティ設定も定義できるようになりました。</p>
+      <p>これにより、<span class="highlight">Pod Security Standards の restricted プロファイル</span>を適用している EKS クラスターでも、AWS Batch ジョブを必要最小限の権限とシステムコールのみで実行できます。金融、医療、規制産業など、セキュリティ基準の厳しい環境でのバッチワークロード運用に有効なアップデートです。</p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ アップデート前の課題</h3>
+          <div class="check-item"><span class="cross-icon">✗</span><span>コンテナの securityContext で capabilities の add / drop や seccomp プロファイルを指定できなかった</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>restricted プロファイルが要求する「全 capabilities の drop」「seccomp の明示設定」を満たせず、restricted 適用クラスターでのジョブ実行が困難だった</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>fsGroup などの Pod レベル設定を定義できず、共有ボリュームのファイル所有権制御に制約があった</span></div>
+        </div>
+        <div class="after-box">
+          <h3>✅ アップデート後の改善</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span>コンテナレベルで capabilities の add / drop と seccomp プロファイル RuntimeDefault / Localhost / Unconfined を指定可能に</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>podProperties の securityContext で fsGroup、runAsUser、runAsGroup、runAsNonRoot、seccompProfile を定義可能に</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>restricted プロファイル適用クラスターでも最小権限の原則に沿ってジョブを実行可能に</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>コンソール、AWS CLI、AWS SDK、CloudFormation のいずれからも設定可能</span></div>
+        </div>
+      </div>
+      <p style="font-size: 14px;">💡 設定は <code class="inline">RegisterJobDefinition</code> API で行い、<span class="highlight">コンテナレベルの設定が Pod レベルのデフォルトを上書き</span>します。</p>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    User(["👤 ユーザー"]) -->|RegisterJobDefinition| JD["📋 ジョブ定義"]
+
+    subgraph JD_Detail["📋 ジョブ定義 eksProperties"]
+        direction LR
+        PodSC["🛡️ Pod レベル securityContext<br/>fsGroup / runAsUser<br/>runAsNonRoot / seccompProfile"]
+        ContSC["🔒 コンテナレベル securityContext<br/>capabilities add と drop<br/>seccompProfile / runAsUser"]
+        PodSC -.->|デフォルト値を提供| ContSC
+    end
+
+    JD --> JD_Detail
+    JD_Detail -->|SubmitJob| Batch["⚙️ AWS Batch<br/>スケジューラー"]
+
+    subgraph EKS["☸️ Amazon EKS クラスター"]
+        PSS{"🔍 Pod Security Standards<br/>restricted プロファイル検証"}
+        Pod["🚀 ジョブ Pod<br/>最小権限で実行"]
+        PSS -->|準拠| Pod
+    end
+
+    Batch -->|Pod 作成| PSS
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef security fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef cluster fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class User user
+    class JD,Batch,Pod process
+    class PodSC,ContSC security
+    class PSS decision
+    class EKS,JD_Detail cluster
+        </pre>
+      </div>
+      <p class="diagram-caption">ジョブ定義に Pod レベルとコンテナレベルのセキュリティコンテキストを設定し、restricted プロファイルを適用した EKS クラスターでも検証を通過して最小権限でジョブ Pod が実行される流れを示しています。コンテナレベルの設定は Pod レベルのデフォルトを上書きします。</p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="feature-card">
+        <h3>🧩 1. Linux capabilities の制御 (コンテナレベル)</h3>
+        <ul>
+          <li>コンテナの <code class="inline">securityContext.capabilities</code> で <code class="inline">add</code> と <code class="inline">drop</code> を指定可能</li>
+          <li>restricted プロファイルで要求される「ALL の drop」と「NET_BIND_SERVICE のみの add」といった構成を実現</li>
+          <li>不要なカーネル権限を排除し、コンテナエスケープなどのリスクを低減</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h3>🛡️ 2. seccomp プロファイルの指定 (コンテナレベル / Pod レベル)</h3>
+        <ul>
+          <li><code class="inline">seccompProfile.type</code> に <code class="inline">RuntimeDefault</code>、<code class="inline">Localhost</code>、<code class="inline">Unconfined</code> を指定可能</li>
+          <li><code class="inline">Localhost</code> タイプの場合は <code class="inline">localhostProfile</code> でノード上のプロファイルパスを指定</li>
+          <li>ジョブが発行できるシステムコールを必要最小限に制限</li>
+        </ul>
+      </div>
+      <div class="feature-card">
+        <h3>📦 3. Pod レベルのセキュリティ設定</h3>
+        <ul>
+          <li><code class="inline">podProperties.securityContext</code> で <code class="inline">fsGroup</code>、<code class="inline">runAsUser</code>、<code class="inline">runAsGroup</code>、<code class="inline">runAsNonRoot</code>、<code class="inline">seccompProfile</code> を定義可能</li>
+          <li><code class="inline">fsGroup</code> によりボリュームのファイル所有権とアクセス権を Pod 単位で制御</li>
+          <li>Pod レベルの設定はコンテナのデフォルトとして機能し、コンテナレベルの設定が優先される</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔬 技術仕様</h2>
+      <h3>サポートされるセキュリティコンテキスト設定</h3>
+      <table>
+        <thead>
+          <tr><th>設定項目</th><th>Pod レベル</th><th>コンテナレベル</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code class="inline">runAsUser</code></td><td class="ok">✓</td><td class="ok">✓ (既存サポート)</td></tr>
+          <tr><td><code class="inline">runAsGroup</code></td><td class="ok">✓</td><td class="ok">✓ (既存サポート)</td></tr>
+          <tr><td><code class="inline">runAsNonRoot</code></td><td class="ok">✓</td><td class="ok">✓ (既存サポート)</td></tr>
+          <tr><td><code class="inline">seccompProfile</code></td><td class="ok">✓<span class="new-badge">新規</span></td><td class="ok">✓<span class="new-badge">新規</span></td></tr>
+          <tr><td><code class="inline">capabilities</code> (add / drop)</td><td class="na">-</td><td class="ok">✓<span class="new-badge">新規</span></td></tr>
+          <tr><td><code class="inline">fsGroup</code></td><td class="ok">✓<span class="new-badge">新規</span></td><td class="na">-</td></tr>
+        </tbody>
+      </table>
+
+      <h3>API 変更履歴</h3>
+      <table>
+        <thead>
+          <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>2026/11/09</td>
+            <td><a href="https://awsapichanges.com/archive/changes/588ec7-batch.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Batch</a></td>
+            <td>3 updated api methods - RegisterJobDefinition、DescribeJobDefinitions、DescribeJobs に EKS セキュリティコンテキスト設定 (Pod レベルの fsGroup、runAsUser、runAsGroup、runAsNonRoot、seccompProfile、コンテナレベルの capabilities、seccompProfile) を追加</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>ジョブ定義の設定例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">restricted プロファイル準拠のジョブ定義</span>
+        </div>
+        <pre><code class="language-json">{
+  "jobDefinitionName": "restricted-eks-job",
+  "type": "container",
+  "eksProperties": {
+    "podProperties": {
+      "securityContext": {
+        "fsGroup": 2000,
+        "runAsNonRoot": true,
+        "seccompProfile": {
+          "type": "RuntimeDefault"
+        }
+      },
+      "containers": [
+        {
+          "image": "public.ecr.aws/amazonlinux/amazonlinux:2023",
+          "command": ["sleep", "60"],
+          "securityContext": {
+            "runAsUser": 1000,
+            "runAsGroup": 3000,
+            "runAsNonRoot": true,
+            "capabilities": {
+              "drop": ["ALL"]
+            },
+            "seccompProfile": {
+              "type": "RuntimeDefault"
+            }
+          }
+        }
+      ]
+    }
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+      <h3>前提条件</h3>
+      <ul class="plain">
+        <li>✓ AWS Batch on Amazon EKS のセットアップが完了していること (EKS クラスターと AWS Batch コンピューティング環境の接続)</li>
+        <li>✓ ジョブ定義を登録するための IAM 権限 (<code class="inline">batch:RegisterJobDefinition</code> など) があること</li>
+        <li>✓ <code class="inline">Localhost</code> タイプの seccomp プロファイルを使用する場合は、ノード上に該当プロファイルが配置されていること</li>
+      </ul>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>セキュリティコンテキストを含むジョブ定義の登録</h3>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ジョブ定義の登録</span></div>
+            <pre><code class="language-bash">aws batch register-job-definition \
+  --job-definition-name restricted-eks-job \
+  --type container \
+  --eks-properties file://eks-properties.json</code></pre>
+          </div>
+          <p><code class="inline">eks-properties.json</code> に Pod レベルとコンテナレベルの securityContext を含む EKS プロパティを定義し、ジョブ定義として登録します。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>ジョブの送信</h3>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ジョブの送信</span></div>
+            <pre><code class="language-bash">aws batch submit-job \
+  --job-name secure-batch-job \
+  --job-queue my-eks-job-queue \
+  --job-definition restricted-eks-job</code></pre>
+          </div>
+          <p>登録したジョブ定義を指定して EKS 向けジョブキューにジョブを送信します。AWS Batch がセキュリティコンテキストを適用した Pod を EKS クラスター上に作成します。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>設定内容の確認</h3>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ジョブ定義の確認</span></div>
+            <pre><code class="language-bash">aws batch describe-job-definitions \
+  --job-definition-name restricted-eks-job \
+  --status ACTIVE</code></pre>
+          </div>
+          <p>登録済みジョブ定義のセキュリティコンテキスト設定を確認します。<code class="inline">DescribeJobs</code> でも実行中ジョブに適用された設定を確認できます。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット / デメリット -->
+    <div class="section">
+      <h2>⚖️ メリットと制約事項</h2>
+      <div class="pros-cons">
+        <div>
+          <h3>💼 ビジネス面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス対応の強化</strong>: restricted プロファイルなど組織のセキュリティ基準を維持したままバッチ運用が可能</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: 例外設定やカスタムコントローラーが不要になり、ガバナンスの一貫性を確保</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>リスク低減</strong>: 最小権限の原則により侵害時の影響範囲を限定</span></div>
+          <h3>⚙️ 技術面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>きめ細かな権限制御</strong>: capabilities の add / drop でジョブごとに必要なカーネル権限のみ付与</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>システムコールの制限</strong>: seccomp により攻撃対象領域を縮小</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な設定階層</strong>: Pod レベルでデフォルトを定義し、必要なコンテナのみ個別に上書き</span></div>
+        </div>
+        <div>
+          <h3>⚠️ 制限事項</h3>
+          <div class="check-item"><span class="cross-icon">!</span><span>対象は AWS Batch on Amazon EKS のジョブ定義のみ。ECS / Fargate ベースの AWS Batch ジョブには適用されない</span></div>
+          <div class="check-item"><span class="cross-icon">!</span><span><code class="inline">capabilities</code> はコンテナレベルのみ、<code class="inline">fsGroup</code> は Pod レベルのみで設定可能</span></div>
+          <div class="check-item"><span class="cross-icon">!</span><span><code class="inline">Localhost</code> タイプの seccomp プロファイルは実行先ノードにプロファイルファイルが必要</span></div>
+          <h3>🤔 考慮すべき点</h3>
+          <div class="check-item"><span class="cross-icon">!</span><span>capabilities を過度に制限すると実行時エラーになる可能性があるため、必要な権限を事前に検証する</span></div>
+          <div class="check-item"><span class="cross-icon">!</span><span>既存ジョブ定義への設定追加は新しいリビジョンの登録と参照先の更新が必要</span></div>
+          <div class="check-item"><span class="cross-icon">!</span><span>コンテナレベルの設定が Pod レベルのデフォルトを上書きする優先順位を理解して設計する</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h3>1️⃣ restricted プロファイル適用クラスターでのバッチ実行</h3>
+        <p><strong>シナリオ</strong>: 全社セキュリティポリシーとして Pod Security Standards の restricted プロファイルを namespace に適用している EKS クラスターで、夜間のデータ処理バッチを AWS Batch で実行したい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+          <pre><code class="language-json">{
+  "securityContext": {
+    "runAsNonRoot": true,
+    "allowPrivilegeEscalation": false,
+    "capabilities": { "drop": ["ALL"] },
+    "seccompProfile": { "type": "RuntimeDefault" }
+  }
+}</code></pre>
+        </div>
+        <div class="effect">✅ <strong>効果</strong>: restricted プロファイルの検証を通過する Pod を AWS Batch が作成できるため、ポリシーの例外設定なしでバッチワークロードを運用できる。</div>
+      </div>
+
+      <div class="usecase">
+        <h3>2️⃣ 低番号ポートを使用するジョブへの最小権限付与</h3>
+        <p><strong>シナリオ</strong>: 1024 番未満のポートへのバインドが必要なネットワーク処理ジョブを、root 実行や特権コンテナを使わずに実行したい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+          <pre><code class="language-json">{
+  "securityContext": {
+    "runAsNonRoot": true,
+    "capabilities": {
+      "drop": ["ALL"],
+      "add": ["NET_BIND_SERVICE"]
+    }
+  }
+}</code></pre>
+        </div>
+        <div class="effect">✅ <strong>効果</strong>: すべての capabilities を削除した上で NET_BIND_SERVICE のみを追加することで、必要最小限の権限でジョブを実行でき、セキュリティリスクを最小化できる。</div>
+      </div>
+
+      <div class="usecase">
+        <h3>3️⃣ 共有ボリュームを使用するマルチコンテナジョブ</h3>
+        <p><strong>シナリオ</strong>: init コンテナでデータを準備し、メインコンテナで処理するジョブにおいて、非 root ユーザー間で共有ボリュームのファイルにアクセスしたい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+          <pre><code class="language-json">{
+  "podProperties": {
+    "securityContext": {
+      "fsGroup": 2000,
+      "runAsNonRoot": true
+    }
+  }
+}</code></pre>
+        </div>
+        <div class="effect">✅ <strong>効果</strong>: Pod レベルの fsGroup によりボリュームのグループ所有権が統一され、複数コンテナ間で権限エラーなくファイルを共有できる。</div>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金と利用可能リージョン</h2>
+      <div class="pros-cons">
+        <div class="related-card">
+          <strong>💵 料金</strong>
+          AWS Batch 自体に追加料金はありません。本機能にも追加料金は発生せず、バッチジョブの実行に使用する EKS クラスター (コントロールプレーン) と EC2 インスタンスなどのコンピューティングリソースに対してのみ料金が発生します。
+        </div>
+        <div class="related-card">
+          <strong>🌍 利用可能リージョン</strong>
+          AWS Batch が利用可能なすべての AWS リージョンでサポートされます。詳細は <a href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS リージョン別サービス一覧</a> を参照してください。
+        </div>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="related-grid">
+        <div class="related-card">
+          <strong>☸️ Amazon EKS</strong>
+          AWS Batch ジョブの実行基盤となるマネージド Kubernetes サービス。Pod Security Standards の適用主体。
+        </div>
+        <div class="related-card">
+          <strong>🛡️ Kubernetes Pod Security Standards</strong>
+          privileged / baseline / restricted の 3 段階で Pod のセキュリティ要件を定義する Kubernetes 標準。
+        </div>
+        <div class="related-card">
+          <strong>📜 AWS CloudFormation</strong>
+          <code class="inline">AWS::Batch::JobDefinition</code> リソースで今回のセキュリティコンテキスト設定を IaC として管理可能。
+        </div>
+        <div class="related-card">
+          <strong>🚢 AWS Batch on Amazon ECS / Fargate</strong>
+          EKS 以外の AWS Batch 実行環境。本アップデートの対象外。
+        </div>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>💡 まとめ</h2>
+      <div class="summary-box">
+        <p style="margin-top: 0;">AWS Batch on Amazon EKS が <span class="highlight">Linux capabilities</span>、<span class="highlight">seccomp プロファイル</span>、<span class="highlight">Pod レベルのセキュリティ設定</span>をサポートしたことで、Pod Security Standards の restricted プロファイルを適用した厳格なセキュリティ環境でもバッチワークロードを実行できるようになりました。</p>
+        <p style="margin-bottom: 0;">🚀 <strong>推奨アクション</strong>: EKS 上で AWS Batch を利用しているユーザーは、既存ジョブ定義に <code class="inline">capabilities.drop: ["ALL"]</code> と <code class="inline">seccompProfile: RuntimeDefault</code> を追加し、最小権限の原則に沿った構成への移行を検討することを推奨します。</p>
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-batch-eks-security-context/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/aws-batch-eks-security-context/</a></li>
+        <li><a href="https://docs.aws.amazon.com/batch/latest/userguide/job_definition_parameters.html#job-definition-parameters-eks-properties" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Batch User Guide - Amazon EKS ジョブ定義パラメータ</a></li>
+        <li><a href="https://awsapichanges.com/archive/changes/588ec7-batch.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更詳細 (awsapichanges.com)</a></li>
+        <li><a href="https://aws.amazon.com/batch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Batch 料金</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-11-13-aws-batch-eks-security-context.md) を基に生成されました。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

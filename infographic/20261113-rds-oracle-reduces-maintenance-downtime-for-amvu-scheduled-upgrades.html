@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon RDS for Oracle - AMVU とスケジュールメンテナンスのダウンタイム短縮</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  background: linear-gradient(135deg, var(--aws-dark-squid) 0%, #2d3e50 100%);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 24px;
+}
+
+.service-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.service-badge {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 14px;
+  border-radius: 20px;
+}
+
+.service-badge.sub {
+  background: transparent;
+  border: 1px solid var(--aws-orange);
+  color: var(--aws-orange);
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 12px 0;
+  line-height: 1.3;
+}
+
+.release-date {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+}
+
+.lead {
+  margin-top: 16px;
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: var(--aws-smile-orange);
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.ba-card {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-card.before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-card.after {
+  background: rgba(29, 129, 2, 0.1);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+
+.ba-card.before .ba-title { color: #FF6B4A; }
+.ba-card.after .ba-title { color: #4CAF50; }
+
+.ba-card ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.ba-card li { margin: 6px 0; }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15) 0%, rgba(255, 153, 0, 0.05) 100%);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.feature-card ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.feature-card li { margin: 4px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { font-size: 16px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase-card {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase-label {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+.usecase-card p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+
+.code-title {
+  color: var(--aws-light-gray);
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* リンク */
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.col-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.col-card h3 { margin-top: 0; }
+
+/* 関連サービス */
+.related-card {
+  background: rgba(0, 161, 201, 0.08);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.related-card strong { color: var(--aws-teal); }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+
+footer ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .before-after, .two-col { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+  body { padding: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="service-badges">
+      <span class="service-badge">Amazon RDS for Oracle</span>
+      <span class="service-badge sub">メンテナンス準備</span>
+      <span class="service-badge sub">AMVU</span>
+    </div>
+    <h1>🛠️ 自動マイナーバージョンアップグレードとスケジュールメンテナンスのダウンタイム短縮</h1>
+    <div class="release-date">📅 リリース日: 2026 年 11 月 13 日</div>
+    <p class="lead">
+      Amazon RDS for Oracle が、メンテナンスウィンドウの<span class="highlight">最大 30 分前にリソースを事前ステージング</span>することで、マイナーバージョンアップグレード (AMVU を含む) と OS 更新のダウンタイムを短縮。準備中も DB インスタンスは <code class="inline">available</code> のまま稼働し、<span class="highlight">追加設定・追加料金なし</span>で自動的に適用されます。
+    </p>
+  </div>
+
+  <!-- 数字で見るアップデート -->
+  <div class="section">
+    <h2>📊 数字で見るアップデート</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">最大 30 分前</div>
+        <div class="stat-label">メンテナンスウィンドウ前に<br>リソースを事前準備</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金 0 円</div>
+        <div class="stat-label">ステージングされた<br>リソースへの課金なし</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">設定変更 不要</div>
+        <div class="stat-label">AMVU 有効なら<br>自動的に恩恵を受けられる</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">4 つ</div>
+        <div class="stat-label">新しい RDS イベントで<br>準備状況を監視可能</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      マイナーバージョンアップグレードや OS 更新には新しいリソースのプロビジョニングが必要ですが、従来はメンテナンス開始後にセットアップが行われるため停止時間が長くなっていました。今回のアップデートで、準備作業がウィンドウ開始前に移動し、ウィンドウ中はアップグレード適用のみに短縮されます。
+    </p>
+    <div class="before-after">
+      <div class="ba-card before">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>リソースのセットアップがメンテナンス開始後に行われ、ダウンタイムが長かった</li>
+          <li>リソースプロビジョニングの時間がそのまま停止時間に含まれていた</li>
+          <li>ダウンタイム短縮には Oracle レプリカを利用した手動切り替えなど、追加の運用作業が必要だった</li>
+        </ul>
+      </div>
+      <div class="ba-card after">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>ウィンドウの最大 30 分前にリソースが事前ステージングされ、オフライン時間が短縮</li>
+          <li>AMVU 有効なインスタンスは追加設定なしで自動的にダウンタイム短縮の恩恵</li>
+          <li>準備の開始・完了・失敗・ロールバックを RDS イベントで把握でき、可観測性が向上</li>
+        </ul>
+      </div>
+    </div>
+    <p>
+      準備処理はユーザーの操作をブロックしません。ユーザーの変更が準備と競合した場合は<span class="highlight">ステージング済みリソースを破棄してユーザーの変更を優先</span>し、準備が完了しなかった場合も従来どおりウィンドウ内でメンテナンスが実行されます。Enterprise Edition と Standard Edition 2 の両方が対象です。
+    </p>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ 動作の変化 (アーキテクチャ図)</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Before["⏳ 従来の動作"]
+        direction LR
+        B1["🟢 稼働中"] --> B2["🔴 ウィンドウ開始<br/>リソースセットアップ<br/>+ アップグレード適用"] --> B3["🟢 稼働再開"]
+    end
+
+    subgraph After["⚡ 新しい動作"]
+        direction LR
+        A1["🟢 稼働中<br/>最大 30 分前に<br/>リソースを事前準備"] --> A2["🔴 ウィンドウ開始<br/>アップグレード適用のみ"] --> A3["🟢 稼働再開"]
+    end
+
+    Before ~~~ After
+
+    classDef running fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef downtime fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class B1,B3,A1,A3 running
+    class B2,A2 downtime
+    class Before,After layer
+      </pre>
+    </div>
+    <p class="diagram-note">
+      従来はメンテナンスウィンドウ開始後にリソースのセットアップが行われていましたが、新しい動作ではウィンドウの最大 30 分前に DB インスタンスを稼働させたまま準備が行われるため、オフライン時間が短縮されます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">🚀 1. メンテナンスリソースの事前ステージング</div>
+      <ul>
+        <li>メンテナンスウィンドウの最大 30 分前に、ダウンタイム不要の準備作業を実行</li>
+        <li>準備中もステータスは <code class="inline">available</code> のまま、接続と API リクエストを通常どおり受け付け</li>
+        <li>ステージングされたリソースへの課金は発生しない</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🎯 2. 対象となるメンテナンス</div>
+      <ul>
+        <li>マイナーバージョンアップグレード (AMVU によりスケジュールされたアップグレードを含む)</li>
+        <li><code class="inline">system-update</code> メンテナンスアクションを使用する OS 更新</li>
+        <li>いずれもメンテナンスウィンドウ内で適用される場合のみ準備が行われる</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🛡️ 3. ユーザー操作を優先する安全設計</div>
+      <ul>
+        <li>準備処理がユーザーの操作をブロック・遅延させることはない</li>
+        <li>操作が準備と競合した場合、ステージング済みリソースをロールバックしてユーザー操作を続行</li>
+        <li>準備が完了できなくても、メンテナンスはウィンドウ内で (準備なしで) 実行される</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🔔 4. メンテナンス準備イベントの追加</div>
+      <ul>
+        <li>準備の開始・完了・失敗・ロールバックを通知する 4 つの RDS イベントを追加</li>
+        <li>ソースタイプは DB インスタンス、カテゴリは <code class="inline">maintenance</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+    <h3>メンテナンス準備の動作</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>準備開始タイミング</td><td>メンテナンスウィンドウの最大 30 分前</td></tr>
+      <tr><td>準備中のインスタンス状態</td><td><code class="inline">available</code> (接続・API リクエストを通常どおり受け付け)</td></tr>
+      <tr><td>対象メンテナンス</td><td>マイナーバージョンアップグレード、OS 更新 (<code class="inline">system-update</code>)</td></tr>
+      <tr><td>対象外</td><td>リードレプリカ、メジャーバージョンアップグレード、即時適用の更新</td></tr>
+      <tr><td>準備失敗時の動作</td><td>準備なしでメンテナンスをウィンドウ内に実行</td></tr>
+      <tr><td>競合時の動作</td><td>ステージング済みリソースをロールバックし、ユーザー操作を優先</td></tr>
+      <tr><td>追加料金</td><td>なし (ステージングされたリソースへの課金なし)</td></tr>
+      <tr><td>対象エディション</td><td>Enterprise Edition、Standard Edition 2</td></tr>
+    </table>
+
+    <h3>メンテナンス準備イベント</h3>
+    <table>
+      <tr><th>イベント ID</th><th>内容</th></tr>
+      <tr><td><code class="inline">RDS-EVENT-0624</code></td><td>メンテナンスのためのリソース準備を開始した</td></tr>
+      <tr><td><code class="inline">RDS-EVENT-0625</code></td><td>メンテナンスのためのリソースをステージングした</td></tr>
+      <tr><td><code class="inline">RDS-EVENT-0626</code></td><td>リソースをステージングできなかった。準備なしでメンテナンスを適用する</td></tr>
+      <tr><td><code class="inline">RDS-EVENT-0627</code></td><td>DB インスタンスへの操作が準備と競合したため、ステージング済みリソースをロールバックした</td></tr>
+    </table>
+    <p style="font-size: 14px;">これらのイベントを受け取るには、<code class="inline">maintenance</code> カテゴリのイベント通知をサブスクライブします。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🔧 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>RDS for Oracle の DB インスタンス (Enterprise Edition または Standard Edition 2) を利用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>マイナーバージョンアップグレードまたは OS 更新をメンテナンスウィンドウ内で適用すること (即時適用は対象外)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>準備イベントを受け取る場合は、RDS イベント通知のサブスクリプションを設定すること</span></div>
+    <p style="font-size: 14px;">本機能は<span class="highlight">自動的に有効化</span>されるため、ユーザー側での有効化操作は不要です。以下は AMVU の有効化とイベント通知の設定例です。</p>
+
+    <h3>ステップ 1: 自動マイナーバージョンアップグレードの有効化</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AMVU の有効化</span></div>
+      <pre><code class="language-bash">aws rds modify-db-instance \
+  --db-instance-identifier my-oracle-instance \
+  --auto-minor-version-upgrade \
+  --apply-immediately</code></pre>
+    </div>
+    <p style="font-size: 14px;">AMVU が有効なインスタンスは、スケジュールされたアップグレード時に自動的にメンテナンス準備の恩恵を受けられます。</p>
+
+    <h3>ステップ 2: メンテナンスウィンドウの確認</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">メンテナンスウィンドウの確認</span></div>
+      <pre><code class="language-bash">aws rds describe-db-instances \
+  --db-instance-identifier my-oracle-instance \
+  --query "DBInstances[0].PreferredMaintenanceWindow"</code></pre>
+    </div>
+    <p style="font-size: 14px;">準備処理はこのウィンドウの最大 30 分前に開始されるため、ウィンドウ直前の変更操作を避ける計画に役立ちます。</p>
+
+    <h3>ステップ 3: メンテナンスイベント通知のサブスクライブ</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">イベントサブスクリプションの作成</span></div>
+      <pre><code class="language-bash">aws rds create-event-subscription \
+  --subscription-name oracle-maintenance-events \
+  --sns-topic-arn arn:aws:sns:ap-northeast-1:123456789012:rds-maintenance \
+  --source-type db-instance \
+  --event-categories maintenance</code></pre>
+    </div>
+    <p style="font-size: 14px;"><code class="inline">maintenance</code> カテゴリのサブスクリプションを作成し、準備の開始 (0624)・完了 (0625)・失敗 (0626)・ロールバック (0627) を SNS 経由で受け取れるようにします。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="two-col">
+      <div class="col-card">
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>サービス停止時間の短縮</strong>: オフライン時間が短縮され、アプリケーションの可用性が向上</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: 事前ステージングされるリソースに課金は発生しない</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の軽減</strong>: 設定変更は不要で、AMVU を有効にしているだけで自動適用</span></div>
+      </div>
+      <div class="col-card">
+        <h3>🔩 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>非ブロッキングな準備処理</strong>: 準備中も DB は通常どおり稼働し、ユーザー操作が優先</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>フェイルセーフな設計</strong>: 準備が失敗してもメンテナンス自体は従来どおり実行</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>可観測性の向上</strong>: 新しい RDS イベントで準備の進行状況を監視・自動化に組み込める</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>リードレプリカは準備の対象外</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>メジャーバージョンアップグレードは対象外</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>即時適用 (apply immediately) したアップグレード・更新は対象外 (ウィンドウ内で適用される場合のみ準備が行われる)</span></div>
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>ウィンドウ開始前の 30 分間に不要な変更を行うと、準備と競合してロールバックが発生し、短縮効果が得られない可能性がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>競合によるロールバックがウィンドウ中に発生した場合、準備なしの場合よりメンテナンスが長くかかることがある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>ダウンタイムは「短縮」されるものであり、ゼロダウンタイムになるわけではない</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase-card">
+      <div class="usecase-title">1️⃣ AMVU によるパッチ適用の停止時間最小化</div>
+      <p><strong>シナリオ</strong>: 基幹業務システムの RDS for Oracle で AMVU を有効にしており、セキュリティパッチを含むマイナーバージョンを自動適用しているが、適用時の停止時間を可能な限り短くしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws rds modify-db-instance \
+  --db-instance-identifier prod-oracle \
+  --auto-minor-version-upgrade</code></pre>
+      </div>
+      <p class="usecase-label">✨ 効果</p>
+      <p>AMVU によりスケジュールされたアップグレードが事前ステージングの対象となり、追加作業なしでメンテナンス時の停止時間が短縮される。</p>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">2️⃣ メンテナンス準備状況の監視と自動化</div>
+      <p><strong>シナリオ</strong>: 運用チームが準備状況を把握し、準備に失敗した場合 (RDS-EVENT-0626) は停止時間が長くなる可能性を事前に関係者へ通知したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws rds create-event-subscription \
+  --subscription-name oracle-prep-monitoring \
+  --sns-topic-arn arn:aws:sns:ap-northeast-1:123456789012:ops-alerts \
+  --source-type db-instance \
+  --source-ids prod-oracle \
+  --event-categories maintenance</code></pre>
+      </div>
+      <p class="usecase-label">✨ 効果</p>
+      <p>準備の開始・完了・失敗をリアルタイムで検知し、SNS から Slack や運用ツールへ連携することで、メンテナンス当日の影響予測と関係者への事前連絡が可能になる。</p>
+    </div>
+
+    <div class="usecase-card">
+      <div class="usecase-title">3️⃣ OS 更新のダウンタイム短縮</div>
+      <p><strong>シナリオ</strong>: <code class="inline">system-update</code> メンテナンスアクションが保留中の RDS for Oracle インスタンスについて、メンテナンスウィンドウ内での適用を計画している。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws rds describe-pending-maintenance-actions \
+  --resource-identifier arn:aws:rds:ap-northeast-1:123456789012:db:prod-oracle</code></pre>
+      </div>
+      <p class="usecase-label">✨ 効果</p>
+      <p>保留中の OS 更新をウィンドウ内で適用するよう計画すれば、事前ステージングによりオフライン時間が短縮される。即時適用では準備が行われない点に注意する。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="col-card">
+        <h3>💵 料金</h3>
+        <p style="font-size: 14px;"><span class="highlight">追加料金なし</span>で利用できます。準備のためにステージングされるリソースに対して課金は発生しません。</p>
+      </div>
+      <div class="col-card">
+        <h3>🌍 利用可能リージョン</h3>
+        <p style="font-size: 14px;">Amazon RDS for Oracle が提供されている<span class="highlight">すべての AWS 商用リージョン</span>および <span class="highlight">AWS GovCloud (US) リージョン</span>で利用可能です。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-card"><strong>Amazon RDS イベント通知</strong>: メンテナンス準備の開始・完了・失敗を <code class="inline">maintenance</code> カテゴリのイベントとして通知する</div>
+    <div class="related-card"><strong>Amazon SNS</strong>: RDS イベントの通知先として利用し、運用チームへのアラートや自動化のトリガーに活用できる</div>
+    <div class="related-card"><strong>Amazon RDS Blue/Green Deployments</strong>: メジャーバージョンアップグレードなど、本機能の対象外となる変更のダウンタイムを最小化する選択肢となる</div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      RDS for Oracle のマイナーバージョンアップグレードと OS 更新において、リソースの事前ステージングによりメンテナンス時のダウンタイムが短縮されました。<span class="highlight">ユーザー側の設定変更は不要で追加料金もかからない</span>ため、すべての RDS for Oracle 利用者が自動的に恩恵を受けられます。
+    </p>
+    <div class="check-item"><span class="check-icon">✓</span><span><code class="inline">maintenance</code> カテゴリのイベント通知をサブスクライブして準備状況を監視する</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>メンテナンスウィンドウ開始前 30 分間は DB インスタンスへの不要な変更を避ける</span></div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/11/rds-oracle-reduces-maintenance-downtime-for-amvu-scheduled-upgrades/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/11/rds-oracle-reduces-maintenance-downtime-for-amvu-scheduled-upgrades/</a></li>
+      <li>ドキュメント: Maintenance preparation in RDS for Oracle: <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/maintenance-preparation.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/maintenance-preparation.html</a></li>
+      <li>ドキュメント: Maintaining a DB instance: <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_UpgradeDBInstance.Maintenance.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_UpgradeDBInstance.Maintenance.html</a></li>
+      <li>ドキュメント: RDS event messages: <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_Events.Messages.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_Events.Messages.html</a></li>
+      <li>Amazon RDS for Oracle 製品ページ: <a href="https://aws.amazon.com/rds/oracle/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/rds/oracle/</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-13) を基に作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
