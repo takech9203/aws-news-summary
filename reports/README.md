@@ -5,6 +5,23 @@
 
 ## 2026 年
 
+- [2026-11-16 - Amazon WorkSpaces - AI エージェントのセットアップ・接続・ガバナンス強化](2026/2026-11-16-amazon-workspaces-AI-agents-connect-govern.md)
+- [2026-11-16 - Amazon ECR - イメージ削除のクロスリージョン / クロスアカウントレプリケーション](2026/2026-11-16-replication-deletes-amazon-ecr.md)
+- [2026-11-16 - Amazon VPC - Networking Flexible Cost Allocation](2026/2026-11-16-networking-flexible-cost-allocation.md)
+- [2026-11-16 - Amazon Connect Health - メディカルコーディング (パブリックプレビュー)](2026/2026-11-16-amazon-connect-health-medical-coding.md)
+- [2026-11-16 - AWS IAM Identity Center - VPC エンドポイントとネットワークアクセスコントロールのサポート](2026/2026-11-16-iam-identity-center-vpc-endpoints.md)
+- [2026-11-16 - AWS Backup - 論理的エアギャップボールトの Amazon RDS サポート](2026/2026-11-16-aws-backup-air-gapped-vault-rds.md)
+- [2026-11-16 - Amazon EBS - スナップショットへの追加 KMS キーの関連付け](2026/2026-11-16-ebs-snapshots-associate-kms-keys.md)
+- [2026-11-16 - AWS Marketplace Metering Service - 小数点以下の使用量レポートのサポート](2026/2026-11-16-aws-marketplace-metering-service-decimal-usage-quantities.md)
+- [2026-11-16 - Kiro - ツール入力を書き換えるフックと Enterprise 向けリアルタイムイベント](2026/2026-11-16-kiro-changelog-2026-11-16.md)
+- [2026-11-16 - Amazon SageMaker AI - リアルタイム推論エンドポイントの KV キャッシュアウェアルーティング](2026/2026-11-16-sagemaker-kv-cache-routing.md)
+- [2026-11-16 - Amazon Bedrock AgentCore - ランタイムインスタンスが 6 リージョンに拡大](2026/2026-11-16-agentcore-aws-regions.md)
+- [2026-11-16 - AWS Secrets Manager - Auth0、Okta、Palo Alto Networks のマネージド外部シークレット対応](2026/2026-11-16-secrets-manager-managed-external-secrets-auth0-okta-palo-alto.md)
+- [2026-11-16 - Amazon S3 Vectors - ベクトル検索と全文検索を組み合わせたハイブリッド検索のサポート](2026/2026-11-16-s3-vectors-hybrid-search.md)
+- [2026-11-16 - AWS IAM Identity Center - SAML リクエストでの ForceAuthn サポート](2026/2026-11-16-iam-identity-center-reauth.md)
+- [2026-11-16 - AWS KMS - AWS Resource Access Manager によるキー共有サポート](2026/2026-11-16-kms-key-sharing-resource-access-manager.md)
+- [2026-11-16 - Amazon Redshift - Apache Iceberg テーブル向けマルチステートメントトランザクション、競合解決、タイムトラベル](2026/2026-11-16-redshift-time-travel-multi-statement.md)
+- [2026-11-16 - AWS WAF - 高度なレートベースルールのリージョン拡大](2026/2026-11-16-waf-advanced-rate-rules-available.md)
 - [2026-11-13 - Amazon RDS for Oracle - 自動マイナーバージョンアップグレードとスケジュールされたメンテナンスのダウンタイム短縮](2026/2026-11-13-rds-oracle-reduces-maintenance-downtime-for-amvu-scheduled-upgrades.md)
 - [2026-11-13 - AWS Marketplace - みなし供給の返金に対する VAT クレジットノートのセルフサービス提出](2026/2026-11-13-aws-marketplace-vat-credit-notes.md)
 - [2026-11-13 - Amazon SageMaker Unified Studio - Designation ごとのレイアウトカスタマイズ](2026/2026-11-13-sagemaker-studio-layout-customization.md)
