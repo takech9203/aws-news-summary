@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Security Hub - Network Scanning による Amazon RDS DB インスタンスのスキャン対応</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-right: 8px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: 1fr 1fr !important; }
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid var(--aws-red);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid var(--aws-green);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF8A73; }
+.after-box h3 { color: #6ECC52; }
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.before-box li, .after-box li {
+  margin: 8px 0;
+  padding-left: 24px;
+  position: relative;
+  font-size: 14px;
+}
+
+.before-box li::before {
+  content: "✗";
+  position: absolute;
+  left: 0;
+  color: var(--aws-red);
+  font-weight: bold;
+}
+
+.after-box li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #6ECC52;
+  font-weight: bold;
+}
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px 12px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+.new-badge {
+  display: inline-block;
+  background: var(--aws-green);
+  color: var(--aws-white);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 6px;
+}
+
+/* チェックリスト */
+.check-item, .cross-item, .note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #6ECC52; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: var(--aws-red); font-size: 16px; flex-shrink: 0; }
+.note-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label { font-weight: 700; color: var(--aws-white); }
+
+.effect-box {
+  background: rgba(29, 129, 2, 0.12);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+ul.plain { padding-left: 20px; margin: 8px 0; }
+ul.plain li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { padding-left: 20px; margin: 8px 0; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS Security Hub</span>
+      <span class="service-badge">Amazon RDS</span>
+    </div>
+    <h1>🛡️ Security Hub Network Scanning が Amazon RDS DB インスタンスのスキャンに対応</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 16 日 | 🔍 インターネットからの実プローブで RDS の到達性を検証</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      AWS Security Hub の <span class="highlight">Network Scanning</span> が Amazon RDS DB インスタンスのスキャンに対応しました。アカウント内の既存および新規の RDS DB インスタンスを自動的に検出し、<span class="highlight">パブリックアクセスが有効なインスタンス</span>をインターネット側から実際にプローブします。到達可能なポートが見つかると、インスタンスとポートの詳細を含む検出結果 (Finding) を作成します。
+    </p>
+    <p>
+      設定からの推定にとどまらず、<span class="highlight">「実際に到達できるか」を検証</span>する点が特長です。検出結果は Security Hub Exposures によって他の検出結果やリソース設定と相関分析され、より広範なリスク評価に活用されます。Network Scanning 有効化済みの環境では、RDS スキャンが<span class="highlight">自動的に有効化</span>されるため追加設定は不要です。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">約 24 時間</div>
+        <div class="stat-label">有効化後、既存リソースの初回スキャン</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">約 12 時間</div>
+        <div class="stat-label">アクティブリソースの再スキャン間隔</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">Security Hub Essentials に含まれる</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">設定不要</div>
+        <div class="stat-label">有効化済み環境では自動で対象拡大</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>😰 Before: アップデート前の課題</h3>
+        <ul>
+          <li>Network Scanning の対象は EC2、Elastic IP、ロードバランサーなどに限られ、RDS のインターネット到達性を実スキャンで検証できなかった</li>
+          <li>設定からリスクを推定できても、実際の到達可否確認には手動テストや外部ツールが必要だった</li>
+          <li>データベースの意図しない公開は情報漏えいに直結するにもかかわらず、継続的かつ自動的な到達性検証の仕組みが不足していた</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>😊 After: アップデート後の改善</h3>
+        <ul>
+          <li>RDS DB インスタンスを自動検出し、パブリックアクセスが有効なインスタンスをインターネット側から実際にスキャンして到達性を検証</li>
+          <li>到達可能なポートごとに検出結果が作成され、Security Hub 上で確認・調査が可能に</li>
+          <li>Security Hub Exposures が他の検出結果やリソース設定と相関分析し、広範なリスク評価を実現</li>
+          <li>有効化済みユーザーには RDS スキャンが自動有効化され、追加設定なしで保護範囲が拡大</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Internet["🌐 インターネット"]
+        Scanner["🔍 Network Scanning<br/>AWS 所有 IP からプローブ"]
+    end
+
+    subgraph Account["☁️ AWS アカウント"]
+        subgraph VPC["🔒 VPC"]
+            RDS1[("🗄️ RDS DB インスタンス<br/>パブリックアクセス: 有効")]
+            RDS2[("🗄️ RDS DB インスタンス<br/>パブリックアクセス: 無効")]
+        end
+        subgraph Hub["🛡️ AWS Security Hub"]
+            Finding["📋 検出結果<br/>到達可能ポートの詳細"]
+            Exposures["⚠️ Security Hub Exposures<br/>相関分析とリスク評価"]
+        end
+    end
+
+    Scanner -->|"DNS 名を解決してスキャン"| RDS1
+    Scanner -.->|"スキャン対象外"| RDS2
+    Scanner -->|"到達可能ポートを検出"| Finding
+    Finding --> Exposures
+
+    classDef internet fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef vpc fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef hub fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef scanner fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef finding fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef exposure fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class Internet internet
+    class VPC vpc
+    class Account,Hub hub
+    class Scanner scanner
+    class RDS1,RDS2 database
+    class Finding finding
+    class Exposures exposure
+      </pre>
+    </div>
+    <p class="diagram-note">
+      Network Scanning は AWS 所有の IP アドレスからインターネット経由で RDS DB インスタンスの DNS 名を解決してプローブし、実際に到達可能なポートを検出して Security Hub に検出結果を作成します。パブリックアクセスが無効なインスタンスはスキャン対象外です。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🔎 1. RDS DB インスタンスの自動検出とスキャン</div>
+      <ul class="plain">
+        <li>アカウント内の既存および新規の RDS DB インスタンスを自動的に検出</li>
+        <li>パブリックアクセスが設定されているインスタンスのみをスキャン対象とする</li>
+        <li>DB インスタンスの DNS 名を解決してスキャンを実行</li>
+        <li>有効化後、既存リソースは約 24 時間以内にスキャン、新規リソースは作成通知の受信後すみやかにスキャン</li>
+        <li>アクティブなリソースは約 12 時間ごとに再スキャンされ、到達性の変化を検出</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 2. 到達可能ポートごとの検出結果の作成</div>
+      <ul class="plain">
+        <li>到達可能なポートごとに、インスタンスとポートの詳細を含む検出結果を OCSF 形式で作成</li>
+        <li>開いているポートがない場合は重要度 Informational の検出結果を作成し、スキャン済みであることを確認可能</li>
+        <li>エンドポイントのポート変更時は再スキャンして新旧の検出結果を更新、パブリックアクセス無効化時はすべての検出結果をクローズ</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔌 3. エンジン固有ポートのスキャン</div>
+      <p style="font-size: 14px; margin: 4px 0 8px 0;">DB インスタンスエンドポイントのポートに加え、エンジン固有の既知ポートもスキャンします。</p>
+      <table>
+        <tr><th>エンジン</th><th>スキャン対象の既知ポート</th></tr>
+        <tr><td>MySQL</td><td>11211, 33060</td></tr>
+        <tr><td>Amazon Aurora PostgreSQL</td><td>1433</td></tr>
+        <tr><td>Oracle</td><td>1158, 1522, 1535, 1830, 2057, 2484, 3306, 3872, 3873, 5433, 5500, 5533, 6141</td></tr>
+        <tr><td>SQL Server Enterprise / Standard</td><td>2383, 8443, 5000</td></tr>
+        <tr><td>SQL Server Developer / Express / Web</td><td>5000</td></tr>
+        <tr><td>上記以外のエンジン</td><td>エンドポイントポートのみ</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔗 4. Security Hub Exposures との連携</div>
+      <ul class="plain">
+        <li>Network Scanning の検出結果を他の検出結果やリソース設定と相関分析</li>
+        <li>単なるポート到達性の報告にとどまらず、より広範なリスク評価を実現</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>スキャンの仕組み</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>スキャン方式</td><td>AWS 所有の IP アドレスからのアクティブなネットワーク到達性テスト</td></tr>
+      <tr><td>スキャン対象</td><td>パブリックアクセスが有効な RDS DB インスタンス (DNS 名を解決してスキャン)</td></tr>
+      <tr><td>対応 IP バージョン</td><td>IPv4 のみ</td></tr>
+      <tr><td>検出結果の形式</td><td>OCSF 形式 (AWS OCSF Extension を使用)</td></tr>
+      <tr><td>初回スキャン</td><td>機能有効化後、既存リソースは約 24 時間以内</td></tr>
+      <tr><td>再スキャン間隔</td><td>約 12 時間ごと (対象となるコントロールプレーン変更時にも再スキャン)</td></tr>
+      <tr><td>スキャン除外方法</td><td>タグキー <code>SecurityHubNetworkScanExclusion</code> を DB インスタンスに付与</td></tr>
+      <tr><td>収集される証拠</td><td>TCP バナー、HTTP メタデータ、TLS 証明書情報、サービス検出結果</td></tr>
+    </table>
+
+    <h3>Network Scanning の対応リソースタイプ</h3>
+    <table>
+      <tr><th>クラウドプロバイダー</th><th>リソースタイプ</th></tr>
+      <tr><td>AWS</td><td>EC2 インスタンス (パブリック IP あり)</td></tr>
+      <tr><td>AWS</td><td>Elastic IP (EIP)</td></tr>
+      <tr><td>AWS</td><td>Network Load Balancer (NLB)</td></tr>
+      <tr><td>AWS</td><td>Application Load Balancer (ALB)</td></tr>
+      <tr><td>AWS</td><td>Classic Load Balancer (CLB)</td></tr>
+      <tr><td>AWS</td><td>Amazon RDS DB インスタンス<span class="new-badge">今回追加</span></td></tr>
+      <tr><td>Azure</td><td>パブリック IP アドレス</td></tr>
+      <tr><td>GCP</td><td>VM インスタンス (パブリック IP あり)</td></tr>
+      <tr><td>GCP</td><td>外部転送ルール</td></tr>
+    </table>
+
+    <h3>検出結果の例</h3>
+    <p style="font-size: 14px;">到達可能なポートが検出された場合、OCSF 検出結果の <code>port_scan_result_list</code> セクションにスキャン結果が含まれます。</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">OCSF 検出結果の port_scan_result_list</span>
+      </div>
+      <pre><code class="language-json">"port_scan_result_list": [
+    {
+      "port_info": {
+        "port": 3306,
+        "protocol_name": "tcp",
+        "protocol_num": 6
+      },
+      "status": "Open",
+      "status_id": 1,
+      "svc_name": "mysql"
+    }
+]</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Security Hub が有効化されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Network Scanning を有効化する権限 (個別アカウント、または組織の委任管理者による設定ポリシー) があること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>スキャン対象とする RDS DB インスタンスにパブリックアクセスが設定されていること (スキャン対象の条件)</span></div>
+
+    <h3>手順</h3>
+
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">Network Scanning の有効化</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash">aws securityhub enable-security-hub-feature-v2 --feature-name NETWORK_SCANNING</code></pre>
+        </div>
+        <p style="font-size: 14px;">コンソールの場合は、Security Hub コンソールの [General settings] から [Network Scanning] セクションで [Enable] を選択し、アクティブスキャンの承認を確認します。組織全体で有効化する場合は、設定ポリシーの作成または編集で Network Scanning を有効化します。<span class="highlight">すでに有効化済みの場合、RDS スキャンは自動的に有効化されるためこのステップは不要</span>です。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">RDS DB インスタンスのパブリックアクセス設定の確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash">aws rds describe-db-instances \
+  --query "DBInstances[?PubliclyAccessible==\`true\`].[DBInstanceIdentifier,Endpoint.Address,Endpoint.Port]" \
+  --output table</code></pre>
+        </div>
+        <p style="font-size: 14px;">アカウント内でパブリックアクセスが有効になっている RDS DB インスタンスの一覧を表示します。これらのインスタンスが Network Scanning のスキャン対象となります。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">検出結果の確認と対応</div>
+        <p style="font-size: 14px;">Security Hub コンソールで Network Scanning の検出結果を確認します。到達可能なポートが検出された RDS DB インスタンスについては、意図した公開かどうかを調査し、不要な場合はパブリックアクセスの無効化やセキュリティグループの見直しを行います。パブリックアクセスを無効化すると、そのインスタンスのすべての検出結果がクローズされます。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">スキャン除外設定 (必要な場合)</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash">aws rds add-tags-to-resource \
+  --resource-name arn:aws:rds:ap-northeast-1:123456789012:db:my-db-instance \
+  --tags Key=SecurityHubNetworkScanExclusion,Value=""</code></pre>
+        </div>
+        <p style="font-size: 14px;">タグキー <code>SecurityHubNetworkScanExclusion</code> を付与すると以降のスキャンが停止し、アクティブな検出結果がクローズされます。タグを削除すると再びスキャン対象になります。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>データ漏えいリスクの低減</strong>: 機密データを保持するデータベースの意図しないインターネット公開を早期に検出し、情報漏えいにつながるリスクを低減できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: Network Scanning は Security Hub Essentials に追加料金なしで含まれており、コストを増やさずにデータベースの露出監視を強化できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス対応の強化</strong>: データベースのインターネット到達性を継続的に検証する仕組みにより、セキュリティ監査やコンプライアンス要件への対応を支援</span></div>
+
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>実到達性に基づく検証</strong>: 設定からの推定ではなく、インターネットからの実際のプローブにより到達性を検証するため、誤検知が少なく実態に即した結果が得られる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>自動検出と継続的スキャン</strong>: 新規 RDS DB インスタンスを自動的に検出し、約 12 時間ごとに再スキャンするため、構成変更による露出の変化を継続的に監視できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の最小化</strong>: Network Scanning 有効化済みの環境では RDS スキャンが自動的に有効化され、追加の設定やエージェント導入が不要</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>リスクの相関分析</strong>: Security Hub Exposures が到達性の検出結果を他の検出結果と相関分析し、優先度付けされたリスク評価を提供</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>スキャン対象はパブリックアクセスが有効な RDS DB インスタンスのみ (プライベートなインスタンスはスキャンされない)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>IPv4 アドレスのみ対応 (IPv6 は現時点で未対応)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>一時的または短命なリソースは、終了前にスキャンされない場合がある</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>スキャン対象ポートはエンドポイントポートとエンジン固有の既知ポートに限られる</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="note-item"><span class="note-icon">⚠️</span><span>有効化により、TCP ポート接続試行、アプリケーション / プロトコル識別、サービスバナーや TLS 証明書メタデータの収集を含むアクティブスキャンを Security Hub に許可することになる</span></div>
+    <div class="note-item"><span class="note-icon">⚠️</span><span>設定ポリシーで有効化された場合、メンバーアカウント側で機能を無効化できない</span></div>
+    <div class="note-item"><span class="note-icon">⚠️</span><span>Network Scanning を無効化しても既存の検出結果は即座にクローズされず、通常のライフサイクルに従って期限切れになるまで表示される</span></div>
+    <div class="note-item"><span class="note-icon">⚠️</span><span>ポートが断続的に到達可能な場合、検出結果はスキャン時点の肯定的な証拠に基づいて作成される</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1️⃣ 意図しないパブリック公開データベースの検出</div>
+      <p><span class="label">シナリオ</span>: 開発チームが検証目的で RDS DB インスタンスのパブリックアクセスを有効化したまま放置しており、セキュリティチームが組織全体でこうしたインスタンスを把握できていない。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># 組織全体で Network Scanning を有効化する設定ポリシーを適用後、
+# 到達可能ポートが検出された RDS インスタンスの検出結果を Security Hub で確認
+aws securityhub enable-security-hub-feature-v2 --feature-name NETWORK_SCANNING</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: インターネットから実際に到達可能なデータベースポートが検出結果として可視化され、セキュリティチームは意図しない公開を特定してパブリックアクセスの無効化などの是正措置を迅速に実施できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2️⃣ 組織全体のアタックサーフェス管理</div>
+      <p><span class="label">シナリオ</span>: マルチアカウント環境を運用する企業が、EC2、ロードバランサーに加えてデータベースを含むインターネット露出リソースの全体像を一元的に把握したい。</p>
+      <p style="font-size: 14px;"><span class="label">実装例</span>:</p>
+      <ul class="plain" style="font-size: 14px;">
+        <li>1. 委任管理者アカウントで Security Hub の設定ポリシーを編集</li>
+        <li>2. Network Scanning 機能を組織のすべてのアカウントとリージョンで有効化</li>
+        <li>3. Security Hub Exposures で相関分析されたリスクを確認し、優先度順に対応</li>
+      </ul>
+      <div class="effect-box">✅ <strong>効果</strong>: EC2、EIP、ロードバランサー、RDS を含むインターネット到達可能リソースが統一されたビューで可視化され、組織全体のアタックサーフェスを継続的に管理できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3️⃣ 構成変更による露出の継続監視</div>
+      <p><span class="label">シナリオ</span>: 運用チームによるセキュリティグループやエンドポイントポートの変更により、これまで非公開だったデータベースが意図せずインターネットに露出することを防ぎたい。</p>
+      <p style="font-size: 14px;"><span class="label">実装例</span>:</p>
+      <ul class="plain" style="font-size: 14px;">
+        <li>1. Network Scanning を有効化 (約 12 時間ごとの再スキャンと変更時の再スキャンが自動実行)</li>
+        <li>2. EventBridge で Security Hub の検出結果をトリガーに通知を設定</li>
+        <li>3. 新たな到達可能ポートの検出時にセキュリティチームへ自動通知</li>
+      </ul>
+      <div class="effect-box">✅ <strong>効果</strong>: コントロールプレーンの変更やポート変更が発生しても再スキャンにより露出の変化が検出され、意図しない公開を早期に発見して対応できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p style="margin: 4px 0;">Network Scanning は <span class="highlight">Security Hub Essentials に追加料金なし</span>で含まれています。RDS DB インスタンスのスキャンについても追加コストは発生しません。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 利用可能リージョン</div>
+      <p style="margin: 4px 0;">Security Hub をサポートするすべての AWS 商用リージョンおよび AWS GovCloud (US) リージョンで利用可能です。リージョンの一覧は <a href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Regional Services List</a> を参照してください。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🗄️ Amazon RDS</div>
+      <p style="margin: 4px 0; font-size: 14px;">今回のスキャン対象となるマネージドリレーショナルデータベースサービス。パブリックアクセス設定がスキャン対象の条件となる</p>
+    </div>
+    <div class="card">
+      <div class="card-title">⚠️ Security Hub Exposures</div>
+      <p style="margin: 4px 0; font-size: 14px;">Network Scanning の検出結果を他の検出結果やリソース設定と相関分析し、広範なリスク評価を提供</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🏢 AWS Organizations</div>
+      <p style="margin: 4px 0; font-size: 14px;">設定ポリシーを通じて組織全体のアカウントとリージョンで Network Scanning を一括有効化</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📨 Amazon EventBridge</div>
+      <p style="margin: 4px 0; font-size: 14px;">Security Hub の検出結果をトリガーとした通知や自動修復ワークフローの構築に活用</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      AWS Security Hub の Network Scanning が RDS DB インスタンスに対応したことで、機密性の高いデータベースのインターネット露出を<span class="highlight">実際のプローブに基づいて継続的に検証</span>できるようになりました。Network Scanning を有効化済みの環境では自動的に RDS スキャンが有効化されるため、まずは Security Hub で RDS 関連の検出結果を確認し、意図しないパブリックアクセス設定がないかを点検することを推奨します。まだ Network Scanning を利用していない場合は、<span class="highlight">追加料金なし</span>で利用できるため、組織全体での有効化を検討する価値があります。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/security-hub-network-scanning-rds/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/security-hub-network-scanning-rds/</a></li>
+      <li><a href="https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-v2-network-scanning.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Security Hub User Guide - Network Scanning</a></li>
+      <li><a href="https://aws.amazon.com/security-hub/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Security Hub 製品ページ</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonRDS/latest/gettingstartedguide/security-public-private.html" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon RDS のパブリック / プライベートアクセス設定</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-16-security-hub-network-scanning-rds.md) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
