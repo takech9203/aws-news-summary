@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Clean Rooms - PySpark ジョブ結果の中間テーブルへの書き込みサポート</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.4;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--aws-light-gray);
+    }
+
+    .subtitle .date {
+      color: var(--aws-smile-orange);
+      font-weight: 600;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+
+    .card p { margin: 4px 0; font-size: 14px; }
+
+    /* Before / After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box .ba-title { color: #FF8A73; }
+    .after-box .ba-title { color: #6BCB4F; }
+
+    .ba-title {
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .ba-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: #6BCB4F; flex-shrink: 0; }
+    .cross-icon { color: #FF8A73; flex-shrink: 0; }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-note {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      vertical-align: top;
+    }
+
+    code.inline {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-squid-ink);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 110px;
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Status flow */
+    .status-flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+
+    .status-badge {
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-weight: 600;
+      font-family: 'Courier New', monospace;
+    }
+
+    .status-start { background: rgba(0, 161, 201, 0.2); border: 1px solid var(--aws-teal); color: var(--aws-teal); }
+    .status-success { background: rgba(29, 129, 2, 0.2); border: 1px solid #6BCB4F; color: #6BCB4F; }
+    .status-failed { background: rgba(209, 50, 18, 0.2); border: 1px solid #FF8A73; color: #FF8A73; }
+
+    /* Steps */
+    .step-item {
+      display: flex;
+      gap: 14px;
+      margin: 16px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    .step-content { flex: 1; }
+    .step-content .step-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 4px;
+    }
+    .step-content p { margin: 4px 0; font-size: 14px; }
+
+    /* Use case */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .usecase p { margin: 6px 0; font-size: 14px; }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 3px solid #6BCB4F;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+
+    /* Merits grid */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .icon-text {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      color: var(--aws-light-gray);
+      font-size: 14px;
+    }
+
+    .arrow { color: var(--aws-orange); flex-shrink: 0; }
+
+    /* Code block */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    ul.link-list { padding-left: 20px; margin: 8px 0; }
+    ul.link-list li { margin: 6px 0; font-size: 14px; }
+
+    .summary-box {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.1));
+      border: 1px solid rgba(255, 153, 0, 0.5);
+      border-radius: 8px;
+      padding: 20px;
+      font-size: 15px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer p { margin: 6px 0; }
+
+    @media (max-width: 700px) {
+      .before-after, .merit-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+      body { padding: 12px; }
+      .section { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <span class="service-badge">AWS Clean Rooms</span>
+      <h1>🤝 PySpark ジョブ結果の中間テーブルへの書き込みサポート</h1>
+      <div class="subtitle">
+        <span class="date">📅 リリース日: 2026 年 11 月 18 日</span> | 機能: PySpark ジョブ結果の中間テーブル (Intermediate Table) への書き込み
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        AWS Clean Rooms が、<span class="highlight">PySpark ジョブの実行結果を中間テーブルに書き込み、後続の分析で再利用</span>する機能をサポートしました。中間テーブルはコラボレーション内で分析結果をキャッシュするテーブルで、これまでの SQL クエリに加えて、<span class="highlight">PySpark 2.0 分析テンプレート</span>によるデータ投入が可能になりました。
+      </p>
+      <p>
+        AWS Clean Rooms は、企業とパートナーが互いの生データを開示・コピーすることなく、組み合わせたデータセットを共同で分析できるサービスです。計測ベンダーが PySpark で特徴量エンジニアリングを実行し、その出力を ML モデルのトレーニングに利用して高価値顧客を特定するといった、多段パイプラインを Clean Rooms 内で構築できます。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <div class="ba-title">❌ アップデート前の課題</div>
+          <div class="ba-item"><span class="cross-icon">✗</span><span>PySpark ジョブの結果を再利用できず、多段ワークフローでは同じ処理を毎回実行し直す必要があった</span></div>
+          <div class="ba-item"><span class="cross-icon">✗</span><span>複数ステップの処理を単一ジョブにまとめるか、コラボレーションの外部で組み立てる必要があった</span></div>
+          <div class="ba-item"><span class="cross-icon">✗</span><span>外部ストレージで中間結果を受け渡すと、プライバシー保護の枠外でデータを扱うリスクがあった</span></div>
+        </div>
+        <div class="after-box">
+          <div class="ba-title">✅ アップデート後の改善</div>
+          <div class="ba-item"><span class="check-icon">✓</span><span>PySpark ジョブの結果を中間テーブルとして保存し、後続の分析から参照可能に</span></div>
+          <div class="ba-item"><span class="check-icon">✓</span><span>特徴量エンジニアリング → モデルトレーニングの多段パイプラインをプライバシー保護の枠内で完結</span></div>
+          <div class="ba-item"><span class="check-icon">✓</span><span>再投入のたびに新バージョンが作成され、ベーステーブル更新時も安全にリフレッシュ可能</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Collab["🤝 AWS Clean Rooms コラボレーション"]
+        direction TB
+        subgraph Sources["🗄️ ベーステーブル"]
+            direction LR
+            T1[("📋 自社データ")]
+            T2[("📋 パートナーデータ")]
+            T1 ~~~ T2
+        end
+        subgraph Step1["⚙️ ステップ 1: 特徴量エンジニアリング"]
+            Template["📜 PySpark 2.0 分析テンプレート"]
+            Job["⚡ 保護されたジョブ"]
+        end
+        IT[("🗂️ 中間テーブル<br/>Parquet 形式でバージョン管理")]
+        subgraph Step2["⚙️ ステップ 2: 後続分析"]
+            ML["🤖 ML モデルトレーニング等"]
+        end
+    end
+    Result(["📊 分析結果"])
+
+    T1 --> Job
+    T2 --> Job
+    Template --> Job
+    Job -->|結果 DataFrame を書き込み| IT
+    IT -->|再利用| ML
+    ML --> Result
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Collab boundary
+    class Sources,Step1,Step2 layer
+    class Job,ML compute
+    class T1,T2,IT database
+    class Template input
+    class Result process
+        </pre>
+      </div>
+      <p class="diagram-note">
+        PySpark 分析テンプレートによる保護されたジョブの結果を中間テーブルに書き込み、後続の分析で再利用する流れを示しています。中間テーブルへの投入のたびに新しいバージョンが作成されます。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="card">
+        <div class="card-title">📝 1. PySpark ジョブ結果の中間テーブルへの書き込み</div>
+        <p>→ PySpark 2.0 (<code class="inline">PYSPARK_2_0</code>) 分析テンプレートを使用して中間テーブルにデータを投入できる</p>
+        <p>→ 投入処理は保護されたジョブ (Protected Job) として実行され、処理時間は数分から数時間</p>
+        <p>→ スクリプトは結果としてちょうど 1 つの DataFrame を返す必要がある</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔄 2. バージョン管理による安全なリフレッシュ</div>
+        <p>→ 投入 (Populate) 操作のたびに中間テーブルの新しいバージョンが作成される</p>
+        <p>→ リフレッシュ中も以前のバージョンが利用可能で、失敗しても既存データには影響しない</p>
+        <div class="status-flow">
+          <span class="status-badge status-start">POPULATE_STARTED</span>
+          <span class="flow-arrow">→</span>
+          <span class="status-badge status-success">POPULATE_SUCCESS</span>
+          <span style="color: var(--aws-light-gray);">または</span>
+          <span class="status-badge status-failed">POPULATE_FAILED</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">⏳ 3. 保持期間とライフサイクル管理</div>
+        <p>→ 保持期間 (デフォルト 30 日) を設定でき、アクティブなバージョンに適用される</p>
+        <p>→ バージョンの期限が切れると、保存されたデータは AWS Clean Rooms から削除される</p>
+        <p>→ 期限切れ後に再び使用するには、テーブルを再投入する必要がある</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">⚙️ 4. コンピューティング設定の柔軟性</div>
+        <p>→ ワーカータイプ (デフォルト: CR.1X) とワーカー数 (2 - 128、デフォルト: 16) を指定可能</p>
+        <p>→ カスタムの Spark プロパティによるランタイム設定も可能</p>
+        <p>→ 複数のクエリコンピューティング支払者がいる場合、投入操作のコスト負担者を選択できる</p>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <h3>PySpark 分析テンプレートによる投入の要件</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>分析テンプレート</td><td>PySpark 2.0 (<code class="inline">PYSPARK_2_0</code>) のみ対応</td></tr>
+        <tr><td>結果の形式</td><td>スクリプトはちょうど 1 つの結果 DataFrame を返す必要がある</td></tr>
+        <tr><td>出力フォーマット</td><td>Parquet のみ (CSV は非対応)</td></tr>
+        <tr><td>列数</td><td>最小 1 列、最大 100 列</td></tr>
+        <tr><td>列名</td><td>投入時に小文字へ変換される。変換後に重複する列名があると投入は失敗する</td></tr>
+        <tr><td>実行形態</td><td>保護されたジョブとして実行 (数分から数時間)</td></tr>
+        <tr><td>保持期間</td><td>デフォルト 30 日。期限切れ後はデータが削除され、再投入が必要</td></tr>
+        <tr><td>テーブル名</td><td>コラボレーション内の全テーブルで一意。最大 100 文字、SQL 予約語は不可</td></tr>
+        <tr><td>暗号化</td><td>カスタム KMS キーによる暗号化をオプションで指定可能</td></tr>
+      </table>
+
+      <h3>考慮事項</h3>
+      <div class="icon-text"><span class="arrow">→</span><span><strong>アクセスバジェット</strong>: 中間テーブルの投入は、参照されるすべてのベーステーブル (推移的な依存関係を含む) のアクセスバジェットを消費する</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span><strong>クォータ</strong>: 中間テーブルを投入する SQL および PySpark 分析は、アカウントのクォータにカウントされる</span></div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="icon-text"><span class="check-icon">✓</span><span>AWS Clean Rooms コラボレーションが作成済みであること</span></div>
+      <div class="icon-text"><span class="check-icon">✓</span><span>PySpark 2.0 (<code class="inline">PYSPARK_2_0</code>) 分析テンプレートが用意されていること</span></div>
+      <div class="icon-text"><span class="check-icon">✓</span><span>分析テンプレートのスクリプトがちょうど 1 つの結果 DataFrame を返すこと</span></div>
+
+      <div class="flow-diagram">
+        <div class="flow-step">🗂️ 中間テーブル<br/>の作成</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📜 データセット<br/>の定義</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">⚡ 中間テーブル<br/>の投入</div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <div class="step-title">中間テーブルの作成</div>
+          <p>コンソールで対象のコラボレーションを開き、[Tables] タブから [Add] → [Create intermediate table] を選択。テーブル名 (最大 100 文字)、説明 (任意)、保持期間 (デフォルト 30 日) を入力します。この時点では <code class="inline">CREATED</code> ステータスで、実データは含まれません。</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <div class="step-title">データセットの定義</div>
+          <p>[Dataset] で [Analysis template] を選択し、PySpark 2.0 分析テンプレートを選択 (エントリポイントファイル、SHA-256 ハッシュ、ロール ARN、ライブラリが表示される)。必要に応じて [Encryption] でカスタム KMS キーの ARN を指定します。SQL クエリで定義することも可能です。</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <div class="step-title">中間テーブルの投入</div>
+          <p>作成時に [Populate the intermediate table after creation] を選択するか、作成後に [Populate] を選択。クエリコンピューティング支払者、ワーカータイプ (デフォルト: CR.1X)、ワーカー数 (2 - 128、デフォルト: 16)、Spark プロパティ (任意) を設定して投入を開始します。進捗は [Analysis] タブで確認できます。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <div class="merit-grid">
+        <div>
+          <h3 style="margin-top: 0;">💼 ビジネス面</h3>
+          <div class="icon-text"><span class="check-icon">✓</span><span><strong>多段分析ワークフローの実現</strong>: 特徴量エンジニアリングからモデルトレーニングまで、複数ステップのパイプラインをコラボレーション内で完結</span></div>
+          <div class="icon-text"><span class="check-icon">✓</span><span><strong>プライバシー保護の維持</strong>: 中間結果を外部に持ち出すことなく、Clean Rooms のデータ保護の枠内で再利用</span></div>
+          <div class="icon-text"><span class="check-icon">✓</span><span><strong>広告・マーケティング分析の高度化</strong>: 高価値顧客の特定、オーディエンスターゲティング、キャンペーン入札最適化を支援</span></div>
+        </div>
+        <div>
+          <h3 style="margin-top: 0;">🔧 技術面</h3>
+          <div class="icon-text"><span class="check-icon">✓</span><span><strong>計算コストの削減</strong>: 高コストな前処理の結果をキャッシュし、後続の分析で再実行せずに参照できる</span></div>
+          <div class="icon-text"><span class="check-icon">✓</span><span><strong>安全なデータ更新</strong>: バージョン管理により、リフレッシュ失敗時も既存データに影響がない</span></div>
+          <div class="icon-text"><span class="check-icon">✓</span><span><strong>柔軟なリソース設定</strong>: ワーカータイプ・ワーカー数・Spark プロパティを投入ジョブごとに調整できる</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <h3 style="margin-top: 0;">制限事項</h3>
+      <div class="icon-text"><span class="cross-icon">✗</span><span>PySpark による投入は PySpark 2.0 (<code class="inline">PYSPARK_2_0</code>) 分析テンプレートのみ対応</span></div>
+      <div class="icon-text"><span class="cross-icon">✗</span><span>出力は Parquet のみで、CSV は非対応</span></div>
+      <div class="icon-text"><span class="cross-icon">✗</span><span>出力列数は最大 100 列。列名は小文字に変換され、変換後に重複すると投入が失敗する</span></div>
+      <div class="icon-text"><span class="cross-icon">✗</span><span>中間テーブルのデータは保持期間 (デフォルト 30 日) を過ぎると削除され、再投入が必要</span></div>
+
+      <h3>考慮すべき点</h3>
+      <div class="icon-text"><span class="arrow">→</span><span>投入操作は参照するすべてのベーステーブル (推移的依存を含む) のアクセスバジェットを消費するため、予算設計に注意が必要</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span>投入は保護されたジョブとして実行され、数分から数時間かかる場合があるため、パイプラインのスケジュール設計を考慮する</span></div>
+      <div class="icon-text"><span class="arrow">→</span><span>投入分析はアカウントのクォータにカウントされる</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">🤖 ユースケース 1: 特徴量エンジニアリングと ML トレーニングの分離</div>
+        <p><strong>シナリオ</strong>: 計測ベンダーが広告主とのコラボレーションで、PySpark による特徴量エンジニアリングの結果を使って高価値顧客を特定する ML モデルをトレーニングしたい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+          <pre><code class="language-text">1. PySpark 2.0 分析テンプレートで特徴量生成スクリプトを登録
+2. 中間テーブルを作成し、テンプレートを指定して投入
+3. 後続の分析で中間テーブルを参照して ML モデルをトレーニング</code></pre>
+        </div>
+        <p class="effect">✨ <strong>効果</strong>: 特徴量生成を毎回再実行せずにモデルトレーニングを反復でき、計算コストと実行時間を削減できる。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🔄 ユースケース 2: ベーステーブル更新に合わせた定期リフレッシュ</div>
+        <p><strong>シナリオ</strong>: パートナーのベーステーブルが日次で更新されるため、前処理済みデータも定期的に最新化したい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+          <pre><code class="language-text">1. 中間テーブルに前処理用の PySpark 分析テンプレートを関連付け
+2. ベーステーブル更新後に Populate 操作を実行して新バージョンを作成
+3. リフレッシュ中は既存バージョンで分析を継続</code></pre>
+        </div>
+        <p class="effect">✨ <strong>効果</strong>: リフレッシュ失敗時も既存データに影響せず、安全に中間データを最新化できる。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🧩 ユースケース 3: 複雑な多段パイプラインの段階的構築</div>
+        <p><strong>シナリオ</strong>: データクレンジング、結合、集計など複数の処理ステップからなる分析を、ステップごとに検証しながら構築したい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+          <pre><code class="language-text">1. 各処理ステップを個別の PySpark 分析テンプレートとして定義
+2. ステップごとに中間テーブルへ結果を書き込み
+3. 各中間テーブルの内容を次ステップの入力として参照</code></pre>
+        </div>
+        <p class="effect">✨ <strong>効果</strong>: 巨大な単一ジョブを分割でき、ステップ単位でのデバッグ・再実行が容易になる。</p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>
+        中間テーブルの投入操作は保護されたクエリまたは保護されたジョブとして実行され、AWS Clean Rooms の標準的なコンピューティング料金 (<span class="highlight">CRPU 時間ベース</span>) が適用されます。ワーカータイプとワーカー数により消費する CRPU が変動します。コラボレーションに複数のクエリコンピューティング支払者がいる場合は、投入操作ごとに支払者を選択できます。
+      </p>
+      <p>詳細は <a href="https://aws.amazon.com/clean-rooms/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Clean Rooms 料金ページ</a> を参照してください。</p>
+    </div>
+
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>
+        AWS Clean Rooms が利用可能なリージョンで使用できます。最新のリージョン情報は <a href="https://docs.aws.amazon.com/general/latest/gr/clean-rooms.html#clean-rooms_region" target="_blank" rel="noopener noreferrer" class="aws-link">AWS リージョン別サービス表</a> を参照してください。
+      </p>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <div class="card-title">📜 AWS Clean Rooms 分析テンプレート</div>
+        <p>PySpark 2.0 分析テンプレートが中間テーブルへの投入手段として利用される</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🤖 AWS Clean Rooms ML</div>
+        <p>中間テーブルで前処理したデータを活用した ML ワークフローとの組み合わせが可能</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🔑 AWS KMS</div>
+        <p>中間テーブルの暗号化にカスタム KMS キーを指定可能</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <div class="summary-box">
+        AWS Clean Rooms の中間テーブルが <strong>PySpark ジョブの結果書き込み</strong>に対応し、特徴量エンジニアリングから ML トレーニングまでの<strong>多段分析ワークフローをプライバシー保護の枠内で構築</strong>できるようになりました。パートナーとのデータコラボレーションで複雑な PySpark 処理を利用している場合は、中間テーブルによる結果の再利用で<strong>コスト削減とパイプラインの簡素化</strong>を検討することを推奨します。
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul class="link-list">
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-clean-rooms-pyspark-intermediate-table" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): AWS Clean Rooms - PySpark 中間テーブル</a></li>
+        <li><a href="https://docs.aws.amazon.com/clean-rooms/latest/userguide/create-intermediate-table.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: 中間テーブルの作成</a></li>
+        <li><a href="https://docs.aws.amazon.com/clean-rooms/latest/userguide/populate-intermediate-table.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: 中間テーブルの投入</a></li>
+        <li><a href="https://aws.amazon.com/clean-rooms/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Clean Rooms 製品ページ</a></li>
+        <li><a href="https://aws.amazon.com/clean-rooms/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-11-18) をもとに作成されました。</p>
+    </footer>
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

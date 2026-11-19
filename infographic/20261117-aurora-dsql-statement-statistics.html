@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Aurora DSQL - Database Insights での SQL ステートメント統計</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.card p { margin: 4px 0; font-size: 14px; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+
+.ba-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.cross-icon { color: var(--aws-red); font-size: 15px; flex-shrink: 0; }
+.check-icon { color: #4CAF50; font-size: 15px; flex-shrink: 0; }
+
+/* 統計カード */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.3;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+td {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+
+td code, p code, li code {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  word-break: break-all;
+}
+
+.table-wrap { overflow-x: auto; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-content { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 6px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase .label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* メリット・デメリット */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+
+.merit-box {
+  background: rgba(29, 129, 2, 0.1);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.caution-box {
+  background: rgba(209, 50, 18, 0.08);
+  border: 1px solid rgba(209, 50, 18, 0.45);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.merit-box h3, .caution-box h3 { margin-top: 0; font-size: 16px; }
+.merit-box h3 { color: #4CAF50; }
+.caution-box h3 { color: #FF6B4A; }
+
+.merit-box ul, .caution-box ul {
+  margin: 8px 0 0 0;
+  padding-left: 18px;
+  font-size: 13.5px;
+}
+
+.merit-box li, .caution-box li { margin: 6px 0; }
+
+ul.plain { padding-left: 20px; margin: 8px 0; }
+ul.plain li { margin: 6px 0; font-size: 14.5px; }
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(0, 161, 201, 0.1));
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 8px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { padding-left: 18px; margin: 8px 0; }
+footer li { margin: 4px 0; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="service-badge">Amazon Aurora DSQL</div>
+    <h1>📊 Database Insights での SQL ステートメント統計</h1>
+    <div class="subtitle">
+      <span class="date">リリース日: 2026 年 11 月 17 日</span> | 機能: SQL ステートメント統計 (Statement Statistics)
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon Aurora DSQL が、クラスターで実行される各 SQL ステートメントの統計を記録し、Amazon CloudWatch の <span class="highlight">OpenTelemetry (OTel) メトリクス</span>として発行する機能を提供開始。
+      <span class="highlight">CloudWatch Database Insights</span> で各ステートメントの実行回数、実行時間、スキャン / 返却 / 変更した行数、使用した DPU (Distributed Processing Unit) を可視化できます。
+    </p>
+    <p>
+      ステートメント統計は<span class="highlight">サンプリングなしの完全計測</span>で、成功したすべてのステートメントを記録。最も時間がかかる / 頻繁に実行される / コストがかかるステートメントを正確に特定できます。追加の Aurora DSQL 料金は不要です。
+    </p>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">100%</div>
+        <div class="stat-label">サンプリングなしで成功した全ステートメントを計測</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">10 種類</div>
+        <div class="stat-label">発行される OTel メトリクス (時間・行数・DPU など)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">Aurora DSQL 側の料金は不要 (CloudWatch 標準料金のみ)</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ アップデート前の課題</div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>クラスターレベルのメトリクスのみで、どの SQL が時間や DPU を消費しているか特定できない</span></div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>スロークエリや高コストクエリの調査にアプリケーション側での計測実装が必要</span></div>
+        <div class="ba-item"><span class="cross-icon">✗</span><span>インデックス追加の判断材料となるスキャン行数の情報が得られない</span></div>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>実行回数・実行時間・行数・DPU 使用量をステートメント単位で把握</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>Database Insights の Top SQL でコードを書かずに問題のあるステートメントを特定</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>PromQL によるプログラマティックな分析と既存モニタリングツールとの統合</span></div>
+        <div class="ba-item"><span class="check-icon">✓</span><span>IAM アイデンティティやアプリケーション名のラベルで接続元ごとにクエリを切り分け</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    App(["👤 アプリケーション"]) -->|SQL 実行| DSQL
+
+    subgraph Cluster["🗄️ Aurora DSQL クラスター"]
+        direction LR
+        DSQL["⚙️ クエリ処理<br/>ストレージレイヤー"]
+        Stats["📊 ステートメント統計<br/>STATEMENT_STATISTICS"]
+        DSQL ~~~ Stats
+    end
+
+    DSQL --> Stats
+    Stats -->|OTel メトリクス| CW["☁️ CloudWatch メトリクス"]
+    Stats -->|正規化 SQL テキスト| Logs["📝 CloudWatch Logs<br/>normalized-sql-text"]
+
+    subgraph Access["🔍 分析インターフェース"]
+        direction LR
+        DI["📈 Database Insights<br/>Top SQL ビュー"]
+        PQ["🔣 PromQL<br/>Query Studio"]
+        LA["🔎 Log Analytics"]
+        DI ~~~ PQ ~~~ LA
+    end
+
+    CW --> DI
+    CW --> PQ
+    Logs --> DI
+    Logs --> LA
+
+    classDef cluster fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Cluster cluster
+    class Access layer
+    class DSQL compute
+    class Stats,CW,Logs internal
+    class DI,PQ,LA process
+    class App user
+      </pre>
+    </div>
+    <p class="diagram-note">
+      Aurora DSQL がステートメントごとの統計を OTel メトリクスとして CloudWatch に発行し、正規化 SQL テキストを CloudWatch Logs に書き込みます。収集されたデータは Database Insights、PromQL、Log Analytics の 3 つの方法で分析できます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">1️⃣ 全ステートメントの統計記録</div>
+      <p>成功したすべての <code>SELECT</code>、<code>INSERT</code>、<code>UPDATE</code>、<code>DELETE</code> をサンプリングなしで計測。<code>BEGIN</code>、<code>COMMIT</code>、<code>SET</code> などのユーティリティステートメントや DDL はカウント対象外。アプリケーションが直接送信するトップレベルのステートメントのみをカウントし、コミット時にトランザクションが失敗した場合も、実行されたステートメントはカウントされます。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">2️⃣ 正規化 SQL テキストとクエリ ID</div>
+      <p>SQL コメントを除去し、リテラル値を <code>$0</code> などのプレースホルダーに置換して正規化。リテラル値だけが異なるステートメントは同じ正規化テキストとクエリ ID を共有します。正規化 SQL テキスト (最大 32 KiB) は CloudWatch Logs の <code>/aws/dsql/normalized-sql-text</code> ロググループに書き込まれます。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">3️⃣ CloudWatch Database Insights での可視化</div>
+      <p>Fleet Health ビューから Aurora DSQL クラスターを選択し、Top SQL でステートメントごとの統計を確認。Calls/s、Rows/s、平均実行時間、呼び出しあたりの DPU、コンピュート時間とストレージ時間、スキャン行数と返却行数のチャートを表示し、コードを書かずに問題のあるステートメントを特定できます。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">4️⃣ PromQL によるプログラマティックなクエリ</div>
+      <p>CloudWatch Query Studio で PromQL を使用してメトリクスを直接分析。<code>sum_over_time</code> と <code>sum by</code> を組み合わせた集計が基本パターンで、モニタリングツールとの統合やランキング分析に活用できます。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📊 発行されるメトリクス</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>メトリクス</th><th>単位</th><th>説明</th></tr>
+        <tr><td><code>aws.dsql.query.calls</code></td><td>Count</td><td>ステートメントの実行呼び出し回数</td></tr>
+        <tr><td><code>aws.dsql.query.time</code></td><td>Seconds</td><td>プランニングと実行の合計時間</td></tr>
+        <tr><td><code>aws.dsql.query.rows</code></td><td>Count</td><td>返却または変更した行数</td></tr>
+        <tr><td><code>aws.dsql.query.compute_dpu</code></td><td>DPU</td><td>フィルタリング、ソート、結合などに使用したコンピュート DPU</td></tr>
+        <tr><td><code>aws.dsql.query.read_dpu</code></td><td>DPU</td><td>ストレージからのデータ読み取りに使用した読み取り DPU</td></tr>
+        <tr><td><code>aws.dsql.query.write_dpu</code></td><td>DPU</td><td>セカンダリインデックスを含む書き込みに使用した書き込み DPU</td></tr>
+        <tr><td><code>aws.dsql.query.multi_region_write_dpu</code></td><td>DPU</td><td>マルチリージョンクラスターのピアリージョンで使用した書き込み DPU</td></tr>
+        <tr><td><code>aws.dsql.query.compute.time</code></td><td>Seconds</td><td>クエリプロセッサでの処理時間 (ストレージリクエスト時間を除く)</td></tr>
+        <tr><td><code>aws.dsql.query.storage.time</code></td><td>Seconds</td><td>読み取り操作中にストレージサーバーで費やした時間</td></tr>
+        <tr><td><code>aws.dsql.query.scanned_rows</code></td><td>Count</td><td>ストレージスキャンが訪問した推定行数</td></tr>
+      </table>
+    </div>
+
+    <h3>🏷️ メトリクスのラベル</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>ラベル</th><th>説明</th></tr>
+        <tr><td><code>db.query.id</code></td><td>正規化 SQL テキストのフィンガープリント。ステートメント単位のグループ化に使用</td></tr>
+        <tr><td><code>aws.dsql.session.role.arn</code></td><td>接続が認証に使用した IAM アイデンティティの ARN</td></tr>
+        <tr><td><code>application.name</code></td><td>接続パラメータで設定したアプリケーション名 (設定時のみ付与)</td></tr>
+        <tr><td><code>@resource.aws.dsql.cluster_id</code></td><td>クラスター識別子。クラスター単位のフィルタリングに使用</td></tr>
+      </table>
+    </div>
+
+    <h3>📜 API 変更履歴</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr><td>2026/11/16</td><td><a href="https://awsapichanges.com/archive/changes/f1785c-dsql.html" target="_blank" rel="noopener noreferrer" class="aws-link">dsql</a></td><td>3 updated api methods - <code>CreateCluster</code>、<code>UpdateCluster</code>、<code>GetCluster</code> に <code>metricGroups</code> パラメータを追加</td></tr>
+      </table>
+    </div>
+
+    <h3>⚙️ データ集計の仕組み</h3>
+    <ul class="plain">
+      <li>Aurora DSQL は <span class="highlight">1 分ごとのウィンドウ</span>で 1 つ以上のデータポイントを CloudWatch に送信</li>
+      <li>各データポイントは前回のデータポイント以降の作業量のみを保持 (累積値ではなく<span class="highlight">差分値</span>)</li>
+      <li>クラスター、クエリ ID、IAM アイデンティティ、アプリケーション名の組み合わせごとに個別の時系列を保持</li>
+      <li>差分値のため、PromQL では <code>rate()</code> や <code>increase()</code> ではなく <code>sum_over_time</code> を使用</li>
+    </ul>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>📋 前提条件</h3>
+    <ul class="plain">
+      <li>Aurora DSQL クラスターが利用可能であること</li>
+      <li>設定変更には <code>dsql:CreateCluster</code> または <code>dsql:UpdateCluster</code> 権限、設定確認には <code>dsql:GetCluster</code> 権限が必要</li>
+      <li>PromQL クエリには <code>cloudwatch:GetMetricData</code> と <code>cloudwatch:ListMetrics</code> 権限が必要</li>
+    </ul>
+
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">既存クラスターでステートメント統計を有効化</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI で STATEMENT_STATISTICS を有効化</span></div>
+          <pre><code class="language-bash">aws dsql update-cluster \
+  --identifier your_cluster_id \
+  --metric-groups '[{"metricGroup":"STATEMENT_STATISTICS"}]' \
+  --region us-east-1</code></pre>
+        </div>
+        <p>コンソールの場合は、クラスターの [Monitoring] タブにある [Advanced monitoring] から設定できます。新規クラスター作成時は <code>create-cluster</code> コマンドに同じ <code>--metric-groups</code> オプションを指定します。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">設定の確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">メトリクスグループ設定の取得</span></div>
+          <pre><code class="language-bash">aws dsql get-cluster \
+  --identifier your_cluster_id \
+  --query 'metricGroups[].metricGroup' --output text \
+  --region us-east-1</code></pre>
+        </div>
+        <p>有効化されている場合は <code>STATEMENT_STATISTICS</code> が出力され、無効の場合は空の出力になります。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">Database Insights で統計を確認</div>
+        <p>CloudWatch コンソールで [Database Insights] を開き、[Fleet Health] ビューの [Database resources] から Aurora DSQL クラスターの DB Identifier を選択。[Top SQL] でステートメントを選択し、クエリ ID、正規化 SQL テキスト、統計チャートを確認します。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">PromQL でメトリクスをクエリ</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">PromQL</span><span class="code-title">合計時間の上位 10 ステートメントをランキング</span></div>
+          <pre><code class="language-text">topk(10,
+  sum by ("db.query.id") (
+    sum_over_time({
+      "aws.dsql.query.time",
+      "@resource.aws.dsql.cluster_id"="your_cluster_id"
+    }[1h])
+  )
+)</code></pre>
+        </div>
+        <p>CloudWatch Query Studio の PromQL で、過去 1 時間に合計時間が最も長かった上位 10 ステートメントをランキング。メトリクス名を <code>aws.dsql.query.calls</code> や DPU 系メトリクスに変えると、実行回数やコストでのランキングも可能です。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>✅ ビジネス面のメリット</h3>
+        <ul>
+          <li><strong>コストの可視化</strong>: ステートメントごとの DPU 使用量 (コンピュート / 読み取り / 書き込み) を確認でき、コストドライバーとなるクエリを特定して最適化の優先順位を付けられる</li>
+          <li><strong>追加料金なしの Aurora DSQL 機能</strong>: Aurora DSQL 側の追加料金は不要で、標準の CloudWatch 料金のみで利用できる</li>
+          <li><strong>運用工数の削減</strong>: アプリケーション側での計測実装なしに、クエリレベルの分析基盤を数分で有効化できる</li>
+        </ul>
+      </div>
+      <div class="merit-box">
+        <h3>✅ 技術面のメリット</h3>
+        <ul>
+          <li><strong>サンプリングなしの完全計測</strong>: 低頻度だが高コストなクエリも見逃さない</li>
+          <li><strong>OTel 標準メトリクス</strong>: PromQL を使った既存のオブザーバビリティツールとの統合が容易</li>
+          <li><strong>多角的な分析ラベル</strong>: クエリ ID に加えて IAM ロール ARN やアプリケーション名で分析でき、マルチテナント環境での切り分けが可能</li>
+          <li><strong>チューニングの判断材料</strong>: スキャン行数と返却行数の比較により、インデックス追加が必要なクエリを特定できる</li>
+        </ul>
+      </div>
+      <div class="caution-box">
+        <h3>⚠️ 制限事項</h3>
+        <ul>
+          <li>デフォルトでは無効であり、クラスターごとに有効化が必要 (マルチリージョンクラスターでは各リージョンで個別に有効化)</li>
+          <li>正規化 SQL テキストはステートメントあたり最大 32 KiB まで保存</li>
+          <li>PromQL クエリの時間範囲は最大 24 時間、1 クエリで返される時系列は最大 500 件</li>
+          <li>ユーティリティステートメントや DDL、ネストされたステートメントは計測対象外</li>
+          <li>現時点で利用可能なメトリクスグループは <code>STATEMENT_STATISTICS</code> のみ</li>
+        </ul>
+      </div>
+      <div class="caution-box">
+        <h3>💭 考慮すべき点</h3>
+        <ul>
+          <li>CloudWatch メトリクスと Logs の標準料金が発生。クエリの種類が非常に多いワークロードでは時系列数とログ量に応じたコスト見積もりが必要</li>
+          <li>リトライされたトランザクション内のステートメントは再度カウントされ、呼び出し回数が実際のリクエスト数より多く見える場合がある</li>
+          <li>無効化後も、オープン中の接続からの統計は数分間、正規化 SQL テキストは最大 1 日間到着する可能性がある</li>
+          <li>Aurora DSQL がロググループを新規作成する場合、保持期間は 545 日に設定される (変更可能)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🐢 ユースケース 1: スロークエリの特定とチューニング</div>
+      <p><span class="label">シナリオ</span>: Aurora DSQL 上のアプリケーションでレイテンシーが悪化しており、原因となるクエリを特定したい。</p>
+      <p><span class="label">実装</span>: Database Insights の Top SQL で平均実行時間の長いステートメントを確認し、「Scanned rows per call」と「Returned rows per call」を比較。スキャン行数が返却行数を大きく上回る場合はインデックス追加を検討する。</p>
+      <p><span class="label">効果</span>: アプリケーション側の計測実装なしに、フルスキャンに近い動作をしているクエリを特定し、インデックス設計の改善につなげられる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">💰 ユースケース 2: DPU コストドライバーの分析</div>
+      <p><span class="label">シナリオ</span>: Aurora DSQL の DPU 料金が想定より高く、どのクエリがコストを押し上げているかを調査したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">PromQL</span><span class="code-title">コンピュート DPU の上位 10 ステートメント</span></div>
+        <pre><code class="language-text">topk(10,
+  sum by ("db.query.id") (
+    sum_over_time({
+      "aws.dsql.query.compute_dpu",
+      "@resource.aws.dsql.cluster_id"="your_cluster_id"
+    }[1h])
+  )
+)</code></pre>
+      </div>
+      <p><span class="label">効果</span>: コンピュート / 読み取り / 書き込みの DPU 使用量をステートメント単位で把握し、最もコストの高いクエリから優先的に最適化できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🏢 ユースケース 3: マルチテナント環境でのワークロード切り分け</div>
+      <p><span class="label">シナリオ</span>: 複数のアプリケーションが同一クラスターを共有しており、どのアプリケーションがどのクエリを実行しているかを把握したい。</p>
+      <p><span class="label">実装</span>: 接続パラメータで <code>application.name</code> を設定し、PromQL で <code>sum by ("application.name")</code> または <code>sum by ("aws.dsql.session.role.arn")</code> を使用して集計する。</p>
+      <p><span class="label">効果</span>: アプリケーション名や IAM アイデンティティごとにクエリ負荷を切り分け、特定のテナントやサービスに起因する負荷増加を迅速に特定できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 / リージョン -->
+  <div class="section">
+    <h2>💵 料金 / 🌍 利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p>Aurora DSQL 側の<span class="highlight">追加料金はありません</span>。標準の CloudWatch メトリクスおよび CloudWatch Logs の料金が適用されます。</p>
+      <ul class="plain">
+        <li>OTel メトリクス: CloudWatch のメトリクス料金に基づく (時系列数に依存)</li>
+        <li>正規化 SQL テキスト: CloudWatch Logs の取り込みおよび保存料金に基づく</li>
+      </ul>
+      <p>詳細は <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">CloudWatch 料金ページ</a> を参照してください。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 利用可能リージョン</div>
+      <p>Aurora DSQL が利用可能なすべての AWS リージョンで利用できます。最新のリージョン一覧は <a href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS リージョン別サービス一覧</a> を参照してください。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">📈 Amazon CloudWatch Database Insights</div>
+      <p>ステートメント統計を可視化するノーコードの UI。Top SQL ビューで正規化 SQL テキストとチャートを確認できます。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔣 Amazon CloudWatch Query Studio</div>
+      <p>PromQL によるメトリクスのインタラクティブな分析環境。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📝 Amazon CloudWatch Logs / Log Analytics</div>
+      <p>正規化 SQL テキストの保存先。クエリ ID から SQL テキストを検索できます。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🧱 AWS CloudFormation</div>
+      <p><code>AWS::DSQL::Cluster</code> リソースの <code>MetricGroups</code> プロパティで IaC による設定が可能です。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>🎯 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin: 0;">
+        Aurora DSQL のステートメント統計により、<span class="highlight">サンプリングなしの完全な計測</span>に基づくクエリレベルのパフォーマンス分析と DPU コスト分析が可能になりました。
+        Aurora DSQL を本番運用しているユーザーは、<code>UpdateCluster</code> で <code>STATEMENT_STATISTICS</code> メトリクスグループを有効化し、Database Insights の Top SQL から高負荷・高コストなステートメントの確認を始めることを推奨します。
+      </p>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/11/aurora-dsql-statement-statistics/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/11/aurora-dsql-statement-statistics/</a></li>
+      <li>ドキュメント: Monitoring SQL statements with Aurora DSQL statement statistics: <a href="https://docs.aws.amazon.com/aurora-dsql/latest/userguide/dsql-statement-statistics.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/aurora-dsql/latest/userguide/dsql-statement-statistics.html</a></li>
+      <li>ドキュメント: Query metrics with PromQL: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-PromQL.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-PromQL.html</a></li>
+      <li>ドキュメント: Amazon CloudWatch Database Insights: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Database-Insights.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Database-Insights.html</a></li>
+      <li>API 変更履歴: <a href="https://awsapichanges.com/archive/changes/f1785c-dsql.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://awsapichanges.com/archive/changes/f1785c-dsql.html</a></li>
+      <li>料金ページ (CloudWatch): <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/cloudwatch/pricing/</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-17-aurora-dsql-statement-statistics.md) に基づいて作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

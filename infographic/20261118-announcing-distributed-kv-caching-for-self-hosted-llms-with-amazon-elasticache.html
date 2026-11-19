@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon ElastiCache - セルフホスト LLM 推論向け分散 KV キャッシング</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+}
+
+.card p, .card ul {
+  margin: 0;
+  font-size: 14px;
+}
+
+.card ul { padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 180px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.ba-box {
+  flex: 1;
+  min-width: 280px;
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-box ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.ba-box li { margin: 6px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td code, p code, li code, span code {
+  background: rgba(0, 161, 201, 0.15);
+  color: var(--aws-teal);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { font-size: 16px; flex-shrink: 0; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 14px 0;
+}
+
+.usecase h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid #4CAF50;
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  margin-top: 10px;
+}
+
+/* エンジンバッジ */
+.engine-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.engine-badge {
+  background: rgba(0, 161, 201, 0.15);
+  border: 1px solid var(--aws-teal);
+  color: var(--aws-teal);
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.two-col {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.two-col > div {
+  flex: 1;
+  min-width: 300px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="service-badge">Amazon ElastiCache</div>
+    <h1>🧠 セルフホスト LLM 推論向け分散 KV キャッシング</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 18 日 | Distributed KV Caching for Self-Hosted LLMs (ElastiCache for Valkey)</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon ElastiCache for Valkey が、セルフホスト LLM 推論向けの<span class="highlight">フルマネージド分散 KV キャッシング</span>の一般提供を開始しました。
+      GPU ローカルキャッシュを<span class="highlight">フリート共有の L2 キャッシュティア</span>で拡張し、どのサーバーからでも KV ステートを数日間にわたって再利用できます。
+    </p>
+    <p>
+      これにより、AI エージェントやチャットアプリケーションが繰り返し送信する長大なコンテキストの<span class="highlight">プリフィル再計算</span>を解消し、
+      推論コストを<span class="highlight">最大 40% 削減</span>、最初のトークンが生成されるまでの時間 (TTFT) を<span class="highlight">最大 80% 短縮</span>します。
+      vLLM、SGLang、TensorRT-LLM にオープンソースの LMCache コネクタ経由で<span class="highlight">設定変更のみ (コード変更不要)</span> で接続できます。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">-40%</div>
+        <div class="stat-label">推論コスト削減 (100 万トークンあたり、最大)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">-80%</div>
+        <div class="stat-label">TTFT 短縮 (最大。モデルによっては 93%)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">220 Gbps</div>
+        <div class="stat-label">ノードあたりスループット (RDMA over EFA)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">数日間</div>
+        <div class="stat-label">KV ステートの保持期間 (セッション・障害をまたぐ)</div>
+      </div>
+    </div>
+
+    <h3>🔄 Before / After</h3>
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ アップデート前の課題</div>
+        <ul>
+          <li>L0 キャッシュ (GPU メモリ、HBM3e で最大約 288 GB) はモデル重みと全リクエストで共有され、長い会話の KV ステートはすぐに追い出されていた</li>
+          <li>L1 キャッシュ (ホストメモリ / ローカル NVMe) は単一サーバー専用で、別サーバーにルーティングされたリクエストは利用不可</li>
+          <li>数時間〜数日後の再訪セッションはキャッシュから消失し、プロンプト全体のプリフィルを再計算 (コーディングエージェントではプロンプトトークンの 95% 以上が処理済みプレフィックスの再送)</li>
+          <li>GPU サーバー障害やスケールインでローカルキャッシュが完全に失われ、復旧後もレイテンシが悪化</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <ul>
+          <li>フリート全体で共有する L2 キャッシュティアにより、どのサーバーに着信しても過去のコンテキストの KV ステートを数ミリ秒で取得</li>
+          <li>推論コストを最大 40% 削減、TTFT を最大 80% 短縮 (ワークロードによっては最大 93%)</li>
+          <li>RDMA over EFA で OS ネットワークスタックと TCP/IP をバイパスし、ノードあたり最大 220 Gbps で GPU ホストメモリと直接データ転送</li>
+          <li>サーバー障害時も残存サーバーが共有キャッシュから KV ステートを読み出し、性能劣化を緩和・復旧を高速化</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    User(["👤 ユーザー / AI エージェント"]) --> Router["🔀 リクエストルーター"]
+
+    subgraph AZ["☁️ 同一アベイラビリティーゾーン"]
+        subgraph GPUFleet["🖥️ GPU フリート"]
+            direction LR
+            subgraph GPU1["⚙️ GPU サーバー 1"]
+                L0a["⚡ L0: GPU メモリ"]
+                L1a["💾 L1: ホストメモリ / NVMe"]
+            end
+            subgraph GPU2["⚙️ GPU サーバー 2"]
+                L0b["⚡ L0: GPU メモリ"]
+                L1b["💾 L1: ホストメモリ / NVMe"]
+            end
+            GPU1 ~~~ GPU2
+        end
+
+        subgraph L2["🗄️ L2: 分散 KV キャッシュ"]
+            EC[("📋 ElastiCache for Valkey&lt;br/&gt;cache.i8ge.48xlarge&lt;br/&gt;DRAM + NVMe 自動ティアリング")]
+        end
+    end
+
+    Router --> GPU1
+    Router --> GPU2
+    L1a -.->|"キャッシュミス時&lt;br/&gt;RDMA over EFA"| EC
+    L1b -.->|"キャッシュミス時&lt;br/&gt;RDMA over EFA"| EC
+
+    classDef az fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef fleet fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef cache fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class AZ az
+    class GPUFleet,GPU1,GPU2,L2 fleet
+    class L0a,L0b,L1a,L1b compute
+    class EC cache
+    class User user
+    class Router process
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      推論エンジンはリクエストごとに L0 (GPU メモリ)、L1 (ホストメモリ / NVMe) の順にローカルキャッシュを確認し、ミスした場合のみ L2 (ElastiCache for Valkey) から RDMA over EFA 経由で KV ステートを読み出します。新しく計算した KV ステートは LMCache コネクタが L2 ティアに書き込み、フリート内の任意の GPU が再利用できます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <h4>🗄️ 共有 L2 KV キャッシュティア</h4>
+      <ul>
+        <li>GPU ローカルの L0 / L1 キャッシュを補完する、フリート全体で共有される L2 ティアを提供</li>
+        <li>KV ステートがサーバー境界・セッション・障害をまたいで数日間維持される</li>
+        <li>ペタバイト級までスケール可能なストレージを提供し、同一 AZ 内のすべての GPU が同じ L2 キャッシュを読み取り可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>⚡ RDMA over EFA による高速データ転送</h4>
+      <ul>
+        <li>Elastic Fabric Adapter (EFA) 上の RDMA により、ElastiCache ノードのメモリと GPU ホストのメモリ間で直接データを転送</li>
+        <li>OS ネットワークスタック、TCP/IP、中間コピーをバイパスし、ノードあたり最大 220 Gbps のスループットを実現</li>
+        <li>DRAM 上のブロックへのキャッシュ応答はサブミリ秒 (8 MB オブジェクトの Get で P50 477 µs、1 GB の取得で約 42 ms)</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>📚 DRAM と NVMe の自動データティアリング</h4>
+      <ul>
+        <li>新たに導入された Valkey のラージオブジェクトサポートを使用し、KV ブロックを DRAM と NVMe に格納</li>
+        <li>最もホットな KV ブロックは DRAM から読み書きし、コールドなブロックはノードローカルの NVMe に自動的にティアリング</li>
+        <li>ユーザーは ElastiCache for Valkey のエンドポイントとやり取りするだけでよく、ティアリングは透過的に動作</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>🔌 LMCache コネクタによる主要推論エンジン対応</h4>
+      <ul>
+        <li>vLLM、SGLang、TensorRT-LLM をオープンソースの LMCache コネクタ経由で接続可能</li>
+        <li>設定変更のみで導入でき、アプリケーションコードの変更は不要</li>
+        <li>オープンウェイト、ファインチューニング済み、カスタムモデルに対応し、フル・スパース・ハイブリッドなどのアテンション設計をサポート</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h4>📊 KVTrace による事前効果見積もり</h4>
+      <ul>
+        <li>オープンソースの KVTrace ツールにより、デプロイ前に自分のトラフィックでコスト削減と TTFT 改善を無料で見積もり可能</li>
+        <li>vLLM / SGLang が発行するキャッシュイベントを利用し、分散 KV キャッシュが解消できたはずの再計算をレポート</li>
+        <li>ハッシュ化されたプロンプトデータのみを使用するためプライバシーを保護し、推論エンジンや GPU クラスターの変更は不要</li>
+      </ul>
+    </div>
+
+    <h3>🧩 対応推論エンジン</h3>
+    <div class="engine-badges">
+      <span class="engine-badge">vLLM</span>
+      <span class="engine-badge">SGLang</span>
+      <span class="engine-badge">TensorRT-LLM</span>
+      <span class="engine-badge">LMCache コネクタ経由</span>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>分散 KV キャッシングの構成要素</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>キャッシュエンジン</td><td>ElastiCache for Valkey</td></tr>
+      <tr><td>ノードタイプ</td><td><code>cache.i8ge.48xlarge</code></td></tr>
+      <tr><td>配置要件</td><td>GPU フリートと同一アベイラビリティーゾーン</td></tr>
+      <tr><td>接続方式</td><td>RDMA over Elastic Fabric Adapter (EFA)</td></tr>
+      <tr><td>ノードあたりスループット</td><td>最大 220 Gbps (2026 年 11 月 18 日時点)</td></tr>
+      <tr><td>ストレージ</td><td>DRAM + ノードローカル NVMe の自動ティアリング、ペタバイト級までスケール可能</td></tr>
+      <tr><td>対応推論エンジン</td><td>vLLM、SGLang、TensorRT-LLM (LMCache コネクタ経由)</td></tr>
+      <tr><td>対応モデル</td><td>オープンウェイト / ファインチューニング済み / カスタムモデル、フル・スパース・ハイブリッドアテンション</td></tr>
+    </table>
+
+    <h3>キャッシュ応答時間 (cache.i8ge.48xlarge)</h3>
+    <table>
+      <tr><th>オブジェクト</th><th>操作</th><th>レイテンシ P50</th><th>レイテンシ P99</th></tr>
+      <tr><td>8 MB オブジェクト 1 個</td><td>Get</td><td>477 µs</td><td>950 µs</td></tr>
+      <tr><td>8 MB オブジェクト 1 個</td><td>Set</td><td>881 µs</td><td>1,010 µs</td></tr>
+      <tr><td>1 GB (8 MB x 128、1 ノード)</td><td>Get</td><td>41.7 ms</td><td>42.1 ms</td></tr>
+      <tr><td>1 GB (8 MB x 128、1 ノード)</td><td>Set</td><td>44.6 ms</td><td>49.4 ms</td></tr>
+    </table>
+
+    <h3>ベンチマーク結果 (AWS 公表値)</h3>
+    <table>
+      <tr><th>ワークロード</th><th>結果</th></tr>
+      <tr><td>共有ドキュメント QA</td><td>サーバーあたり 2 倍の RPS を処理し、100 万出力トークンあたりのコストを 40% 削減 (ElastiCache ノード費用控除後)</td></tr>
+      <tr><td>コーディングエージェント</td><td>同一負荷で最大 1.98 倍のスループット、サーバーあたりピークトークンスループット 23% 向上</td></tr>
+      <tr><td>AI アシスタント</td><td>同一負荷で最大 1.61 倍のスループット (P90 TTFT 30 秒の SLO 内)</td></tr>
+      <tr><td>TTFT 削減</td><td>8 モデルのテストで 55%〜93% の削減。フルアテンションモデルは 10K トークン程度のプロンプトでも 80% 以上の削減</td></tr>
+      <tr><td>サーバー障害時</td><td>残存サーバーが P90 TTFT を 43% 低く維持しつつ 1.48 倍のリクエストを完了。復旧後 60 秒以内に元の性能に回復</td></tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>GPU フリート (例: P6 サーバー) と同一アベイラビリティーゾーンに ElastiCache for Valkey クラスターを作成できること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>vLLM、SGLang、TensorRT-LLM のいずれかの推論エンジンを使用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>LMCache コネクタを構成できること</span></div>
+
+    <h3>ステップ 1: KVTrace で効果を事前見積もり (推奨)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">KVTrace によるシミュレーション</span>
+      </div>
+      <pre><code class="language-bash"># KVTrace を GitHub から取得 (PyPI にはない)
+git clone https://github.com/aws-samples/amazon-elasticache-samples.git
+cd amazon-elasticache-samples/kvtrace
+pip install .
+
+# vLLM の KV キャッシュイベントを有効化
+vllm serve &lt;model&gt; --enable-prefix-caching \
+  --kv-events-config '{"enable_kv_cache_events": true, "publisher": "zmq", "endpoint": "tcp://127.0.0.1:5557", "replay_endpoint": "tcp://127.0.0.1:5558", "topic": "kv-events"}'
+
+# 各 GPU サーバーでトラフィックを記録
+kvtrace record --endpoint-mode bind --endpoint tcp://127.0.0.1:5557 \
+  --replay-endpoint tcp://127.0.0.1:5558 \
+  --model &lt;model-label&gt; --metrics-url http://127.0.0.1:8000/metrics --out traces/
+
+# キャッシュサイズをシミュレートしてレポートを作成
+kvtrace simulate traces/ --model-config config.json --tp 8 -o sim.json
+kvtrace report sim.json -o report.html \
+  --gpu-cost-per-hour &lt;GPU 時間単価&gt; --gpus-per-replica 8</code></pre>
+    </div>
+    <p style="font-size: 14px;">vLLM が発行するキャッシュイベントを記録し、分散 KV キャッシュ導入時の期待キャッシュヒット率・コスト削減・TTFT 改善と推奨クラスターサイズをオフラインでシミュレートします。本番クラスターの変更は不要で、ハッシュ化されたデータのみを扱います。</p>
+
+    <h3>ステップ 2: ElastiCache for Valkey クラスターの作成</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">GPU フリートと同一 AZ にクラスターを作成</span>
+      </div>
+      <pre><code class="language-bash">aws elasticache create-replication-group \
+  --replication-group-id llm-kv-cache \
+  --replication-group-description "Distributed KV cache for LLM inference" \
+  --engine valkey \
+  --cache-node-type cache.i8ge.48xlarge \
+  --preferred-cache-cluster-azs &lt;GPU フリートと同じ AZ&gt;</code></pre>
+    </div>
+    <p style="font-size: 14px;">同一 AZ への配置は、RDMA over EFA による低レイテンシ通信の要件です。</p>
+
+    <h3>ステップ 3: 推論エンジンへのエンドポイント追加</h3>
+    <p style="font-size: 14px;">
+      LMCache の Valkey コネクタ設定に、作成した ElastiCache for Valkey クラスターのエンドポイントを追加します。
+      vLLM、SGLang、TensorRT-LLM のいずれも<span class="highlight">設定変更のみで接続でき、アプリケーションコードの変更は不要</span>です。
+    </p>
+
+    <div class="flow-diagram" style="display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; margin:24px 0;">
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">📊 KVTrace で<br/>効果を見積もり</div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">🗄️ 同一 AZ に Valkey<br/>クラスターを作成</div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">🔌 LMCache 設定に<br/>エンドポイント追加</div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center;">✅ コード変更なしで<br/>L2 キャッシュ有効化</div>
+    </div>
+  </div>
+
+  <!-- メリット / 制約 -->
+  <div class="section">
+    <h2>💡 メリットと制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3>📈 ビジネス面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>推論コストの大幅削減</strong>: プリフィル再計算の代わりにキャッシュから KV ステートを取得し、100 万トークンあたりのコストを最大 40% 削減 (ElastiCache ノード費用考慮後)</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ユーザー体験の向上</strong>: TTFT を最大 80% 短縮。Multiverse Computing 社の事例では、同じ GPU で 50% 多いリクエストを処理し、ピーク時の TTFT 中央値を 95% 削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>GPU 投資の最大活用</strong>: ルーティング最適化への依存を減らし、フリート全体の GPU を有効活用。トラフィックスパイク時の増設判断を緩和</span></div>
+
+        <h3>🔧 技術面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コード変更不要の導入</strong>: LMCache コネクタによる設定変更のみで vLLM / SGLang / TensorRT-LLM に統合可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>障害・スケーリング耐性</strong>: ローカルキャッシュ喪失時も共有ティアから KV ステートを読み出して性能を維持。復帰サーバーも 60 秒以内に初期性能に回復 (テスト環境)</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>事前検証が可能</strong>: KVTrace により、デプロイ前に自社トラフィックでの効果とクラスターサイズを無料で見積もり可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>フルマネージド</strong>: DRAM / NVMe ティアリングやスケーリングは ElastiCache が管理し、ユーザーはエンドポイントを利用するだけ</span></div>
+      </div>
+      <div>
+        <h3>⚠️ 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ノードタイプは <code>cache.i8ge.48xlarge</code> に限定され、GPU フリートと同一アベイラビリティーゾーンへの配置が必要</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>提供リージョンは米国、欧州、アジアパシフィックの 13 リージョン (発表時点。具体名はドキュメントで確認)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>RDMA over EFA を使用するため、EFA に対応した GPU インスタンス構成が前提</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>キャッシュは容量確保のために古い KV ステートを追い出すため、保持期間は無期限ではない (数日単位)</span></div>
+
+        <h3>🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span>KV ステートが GPU メモリに収まる小規模デプロイ、再利用のない単発 LLM 呼び出し (分類、翻訳、モデレーションなど)、短いプロンプトから長い出力を生成するワークロードでは効果が小さい</span></div>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span>モデルごとに「カットオーバーポイント」(キャッシュ取得が再計算より速くなるプロンプト長) が存在。テストした全モデルで 10K トークン未満 (スパースモデルで 512 トークン未満、ハイブリッドモデルで 1,000〜7,600 トークン)。レイテンシ重視の場合は自ワークロードでの測定とカットオーバー超のプロンプトのみのキャッシュが推奨</span></div>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span><code>cache.i8ge.48xlarge</code> は大型ノードのため、ノード費用を上回るコスト削減が得られるか KVTrace で事前確認が重要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span>ベンチマーク値 (最大 40% コスト削減、最大 80% TTFT 短縮) はワークロード特性とキャッシュヒット率に依存</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>1️⃣ AI コーディングアシスタント</h4>
+      <p><strong>シナリオ</strong>: 開発者が同じコードベースに対して何十ターンも対話を続ける AI コーディングアシスタントを、複数の GPU サーバーでセルフホスト。プロンプトは 100K トークンを超え、95% 以上が過去に処理済みのプレフィックスの再送。</p>
+      <p><strong>実装例</strong>: KVTrace でトレースを記録して効果を見積もり、GPU フリートと同一 AZ に <code>cache.i8ge.48xlarge</code> クラスターを作成し、vLLM の LMCache 設定に Valkey エンドポイントを追加。</p>
+      <p class="effect">💡 <strong>効果</strong>: AWS のテストでは、コーディングエージェントワークロードで同一負荷時に最大 1.98 倍のスループットを達成。長いプロンプトほどプリフィル再計算の削減効果が大きい。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>2️⃣ 数時間〜数日の会話履歴を持つサポートエージェント</h4>
+      <p><strong>シナリオ</strong>: カスタマーサポート AI が長時間の会話履歴を保持し、ユーザーが数時間後や翌日に戻ってくる。従来はローカルキャッシュから KV ステートが消失し、履歴全体のプリフィルを再計算していた。</p>
+      <p><strong>実装例</strong>: 分散 KV キャッシュを L2 ティアとして追加し、KV ステートを数日間保持。どの GPU サーバーにルーティングされても過去の文脈を再利用。</p>
+      <p class="effect">💡 <strong>効果</strong>: 再訪ユーザーへの応答で TTFT が大幅に短縮され (テストでは最大 80%)、GPU は新規リクエストの処理に集中できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>3️⃣ 共有ドキュメントに対する大規模 QA</h4>
+      <p><strong>シナリオ</strong>: 多数のユーザーが同じ契約書やマニュアルに対して質問するドキュメント QA サービス。共有システムプロンプトと共通ドキュメントのプリフィルが全サーバーで重複計算されている。</p>
+      <p><strong>実装例</strong>: 共通ドキュメントの KV ステートを L2 ティアで共有し、全 GPU サーバーがプリフィル済みの状態を再利用。</p>
+      <p class="effect">💡 <strong>効果</strong>: AWS のテストでは、サーバーあたりの処理リクエスト数が 2 倍になり、インタラクティビティ SLO (P90 TTFT 5 秒未満) を維持しながら 100 万出力トークンあたりのコストを 40% 削減。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <p>
+      ElastiCache for Valkey のノード料金体系に基づき、<code>cache.i8ge.48xlarge</code> ノードの稼働時間に応じて課金されます。
+      分散 KV キャッシング機能自体の<span class="highlight">追加料金は発表されていません</span>。KVTrace ツールは無料で利用できます。
+    </p>
+    <p>
+      AWS の公表値である「コスト最大 40% 削減」は、<span class="highlight">ElastiCache ノードの費用を支払った後のネットの削減率</span>です。
+    </p>
+    <p>🌍 <strong>利用可能リージョン</strong>: 米国、欧州、アジアパシフィックの 13 の AWS リージョン (2026 年 11 月 18 日時点)。具体的なリージョンは ElastiCache ドキュメントで確認してください。</p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <h4>🗄️ Amazon ElastiCache for Valkey</h4>
+      <p>本機能の基盤となるフルマネージドインメモリキャッシュサービス。新しいラージオブジェクトサポートで KV ブロックを格納。</p>
+    </div>
+    <div class="card">
+      <h4>⚡ Elastic Fabric Adapter (EFA)</h4>
+      <p>GPU ノードとキャッシュノード間の RDMA 通信を実現するネットワークインターフェイス。</p>
+    </div>
+    <div class="card">
+      <h4>🔌 LMCache</h4>
+      <p>vLLM / SGLang / TensorRT-LLM と ElastiCache を接続するオープンソースの KV キャッシュオフロードコネクタ。</p>
+    </div>
+    <div class="card">
+      <h4>🖥️ Amazon EC2 P6 インスタンス</h4>
+      <p>ベンチマークで使用された GPU サーバー。8 GPU 構成で vLLM を実行。</p>
+    </div>
+    <div class="card">
+      <h4>🤖 Amazon SageMaker AI / Amazon Bedrock</h4>
+      <p>セルフホストではなくマネージドな推論を選ぶ場合の代替手段。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      Amazon ElastiCache for Valkey の分散 KV キャッシングは、セルフホスト LLM 推論の最大のボトルネックである<span class="highlight">プリフィル再計算</span>を、フリート共有の L2 キャッシュティアで解消する画期的なアップデートです。
+      コード変更なしの設定のみで vLLM / SGLang / TensorRT-LLM に導入でき、<span class="highlight">コスト最大 40% 削減と TTFT 最大 80% 短縮</span>が期待できます。
+      長いコンテキストを扱う AI エージェントやドキュメント QA をセルフホストしている場合は、まず<span class="highlight">無料の KVTrace ツール</span>で自社トラフィックでの効果を見積もることを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/announcing-distributed-kv-caching-for-self-hosted-llms-with-amazon-elasticache/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/announcing-distributed-kv-caching-for-self-hosted-llms-with-amazon-elasticache/</a></li>
+      <li><a href="https://aws.amazon.com/blogs/database/announcing-distributed-kv-caching-for-self-hosted-llms-with-amazon-elasticache/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog: https://aws.amazon.com/blogs/database/announcing-distributed-kv-caching-for-self-hosted-llms-with-amazon-elasticache/</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/distributed-kv-caching.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント (Distributed KV caching): https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/distributed-kv-caching.html</a></li>
+      <li><a href="https://github.com/aws-samples/amazon-elasticache-samples/tree/main/kvtrace" target="_blank" rel="noopener noreferrer" class="aws-link">KVTrace ツール (GitHub): https://github.com/aws-samples/amazon-elasticache-samples/tree/main/kvtrace</a></li>
+      <li><a href="https://aws.amazon.com/hpc/efa/" target="_blank" rel="noopener noreferrer" class="aws-link">Elastic Fabric Adapter: https://aws.amazon.com/hpc/efa/</a></li>
+      <li><a href="https://aws.amazon.com/elasticache/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ (Amazon ElastiCache): https://aws.amazon.com/elasticache/pricing/</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-18) を基に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

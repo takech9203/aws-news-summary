@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon S3 - レプリケーションの除外設定と Multi-Region キー解決</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .box-title { color: #FF8A73; }
+.after-box .box-title { color: #6FCF4F; }
+
+.box-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14.5px;
+}
+
+.check-icon { color: #6FCF4F; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* 統計カード */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .stats-row { grid-template-columns: 1fr; }
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px 14px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.3;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14.5px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13.5px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* ステップ */
+.step-list { margin: 16px 0; }
+
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-content { flex: 1; }
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--aws-squid-ink);
+  background: var(--aws-smile-orange);
+  border-radius: 4px;
+  padding: 1px 8px;
+  margin-right: 6px;
+}
+
+.usecase p { margin: 8px 0; font-size: 14.5px; }
+
+/* メリット・デメリット 2 カラム */
+.pros-cons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .pros-cons { grid-template-columns: 1fr; }
+}
+
+/* 関連サービス */
+.related-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .related-grid { grid-template-columns: 1fr; }
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12.5px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 6px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(0, 161, 201, 0.1));
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 4px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="service-badge">Amazon S3</div>
+    <h1>🪣 S3 Replication に除外設定と<br>Multi-Region キー解決が登場</h1>
+    <div class="subtitle">📅 リリース日: <span class="date">2026 年 11 月 18 日</span> | 機能: Exclusions / Multi-Region Key Resolution</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon S3 Replication に 2 つの新機能が追加されました。<span class="highlight">除外設定 (Exclusions)</span> は、バケット全体をレプリケーションしながら、特定のプレフィックスやタグ付きオブジェクト (ログや実験用データなど) をスキップできます。<span class="highlight">Multi-Region キー解決</span> は、レプリケーション先リージョンでソースオブジェクトに対応する AWS KMS Multi-Region キーを自動的に使用して各レプリカを暗号化します。
+    </p>
+    <p>
+      多数のテナントを収容する<span class="highlight">マルチテナントバケット</span>や共有バケットで特に有効で、従来は多数のレプリケーションルールが必要だった構成を<span class="highlight">単一のルールに集約</span>できます。後から追加されるテナントにも自動的に適用されます。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">数百 → 1</div>
+        <div class="stat-label">テナントごとのルールを単一ルールに集約</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">両機能ともオプションで無料</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">全リージョン</div>
+        <div class="stat-label">すべての AWS リージョンで利用可能</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ アップデート前の課題</div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>バケット全体のレプリケーションでは不要なデータ (ログや一時データ) も複製され、ストレージ・転送コストが増加</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>特定データのみ複製するには、プレフィックスやタグごとに多数のルールを作成・管理する必要があった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>テナントごとに異なる KMS キーを使う場合、キーごとにルールを分け、テナント追加のたびに更新が必要だった</span></div>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ アップデート後の改善</div>
+        <div class="check-item"><span class="check-icon">✓</span><span>除外設定で、バケット全体を複製しつつ特定プレフィックスやタグ付きオブジェクトをスキップ可能に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>レプリケーション先で対応する KMS Multi-Region キーを自動的に使用してレプリカを暗号化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>多数のルールを単一ルールに集約でき、後から追加されるテナントにも自動対応</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart LR
+    subgraph Source["🌏 ソースリージョン"]
+        direction TB
+        SrcBucket[("🪣 ソースバケット")]
+        AppData["📦 テナントデータ<br/>KMS Multi-Region キーで暗号化"]
+        Logs["📝 ログ / 実験用データ<br/>除外対象プレフィックス・タグ"]
+        AppData ~~~ Logs
+    end
+
+    subgraph Rule["⚙️ S3 Replication 単一ルール"]
+        Exclusion{"🚫 除外設定<br/>プレフィックス / タグ"}
+    end
+
+    subgraph Dest["🌍 レプリケーション先リージョン"]
+        direction TB
+        DestBucket[("🪣 レプリカバケット")]
+        MRK["🔑 対応する KMS<br/>Multi-Region キーで暗号化"]
+        DestBucket ~~~ MRK
+    end
+
+    SrcBucket --> Exclusion
+    Exclusion -->|レプリケーション| DestBucket
+    Exclusion -.->|スキップ| Skipped["⏭️ レプリケーションしない"]
+
+    classDef bucket fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class SrcBucket,DestBucket bucket
+    class Exclusion decision
+    class AppData,Logs,MRK internal
+    class Skipped warning
+    class Source,Rule,Dest layer
+      </pre>
+    </div>
+    <p class="diagram-caption">単一のレプリケーションルールで、除外対象 (特定プレフィックスやタグ付きオブジェクト) をスキップしながらバケット全体をレプリケーションし、レプリケーション先では対応する KMS Multi-Region キーでレプリカを暗号化する流れ</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">🚫 1. 除外設定 (Exclusions)</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>バケット全体を対象としながら、特定のプレフィックス配下のオブジェクトをレプリケーションから除外</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>特定のタグが付与されたオブジェクトの除外も可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ログや実験用データのスキップにより、ストレージコストと転送コストを削減</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🔑 2. Multi-Region キー解決 (Multi-Region Key Resolution)</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>KMS Multi-Region キーで暗号化されたオブジェクトを、レプリケーション先の対応するレプリカキーで自動的に暗号化</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ソースオブジェクトの暗号化要件に準拠した状態でレプリカを維持</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>テナントごとに固有のキーを使うマルチテナントバケットでも単一ルールでレプリケーション可能</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🔄 3. ルールの集約と自動追従</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>従来は多数のレプリケーションルールが必要だった構成を単一ルールに集約</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>数百のテナントを収容するバケットでも、後から追加されるテナントを含めて単一ルールで対応</span></div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対象機能</td><td>Amazon S3 Replication (CRR / SRR)</td></tr>
+      <tr><td>除外設定</td><td>プレフィックス単位またはオブジェクトタグ単位でレプリケーション対象から除外</td></tr>
+      <tr><td>Multi-Region キー解決</td><td>レプリケーション先リージョンの対応する KMS Multi-Region キーでレプリカを暗号化</td></tr>
+      <tr><td>利用方法</td><td>AWS SDK、AWS CLI、S3 API、S3 コンソール</td></tr>
+      <tr><td>適用</td><td>両機能ともオプション (既存のレプリケーション動作は変更なし)</td></tr>
+      <tr><td>追加料金</td><td>なし</td></tr>
+    </table>
+    <p style="font-size: 13.5px;">
+      💡 本アップデートに対応する API 変更は、レポート作成時点 (2026 年 11 月 19 日) で awsapichanges.com に未掲載です。レプリケーション設定は <span class="highlight">PutBucketReplication</span> API で管理されるため、詳細な設定要素は <a class="aws-link" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html" target="_blank" rel="noopener noreferrer">S3 User Guide</a> の最新情報を確認してください。
+    </p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>ソースバケットとレプリケーション先バケットの両方でバージョニングが有効であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>S3 がオブジェクトをレプリケーションするための IAM ロール (KMS キー使用時は対象キーへの復号・暗号化権限を含む) が設定されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Multi-Region キー解決を使用する場合、レプリケーション先リージョンに対応する KMS Multi-Region レプリカキーが作成されていること</span></div>
+
+    <h3>📋 手順</h3>
+    <div class="step-list">
+      <div class="step-item">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <div class="step-title">レプリケーションルールの作成</div>
+          <p style="margin: 0; font-size: 14.5px;">S3 コンソールでソースバケットの [管理] タブから [レプリケーションルール] を作成し、ルールのスコープとしてバケット全体を指定</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <div class="step-title">除外設定の追加</div>
+          <p style="margin: 0; font-size: 14.5px;">除外するプレフィックス (例: <span class="highlight">logs/</span>) や除外対象のオブジェクトタグ (例: <span class="highlight">environment=experimental</span>) を指定。該当オブジェクトは自動的にスキップされる</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <div class="step-title">Multi-Region キー解決の有効化</div>
+          <p style="margin: 0; font-size: 14.5px;">ルールの暗号化設定で有効化すると、KMS Multi-Region キーで暗号化されたソースオブジェクトは、レプリケーション先の対応するレプリカキーで暗号化される</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">レプリケーション設定の確認</span>
+      </div>
+      <pre><code class="language-bash"># 設定後、レプリケーション設定を確認する
+aws s3api get-bucket-replication --bucket my-source-bucket</code></pre>
+    </div>
+    <p style="font-size: 13.5px; margin-bottom: 0;">このコマンドは、ソースバケットに設定されたレプリケーション設定 (ルール、除外設定、暗号化設定を含む) を取得して表示します。</p>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="pros-cons">
+      <div>
+        <h3 style="margin-top: 0;">💼 ビジネス面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">コスト削減</strong>: 不要データの複製スキップでレプリカのストレージコストとリージョン間転送コストを削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">運用負荷の軽減</strong>: 多数のルールを単一ルールに集約し、作成・更新・監査の負荷を軽減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">コンプライアンス維持</strong>: レプリカが暗号化要件に準拠した状態を自動維持し、監査対応が容易に</span></div>
+        <h3>⚙️ 技術面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">シンプルな構成</strong>: 「全体を複製し、一部を除外」という直感的な設計が可能に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">自動スケール</strong>: 新テナントやプレフィックス追加時も設定変更が不要</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color: var(--aws-white);">暗号化の一貫性</strong>: S3 がキーの対応関係を自動解決し、リージョンごとのキー指定ミスを防止</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">🚧 制限事項</h3>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span>Multi-Region キー解決は KMS Multi-Region キー使用時に有効な機能で、通常の単一リージョンキーには適用されない</span></div>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span>レプリケーション先リージョンに対応する Multi-Region レプリカキーの事前作成が必要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span>除外されたオブジェクトは複製されないため、DR 要件の対象データを誤って除外しないよう設計時の確認が必要</span></div>
+        <h3>🤔 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span>既存ルールを集約する場合、除外条件が既存の包含条件と等価になるかを事前に検証することを推奨</span></div>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span>除外によりレプリケーションされないデータは、別途バックアップが必要か検討する</span></div>
+        <div class="check-item"><span class="warn-icon">⚠️</span><span>詳細な設定要素や制限値は公式ドキュメントの最新情報を確認する</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🏢 1. マルチテナント SaaS バケットのリージョン間レプリケーション</div>
+      <p><span class="usecase-label">シナリオ</span>数百のテナントをプレフィックスで分離し、テナントごとに固有の KMS Multi-Region キーで暗号化しているバケットを、DR 目的で別リージョンにレプリケーションしたい。</p>
+      <p><span class="usecase-label">実装</span>各テナントのレプリカキーを DR リージョンに作成 → バケット全体を対象とする単一ルールを作成 → Multi-Region キー解決を有効化</p>
+      <p><span class="usecase-label">効果</span>テナントごとのルール作成が不要になり、新規テナント追加時もルール変更なしで自動的にレプリケーション。各レプリカはテナント固有のキーで暗号化された状態を維持。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">💰 2. ログ・一時データを除外したコスト効率の高い DR 構成</div>
+      <p><span class="usecase-label">シナリオ</span>アプリケーションデータとアクセスログが同一バケットに保存されており、DR リージョンにはアプリケーションデータのみをレプリケーションしたい。</p>
+      <p><span class="usecase-label">実装</span>バケット全体を対象とするルールを作成 → 除外設定に logs/ プレフィックスを指定 → 実験用データには experimental タグを付与してタグ除外を設定</p>
+      <p><span class="usecase-label">効果</span>重要データのみをレプリケーションすることで、DR リージョンのストレージコストとリージョン間データ転送コストを削減。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔐 3. 本番環境から分析環境への選択的データ共有</div>
+      <p><span class="usecase-label">シナリオ</span>本番バケットのデータを分析用アカウントのバケットに SRR で共有するが、個人情報を含む特定プレフィックスは共有対象から除外したい。</p>
+      <p><span class="usecase-label">実装</span>本番バケットから分析バケットへのクロスアカウント SRR ルールを作成 → 除外設定に個人情報を含むプレフィックス (例: pii/) を指定</p>
+      <p><span class="usecase-label">効果</span>共有してはいけないデータをレプリケーション段階で確実に除外でき、データガバナンス要件を満たしながら分析環境へのデータ提供を自動化。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💵 料金</h2>
+    <p>除外設定と Multi-Region キー解決の両機能は、<span class="highlight">追加料金なし</span>で利用できます。S3 Replication 自体の標準料金は従来どおり適用されます。</p>
+    <table>
+      <tr><th>料金項目</th><th>内容</th></tr>
+      <tr><td>除外設定 / Multi-Region キー解決</td><td>追加料金なし</td></tr>
+      <tr><td>レプリカのストレージ</td><td>レプリケーション先の storage class に応じた標準料金</td></tr>
+      <tr><td>リージョン間データ転送 (CRR)</td><td>標準のデータ転送料金</td></tr>
+      <tr><td>KMS リクエスト</td><td>レプリカ暗号化に伴う KMS API リクエスト料金</td></tr>
+    </table>
+    <p style="font-size: 13.5px; margin-bottom: 0;">💡 除外設定によりレプリケーション対象データが減ることで、これらの既存コストの削減が期待できます。S3 RTC 使用時は RTC 料金も適用されます。詳細は <a class="aws-link" href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer">S3 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <!-- リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p style="margin: 0;">✅ <span class="highlight">すべての AWS リージョン</span>で利用可能です。</p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="card" style="margin: 0;">
+        <div class="card-title">🔑 AWS KMS Multi-Region キー</div>
+        <p style="margin: 0; font-size: 14px;">複数リージョンで同一のキーマテリアルを共有するキー。Multi-Region キー解決機能の前提となる</p>
+      </div>
+      <div class="card" style="margin: 0;">
+        <div class="card-title">⏱️ S3 Replication Time Control</div>
+        <p style="margin: 0; font-size: 14px;">15 分以内のレプリケーションを SLA で保証。本アップデートの機能と組み合わせて利用可能</p>
+      </div>
+      <div class="card" style="margin: 0;">
+        <div class="card-title">📦 S3 Batch Replication</div>
+        <p style="margin: 0; font-size: 14px;">既存オブジェクトをオンデマンドでレプリケーション。ルール設定前の既存データの同期に使用</p>
+      </div>
+      <div class="card" style="margin: 0;">
+        <div class="card-title">🌐 S3 Multi-Region Access Point</div>
+        <p style="margin: 0; font-size: 14px;">リージョン間フェイルオーバーを実現。双方向レプリケーションと組み合わせた高可用性構成に使用</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section summary-box">
+    <h2>🎯 まとめ</h2>
+    <p style="margin-bottom: 0;">
+      S3 Replication の除外設定と Multi-Region キー解決により、<span class="highlight">マルチテナントバケットや共有バケットのレプリケーション設計が大幅に簡素化</span>されます。多数のルールで運用している既存環境では、単一ルールへの集約による<span class="highlight">コスト削減と運用負荷軽減</span>の効果が大きいため、現在のレプリケーション構成の見直しを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-s3-replication-exclusions-multi-region-key-resolution/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-s3-replication-exclusions-multi-region-key-resolution/</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/s3/features/replication/" target="_blank" rel="noopener noreferrer">S3 Replication 製品ページ: https://aws.amazon.com/s3/features/replication/</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html" target="_blank" rel="noopener noreferrer">ドキュメント: Replicating objects within and across Regions</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer">料金ページ: https://aws.amazon.com/s3/pricing/</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-18-amazon-s3-replication-exclusions-multi-region-key-resolution.md) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

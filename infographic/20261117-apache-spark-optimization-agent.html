@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon EMR Serverless - Apache Spark Optimization Agent</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover {
+  color: var(--aws-smile-orange);
+}
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.ba-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-label {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-label { color: #FF8A73; }
+.ba-after .ba-label { color: #6BCB4A; }
+
+.ba-box ul { margin: 0; padding-left: 0; list-style: none; }
+.ba-box li {
+  margin: 8px 0;
+  padding-left: 22px;
+  position: relative;
+  font-size: 14px;
+}
+.ba-before li::before { content: "✗"; position: absolute; left: 0; color: #FF8A73; font-weight: 700; }
+.ba-after li::before { content: "✓"; position: absolute; left: 0; color: #6BCB4A; font-weight: 700; }
+
+/* 統計カード */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.2));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 110px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* チェックリスト */
+.check-item, .cross-item, .info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #6BCB4A; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+.info-icon { color: var(--aws-teal); font-size: 16px; flex-shrink: 0; }
+
+/* テーブル */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 12px 0;
+}
+
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+.spec-table td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--aws-light-gray);
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 12px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.step-body { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-body p { margin: 4px 0; font-size: 14px; }
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+/* ラベルタグ */
+.tag {
+  display: inline-block;
+  background: rgba(140, 79, 255, 0.25);
+  border: 1px solid var(--aws-purple);
+  color: #C9ADFF;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 2px 4px 2px 0;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <span class="service-badge">Amazon EMR Serverless</span>
+    <h1>⚡ Apache Spark Optimization Agent</h1>
+    <div class="subtitle">完了した Spark ジョブを数秒で分析し、コストとパフォーマンスの最適化レコメンデーションを提示 | リリース日: 2026 年 11 月 17 日</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon EMR Serverless で <span class="highlight">Apache Spark Optimization Agent</span> が利用可能になりました。完了した Spark ジョブ実行を分析し、<span class="highlight">数秒で</span>コストとパフォーマンスの最適化レコメンデーションを提示します。コストまたはパフォーマンスのどちらを優先するかを選択でき、テレメトリの証拠と平易な言葉による理由付きで、具体的な設定変更が返されます。
+    </p>
+    <p>
+      決定論的なレコメンデーションエンジンがジョブの設定、ログ、Spark テレメトリをまとめて読み取り、並列度の不足、スキューした結合キー、スピルを引き起こすメモリ圧迫、アイドルエグゼキューター、過剰なキャパシティプロビジョニングなどを特定します。過去の良好なベースライン実行との比較 (リグレッション分析) にも対応します。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">数秒</div>
+        <div class="stat-label">完了ジョブの分析時間</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">エージェント自体は無料で利用可能</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">EMR 7.6+</div>
+        <div class="stat-label">対応 EMR リリース</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-label">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>Spark UI、ログ、メトリクスを手動で突き合わせて分析する必要があり、専門知識と多くの時間が必要だった</li>
+          <li>データスキュー、メモリスピル、アイドルエグゼキューターの特定には試行錯誤の設定変更が必要だった</li>
+          <li>以前は高速だったジョブが遅くなっても、過去の実行と体系的に比較する手段がなかった</li>
+          <li>コストとパフォーマンスのトレードオフの判断は個人の経験に依存していた</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-label">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>完了した Spark ジョブ実行を数秒で分析し、根拠となるテレメトリと理由付きの設定変更を取得できる</li>
+          <li>コストまたはパフォーマンスの目標を指定でき、もう一方の劣化を定義された範囲内に抑えた推奨が得られる</li>
+          <li>ベースライン実行との比較により、パフォーマンス劣化の原因となった変更点を特定できる</li>
+          <li>新しい Spark バージョンや Graviton 利用などのベストプラクティスチェックも自動化された</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Client["💻 開発環境"]
+        direction LR
+        MCPClient["🤖 MCP クライアント"]
+        Console["🖥️ EMR Serverless コンソール&lt;br/&gt;Analyze with AI"]
+        MCPClient ~~~ Console
+    end
+
+    subgraph AWSCloud["☁️ AWS Cloud"]
+        MCPServer["🔌 SageMaker Unified Studio&lt;br/&gt;リモート MCP サーバー&lt;br/&gt;analyze_spark_workload"]
+        subgraph Artifacts["🗄️ ジョブアーティファクト"]
+            direction LR
+            SHS["📊 Spark History Server&lt;br/&gt;イベントデータ"]
+            Logs["📋 ログと設定&lt;br/&gt;S3 / CloudWatch Logs"]
+            SHS ~~~ Logs
+        end
+        Engine["⚙️ 決定論的&lt;br/&gt;レコメンデーションエンジン"]
+        Guard["🛡️ ガードレール&lt;br/&gt;PII マスキングなど"]
+    end
+
+    MCPClient --&gt;|"1. SigV4 署名リクエスト"| MCPServer
+    Console --&gt;|"1. 分析リクエスト"| MCPServer
+    MCPServer --&gt;|"2. ユーザーの IAM 権限で読み取り"| Artifacts
+    Artifacts --&gt; Engine
+    Engine --&gt; Guard
+    Guard --&gt;|"3. 推奨設定と根拠を返却"| MCPClient
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+
+    class AWSCloud cloud
+    class Client,Artifacts layer
+    class MCPServer,Engine compute
+    class SHS,Logs storage
+    class MCPClient,Console input
+    class Guard decision
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      MCP クライアントまたはコンソールからのリクエストは SageMaker Unified Studio リモート MCP サーバーに届き、サーバーがユーザーの IAM 権限でジョブアーティファクトを読み取って分析し、レコメンデーションを返します。MCP クライアントからのアクセスは MCP Proxy for AWS 経由で SigV4 署名されます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🚀 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ 単一実行の最適化分析</div>
+      <p style="margin: 4px 0; font-size: 14px;">完了した 1 回の Spark ジョブ実行を分析し、非効率の一般的な原因を特定。検出対象はアイドルまたは低稼働のキャパシティ、データスキュー、メモリ圧迫、非効率な読み取りなど。各レコメンデーションには<span class="highlight">テレメトリの証拠と平易な言葉による理由</span>が付属します。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ ベースライン比較 (リグレッション分析)</div>
+      <p style="margin: 4px 0; font-size: 14px;">パフォーマンスが劣化した実行を、過去の良好なベースライン実行と比較。設定、実行メトリクス、ステージとタスクの挙動、シャッフル、キャパシティを比較して何が変わったのかを特定します。ベースラインは同一アプリケーションの過去の実行を実行 ID で指定します。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 意図 (コストまたはパフォーマンス) に基づく最適化</div>
+      <p style="margin: 4px 0; font-size: 14px;">プロンプトでコスト削減または実行時間短縮のどちらを目標とするかを指定可能。未指定時はパフォーマンスを優先し、ベースライン比較では劣化した指標を自動採用。トレードオフ時は指定指標を改善しつつ、もう一方の劣化を定義された範囲内に抑えます。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ 決定論的レコメンデーションエンジンと検証</div>
+      <p style="margin: 4px 0; font-size: 14px;">ルールベースの調査が 4 カテゴリをチェック: <span class="highlight">メモリ</span> (GC 圧迫、スピル、OOM)、<span class="highlight">データ</span> (スキュー、ストラグラー、パーティション不足)、<span class="highlight">キャパシティ</span> (アイドル、サイジング)、<span class="highlight">実行</span> (フェッチ失敗、AQE 設定)。AWS 上の数百万の Spark ジョブで最も頻繁にチューニングされる設定を対象とし、返却前に決定論的ルールで検証して効果のない設定や目標に反する変更を除外します。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">5️⃣ ベストプラクティスチェックリスト</div>
+      <p style="margin: 4px 0; font-size: 14px;">新しい Spark バージョンへのアップグレードや Graviton プロセッサの利用など、プラットフォームレベルの改善項目も評価。各レコメンデーションは変更対象のサーフェスでラベル付けされます。</p>
+      <div style="margin-top: 8px;">
+        <span class="tag">インフラストラクチャ</span>
+        <span class="tag">Spark 設定</span>
+        <span class="tag">コード</span>
+        <span class="tag">データレイアウト</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>エージェントの仕様</h3>
+    <table class="spec-table">
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>分析対象</td><td>成功した Spark ジョブ実行 (失敗した実行は Troubleshooting Agent が担当)</td></tr>
+      <tr><td>対応プラットフォーム</td><td>EMR Serverless、AWS Glue</td></tr>
+      <tr><td>対応 EMR リリース</td><td>7.6 以降</td></tr>
+      <tr><td>エントリポイント</td><td>EMR Serverless コンソールの [Analyze with AI] ボタン、MCP クライアント</td></tr>
+      <tr><td>MCP ツール</td><td><code>analyze_spark_workload</code> (sagemaker-unified-studio-mcp-troubleshooting)</td></tr>
+      <tr><td>入力データ</td><td>Spark イベントデータ (Spark History Server)、アプリケーションレベルとジョブ実行レベルの設定、ログ</td></tr>
+      <tr><td>出力</td><td>サマリー、優先順位付きレコメンデーション ([config] / [infra] / [data])、推奨 Spark プロパティの現在値と推奨値、ベースライン比較結果</td></tr>
+      <tr><td>認証と監査</td><td>AWS IAM で認証、AWS CloudTrail に記録</td></tr>
+      <tr><td>コード変更の適用</td><td>読み取り専用。ジョブの変更、開始、停止は行わない</td></tr>
+    </table>
+
+    <h3>🔒 IAM とセキュリティ</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>エージェントは MCP クライアントに設定された IAM アイデンティティとして動作し、その権限の範囲内でのみ Amazon EMR、Amazon S3、Amazon CloudWatch Logs、Spark History Server のデータを読み取る</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>リモート MCP サーバー経由のリクエストには条件キー <code>aws:ViaAWSMCPService</code> と <code>aws:CalledViaAWSMCP</code> が付与され、IAM ポリシーでアクセス範囲を制御できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>モデルにデータが渡る前に Amazon Comprehend が PII を検出してマスキングし、すべてのモデル呼び出しは Amazon Bedrock ガードレールを通過する</span></div>
+
+    <h3>分析プロンプトの例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Prompt</span>
+        <span class="code-title">分析プロンプトの例</span>
+      </div>
+      <pre><code class="language-text">Analyze EMR Serverless job run {job-run-id} in application {application-id}
+and recommend optimizations</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="info-item"><span class="info-icon">▸</span><span>EMR Serverless で EMR リリース 7.6 以降を使用してジョブを実行していること</span></div>
+    <div class="info-item"><span class="info-icon">▸</span><span>分析対象のジョブ実行が成功 (完了) していること</span></div>
+    <div class="info-item"><span class="info-icon">▸</span><span>使用する IAM アイデンティティに、対象のジョブ実行データ (EMR Serverless、S3 のログ、Spark History Server) への読み取り権限があること</span></div>
+    <div class="info-item"><span class="info-icon">▸</span><span>MCP クライアントから使用する場合は、MCP Proxy for AWS を設定した MCP クライアントと AWS CLI プロファイル</span></div>
+
+    <div class="flow-diagram">
+      <div class="flow-step">🖥️ コンソール or<br/>🤖 MCP で分析</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📊 ベースライン<br/>比較</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔍 推奨を検証<br/>非本番でテスト</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">✅ 本番に適用</div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">コンソールから分析する</div>
+        <p>EMR Serverless コンソールで対象アプリケーションのジョブ実行を開き、[Analyze with AI] ボタンを選択します。成功した実行に対しては Optimization Agent が自動的に選択され、分析が開始されます。</p>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">MCP クライアントから分析する</div>
+        <p>自然言語でプロンプトを送信します。ジョブ実行 ID とアプリケーション ID を指定し、必要に応じてコストまたはパフォーマンスの目標を明示すると、MCP クライアントが <code>analyze_spark_workload</code> ツールを呼び出します。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Prompt</span><span class="code-title">コスト目標での分析</span></div>
+          <pre><code class="language-text">Analyze EMR Serverless job run 00abc123def456 in application
+00fedcba987654 with a cost goal and recommend optimizations</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">ベースライン比較を実行する</div>
+        <p>劣化した実行と、同一アプリケーションの過去の良好な実行の ID を指定すると、エージェントが設定、メトリクス、ステージ、キャパシティを比較し、リグレッションの原因と緩和策を返します。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Prompt</span><span class="code-title">ベースライン比較</span></div>
+          <pre><code class="language-text">Compare EMR Serverless job run 00abc123def456 against baseline run
+00xyz789uvw012 in application 00fedcba987654 and explain what changed</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-item">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <div class="step-title">レコメンデーションを検証して適用する</div>
+        <p>返された推奨 Spark プロパティ (現在値と推奨値) を確認し、本番ジョブに適用する前に非本番環境の実行でテストします。分析は対話的に継続でき、特定のレコメンデーションの詳細や、コスト重視への切り替えを追加で依頼できます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>💡 メリットと制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">✅ メリット (ビジネス面)</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">追加コストなしの最適化</strong>: エージェント自体は無料で利用でき、推奨に従うことで EMR Serverless の実行コストを削減できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">チューニング工数の削減</strong>: 専門家が時間をかけて行っていた分析が数秒で完了し、データエンジニアの生産性が向上する</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">本番前の品質向上</strong>: 開発段階でのチューニングに活用することで、本番昇格後のコスト超過やパフォーマンス問題を予防できる</span></div>
+
+        <h3>✅ メリット (技術面)</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">証拠に基づくレコメンデーション</strong>: テレメトリの証拠と理由が明示され、妥当性を検証した上で適用を判断できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">決定論的な検証</strong>: 効果のない設定や目標に反する変更が返却前に除外され、信頼性が高い</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">リグレッション分析</strong>: データ量の増加、設定変更、コード変更のどれが劣化の原因かを体系的に切り分けられる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">セキュリティ統制</strong>: IAM 認証、CloudTrail 記録、条件キー、PII マスキングが組み込まれている</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">⚠️ 制限事項</h3>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>EMR リリース 7.6 以降のみ対応 (それ以前のリリースで実行したジョブは分析不可)</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>AWS GovCloud (US) リージョンと中国リージョンでは利用不可</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>成功した実行のみが対象 (失敗した実行は Apache Spark Troubleshooting Agent の担当)</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>コードレコメンデーションツール <code>spark_code_recommendation</code> はサポートしない</span></div>
+        <div class="cross-item"><span class="cross-icon">✗</span><span>ベースライン比較は同一アプリケーションの過去の実行に限られる</span></div>
+
+        <h3>🤔 考慮すべき点</h3>
+        <div class="info-item"><span class="info-icon">▸</span><span>レコメンデーションは提案のみで自動適用されないため、適用とテストはユーザー自身が行う</span></div>
+        <div class="info-item"><span class="info-icon">▸</span><span>推奨された変更は本番適用前に非本番環境での検証が推奨されている</span></div>
+        <div class="info-item"><span class="info-icon">▸</span><span>MCP クライアントから使用する場合は MCP Proxy for AWS のセットアップが必要</span></div>
+        <div class="info-item"><span class="info-icon">▸</span><span>検証のために実行するジョブには通常の EMR Serverless 料金が発生する</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">💰 ユースケース 1: 定期バッチジョブのコスト削減</div>
+      <p><span class="label">シナリオ</span>: 毎日実行される ETL ジョブの EMR Serverless コストが増加しており、過剰なキャパシティやアイドルエグゼキューターがないか確認したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Prompt</span></div>
+        <pre><code class="language-text">Analyze EMR Serverless job run &lt;job-run-id&gt; in application &lt;application-id&gt;
+with a cost goal and recommend optimizations</code></pre>
+      </div>
+      <p><span class="label">効果</span>: アイドルキャパシティや過剰プロビジョニングが特定され、パフォーマンスの劣化を定義された範囲内に抑えながらコストを削減する設定変更が得られる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔍 ユースケース 2: パフォーマンスリグレッションの原因特定</div>
+      <p><span class="label">シナリオ</span>: 先週まで 30 分で完了していたジョブが今週から 1 時間かかるようになった。データ量、設定、コードのどれが原因か切り分けたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Prompt</span></div>
+        <pre><code class="language-text">Compare EMR Serverless job run &lt;slow-run-id&gt; against baseline run
+&lt;good-run-id&gt; in application &lt;application-id&gt; and explain what changed</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 2 つの実行の設定、メトリクス、ステージ挙動、キャパシティが比較され、リグレッションを引き起こした変更点と緩和策が特定される。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🧪 ユースケース 3: 本番昇格前の開発段階チューニング</div>
+      <p><span class="label">シナリオ</span>: 新規開発した Spark ジョブを本番に昇格する前に、データスキューやメモリ設定の問題がないか確認し、適切な設定で本番投入したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Prompt</span></div>
+        <pre><code class="language-text">Analyze EMR Serverless job run &lt;dev-run-id&gt; in application &lt;dev-application-id&gt;
+and recommend optimizations for performance</code></pre>
+      </div>
+      <p><span class="label">効果</span>: スキューした結合キーやメモリ圧迫によるスピルなどの問題が開発段階で検出され、本番投入後の手戻りを防止できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💵 料金と利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card" style="margin: 0;">
+        <div class="card-title">💰 料金</div>
+        <p style="margin: 4px 0; font-size: 14px;">Apache Spark Optimization Agent は<span class="highlight">追加料金なし</span>で利用できます。エージェントは分析とレコメンデーションを提供し、ユーザーが支払うのは使用する EMR Serverless リソースの料金のみです。推奨された変更を検証するために実行するジョブにも通常の EMR Serverless 料金が適用されます。</p>
+      </div>
+      <div class="card" style="margin: 0;">
+        <div class="card-title">🌏 利用可能リージョン</div>
+        <p style="margin: 4px 0; font-size: 14px;">EMR Serverless が利用可能な<span class="highlight">すべてのリージョン</span>で利用できます。ただし、AWS GovCloud (US) リージョンと中国リージョンは除きます。EMR リリースバージョン 7.6 以降が対象です。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🛠️ Apache Spark Troubleshooting Agent</div>
+      <p style="margin: 4px 0; font-size: 14px;">失敗した Spark 実行の根本原因分析と修正提案を行う姉妹機能。EMR on EC2、EMR on EKS、AWS Glue、SageMaker ノートブックにも対応する。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🧩 AWS Glue</div>
+      <p style="margin: 4px 0; font-size: 14px;">Optimization Agent は AWS Glue の Spark ジョブにも対応しており、Glue Studio Spark UI のイベントログから分析する。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🎓 Amazon SageMaker Unified Studio</div>
+      <p style="margin: 4px 0; font-size: 14px;">リモート MCP サーバーが <code>analyze_spark_workload</code> ツールを提供し、エージェントへの入り口となる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔐 AWS IAM / AWS CloudTrail</div>
+      <p style="margin: 4px 0; font-size: 14px;">すべてのアクセスの認証と監査記録を担い、条件キーによるアクセス制御が可能。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      Apache Spark Optimization Agent により、これまで専門知識と時間を要していた EMR Serverless 上の Spark ジョブチューニングが、<span class="highlight">証拠と理由付きのレコメンデーション</span>として数秒で得られるようになりました。追加料金なしで利用できるため、EMR リリース 7.6 以降を使用しているユーザーは、まずコストが大きい定期ジョブやパフォーマンスが劣化したジョブに対してコンソールの [Analyze with AI] から分析を試すことを推奨します。推奨された変更は非本番環境で検証した上で本番に適用してください。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/apache-spark-optimization-agent/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/apache-spark-optimization-agent/</a></li>
+      <li><a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/spark-optimization-agent.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Apache Spark Optimization Agent for Amazon EMR and AWS Glue</a></li>
+      <li><a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/spark-troubleshoot.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Spark Troubleshooting and Optimization Agents</a></li>
+      <li><a href="https://aws.amazon.com/emr/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ: Amazon EMR Serverless</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-17-apache-spark-optimization-agent.md) をもとに作成されています。</p>
+  </footer>
+
+</div>
+
+<!-- Mermaid.js -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#FF9900',
+      primaryTextColor: '#232F3E',
+      primaryBorderColor: '#FF9900',
+      lineColor: '#FF9900',
+      secondaryColor: '#F5F5F5',
+      tertiaryColor: '#FAFAFA',
+      background: '#FFFFFF',
+      mainBkg: '#FFF3E0',
+      nodeBorder: '#FF9900',
+      clusterBkg: '#FFF8E1',
+      clusterBorder: '#FF9900',
+      edgeLabelBackground: '#FFFFFF',
+      textColor: '#232F3E'
+    }
+  });
+</script>
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon S3 - AWS CloudTrail によるポスト量子 TLS 可視化</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      margin-right: 8px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 8px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .card p, .card ul {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .card ul {
+      padding-left: 20px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    /* Before/After 比較 */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 720px) {
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.1);
+      border: 1px solid rgba(29, 129, 2, 0.5);
+    }
+
+    .before-box h3, .after-box h3 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 { color: #FF6B6B; }
+    .after-box h3 { color: #6BCB77; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li {
+      margin: 8px 0;
+    }
+
+    /* 統計カード */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.15));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      margin-bottom: 4px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+    }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon { color: #6BCB77; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B6B; font-size: 16px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+    }
+
+    td code, p code, li code {
+      background: rgba(255, 153, 0, 0.12);
+      color: var(--aws-smile-orange);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+
+    /* Mermaid コンテナ */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* ステップ */
+    .step {
+      display: flex;
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .step-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .step-content h4 {
+      margin: 4px 0 8px 0;
+      color: var(--aws-white);
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+
+    .usecase h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-orange);
+      font-size: 16px;
+    }
+
+    .usecase p {
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.12);
+      border-left: 3px solid #6BCB77;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+
+    /* メリット/デメリット 2 カラム */
+    .pros-cons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 720px) {
+      .pros-cons {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul {
+      padding-left: 20px;
+      margin: 8px 0;
+    }
+
+    footer li {
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div>
+        <span class="service-badge">Amazon S3</span>
+        <span class="service-badge">AWS CloudTrail</span>
+      </div>
+      <h1>🔐 CloudTrail でポスト量子 TLS を可視化</h1>
+      <div class="subtitle">S3 リクエストの TLS 鍵交換アルゴリズム keyExchange を CloudTrail に記録 | リリース日: 2026 年 11 月 17 日</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        Amazon S3 へのリクエストで使用された <span class="highlight">TLS 鍵交換アルゴリズム</span>が AWS CloudTrail に記録されるようになりました。
+        管理イベントおよびデータイベントの <code>tlsDetails</code> フィールドに新しい <code>keyExchange</code> 値が追加され、
+        ハイブリッドポスト量子アルゴリズムの <code>X25519MLKEM768</code> や従来型の <code>x25519</code> など、各接続でネゴシエートされた鍵交換方式を確認できます。
+      </p>
+      <p>
+        これにより、S3 トラフィックのうち<span class="highlight">ポスト量子暗号 PQC で保護されている割合</span>を測定し、
+        従来型の鍵交換で接続しているアプリケーション、SDK バージョン、IAM プリンシパルを特定して、ポスト量子移行の優先順位付けに活用できます。
+        将来、暗号学的に意味のある量子コンピュータが実用化された場合に備え、長期的な機密性が求められるデータを扱う組織にとって重要なアップデートです。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ Before: アップデート前の課題</h3>
+          <ul>
+            <li>S3 エンドポイントはハイブリッド PQ-TLS に対応していたが、どのクライアントが実際に PQ-TLS で接続しているか確認する手段がなかった</li>
+            <li>S3 サーバーアクセスログには TLS バージョンと暗号スイートのみ記録され、鍵交換アルゴリズムは記録されない</li>
+            <li>ポスト量子移行の進捗を定量的に測定できず、未移行のアプリケーションや SDK バージョンの特定が困難だった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>✅ After: アップデート後の改善</h3>
+          <ul>
+            <li>CloudTrail の <code>tlsDetails.keyExchange</code> フィールドで、リクエスト単位の鍵交換アルゴリズムを確認可能に</li>
+            <li>PQ-TLS で保護されている S3 トラフィックの割合を測定できるようになった</li>
+            <li>従来型の鍵交換を使用しているアプリケーション、SDK バージョン、IAM プリンシパルを特定し、アップグレードの優先順位付けが可能に</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Clients["💻 クライアント"]
+        direction LR
+        PQ["🔐 PQ-TLS 対応クライアント<br/>X25519MLKEM768"]
+        Classic["🔓 従来型クライアント<br/>x25519 / secp256r1"]
+        PQ ~~~ Classic
+    end
+
+    subgraph AWS["☁️ AWS"]
+        S3["🪣 Amazon S3<br/>汎用 / ディレクトリ / テーブル / ベクトルバケット"]
+        CT["📜 AWS CloudTrail<br/>tlsDetails.keyExchange を記録"]
+        Athena["🔍 ログクエリ<br/>Athena / CloudTrail Lake"]
+    end
+
+    Admin(["👤 管理者<br/>未移行クライアントを特定"])
+
+    PQ -->|ハイブリッド PQ 鍵交換| S3
+    Classic -->|従来型の鍵交換| S3
+    S3 --> CT
+    CT --> Athena
+    Athena --> Admin
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Clients,AWS cloud
+    class PQ input
+    class Classic warning
+    class S3 storage
+    class CT,Athena internal
+    class Admin user
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        PQ-TLS 対応クライアントと従来型クライアントの双方からの S3 リクエストについて、TLS ハンドシェイクでネゴシエートされた鍵交換アルゴリズムが CloudTrail に記録され、クエリによって未移行クライアントを特定できる流れを示しています。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚙️ 主要機能</h2>
+
+      <div class="card">
+        <h4>📜 CloudTrail への鍵交換アルゴリズムの記録</h4>
+        <ul>
+          <li>管理イベントおよびデータイベントの <code>tlsDetails</code> フィールドに <code>keyExchange</code> 値が追加</li>
+          <li>各 TLS 接続でネゴシエートされた鍵交換方式をリクエスト単位で確認できる</li>
+          <li>ハイブリッド PQ アルゴリズム (<code>X25519MLKEM768</code>、<code>SecP256r1MLKEM768</code>) と従来型 (<code>x25519</code>、<code>secp256r1</code>、<code>secp384r1</code>) を区別できる</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>🪣 幅広いバケットタイプとアクセス経路への対応</h4>
+        <ul>
+          <li>汎用バケット、ディレクトリバケット、テーブルバケット、ベクトルバケットへのリクエストで記録</li>
+          <li>AWS PrivateLink 経由のリクエストも対象</li>
+          <li>ハイブリッド PQ-TLS 自体は、Multi-Region Access Points を除くすべての S3 エンドポイントでサポート</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>📊 ポスト量子移行の進捗測定</h4>
+        <ul>
+          <li>PQ-TLS で保護されている S3 トラフィックの割合を測定できる</li>
+          <li>ユーザーエージェント、IAM プリンシパル単位で未移行クライアントを特定し、移行の優先順位付けができる</li>
+          <li>S3 のデフォルトのサーバー側暗号化 (AES-256) と組み合わせ、転送中と保管時の両方で耐量子性のある保護を実現</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔬 技術仕様</h2>
+
+      <h3>keyExchange フィールドの値</h3>
+      <table>
+        <thead>
+          <tr><th>値</th><th>意味</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>X25519MLKEM768</code></td>
+            <td>ハイブリッドポスト量子鍵交換 (X25519 + ML-KEM-768)、TLS 1.3</td>
+          </tr>
+          <tr>
+            <td><code>SecP256r1MLKEM768</code></td>
+            <td>ハイブリッドポスト量子鍵交換 (P-256 + ML-KEM-768)、TLS 1.3</td>
+          </tr>
+          <tr>
+            <td><code>x25519</code></td>
+            <td>従来型の楕円曲線鍵交換、TLS 1.3 または TLS 1.2</td>
+          </tr>
+          <tr>
+            <td><code>secp256r1</code>、<code>secp384r1</code></td>
+            <td>従来型の楕円曲線鍵交換、TLS 1.3 または TLS 1.2</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>CloudTrail イベントの例</h3>
+      <p>PQ-TLS を使用したリクエストの CloudTrail イベントでは、<code>tlsDetails</code> が以下のように記録されます。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">CloudTrail イベント (抜粋)</span>
+        </div>
+        <pre><code class="language-json">{
+  "eventVersion": "1.11",
+  "eventSource": "s3.amazonaws.com",
+  "eventName": "ListBuckets",
+  "awsRegion": "us-east-2",
+  "userAgent": "aws-cli/2.40.1 ...",
+  "tlsDetails": {
+    "tlsVersion": "TLSv1.3",
+    "cipherSuite": "TLS_AES_128_GCM_SHA256",
+    "clientProvidedHostHeader": "s3.us-east-2.amazonaws.com",
+    "keyExchange": "X25519MLKEM768"
+  }
+}</code></pre>
+      </div>
+
+      <h3>API 変更履歴</h3>
+      <p>
+        本アップデートは CloudTrail イベントレコードへのフィールド追加であり、SDK の API 変更を伴いません。
+        2026 年 11 月 17 日時点の AWS API Changes フィードに、本アップデートに関連する API 変更は含まれていません。
+      </p>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>CloudTrail で S3 の管理イベントが記録されていること (データイベントの分析にはデータイベントの有効化が必要)</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ログをクエリする場合、CloudTrail Lake または Athena のテーブルが設定されていること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>クライアント側で PQ-TLS を利用するには、PQ-TLS に対応した AWS SDK / ツールのバージョンと設定が必要</span></div>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h4>S3 データイベントの記録を有効化</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">AWS CLI</span>
+            </div>
+            <pre><code class="language-bash">aws cloudtrail put-event-selectors \
+  --trail-name my-trail \
+  --advanced-event-selectors '[
+    {
+      "Name": "S3DataEvents",
+      "FieldSelectors": [
+        { "Field": "eventCategory", "Equals": ["Data"] },
+        { "Field": "resources.type", "Equals": ["AWS::S3::Object"] }
+      ]
+    }
+  ]'</code></pre>
+          </div>
+          <p style="font-size: 14px;">既存のトレイルに対して S3 オブジェクトレベルのデータイベントの記録を有効化します。これにより、GetObject や PutObject などのリクエストごとに <code>tlsDetails</code> を含むイベントが記録されます。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h4>従来型の鍵交換を使用しているクライアントをクエリ</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">SQL</span>
+              <span class="code-title">Athena クエリ</span>
+            </div>
+            <pre><code class="language-sql">SELECT useragent,
+       useridentity.arn AS principal_arn,
+       tlsdetails.keyexchange,
+       count(*) AS request_count
+FROM cloudtrail_logs
+WHERE eventsource = 's3.amazonaws.com'
+  AND tlsdetails.keyexchange IS NOT NULL
+  AND tlsdetails.keyexchange NOT LIKE '%MLKEM%'
+GROUP BY useragent, useridentity.arn, tlsdetails.keyexchange
+ORDER BY request_count DESC;</code></pre>
+          </div>
+          <p style="font-size: 14px;">Athena で CloudTrail ログをクエリし、ML-KEM を使用していない S3 リクエストのユーザーエージェントと IAM プリンシパルをリクエスト数の多い順に抽出します。テーブル名やカラム定義は環境に合わせて調整してください。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h4>未移行クライアントのアップグレード</h4>
+          <p style="font-size: 14px;">
+            ステップ 2 で特定したクライアントについて、PQ-TLS に対応した SDK バージョンへの更新や設定変更を行います。
+            SDK ごとの対応状況と設定方法は <a href="https://docs.aws.amazon.com/sdkref/latest/guide/pqtls-details.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS SDKs and Tools Reference Guide</a> を参照してください。
+            アップグレード後、再度クエリを実行して <code>keyExchange</code> が <code>X25519MLKEM768</code> などのハイブリッド PQ アルゴリズムに切り替わったことを確認します。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット / デメリット -->
+    <div class="section">
+      <h2>⚖️ メリットと制約事項</h2>
+      <div class="pros-cons">
+        <div>
+          <h3>💼 ビジネス面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>移行計画の定量化</strong>: ポスト量子移行の進捗を具体的な数値 (PQ-TLS 利用率) で経営層や監査者に報告できる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス対応</strong>: Harvest Now Decrypt Later 攻撃への対策状況を証跡として示せる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コスト不要</strong>: 鍵交換の記録自体に追加料金は発生せず、既存の CloudTrail の仕組みをそのまま活用できる</span></div>
+
+          <h3>🔧 技術面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>リクエスト単位の可視性</strong>: 接続ごとにネゴシエートされた鍵交換アルゴリズムを正確に把握できる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>未移行クライアントの特定</strong>: ユーザーエージェントや IAM プリンシパルと組み合わせてアップグレード対象を絞り込める</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong>幅広いカバレッジ</strong>: 汎用、ディレクトリ、テーブル、ベクトルの各バケットタイプと PrivateLink 経由のアクセスに対応</span></div>
+        </div>
+        <div>
+          <h3>⚠️ 制限事項</h3>
+          <div class="check-item"><span class="cross-icon">✗</span><span>オブジェクトレベルの分析には CloudTrail の S3 データイベントの有効化が必要で、標準の CloudTrail 料金が発生する</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>S3 サーバーアクセスログには鍵交換アルゴリズムは記録されない (TLS バージョンと暗号スイートのみ)</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>ハイブリッド PQ-TLS 自体は Multi-Region Access Points ではサポートされない</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>AWS サービスがユーザーに代わって実行した API コールでは <code>tlsDetails</code> フィールドは記録されない</span></div>
+
+          <h3>💡 考慮すべき点</h3>
+          <div class="check-item"><span class="warn-icon">⚠</span><span><code>keyExchange</code> の値はクライアント側の TLS 設定に依存するため、PQ-TLS の利用には SDK やツール側の対応バージョンと設定が必要</span></div>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>データイベントの量が多い環境では、CloudTrail Lake や Athena でのクエリコストとログ保管コストを考慮する必要がある</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h4>📈 ユースケース 1: ポスト量子移行の進捗ダッシュボード</h4>
+        <p><strong>シナリオ</strong>: 金融機関が全社的なポスト量子暗号移行プログラムを進めており、S3 トラフィックの PQ-TLS 利用率を継続的に追跡したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">日次 PQ-TLS 利用率の集計</span>
+          </div>
+          <pre><code class="language-sql">SELECT date_trunc('day', from_iso8601_timestamp(eventtime)) AS day,
+       sum(CASE WHEN tlsdetails.keyexchange LIKE '%MLKEM%' THEN 1 ELSE 0 END)
+         * 100.0 / count(*) AS pq_tls_percentage
+FROM cloudtrail_logs
+WHERE eventsource = 's3.amazonaws.com'
+  AND tlsdetails.keyexchange IS NOT NULL
+GROUP BY 1
+ORDER BY 1;</code></pre>
+        </div>
+        <p class="effect">✅ <strong>効果</strong>: 日次の PQ-TLS 利用率を可視化し、移行プログラムの KPI として経営層に報告できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h4>🔍 ユースケース 2: 未移行アプリケーションの特定と優先順位付け</h4>
+        <p><strong>シナリオ</strong>: 多数のアプリケーションが S3 を利用しており、どのアプリケーションの SDK を優先的にアップグレードすべきか判断したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">未移行クライアントの上位 20 件を抽出</span>
+          </div>
+          <pre><code class="language-sql">SELECT useragent, count(*) AS request_count
+FROM cloudtrail_logs
+WHERE eventsource = 's3.amazonaws.com'
+  AND tlsdetails.keyexchange NOT LIKE '%MLKEM%'
+GROUP BY useragent
+ORDER BY request_count DESC
+LIMIT 20;</code></pre>
+        </div>
+        <p class="effect">✅ <strong>効果</strong>: リクエスト数の多い未移行クライアントから優先的にアップグレードし、PQ-TLS 利用率を効率的に向上できる。</p>
+      </div>
+
+      <div class="usecase">
+        <h4>🛡️ ユースケース 3: セキュリティ監査での証跡提示</h4>
+        <p><strong>シナリオ</strong>: 長期保存が必要な個人情報を S3 に保管しており、監査で転送中データの耐量子性対策の実施状況を示す必要がある。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">機密データバケットへのアクセス証跡</span>
+          </div>
+          <pre><code class="language-sql">SELECT useridentity.arn AS principal_arn,
+       tlsdetails.keyexchange,
+       count(*) AS request_count
+FROM cloudtrail_logs
+WHERE eventsource = 's3.amazonaws.com'
+  AND requestparameters LIKE '%sensitive-data-bucket%'
+GROUP BY useridentity.arn, tlsdetails.keyexchange;</code></pre>
+        </div>
+        <p class="effect">✅ <strong>効果</strong>: 機密データを扱うバケットへのアクセスがハイブリッド PQ 鍵交換で保護されていることを、プリンシパル単位の証跡として監査者に提示できる。</p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金と利用可能リージョン</h2>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-value">追加料金なし</div>
+          <div class="stat-label">鍵交換詳細の記録自体に追加料金は発生しない</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">標準 CloudTrail 料金</div>
+          <div class="stat-label">S3 データイベントの記録と分析に適用</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">全 AWS リージョン</div>
+          <div class="stat-label">S3 リクエストの鍵交換詳細を記録可能</div>
+        </div>
+      </div>
+      <p style="font-size: 14px;">
+        管理イベントは各リージョンで 1 つ目のトレイルのコピーが無料で記録されます。
+        詳細は <a href="https://aws.amazon.com/cloudtrail/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS CloudTrail の料金ページ</a> を参照してください。
+      </p>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <h4>📜 AWS CloudTrail</h4>
+        <p><code>tlsDetails.keyExchange</code> フィールドを記録する基盤。CloudTrail Lake を使用するとマネージドなクエリ環境でログを分析できる。</p>
+      </div>
+      <div class="card">
+        <h4>🔍 Amazon Athena</h4>
+        <p>S3 に保存された CloudTrail ログに対して SQL クエリを実行し、未移行クライアントを特定できる。</p>
+      </div>
+      <div class="card">
+        <h4>🧰 AWS SDK / AWS CLI</h4>
+        <p>PQ-TLS を利用するにはクライアント側の対応が必要。SDK ごとの設定方法は AWS SDKs and Tools Reference Guide に記載されている。</p>
+      </div>
+      <div class="card">
+        <h4>🔑 AWS KMS / ACM</h4>
+        <p>AWS では S3 以外にも各サービスで PQC 対応が進められており、全体像は Post-Quantum Cryptography for AWS のページで確認できる。</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        Amazon S3 へのリクエストで使用された TLS 鍵交換アルゴリズムが CloudTrail に記録されるようになり、
+        <span class="highlight">ポスト量子移行の進捗を定量的に測定</span>できるようになりました。
+        長期的な機密性が求められるデータを S3 で扱っている場合は、まず CloudTrail ログで現在の PQ-TLS 利用状況を確認し、
+        従来型の鍵交換を使用しているクライアントの SDK アップグレード計画を立てることを推奨します。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典・参考リンク</p>
+      <ul>
+        <li>公式発表 (What's New): <a href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-s3-post-quantum-tls-aws-cloudtrail/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-s3-post-quantum-tls-aws-cloudtrail/</a></li>
+        <li>ドキュメント: Using hybrid post-quantum TLS with Amazon S3: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingEncryptionInTransit.PQ-TLS.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingEncryptionInTransit.PQ-TLS.html</a></li>
+        <li>ドキュメント: CloudTrail record contents: <a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-event-reference-record-contents.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-event-reference-record-contents.html</a></li>
+        <li>ドキュメント: Enabling hybrid post-quantum TLS (AWS SDKs and Tools Reference Guide): <a href="https://docs.aws.amazon.com/sdkref/latest/guide/pqtls-details.html" target="_blank" rel="noopener noreferrer" class="aws-link">https://docs.aws.amazon.com/sdkref/latest/guide/pqtls-details.html</a></li>
+        <li>Post-Quantum Cryptography for AWS: <a href="https://aws.amazon.com/security/post-quantum-cryptography/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/security/post-quantum-cryptography/</a></li>
+        <li>料金ページ (AWS CloudTrail): <a href="https://aws.amazon.com/cloudtrail/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">https://aws.amazon.com/cloudtrail/pricing/</a></li>
+      </ul>
+      <p>ベースレポート: reports/2026/2026-11-17-amazon-s3-post-quantum-tls-aws-cloudtrail.md | 生成日: 2026-11-19</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
