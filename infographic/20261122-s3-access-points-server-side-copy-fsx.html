@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon S3 / Amazon FSx - S3 Access Points によるサーバーサイドコピー対応</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.service-badge {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 16px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  display: inline-block;
+  border: 1px solid var(--aws-orange);
+  color: var(--aws-orange);
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+}
+
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.feature-card .feature-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.feature-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.feature-card li {
+  margin: 4px 0;
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.ba-card {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-card ul {
+  margin: 0;
+  padding-left: 4px;
+  list-style: none;
+}
+
+.ba-card li {
+  margin: 8px 0;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.check-icon { color: #4CAF50; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; flex-shrink: 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+code.inline {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.92em;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+
+.code-title {
+  color: var(--aws-light-gray);
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  color: var(--aws-smile-orange);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase .effect {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-body { flex: 1; min-width: 0; }
+
+.step-title {
+  color: var(--aws-white);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* 注意・警告 */
+.warning-box {
+  background: rgba(255, 153, 0, 0.08);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 10px 0;
+}
+
+.limit-box {
+  background: rgba(209, 50, 18, 0.08);
+  border-left: 4px solid var(--aws-red);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 10px 0;
+}
+
+ul.simple { margin: 8px 0; padding-left: 22px; }
+ul.simple li { margin: 6px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover {
+  color: var(--aws-smile-orange);
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="service-badges">
+      <span class="service-badge">Amazon S3</span>
+      <span class="service-badge">Amazon FSx for NetApp ONTAP</span>
+      <span class="service-badge">Amazon FSx for OpenZFS</span>
+    </div>
+    <h1>🪣 S3 Access Points によるサーバーサイドコピー対応</h1>
+    <div class="subtitle">S3 バケットと FSx ファイルシステム間のデータ移動が、転送サーバーなしで AWS 内部で完結</div>
+    <div class="release-date">📅 リリース日: 2026 年 11 月 22 日</div>
+  </div>
+
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon S3 の汎用バケットと Amazon FSx ファイルシステムの間で、<span class="highlight">S3 Access Points を使用したサーバーサイドコピー・移動</span>が可能になりました。
+      同一 AWS リージョン内であれば、S3 標準の <code class="inline">CopyObject</code> / <code class="inline">UploadPartCopy</code> オペレーションで、
+      S3 と FSx 間、または FSx ファイルシステム間でデータを直接転送できます。
+    </p>
+    <p>
+      S3 Access Points for FSx は、FSx ファイルシステムを<span class="highlight">マウントすることなく S3 API 経由でアクセス</span>できるエンドポイントです。
+      データ転送が AWS 側で完結するため、従来よりも高速かつ低コストで、簡単にデータ移動を実現できます。AWS CLI、AWS SDK、S3 互換ツールから利用可能です。
+    </p>
+
+    <div class="before-after">
+      <div class="ba-card ba-before">
+        <div class="ba-title">❌ Before: クライアント経由の 2 段階転送</div>
+        <ul>
+          <li><span class="cross-icon">✗</span><span>EC2 などの自前サーバーで各オブジェクトをダウンロードし、再アップロードが必要</span></li>
+          <li><span class="cross-icon">✗</span><span>転送用コンピューティングリソースの準備・運用コストと管理負荷が発生</span></li>
+          <li><span class="cross-icon">✗</span><span>2 段階転送のため大量データの移動に時間がかかる</span></li>
+        </ul>
+      </div>
+      <div class="ba-card ba-after">
+        <div class="ba-title">✅ After: サーバーサイドコピー</div>
+        <ul>
+          <li><span class="check-icon">✓</span><span><code class="inline">CopyObject</code> / <code class="inline">UploadPartCopy</code> で S3 と FSx 間を直接コピー・移動</span></li>
+          <li><span class="check-icon">✓</span><span>FSx ファイルシステム間のクロスファイルシステムコピーにも対応</span></li>
+          <li><span class="check-icon">✓</span><span>転送用サーバーが不要になり、高速・低コスト・シンプルなデータ移動を実現</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Before["従来: クライアント経由の転送"]
+        direction LR
+        SrcB[("🪣 S3 バケット")]
+        Client["🖥️ 自前の転送サーバー<br/>EC2 など"]
+        FSxB[("📁 FSx ファイルシステム")]
+        SrcB -->|1 ダウンロード| Client
+        Client -->|2 アップロード| FSxB
+    end
+
+    subgraph After["今回: サーバーサイドコピー"]
+        direction LR
+        App(["👤 アプリケーション<br/>AWS CLI / SDK"])
+        SrcA[("🪣 S3 バケット")]
+        AP["🔌 S3 Access Point<br/>for FSx"]
+        FSxA[("📁 FSx ファイルシステム<br/>ONTAP / OpenZFS")]
+        App -.->|CopyObject<br/>UploadPartCopy| AP
+        SrcA -->|AWS 内部で直接転送| AP
+        AP --> FSxA
+    end
+
+    Before ~~~ After
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Before,After layer
+    class SrcB,FSxB,SrcA,FSxA storage
+    class Client compute
+    class AP internal
+    class App user
+      </pre>
+    </div>
+    <p>従来はユーザー管理のサーバーを経由した 2 段階転送が必要でしたが、今回のアップデートにより API 呼び出しのみでデータ転送が AWS 内部で完結します。</p>
+  </div>
+
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">1️⃣ S3 バケットと FSx 間のサーバーサイドコピー</div>
+      <ul>
+        <li>同一 AWS リージョン内の S3 汎用バケットと FSx ファイルシステム間でデータを直接コピー・移動</li>
+        <li>S3 標準の <code class="inline">CopyObject</code> / <code class="inline">UploadPartCopy</code> オペレーションをそのまま使用可能</li>
+        <li>データがクライアントを経由しないため、転送が高速かつ低コスト</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">2️⃣ FSx ファイルシステム間のコピー</div>
+      <ul>
+        <li>S3 Access Points を介して、FSx ファイルシステム間でもサーバーサイドでデータを転送可能</li>
+        <li>ファイルシステムの移行やチーム間のデータ共有に活用できる</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">3️⃣ 既存ツールとの互換性</div>
+      <ul>
+        <li>AWS CLI、AWS SDK、S3 互換ツールから利用可能</li>
+        <li>S3 の標準 API を使用するため、既存の S3 向けワークフローやスクリプトを流用できる</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様 (対応構成)</h2>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対応 FSx ファイルシステム</td><td>Amazon FSx for NetApp ONTAP、Amazon FSx for OpenZFS</td></tr>
+      <tr><td>対応 S3 バケット</td><td>S3 汎用バケット</td></tr>
+      <tr><td>対応オペレーション</td><td><code class="inline">CopyObject</code>、<code class="inline">UploadPartCopy</code></td></tr>
+      <tr><td>コピー方向</td><td>S3 → FSx、FSx → S3、FSx → FSx</td></tr>
+      <tr><td>リージョン条件</td><td>コピー元とコピー先が同一 AWS リージョン内であること</td></tr>
+      <tr><td>アクセス方法</td><td>S3 Access Point for FSx 経由</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>📋 前提条件</h3>
+    <ul class="simple">
+      <li>FSx for NetApp ONTAP または FSx for OpenZFS のファイルシステムが作成済みであること</li>
+      <li>FSx ファイルシステムに S3 Access Point がアタッチされていること</li>
+      <li>コピー元・コピー先に対する適切な IAM 権限 (<code class="inline">s3:GetObject</code>、<code class="inline">s3:PutObject</code> など) が設定されていること</li>
+    </ul>
+
+    <div class="flow-diagram">
+      <div class="flow-step">🔌 Access Point<br/>作成</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📤 CopyObject で<br/>サーバーサイドコピー</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📦 大容量は<br/>UploadPartCopy</div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-body">
+        <div class="step-title">FSx ファイルシステムに S3 Access Point を作成</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">S3 Access Point の作成</span>
+          </div>
+          <pre><code class="language-bash">aws s3control create-access-point \
+  --account-id 111122223333 \
+  --name my-fsx-access-point \
+  --bucket arn:aws:fsx:ap-northeast-1:111122223333:volume/fs-0123456789abcdef0/fsvol-0123456789abcdef0</code></pre>
+        </div>
+        <p>FSx ボリュームを指定して S3 Access Point を作成します。これにより、FSx 上のデータに S3 API でアクセスできるエンドポイントが用意されます (既にアタッチ済みの場合はこのステップは不要です)。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-body">
+        <div class="step-title">S3 バケットから FSx へサーバーサイドコピー</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">CopyObject によるコピー</span>
+          </div>
+          <pre><code class="language-bash">aws s3api copy-object \
+  --copy-source my-source-bucket/data/input.csv \
+  --bucket arn:aws:s3:ap-northeast-1:111122223333:accesspoint/my-fsx-access-point \
+  --key data/input.csv</code></pre>
+        </div>
+        <p><code class="inline">CopyObject</code> オペレーションで、S3 バケット上のオブジェクトを S3 Access Point 経由で FSx ファイルシステムに直接コピーします。データはクライアントを経由せず、AWS 内部で転送されます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-body">
+        <div class="step-title">大容量オブジェクトのマルチパートコピー</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">UploadPartCopy によるパート単位コピー</span>
+          </div>
+          <pre><code class="language-bash">aws s3api upload-part-copy \
+  --copy-source my-source-bucket/data/large-file.bin \
+  --bucket arn:aws:s3:ap-northeast-1:111122223333:accesspoint/my-fsx-access-point \
+  --key data/large-file.bin \
+  --part-number 1 \
+  --upload-id "example-upload-id" \
+  --copy-source-range bytes=0-5368709119</code></pre>
+        </div>
+        <p>大容量オブジェクトの場合は、マルチパートアップロードと <code class="inline">UploadPartCopy</code> を組み合わせて、パート単位でサーバーサイドコピーを実行します。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="before-after">
+      <div class="card" style="margin: 0;">
+        <h3 style="margin-top: 0;">💼 ビジネス面</h3>
+        <ul class="simple">
+          <li><strong style="color: var(--aws-white);">コスト削減</strong>: 転送専用サーバー (EC2 など) の運用が不要になり、コンピューティングコストと運用負荷を削減</li>
+          <li><strong style="color: var(--aws-white);">時間短縮</strong>: AWS 内部で転送が完結し、2 段階転送と比較して転送時間を短縮</li>
+          <li><strong style="color: var(--aws-white);">データ活用の促進</strong>: パートナーデータの取り込みや部門間のデータ共有がスムーズに</li>
+        </ul>
+      </div>
+      <div class="card" style="margin: 0;">
+        <h3 style="margin-top: 0;">⚙️ 技術面</h3>
+        <ul class="simple">
+          <li><strong style="color: var(--aws-white);">標準 API の利用</strong>: <code class="inline">CopyObject</code> / <code class="inline">UploadPartCopy</code> を使用するため、既存ツールやスクリプトをそのまま活用</li>
+          <li><strong style="color: var(--aws-white);">アーキテクチャの簡素化</strong>: 中間サーバーが不要になり、障害点が減少し運用がシンプルに</li>
+          <li><strong style="color: var(--aws-white);">マウント不要</strong>: NFS 等でのマウント設定なしに S3 API 経由でデータ転送を実行</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>🚫 制限事項</h3>
+    <div class="limit-box">
+      <ul class="simple" style="margin: 0;">
+        <li>サーバーサイドコピーは<strong style="color: var(--aws-white);">同一 AWS リージョン内</strong>の転送に限定される</li>
+        <li>対応 FSx は <strong style="color: var(--aws-white);">FSx for NetApp ONTAP と FSx for OpenZFS のみ</strong> (FSx for Windows File Server、FSx for Lustre は対象外)</li>
+        <li>S3 Access Points for FSx が利用可能なリージョンでのみ使用できる</li>
+      </ul>
+    </div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="warning-box">
+      <ul class="simple" style="margin: 0;">
+        <li>FSx 側のファイルシステム性能 (スループット容量) がコピー速度に影響する可能性があるため、大量データ転送時は性能設定を確認する</li>
+        <li>コピー元・コピー先の双方に対する IAM 権限と Access Point ポリシーの設計が必要</li>
+        <li>クロスリージョンの転送が必要な場合は、従来どおり別の転送手段 (AWS DataSync など) を検討する</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📥 ユースケース 1: パートナーデータの FSx への取り込み</div>
+      <p style="margin: 0 0 8px 0;"><strong style="color: var(--aws-white);">シナリオ</strong>: パートナー企業から S3 バケット経由で受領したデータを、社内の分析基盤が利用する FSx for NetApp ONTAP ファイルシステムに取り込みたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws s3 cp s3://partner-delivery-bucket/dataset/ \
+  s3://arn:aws:s3:ap-northeast-1:111122223333:accesspoint/analytics-fsx-ap/dataset/ \
+  --recursive</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 転送用サーバーを経由せずにデータを直接取り込めるため、取り込み時間とコストを削減し、パイプラインを簡素化できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📤 ユースケース 2: 分析結果の S3 バケットへのエクスポート</div>
+      <p style="margin: 0 0 8px 0;"><strong style="color: var(--aws-white);">シナリオ</strong>: FSx for OpenZFS 上で生成された分析結果やレポートを、別チームが利用する S3 バケットに共有したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws s3api copy-object \
+  --copy-source "arn:aws:s3:ap-northeast-1:111122223333:accesspoint/results-fsx-ap/object/reports/monthly.parquet" \
+  --bucket team-b-shared-bucket \
+  --key reports/monthly.parquet</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: ファイルシステムをマウントすることなく、S3 API のみで成果物を他チームに共有でき、データ連携のリードタイムを短縮できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔄 ユースケース 3: FSx ファイルシステム間のデータ移行</div>
+      <p style="margin: 0 0 8px 0;"><strong style="color: var(--aws-white);">シナリオ</strong>: 既存の FSx ファイルシステムから新しい FSx ファイルシステムへ、特定ディレクトリのデータを移行したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws s3 cp \
+  s3://arn:aws:s3:ap-northeast-1:111122223333:accesspoint/old-fsx-ap/project-a/ \
+  s3://arn:aws:s3:ap-northeast-1:111122223333:accesspoint/new-fsx-ap/project-a/ \
+  --recursive</code></pre>
+      </div>
+      <div class="effect">✅ <strong>効果</strong>: 中間サーバーやステージング用バケットを用意することなく、ファイルシステム間でデータを直接移動できる。</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      公式発表には本機能固有の料金は記載されていませんが、従来のようにダウンロード・アップロード用のサーバーを運用する必要がなくなるため、
+      <span class="highlight">転送にかかる時間・コスト・手間を削減</span>できるとされています。
+      S3 API リクエストおよび FSx の利用には、それぞれの標準料金が適用されます。
+    </p>
+    <ul class="simple">
+      <li>📄 <a class="aws-link" href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer">Amazon S3 料金ページ</a></li>
+      <li>📄 <a class="aws-link" href="https://aws.amazon.com/fsx/pricing/" target="_blank" rel="noopener noreferrer">Amazon FSx 料金ページ</a></li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>S3 Access Points for FSx が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="icon-text"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong style="color: var(--aws-white);">Amazon S3 Access Points</strong>: バケットやファイルシステムへのアクセスをアプリケーション単位で管理するエンドポイント機能。本アップデートの基盤となる機能</span></div>
+    </div>
+    <div class="card">
+      <div class="icon-text"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong style="color: var(--aws-white);">Amazon FSx for NetApp ONTAP</strong>: NetApp ONTAP ベースのフルマネージドファイルストレージ。本機能の対応ファイルシステム</span></div>
+    </div>
+    <div class="card">
+      <div class="icon-text"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong style="color: var(--aws-white);">Amazon FSx for OpenZFS</strong>: OpenZFS ベースのフルマネージドファイルストレージ。本機能の対応ファイルシステム</span></div>
+    </div>
+    <div class="card">
+      <div class="icon-text"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong style="color: var(--aws-white);">AWS DataSync</strong>: クロスリージョン転送や大規模なデータ移行が必要な場合の代替手段</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      S3 Access Points for FSx がサーバーサイドコピーに対応したことで、S3 バケットと FSx ファイルシステム間のデータ移動から
+      <span class="highlight">転送用サーバーが不要</span>になり、高速・低コスト・シンプルなデータ連携が実現しました。
+      S3 と FSx を併用してデータパイプラインを構築している場合は、既存の転送処理を
+      <code class="inline">CopyObject</code> / <code class="inline">UploadPartCopy</code> ベースのサーバーサイドコピーに置き換えることを検討してください。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/s3-access-points-server-side-copy-fsx/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/s3-access-points-server-side-copy-fsx/</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/blogs/aws/amazon-fsx-for-openzfs-now-supports-amazon-s3-access-without-any-data-movement/" target="_blank" rel="noopener noreferrer">AWS Blog: Amazon FSx for OpenZFS now supports Amazon S3 access without any data movement</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/fsx/latest/ONTAPGuide/accessing-data-via-s3-access-points.html" target="_blank" rel="noopener noreferrer">ドキュメント: Accessing data via S3 Access Points (FSx for NetApp ONTAP)</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/fsx/latest/OpenZFSGuide/s3accesspoints-for-FSx.html" target="_blank" rel="noopener noreferrer">ドキュメント: S3 Access Points for FSx (FSx for OpenZFS)</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/s3/features/access-points/" target="_blank" rel="noopener noreferrer">S3 Access Points 機能ページ</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-11-22) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

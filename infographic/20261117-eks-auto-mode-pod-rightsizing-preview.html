@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon EKS Auto Mode リソース最適化による Pod の自動ライトサイジング (プレビュー)</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.preview-badge {
+  display: inline-block;
+  background: var(--aws-purple);
+  color: var(--aws-white);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+  margin-left: 8px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+}
+
+.feature-card {
+  background: var(--aws-squid-ink);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 12px 0;
+}
+
+.feature-card .feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.feature-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.feature-card li { margin: 4px 0; }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.1);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .box-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .box-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 6px 0; font-size: 14px; }
+
+/* stat cards */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 4px;
+}
+
+/* table */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+/* check / cross lists */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; line-height: 1.6; }
+.cross-icon { color: #FF6B4A; font-size: 16px; line-height: 1.6; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; line-height: 1.6; }
+
+/* use case */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+/* code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+code.inline {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+}
+
+/* steps */
+.step {
+  display: flex;
+  gap: 16px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+
+/* mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* regions */
+.region-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.region-chip {
+  background: rgba(0, 161, 201, 0.15);
+  border: 1px solid var(--aws-teal);
+  border-radius: 16px;
+  padding: 6px 14px;
+  font-size: 14px;
+  color: var(--aws-white);
+}
+
+/* mode flow */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 120px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.note-box {
+  background: rgba(140, 79, 255, 0.1);
+  border: 1px solid rgba(140, 79, 255, 0.5);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">Amazon EKS</span><span class="preview-badge">プレビュー</span>
+    </div>
+    <h1>☸️ EKS Auto Mode リソース最適化による<br>Pod の自動ライトサイジング</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 17 日 | サービス: Amazon Elastic Kubernetes Service</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      EKS Auto Mode の新機能<span class="highlight">リソース最適化 (resource optimization)</span>がプレビューリリース。実行中の Pod の<strong style="color: var(--aws-white);">実際の使用量</strong>に基づいて、CPU とメモリのリクエスト値を自動的にライトサイジングします。同じワークロードをより少ない / 小さい EC2 インスタンスで実行でき、<span class="highlight">手動チューニングなし・追加料金なし</span>でコンピューティングコストを削減できます。
+    </p>
+    <p>
+      有効化は <code class="inline">ClusterResourceOptimizationPolicy</code> を作成するだけ。デフォルトの <code class="inline">Recommend</code> モードで推奨値を確認し、準備ができたら <code class="inline">Apply</code> モードに切り替えると、Pod を再作成せずインプレースでリサイズ。Pod テンプレートは一切変更されないため、Argo CD や Flux などの GitOps ツールで<strong style="color: var(--aws-white);">ドリフトが発生しません</strong>。
+    </p>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">追加料金なしで利用可能</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">約 12 時間</div>
+        <div class="stat-label">推奨値の生成に必要な使用量履歴</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0 回</div>
+        <div class="stat-label">リサイズ時の Pod 再作成 (インプレース)</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ アップデート前の課題</div>
+        <ul>
+          <li>CPU / メモリのリクエスト値はデプロイ時のまま見直されず、過剰な値のまま放置されがち</li>
+          <li>適正化には使用量の計測、Pod テンプレート編集、再デプロイといった手動チューニングが必要</li>
+          <li>VPA などで自動調整すると、マニフェスト変更が GitOps ツールのドリフトとして検出される懸念</li>
+          <li>過剰なリクエスト値により、多すぎる / 大きすぎる EC2 インスタンスが稼働しコスト増大</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ アップデート後の改善</div>
+        <ul>
+          <li>実使用量に基づく CPU / メモリリクエストの推奨値がワークロードごとに自動生成</li>
+          <li><code class="inline">Apply</code> モードでは Pod <code class="inline">resize</code> サブリソースにより再作成なしでインプレースリサイズ</li>
+          <li>Pod テンプレートは変更されないため GitOps ドリフトが発生しない</li>
+          <li>OOM kill 発生時はメモリ推奨値を引き上げ、Java ヒープ等の要件を下回らないよう調整</li>
+          <li>追加料金なしで、より少ない / 小さいインスタンスに集約</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Admin(["👤 プラットフォームチーム"]) -->|ポリシーを作成| CROP["📜 ClusterResourceOptimizationPolicy"]
+
+    subgraph Cluster["☁️ EKS Auto Mode クラスター"]
+        CROP --> RO["📊 ResourceOptimization オブジェクト<br/>ワークロードごとに自動作成"]
+        Usage["📈 コンテナの実使用量<br/>約 12 時間の履歴を収集"] --> RO
+        RO --> Mode{"モード"}
+        Mode -->|Recommend| Rec["💡 推奨値のレポートのみ<br/>Pod は変更しない"]
+        Mode -->|Apply| Resize["⚡ Pod resize サブリソースで<br/>インプレースリサイズ"]
+        Resize --> Pods["📦 Deployment / StatefulSet の Pod"]
+    end
+
+    Pods -.->|Pod テンプレートは変更しないためドリフトなし| GitOps{{"🔁 Argo CD / Flux"}}
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Cluster cloud
+    class Admin user
+    class CROP input
+    class RO,Usage internal
+    class Mode decision
+    class Rec,Resize,Pods process
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      ポリシーを作成すると、選択されたワークロードごとに <code class="inline">ResourceOptimization</code> オブジェクトが自動作成され、約 12 時間の使用量履歴に基づいて推奨値が生成されます。<code class="inline">Apply</code> モードでは Pod テンプレートを変更せず、実行中の Pod をインプレースでリサイズします。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">📜 1. ポリシーベースの有効化 (ClusterResourceOptimizationPolicy)</div>
+      <ul>
+        <li>クラスタースコープの Kubernetes オブジェクトを <code class="inline">kubectl</code> や GitOps ツールで作成するだけ (EKS API の設定は不要)</li>
+        <li><code class="inline">namespaceSelector</code> と <code class="inline">workloadSelector</code> で対象を柔軟に選択</li>
+        <li>複数ポリシーが同じワークロードを選択した場合はフィールドごとに結合、より具体的なポリシーが優先</li>
+        <li>空の <code class="inline">spec</code> はシステム名前空間を除く全 Deployment / StatefulSet を <code class="inline">Recommend</code> モードで選択</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🔀 2. 2 つの動作モード (Recommend / Apply)</div>
+      <div class="flow-diagram">
+        <div class="flow-step">💡 Recommend<br>推奨値の生成のみ<br>Pod は変更しない</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">⚡ Apply<br>推奨値に合わせて<br>Pod をリサイズ</div>
+      </div>
+      <ul>
+        <li>モードを切り替えても収集済みの使用量履歴はリセットされず、再収集は不要</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🔁 3. インプレースリサイズと GitOps 親和性</div>
+      <ul>
+        <li>Kubernetes の Pod <code class="inline">resize</code> サブリソースを使用し、Pod を再作成せずにリサイズ</li>
+        <li>Pod テンプレートは編集しないため、Argo CD や Flux はドリフトを検出せず、リバートも発生しない</li>
+        <li>スケールアウトやロールアウトで作成される新しい Pod は推奨サイズで起動</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">⚖️ 4. Balanced 最適化プロファイル</div>
+      <ul>
+        <li><strong>CPU</strong>: 使用量の 95 パーセンタイルがリクエスト値の約 <span class="highlight">87%</span> になるようにサイジング</li>
+        <li><strong>メモリ</strong>: 95 パーセンタイルがリクエスト値の約 <span class="highlight">70%</span> になるようにサイジング (OOM 対策で CPU より大きいヘッドルーム)</li>
+        <li>推奨値は宣言された最小リクエストの 1/2 から最大リミットの 2 倍までの範囲内</li>
+        <li>Java サービスではメモリ推奨値が Java ヒープを下回らないよう維持、OOM kill 後はメモリを引き上げ</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🤝 5. オートスケーラーとの共存</div>
+      <ul>
+        <li>HPA や KEDA がスケーリング基準とするリソースは変更しない</li>
+        <li>VPA が既に管理しているワークロードは除外できる</li>
+        <li><code class="inline">optimization.eks.amazonaws.com/enabled: "false"</code> アノテーションで個別にオプトアウト可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+    <h3>要件とスコープ</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>クラスター</td><td>Kubernetes 1.36 以降の EKS Auto Mode クラスター (既存クラスターも対象、クラスター更新や EKS API 呼び出しは不要)</td></tr>
+      <tr><td>対象ワークロード</td><td>Deployment、StatefulSet</td></tr>
+      <tr><td>対象リソース</td><td>CPU、メモリ (GPU、エフェメラルストレージ、レプリカ数は対象外)</td></tr>
+      <tr><td>除外名前空間</td><td><code class="inline">kube-system</code>、<code class="inline">kube-public</code>、<code class="inline">kube-node-lease</code> は選択しても管理対象外</td></tr>
+      <tr><td>推奨値の生成</td><td>コンテナごとに約 12 時間の使用量履歴が必要</td></tr>
+      <tr><td>最適化プロファイル</td><td>プレビューでは <code class="inline">Balanced</code> のみ</td></tr>
+      <tr><td>料金</td><td>追加料金なし</td></tr>
+    </table>
+
+    <div class="note-box">
+      🔎 <strong>API 変更履歴</strong>: 今回のアップデートに関連する EKS API の変更はありません。リソース最適化は <code class="inline">ClusterResourceOptimizationPolicy</code> という Kubernetes カスタムリソース (apiVersion: <code class="inline">eks.amazonaws.com/v1beta1</code>) で管理され、EKS API の設定は存在しません。
+    </div>
+
+    <h3>ClusterResourceOptimizationPolicy の例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">YAML</span>
+        <span class="code-title">特定チームのワークロードを Apply モードで管理</span>
+      </div>
+      <pre><code class="language-yaml">apiVersion: eks.amazonaws.com/v1beta1
+kind: ClusterResourceOptimizationPolicy
+metadata:
+  name: team-search
+spec:
+  namespaceSelector:
+    matchLabels:
+      team: search
+  workloadSelector:
+    matchLabels:
+      tier: stateless
+  mode: Apply</code></pre>
+    </div>
+    <p style="font-size: 14px;"><code class="inline">team: search</code> ラベルを持つ名前空間のうち、<code class="inline">tier: stateless</code> ラベルを持つワークロードのみを <code class="inline">Apply</code> モードで管理するポリシーの例です。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Kubernetes バージョン 1.36 以降で稼働する EKS Auto Mode クラスター</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>クラスターと通信できるように設定された <code class="inline">kubectl</code></span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>クラスタースコープのリソースを作成できる権限</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">デフォルト設定でリソース最適化を有効化</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">空の spec でポリシーを作成</span></div>
+          <pre><code class="language-bash">cat &lt;&lt;EOF &gt; ro-default-policy.yaml
+apiVersion: eks.amazonaws.com/v1beta1
+kind: ClusterResourceOptimizationPolicy
+metadata:
+  name: default
+spec: {}
+EOF
+
+kubectl apply -f ro-default-policy.yaml</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">システム名前空間を除く全 Deployment / StatefulSet が <code class="inline">Recommend</code> モードと <code class="inline">Balanced</code> プロファイルで選択されます。この時点では Pod は一切変更されません。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">ポリシーの状態と推奨値を確認</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">crop / ro は短縮名</span></div>
+          <pre><code class="language-bash"># ポリシーの状態を確認
+kubectl get crop
+
+# ワークロードごとの ResourceOptimization オブジェクトを確認
+kubectl get ro --all-namespaces</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;"><code class="inline">READY</code> が <code class="inline">True</code> であればセレクターは有効、<code class="inline">SELECTED</code> は選択中のワークロード数。推奨値は約 12 時間の使用量履歴の収集後に表示されます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">Apply モードに切り替えてリサイズを開始</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">モードの切り替え</span></div>
+          <pre><code class="language-bash">kubectl patch crop default --type merge -p '{"spec":{"mode":"Apply"}}'</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">モード切り替え時に使用量履歴はリセットされないため、既に推奨値があるワークロードは即座にリサイズ対象となります。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">必要に応じて個別ワークロードをオプトアウト</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">オプトアウトと値の復元</span></div>
+          <pre><code class="language-bash"># ワークロードを管理対象から除外
+kubectl annotate deployment my-app -n my-namespace optimization.eks.amazonaws.com/enabled="false"
+
+# 適用済みの値を Pod テンプレートの値に戻す場合
+kubectl rollout restart deployment my-app -n my-namespace</code></pre>
+        </div>
+        <p style="font-size: 14px; margin: 8px 0 0 0;">適用済みの値は自動では戻らないため、Pod テンプレートの値に戻すにはロールアウト再起動が必要です。GitOps 管理の場合はリポジトリ内のマニフェストにアノテーションを追加してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💪 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>コンピューティングコストの削減</strong>: 過剰なリクエスト値が実使用量に合わせて適正化され、より少ない / 小さい EC2 インスタンスで実行可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>追加料金なし</strong>: リソース最適化自体に費用は発生せず、導入の障壁が低い</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用工数の削減</strong>: 放置されがちなリクエスト値の見直しが自動化され、手動チューニングが不要</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>GitOps とのドリフトレスな統合</strong>: Pod テンプレートを変更しないため、Argo CD や Flux がドリフトを検出しない</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>無停止のリサイズ</strong>: Pod <code class="inline">resize</code> サブリソースによるインプレースリサイズで Pod の再作成を伴わない</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>安全性を考慮した推奨値</strong>: メモリには CPU より大きいヘッドルーム、Java ヒープの維持や OOM kill 後のメモリ引き上げ</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>段階的な導入が可能</strong>: <code class="inline">Recommend</code> モードで影響なく確認してから、ポリシー単位・ワークロード単位で <code class="inline">Apply</code> に移行</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>プレビューリリースであり、仕様は変更される可能性がある</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>Kubernetes 1.36 以降の EKS Auto Mode クラスターのみで利用可能 (Auto Mode 以外は利用不可)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>対象は Deployment と StatefulSet のみ、CPU とメモリのみサイジング (GPU、エフェメラルストレージ、レプリカ数は対象外)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span><code class="inline">kube-system</code>、<code class="inline">kube-public</code>、<code class="inline">kube-node-lease</code> 名前空間は管理されない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>最適化プロファイルはプレビューでは <code class="inline">Balanced</code> のみ</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>利用可能リージョンは 7 リージョンに限定</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span><strong>自動ロールバックなし</strong>: 適用した推奨値がワークロードを劣化させても自動では元に戻らない。問題発生時はオプトアウトまたは <code class="inline">Recommend</code> モードへの切り替えが必要</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span><strong>適用済みの値は残存する</strong>: ポリシー削除やモード変更をしても、実行中の Pod には最後に適用された値が残る。戻すには <code class="inline">kubectl rollout restart</code> などの再起動が必要</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span><strong>コスト削減額のレポートなし</strong>: プレビューでは削減額の推定値は表示されないため、計測には AWS Cost Explorer などを使用</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span><strong>コンソールは読み取り専用</strong>: EKS コンソールに専用ページはなく、Kubernetes リソースビューアーで読み取り専用の確認のみ</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>最初の推奨値の生成には約 12 時間の使用量履歴が必要。オプトアウトすると履歴が削除され、再有効化時は約 12 時間の再収集が必要</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">☕ ユースケース 1: Argo CD 管理下の Java サービス群の一括ライトサイジング</div>
+      <p style="font-size: 14px;"><strong>シナリオ</strong>: プラットフォームチームが Argo CD で多数の Java サービスを管理しており、各チームのテンプレートを編集せずに全アプリケーション名前空間をライトサイジングしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">全名前空間に Apply モードを適用</span></div>
+        <pre><code class="language-yaml">apiVersion: eks.amazonaws.com/v1beta1
+kind: ClusterResourceOptimizationPolicy
+metadata:
+  name: default
+spec:
+  mode: Apply</code></pre>
+      </div>
+      <p style="font-size: 14px; margin-bottom: 0;"><strong>効果</strong>: テンプレート編集や GitOps ドリフトなしで全名前空間をライトサイジング。メモリ推奨値は各 Java ヒープより上に維持され、OOM kill 発生後はメモリを引き上げるため、Java ワークロードでも安全に適用できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🛡️ ユースケース 2: 本番名前空間を除外した段階的導入</div>
+      <p style="font-size: 14px;"><strong>シナリオ</strong>: まず本番以外の環境で推奨値を適用し、本番の <code class="inline">payments-prod</code> 名前空間は対象外にしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">NotIn で特定の名前空間を除外</span></div>
+        <pre><code class="language-yaml">apiVersion: eks.amazonaws.com/v1beta1
+kind: ClusterResourceOptimizationPolicy
+metadata:
+  name: all-but-payments
+spec:
+  namespaceSelector:
+    matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: NotIn
+        values: [payments-prod]</code></pre>
+      </div>
+      <p style="font-size: 14px; margin-bottom: 0;"><strong>効果</strong>: Kubernetes が全名前空間に自動設定する <code class="inline">kubernetes.io/metadata.name</code> ラベルを利用し、ラベル付け作業なしで特定の名前空間を除外。本番環境への影響を避けながら段階的に導入できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔍 ユースケース 3: 特定チームのステートレスワークロードのみ自動適用</div>
+      <p style="font-size: 14px;"><strong>シナリオ</strong>: 検索チームのステートレスなワークロードだけ自動リサイズを有効にし、その他のワークロードは推奨値の確認にとどめたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">YAML</span><span class="code-title">セレクターで対象を絞り込み</span></div>
+        <pre><code class="language-yaml">apiVersion: eks.amazonaws.com/v1beta1
+kind: ClusterResourceOptimizationPolicy
+metadata:
+  name: team-search
+spec:
+  namespaceSelector:
+    matchLabels:
+      team: search
+  workloadSelector:
+    matchLabels:
+      tier: stateless
+  mode: Apply</code></pre>
+      </div>
+      <p style="font-size: 14px; margin-bottom: 0;"><strong>効果</strong>: より具体的なポリシーが優先されるルールにより、デフォルトポリシー (<code class="inline">Recommend</code>) と共存しながら、対象を絞った <code class="inline">Apply</code> モードの適用が可能。HPA や KEDA のスケーリング基準リソースは変更されないため、既存のオートスケーリング構成とも共存できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>リソース最適化は<span class="highlight">追加料金なし</span>で利用できます。EKS Auto Mode 自体の料金 (管理対象インスタンスに対する Auto Mode 料金と EC2 インスタンス料金) は従来どおり発生します。</p>
+    <p>ライトサイジングにより必要な EC2 インスタンスの数やサイズが削減されるため、コンピューティングコストの削減が期待できます。プレビューでは削減額の推定値は提供されないため、効果測定には AWS Cost Explorer などを使用してください。</p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <div class="region-grid">
+      <span class="region-chip">🇺🇸 米国東部 (バージニア北部)</span>
+      <span class="region-chip">🇺🇸 米国東部 (オハイオ)</span>
+      <span class="region-chip">🇺🇸 米国西部 (オレゴン)</span>
+      <span class="region-chip">🇩🇪 欧州 (フランクフルト)</span>
+      <span class="region-chip">🇮🇪 欧州 (アイルランド)</span>
+      <span class="region-chip">🇰🇷 アジアパシフィック (ソウル)</span>
+      <span class="region-chip">🇯🇵 アジアパシフィック (東京)</span>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card"><strong style="color: var(--aws-white);">EKS Auto Mode</strong>: 本機能の前提となる EKS のフルマネージドな実行モード。コンピューティング、ネットワーク、ストレージのプロビジョニングと管理を自動化する</div>
+    <div class="card"><strong style="color: var(--aws-white);">Horizontal Pod Autoscaler (HPA) / KEDA</strong>: 水平スケーリングの仕組み。リソース最適化はスケーリング基準とするリソースを変更しないため共存できる</div>
+    <div class="card"><strong style="color: var(--aws-white);">Vertical Pod Autoscaler (VPA)</strong>: 垂直スケーリングの仕組み。VPA が既に管理しているワークロードはリソース最適化から除外できる</div>
+    <div class="card"><strong style="color: var(--aws-white);">AWS Cost Explorer</strong>: ライトサイジングによるコスト削減効果の計測に使用できる</div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>EKS Auto Mode のリソース最適化は、デプロイ後に放置されがちな CPU / メモリリクエストの適正化を、<span class="highlight">GitOps ドリフトや Pod 再作成なし</span>で自動化する機能です。追加料金なしで利用でき、まず <code class="inline">Recommend</code> モードで推奨値を確認してから <code class="inline">Apply</code> モードに移行する段階的な導入が可能です。</p>
+    <p>Kubernetes 1.36 以降の EKS Auto Mode クラスターを運用しているチームは、まずデフォルトポリシーを作成して推奨値を確認し、コスト削減の余地を把握することをお勧めします。</p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/eks-auto-mode-pod-rightsizing-preview/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/eks-auto-mode-pod-rightsizing-preview/</a></li>
+      <li><a href="https://docs.aws.amazon.com/eks/latest/userguide/auto-resource-optimization.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Rightsize workloads with resource optimization</a></li>
+      <li><a href="https://docs.aws.amazon.com/eks/latest/userguide/auto-ro-enable.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Turn on and configure EKS Auto Mode resource optimization</a></li>
+      <li><a href="https://aws.amazon.com/eks/auto-mode/" target="_blank" rel="noopener noreferrer" class="aws-link">EKS Auto Mode 製品ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-17-eks-auto-mode-pod-rightsizing-preview.md) に基づいて作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

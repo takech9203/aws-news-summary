@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Inspector - ECR および EC2 の検出結果に対するランタイム到達可能性分析の拡張</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF8A73; }
+.after-box .ba-title { color: #6FCF52; }
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; font-size: 14px; }
+
+/* 判定方法カード */
+.method-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .method-grid { grid-template-columns: 1fr; }
+}
+
+.method-card {
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(140, 79, 255, 0.5);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.method-name {
+  font-weight: 700;
+  color: var(--aws-purple);
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.method-desc { font-size: 14px; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+code {
+  font-family: 'Courier New', monospace;
+  background: rgba(255, 153, 0, 0.12);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.92em;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #6FCF52; font-size: 17px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 17px; flex-shrink: 0; }
+.warn-icon { font-size: 16px; flex-shrink: 0; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  background: transparent;
+  color: inherit;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid { display: flex; justify-content: center; }
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: -8px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase-label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* ステップ */
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  margin-right: 8px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.step-heading {
+  display: flex;
+  align-items: center;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 24px 0 8px 0;
+}
+
+/* メリットグリッド */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+
+.merit-box {
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.merit-box h3 { margin-top: 0; color: var(--aws-teal); font-size: 16px; }
+.merit-box ul { margin: 0; padding-left: 18px; }
+.merit-box li { margin: 8px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">Amazon Inspector</span>
+    <h1>🔍 ECR および EC2 の検出結果に対するランタイム到達可能性分析の拡張</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 23 日 | 機能: ランタイム到達可能性分析 Runtime Reachability Analysis の ECR / EC2 検出結果への拡張</div>
+  </div>
+
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>Amazon Inspector が、Amazon ECR のコンテナイメージおよび Amazon EC2 インスタンスの脆弱性検出結果に対して、<span class="highlight">ランタイム到達可能性分析</span>を適用するようになりました。検出された脆弱性が実際にアプリケーションから到達可能 (悪用される可能性がある) かどうかを Inspector が自動的に判定し、検出結果に反映します。</p>
+    <p>大規模なコンテナフリートや複雑なアプリケーションを運用するチームにとって、未使用の依存関係に含まれる脆弱性と、実際に到達可能な脆弱性を分離できることは、<span class="highlight">修復の優先順位付け</span>において大きな価値があります。ノイズが減少し、開発チームとセキュリティチームの効率が向上します。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>Inspector はリソース内のすべての脆弱性にフラグを立てており、アプリケーションが使用していないパッケージの脆弱性も同列に報告されていた</li>
+          <li>セキュリティチームは、どの脆弱性が実際のリスクをもたらすかを手動で調査する必要があった</li>
+          <li>大規模環境では検出結果のノイズが多く、本当に対処すべき脆弱性の優先順位付けが困難だった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>Inspector が脆弱性の到達可能性を自動判定し、潜在的に到達可能な脆弱性を識別できるように</li>
+          <li>ECR コンテナイメージでは、脆弱なパッケージが Dockerfile の WORKDIR、ENTRYPOINT、CMD 命令で定義されたアプリケーションパスに含まれるかを自動チェック</li>
+          <li>EC2 インスタンスでは、脆弱なパッケージが直近のスキャン時にプロセスとして実行されていたかを自動チェック</li>
+          <li>到達可能性に基づくフィルタリングにより、修復の優先順位付けが容易に</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Resources["🖥️ スキャン対象リソース"]
+        direction LR
+        ECR["📦 ECR コンテナイメージ"]
+        EC2["💻 EC2 インスタンス"]
+        ECR ~~~ EC2
+    end
+
+    subgraph Inspector["🔍 Amazon Inspector"]
+        Scan["🧪 脆弱性スキャン"]
+        Reach{"🎯 到達可能性分析"}
+    end
+
+    subgraph Analysis["⚙️ 判定ロジック"]
+        direction LR
+        Docker["📄 Dockerfile パス確認<br/>WORKDIR / ENTRYPOINT / CMD"]
+        Proc["🔄 実行プロセス確認<br/>VM Scanner エージェント"]
+        Docker ~~~ Proc
+    end
+
+    Reachable["🚨 到達可能な脆弱性<br/>優先的に修復"]
+    NotReachable["📋 未使用パッケージの脆弱性<br/>優先度を下げて管理"]
+
+    ECR --> Scan
+    EC2 --> Scan
+    Scan --> Reach
+    Reach -.-> Docker
+    Reach -.-> Proc
+    Reach --> Reachable
+    Reach --> NotReachable
+
+    classDef resource fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef inspector fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef logic fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef critical fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+    classDef low fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef container fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class ECR,EC2 resource
+    class Scan inspector
+    class Reach decision
+    class Docker,Proc logic
+    class Reachable critical
+    class NotReachable low
+    class Resources,Inspector,Analysis container
+      </pre>
+    </div>
+    <p class="diagram-caption">Inspector が ECR コンテナイメージと EC2 インスタンスをスキャンした後、Dockerfile のパス情報や実行プロセスの観測結果に基づいて到達可能性を判定し、脆弱性を「到達可能」と「未使用パッケージ」に分類するフロー</p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <h3>1️⃣ ECR コンテナイメージの到達可能性分析</h3>
+    <div class="card">
+      <div class="check-item"><span class="check-icon">✓</span><span>脆弱なパッケージが、Dockerfile の <code>WORKDIR</code>、<code>ENTRYPOINT</code>、<code>CMD</code> 命令で定義されたアプリケーションパス内に含まれるかをチェック</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>アプリケーションの実行経路に含まれないパッケージの脆弱性を区別可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>大規模なコンテナフリートにおける修復優先順位付けを支援</span></div>
+    </div>
+
+    <h3>2️⃣ EC2 インスタンスの到達可能性分析</h3>
+    <div class="card">
+      <div class="check-item"><span class="check-icon">✓</span><span>脆弱なパッケージが、直近のスキャン時に実行中のプロセスとして観測されたかをチェック</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>エージェントベースのスキャン (Inspector VM Scanner) が必要</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>実際に稼働しているプロセスに関連する脆弱性を優先的に特定</span></div>
+    </div>
+
+    <h3>3️⃣ 検出結果への自動反映とバックフィル</h3>
+    <div class="card">
+      <div class="check-item"><span class="check-icon">✓</span><span>新規の検出結果には即座に到達可能性分析が適用される</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>既存の検出結果にも順次バックフィルされる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>追加料金なしで利用可能</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>到達可能性の判定方法</h3>
+    <div class="method-grid">
+      <div class="method-card">
+        <div class="method-name">📦 ECR コンテナイメージ</div>
+        <div class="method-desc">Dockerfile の <code>WORKDIR</code> / <code>ENTRYPOINT</code> / <code>CMD</code> で定義されたパスに脆弱なパッケージが含まれるかを判定。<br/><strong>前提条件</strong>: ECR 拡張スキャンの有効化</div>
+      </div>
+      <div class="method-card">
+        <div class="method-name">💻 EC2 インスタンス</div>
+        <div class="method-desc">直近のスキャン時に脆弱なパッケージがプロセスとして実行されていたかを判定。<br/><strong>前提条件</strong>: Inspector VM Scanner によるエージェントベーススキャン</div>
+      </div>
+    </div>
+
+    <h3>API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/11/20</td>
+        <td><a href="https://awsapichanges.com/archive/changes/e9d2b3-inspector2.html" target="_blank" rel="noopener noreferrer" class="aws-link">Inspector2</a></td>
+        <td>6 updated api methods - 検出結果モデルの脆弱なパッケージに <code>runtimeReachability</code>、<code>runtimeReachabilityReason</code>、<code>purl</code> フィールドを追加。検出結果の一覧表示、抑制ルール、検出結果レポートに <code>runtimeReachability</code>、<code>runtimeReachabilityReason</code>、<code>purlQualifier</code> のパッケージフィルターを追加</td>
+      </tr>
+    </table>
+
+    <h3>検出結果のフィルター例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">runtimeReachability フィルター</span>
+      </div>
+      <pre><code class="language-json">{
+  "filterCriteria": {
+    "vulnerablePackages": [
+      {
+        "runtimeReachability": {
+          "comparison": "EQUALS",
+          "value": "REACHABLE"
+        }
+      }
+    ]
+  }
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon Inspector が有効化されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ECR の場合: ECR スキャンが有効化されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>EC2 の場合: Inspector VM Scanner によるエージェントベースのスキャンが有効化されていること</span></div>
+
+    <div class="step-heading"><span class="step-number">1</span>Inspector のスキャン状況を確認</div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">アカウントのスキャン状況確認</span>
+      </div>
+      <pre><code class="language-bash">aws inspector2 batch-get-account-status</code></pre>
+    </div>
+    <p>アカウントで Inspector の ECR / EC2 スキャンが有効になっているかを確認します。</p>
+
+    <div class="step-heading"><span class="step-number">2</span>到達可能性でフィルタリングして検出結果を取得</div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">到達可能な脆弱性のみを一覧表示</span>
+      </div>
+      <pre><code class="language-bash">aws inspector2 list-findings \
+  --filter-criteria '{
+    "vulnerablePackages": [
+      {
+        "runtimeReachability": {
+          "comparison": "EQUALS",
+          "value": "REACHABLE"
+        }
+      }
+    ]
+  }'</code></pre>
+    </div>
+    <p><code>runtimeReachability</code> フィルターを使用して、到達可能と判定された脆弱性のみを一覧表示します。優先的に修復すべき検出結果を素早く特定できます。</p>
+
+    <div class="step-heading"><span class="step-number">3</span>抑制ルールやレポートへの活用</div>
+    <p>到達可能性フィルターは抑制ルール (suppression rules) や検出結果レポートにも利用できます。未使用パッケージの脆弱性に対する抑制ルールを作成することで、検出結果の<span class="highlight">ノイズを削減</span>し、運用負荷を軽減できます。</p>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>💼 ビジネス面</h3>
+        <ul>
+          <li><strong>修復工数の削減</strong>: 実際にリスクをもたらす脆弱性に集中でき、手動調査にかかる工数を削減できる</li>
+          <li><strong>セキュリティ対応の迅速化</strong>: 到達可能な脆弱性を優先することで、実リスクへの対応時間を短縮できる</li>
+          <li><strong>追加コストなし</strong>: 追加料金なしで既存の Inspector 利用環境にそのまま適用される</li>
+        </ul>
+      </div>
+      <div class="merit-box">
+        <h3>🔧 技術面</h3>
+        <ul>
+          <li><strong>ノイズの削減</strong>: 未使用の依存関係に含まれる脆弱性を分離し、アラート疲れを防止できる</li>
+          <li><strong>自動化された到達可能性判定</strong>: Dockerfile のパス情報やプロセス観測に基づく判定が自動で行われる</li>
+          <li><strong>API / フィルターとの統合</strong>: <code>runtimeReachability</code> フィルターにより、一覧表示・抑制ルール・レポートで一貫した優先順位付けが可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>EC2 インスタンスの到達可能性分析には、Inspector VM Scanner によるエージェントベースのスキャンが必要 (エージェントレススキャンのみでは利用不可)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>ECR の判定は Dockerfile の <code>WORKDIR</code>、<code>ENTRYPOINT</code>、<code>CMD</code> 命令に基づくため、実行時に動的にロードされるパッケージの検出には限界がある可能性がある</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>既存の検出結果へのバックフィルは順次実施されるため、反映までに時間がかかる場合がある</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>「到達不可」と判定された脆弱性も、構成変更により将来到達可能になる可能性があるため、完全に無視せず管理を継続することが望ましい</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>EC2 の判定は直近のスキャン時のプロセス観測に基づくため、稀にしか起動しないプロセスの脆弱性は到達可能と判定されない可能性がある</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📦 ユースケース 1: 大規模コンテナフリートの脆弱性トリアージ</div>
+      <p><span class="usecase-label">シナリオ</span>: 数百のマイクロサービスを ECR で管理しており、ベースイメージ由来の脆弱性検出が大量に発生している。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws inspector2 list-findings \
+  --filter-criteria '{
+    "resourceType": [{"comparison": "EQUALS", "value": "AWS_ECR_CONTAINER_IMAGE"}],
+    "vulnerablePackages": [
+      {"runtimeReachability": {"comparison": "EQUALS", "value": "REACHABLE"}}
+    ]
+  }'</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: アプリケーションの実行パスに含まれる脆弱性のみを抽出し、修復対象を大幅に絞り込める。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">💻 ユースケース 2: EC2 サーバー群の実行中プロセスに基づく優先修復</div>
+      <p><span class="usecase-label">シナリオ</span>: 多数の EC2 インスタンスで動作するレガシーアプリケーションがあり、OS パッケージの脆弱性が大量に検出されている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># Inspector VM Scanner によるエージェントベーススキャンを有効化した上で
+aws inspector2 list-findings \
+  --filter-criteria '{
+    "resourceType": [{"comparison": "EQUALS", "value": "AWS_EC2_INSTANCE"}],
+    "vulnerablePackages": [
+      {"runtimeReachability": {"comparison": "EQUALS", "value": "REACHABLE"}}
+    ]
+  }'</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 実際にプロセスとして実行されていたパッケージの脆弱性を優先的に修復し、実リスクを効率的に低減できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔕 ユースケース 3: 未使用パッケージの脆弱性に対する抑制ルール運用</div>
+      <p><span class="usecase-label">シナリオ</span>: セキュリティダッシュボードのノイズを削減したいが、検出結果自体は記録として残したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws inspector2 create-filter \
+  --action SUPPRESS \
+  --name "suppress-unreachable-findings" \
+  --filter-criteria '{
+    "vulnerablePackages": [
+      {"runtimeReachability": {"comparison": "EQUALS", "value": "NOT_REACHABLE"}}
+    ]
+  }'</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 到達不可と判定された検出結果を抑制し、チームが対応すべきアクティブな検出結果に集中できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p><span class="highlight">追加料金なし</span>で利用できます。既存の Amazon Inspector の料金体系 (スキャン対象リソースに基づく課金) の範囲内で、到達可能性分析が自動的に適用されます。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>Amazon Inspector が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">📦 Amazon ECR</div>
+      <p style="margin:0; font-size:14px;">コンテナイメージのレジストリ。Inspector の拡張スキャンと連携して脆弱性を検出し、今回のアップデートで到達可能性分析が適用される。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">💻 Amazon EC2</div>
+      <p style="margin:0; font-size:14px;">Inspector VM Scanner によるエージェントベーススキャンと組み合わせることで、実行中プロセスに基づく到達可能性分析が可能。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🛡️ AWS Security Hub</div>
+      <p style="margin:0; font-size:14px;">Inspector の検出結果を集約し、組織全体のセキュリティ状況を可視化できる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🧩 Amazon Inspector Code Security</div>
+      <p style="margin:0; font-size:14px;">ソースコードレベルの脆弱性検出。到達可能性分析と合わせて多層的な脆弱性管理を実現。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>Amazon Inspector のランタイム到達可能性分析が ECR コンテナイメージと EC2 インスタンスに拡張され、<span class="highlight">実際にリスクをもたらす脆弱性の特定が自動化</span>されました。追加料金なしで新規検出結果に即座に適用されるため、Inspector を利用中のチームは <code>runtimeReachability</code> フィルターを活用した優先順位付けと抑制ルールの整備を進めることを推奨します。EC2 で本機能を利用するには、Inspector VM Scanner によるエージェントベーススキャンの有効化を確認してください。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/inspector-runtime-reachability/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon Inspector - Runtime Reachability</a></li>
+      <li><a href="https://aws.amazon.com/inspector/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon Inspector 製品ページ</a></li>
+      <li><a href="https://docs.aws.amazon.com/inspector/latest/user/inspector-vm-scanner.html" target="_blank" rel="noopener noreferrer" class="aws-link">Inspector VM Scanner ドキュメント</a></li>
+      <li><a href="https://awsapichanges.com/archive/changes/e9d2b3-inspector2.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 (Inspector2)</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-23) に基づいて作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

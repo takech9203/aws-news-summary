@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kiro CLI の長時間セッション向けパフォーマンス改善</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.date-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--aws-white);
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover {
+  color: var(--aws-smile-orange);
+}
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 10px;
+  padding: 18px 14px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+.stat-sub {
+  font-size: 12px;
+  color: rgba(213, 219, 219, 0.7);
+  margin-top: 4px;
+}
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 {
+  margin-top: 0;
+  font-size: 16px;
+}
+
+.before-box h3 { color: #FF6B4A; }
+.after-box h3 { color: #4CAF50; }
+
+.before-box ul, .after-box ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+.before-box li, .after-box li {
+  margin: 6px 0;
+  font-size: 14px;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+
+/* テーブル */
+.table-wrap { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+
+td.before-val { color: #FF8A70; }
+td.after-val { color: #6FCF6F; font-weight: 600; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 6px;
+}
+
+.effect-tag {
+  display: inline-block;
+  background: rgba(29, 129, 2, 0.25);
+  color: #6FCF6F;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 999px;
+  margin-right: 6px;
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: var(--aws-smile-orange);
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 6px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>⚡ Kiro CLI の長時間セッション向け<br>パフォーマンス改善</h1>
+  </div>
+  <div class="subtitle">
+    <span class="service-badge">Kiro CLI</span>
+    <span class="date-badge">📅 リリース日: 2026 年 11 月 23 日</span><br>
+    数日〜数週間続くエージェントセッションに対応するため、メモリ管理・入力応答性・起動時間・ダウンロードサイズを大幅改善
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      モデルの長時間タスク処理能力の向上や <code class="inline">/goal</code> のような機能により、エージェントセッションは
+      <span class="highlight">数日から数週間</span>開き続けられるようになりました。Kiro は CLI 自体の性能がボトルネックにならないよう、
+      <span class="highlight">4 つの領域</span>にわたる大規模なパフォーマンス改善を発表しました。
+    </p>
+    <p>
+      対象は、複数の長時間エージェントセッションを並行実行する開発者や、CI/CD・プルリクエストレビューなどの自動化環境で Kiro を利用するチームです。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">193.5 MB</div>
+        <div class="stat-label">21 日間シミュレーションのメモリ使用量</div>
+        <div class="stat-sub">370.5 MB から減少し、増加が停止</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">約 7.8 倍</div>
+        <div class="stat-label">p95 再描画の高速化</div>
+        <div class="stat-sub">276.9 ミリ秒 → 35.4 ミリ秒</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">最大 77% 削減</div>
+        <div class="stat-label">ダウンロードサイズ</div>
+        <div class="stat-sub">Linux ARM64: 約 674 MB → 154.5 MB</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0.414 秒</div>
+        <div class="stat-label">ウォームスタート中央値</div>
+        <div class="stat-sub">6.785 秒から短縮、p95 目標 0.5 秒未満を達成</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <ul>
+          <li>メモリが増加し続け、Bun プロセスが約 3 GB に達する事例 (最後の 1 週間で 1 日約 10 MB 増加)</li>
+          <li>macOS 署名プロセスで JIT エンタイトルメントが除去され、長い応答の後にタイピングが遅延</li>
+          <li>macOS のダウンロード約 960 MB、インストール後約 1.8 GB で CI/CD に待ち時間</li>
+          <li>起動時に約 1.55 GB の実行ファイル 2 つをハッシュ計算し、それだけで 5.77 秒 (ウォームスタート中央値 6.785 秒)</li>
+          <li>メモリ確保のために有用なセッションを閉じる「セッションのやりくり」が必要</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <ul>
+          <li>直近のターンのみメモリ保持、古いターンはディスクへ。21 日間で 193.5 MB で安定 (CLI 2.22.0 以降)</li>
+          <li>JIT 復元で p95 再描画が約 7.8 倍高速化 (2.16.1)。1,118 行表示中もキー入力が p95 で 2.32 ミリ秒 (2.25.0)</li>
+          <li>macOS: ダウンロード 358.2 MB (約 63% 減)、インストール 654.6 MB (約 64% 減)。Linux ARM64 は約 75〜77% 減</li>
+          <li>ウォームスタート中央値 0.414 秒、0.5 秒未満の p95 目標を達成</li>
+          <li>24 GB の MacBook Pro で 15 個の長時間セッションを再起動なしで同時維持</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図: メモリ管理の変更</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Before["⏮️ 改善前のメモリ管理"]
+        direction LR
+        B1["💬 すべてのターン"] --> B2["🧠 メモリに保持"]
+        B2 --> B3["⚠️ メモリが増加し続ける<br/>最大約 3 GB の事例"]
+    end
+
+    subgraph After["⏭️ 改善後のメモリ管理 CLI 2.22.0 以降"]
+        T1["💬 直近のターン"] --> M["🧠 メモリ<br/>21 日間で 193.5 MB で安定"]
+        T2["📜 完了した古いターン"] --> A[("💾 ディスク上のアーカイブ")]
+        T3["🤖 完了したサブエージェント"] --> C["🧹 状態をクリーンアップ"]
+        R["⌨️ /transcript と /rewind"] -.->|必要時に読み込み| A
+    end
+
+    Before ~~~ After
+
+    classDef warn fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef mem fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef disk fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#33691E
+    classDef proc fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class B1,T1,T2,T3 proc
+    class B2,M mem
+    class B3 warn
+    class A disk
+    class R input
+    class C proc
+    class Before,After layer
+      </pre>
+    </div>
+    <p>
+      改善後は直近のターンのみをメモリに保持し、完了した古いターンはディスク上のアーカイブへ移動します。
+      <code class="inline">/transcript</code> や <code class="inline">/rewind</code> は必要時にアーカイブを読み込むため、
+      <span class="highlight">会話全体は失われません</span>。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🚀 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🧠 1. メモリ使用量の安定化 (Kiro CLI 2.22.0 以降)</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>直近のターンのみメモリに保持し、完了した古いターンはディスク上のアーカイブへ移動</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>タスクを完了したサブエージェントが状態を残さないように改善</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><code class="inline">/transcript</code> と <code class="inline">/rewind</code> はアーカイブから読み込み、会話全体を保持したままメモリを削減</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>21 日間シミュレーションで 370.5 MB → <strong>193.5 MB で安定</strong>、1 日約 10 MB の増加が停止</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>672 ターン・10,752 回のサブエージェント呼び出しを含む 4 週間の高負荷テストでも、ピーク 270.0 MB、終了時 174.9 MB</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⌨️ 2. タイピング応答性の改善 (Kiro CLI 2.16.1 / 2.25.0)</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>macOS 署名プロセスが組み込み Bun ランタイムから JIT エンタイトルメントを除去していた問題を修正 (2.16.1)</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>1,118 行の応答 + 20 キーストロークの比較テストで、p95 再描画が 276.9 ミリ秒 → 35.4 ミリ秒 (約 7.8 倍高速)</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>1,118 行の履歴表示中でもキー入力が p95 で 2.32 ミリ秒で反映 (2.25.0、10 回実行の中央値。全実行が 2.30〜2.55 ミリ秒)</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📦 3. ダウンロード・インストールサイズの削減</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>macOS ユニバーサル DMG: ダウンロード約 960 MB → <strong>358.2 MB (約 63% 削減)</strong>、インストール後約 1.8 GB → <strong>654.6 MB (約 64% 削減)</strong></span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>Linux ARM64: ダウンロード約 674 MB → <strong>154.5 MB (約 77% 削減)</strong>、インストール後約 1.1 GB → <strong>272.1 MB (約 75% 削減)</strong></span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>起動時に約 1.55 GB の実行ファイル 2 つをハッシュ計算していた問題 (5.77 秒) を解消</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🏁 4. 起動時間の短縮</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ウォームスタート中央値が 6.785 秒 → <strong>0.414 秒</strong>に短縮、0.5 秒未満の p95 目標を達成</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>起動時の重複処理を削除し、残りの読み込みをバックグラウンドで実行しながら入力を開始可能に</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔀 5. 複数セッションの同時実行</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>24 GB の MacBook Pro 上で 15 個の長時間セッションを、クローズや再起動なしで同時に維持</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>20 個の CLI プロセスが 1 日分の作業をシミュレートしたテストでは、メモリ中央値 251.6 MB、最大 261.1 MB</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>計画上の目安はセッションあたり 500 MB (CLI 300 MB + エージェントサーバー 200 MB)、15 セッションでも 7.5 GB</span></div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>📊 技術仕様: パフォーマンス改善の数値まとめ</h2>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>改善前</th><th>改善後</th><th>対象バージョン</th></tr>
+        <tr><td>メモリ使用量 (21 日間シミュレーション)</td><td class="before-val">370.5 MB、1 日約 10 MB 増加</td><td class="after-val">193.5 MB、増加なし</td><td>2.22.0 以降</td></tr>
+        <tr><td>4 週間高負荷テスト (672 ターン、10,752 サブエージェント呼び出し)</td><td class="before-val">-</td><td class="after-val">ピーク 270.0 MB、終了時 174.9 MB</td><td>2.22.0 以降</td></tr>
+        <tr><td>p95 再描画時間 (1,118 行応答 + 20 キーストローク)</td><td class="before-val">276.9 ミリ秒</td><td class="after-val">35.4 ミリ秒 (約 7.8 倍高速)</td><td>2.16.1</td></tr>
+        <tr><td>キー入力の p95 表示時間 (1,118 行履歴表示中)</td><td class="before-val">-</td><td class="after-val">2.32 ミリ秒</td><td>2.25.0</td></tr>
+        <tr><td>macOS ダウンロードサイズ</td><td class="before-val">約 960 MB</td><td class="after-val">358.2 MB (約 63% 削減)</td><td>最新版</td></tr>
+        <tr><td>macOS インストールサイズ</td><td class="before-val">約 1.8 GB</td><td class="after-val">654.6 MB (約 64% 削減)</td><td>最新版</td></tr>
+        <tr><td>Linux ARM64 ダウンロードサイズ</td><td class="before-val">約 674 MB</td><td class="after-val">154.5 MB (約 77% 削減)</td><td>最新版</td></tr>
+        <tr><td>Linux ARM64 インストールサイズ</td><td class="before-val">約 1.1 GB</td><td class="after-val">272.1 MB (約 75% 削減)</td><td>最新版</td></tr>
+        <tr><td>ウォームスタート中央値</td><td class="before-val">6.785 秒</td><td class="after-val">0.414 秒</td><td>最新版</td></tr>
+      </table>
+    </div>
+
+    <h3>🧩 メモリ管理の仕組み</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>要素</th><th>動作</th></tr>
+        <tr><td>直近のターン</td><td>メモリに保持</td></tr>
+        <tr><td>完了した古いターン</td><td>ディスク上のアーカイブへ移動</td></tr>
+        <tr><td>完了したサブエージェント</td><td>状態を残さずクリーンアップ</td></tr>
+        <tr><td><code class="inline">/transcript</code> / <code class="inline">/rewind</code></td><td>必要時にアーカイブから読み込み (会話全体を保持)</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🔧 設定方法</h2>
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Kiro CLI を利用できる環境 (macOS または Linux)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>メモリ改善は Kiro CLI 2.22.0 以降、タイピング応答性の最新改善は 2.25.0 以降</span></div>
+
+    <div class="flow-diagram" style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:24px 0;">
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px;">📥 インストール<br>またはアップデート</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px;">🔍 バージョン確認<br>2.22.0 / 2.25.0 以降</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;min-width:100px;">⏳ 長時間セッション<br>で利用</div>
+    </div>
+
+    <h3>ステップ 1: Kiro CLI のインストールまたはアップデート</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">アップデートの実行</span></div>
+      <pre><code class="language-bash"># 新規インストールの場合は kiro.dev のダウンロードページから取得
+# 既存ユーザーは CLI 内でアップデートを実行
+kiro-cli update</code></pre>
+    </div>
+    <p>今回の改善は<span class="highlight">特別な設定なし</span>で有効になります。</p>
+
+    <h3>ステップ 2: バージョンの確認</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">バージョン確認</span></div>
+      <pre><code class="language-bash">kiro-cli --version</code></pre>
+    </div>
+    <p>2.22.0 以降であればメモリ管理の改善が、2.25.0 以降であれば最新のタイピング応答性改善が含まれています。</p>
+
+    <h3>ステップ 3: 長時間セッションでの利用</h3>
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">長時間セッションの利用</span></div>
+      <pre><code class="language-bash"># ワークスペースで Kiro CLI を起動
+kiro-cli
+
+# 過去の会話はアーカイブから参照可能
+/transcript</code></pre>
+    </div>
+    <p>セッションを長期間開いたままでも、メモリ使用量は安定します。過去のターンは <code class="inline">/transcript</code> や <code class="inline">/rewind</code> で必要時に参照できます。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>開発者の生産性向上</strong>: 「セッションのやりくり」が不要になり、エージェントによる長時間タスクを中断せずに継続できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>CI/CD の高速化</strong>: ダウンロードサイズが約 63〜77% 削減され、自動化環境でのセットアップ時間が短縮される</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ハードウェアコストの抑制</strong>: 24 GB のラップトップで 15 の長時間セッションを同時維持でき、追加リソースなしで並行作業を拡大できる</span></div>
+
+    <h3>⚙️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>メモリ増加の根本的解決</strong>: 時間経過による増加自体を停止させるアーカイブ型のメモリ管理を採用</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>会話履歴の完全保持</strong>: 古いターンはディスクに退避されるだけで、<code class="inline">/transcript</code> や <code class="inline">/rewind</code> から全履歴にアクセス可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>即応性のある入力体験</strong>: 長い応答の表示後でもキー入力が p95 で 2.32 ミリ秒で反映され、体感的な遅延がない</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>高速な起動</strong>: ウォームスタートが 0.414 秒となり、バックグラウンド読み込み中でも入力を開始できる</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚧 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>メモリ管理の改善は 2.22.0 以降、タイピング応答性の最新数値は 2.25.0 以降が対象で、古いバージョンでは恩恵を受けられない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>記事中の「3 GB のセッション」は一例であり、すべてのセッションで同じ削減率が得られるわけではない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>旧ビルドの正確なサイズ記録が残っていないため、サイズ削減率は概数に基づく</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="check-icon">→</span><span>セッションあたりの計画メモリの目安は 500 MB (CLI 300 MB + エージェントサーバー 200 MB)。同時セッション数の設計時はこの値を基準にするとよい</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span>数十のセッションを同時に実行したい場合は、ローカルではなくクラウドセッションの利用が推奨されている</span></div>
+    <div class="check-item"><span class="check-icon">→</span><span>測定値はビルドやワークロードにより異なるため、起動時間の改善幅は「時間経過による進歩」として解釈する必要がある</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. 複数の長時間エージェントセッションの並行実行</div>
+      <p style="margin:6px 0;"><strong>シナリオ</strong>: 複数のリポジトリやタスクに対して、専用の Kiro CLI セッションを数日間開いたままにして、エージェントに長時間タスクを任せたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># 各ワークスペースでセッションを起動し、開いたまま維持
+cd ~/projects/service-a &amp;&amp; kiro-cli
+cd ~/projects/service-b &amp;&amp; kiro-cli
+# /goal でエージェントに目標を与え、長時間の反復作業を実行</code></pre>
+      </div>
+      <p style="margin:6px 0;"><span class="effect-tag">効果</span>セッションあたり 500 MB の計画値で 15 セッションが 7.5 GB に収まり、24 GB のラップトップでもエディタやブラウザと併用しながら複数セッションを維持できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. CI/CD やプルリクエストレビューの自動化</div>
+      <p style="margin:6px 0;"><strong>シナリオ</strong>: CI/CD パイプラインやプルリクエストレビューの自動化で Kiro CLI を毎回ダウンロード・インストールしており、セットアップ時間を短縮したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># CI ジョブ内で Kiro CLI を取得 (Linux ARM64 の例)
+# ダウンロードサイズ: 約 674 MB → 154.5 MB
+# インストールサイズ: 約 1.1 GB → 272.1 MB</code></pre>
+      </div>
+      <p style="margin:6px 0;"><span class="effect-tag">効果</span>ダウンロードが約 77% 小さくなり、ジョブごとのセットアップ待ち時間が大幅に短縮される。起動も 0.414 秒 (中央値) と高速なため、自動化タスクがすぐに開始できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. 長い応答を扱うインタラクティブな開発</div>
+      <p style="margin:6px 0;"><strong>シナリオ</strong>: エージェントが 1,000 行を超える長い応答を生成した後も、続けてコマンドや指示を快適に入力したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># 長い応答の後もそのまま入力を継続
+# 過去の内容が必要になったらアーカイブから参照
+/transcript
+/rewind</code></pre>
+      </div>
+      <p style="margin:6px 0;"><span class="effect-tag">効果</span>1,118 行の履歴を表示した状態でもキー入力が p95 で 2.32 ミリ秒で反映され、入力遅延なく作業を継続できる。</p>
+    </div>
+  </div>
+
+  <!-- リージョン・関連サービス -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>🌐 <span class="highlight">グローバル</span> (Kiro はグローバルに提供されるサービスです)</p>
+
+    <h2 style="margin-top:28px;">🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🖥️ Kiro IDE</div>
+      Kiro CLI と同じエージェント基盤を持つ AI 搭載 IDE。CLI はワークスペースの skills、AGENTS.md、ドキュメント、チームナレッジを活用する
+    </div>
+    <div class="card">
+      <div class="card-title">☁️ Kiro クラウドセッション</div>
+      数十のセッションを同時に実行したい場合に適した、クラウド上でエージェントを実行する機能
+    </div>
+    <div class="card">
+      <div class="card-title">🎯 /goal コマンド</div>
+      エージェントが目標に向かって反復し、レビュー前に進捗を自己検証できる機能。長時間セッションの主要な利用パターン
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>✨ まとめ</h2>
+    <p>
+      Kiro CLI は、<span class="highlight">メモリ管理・タイピング応答性・ダウンロードサイズ・起動時間</span>の 4 領域で大幅なパフォーマンス改善を実現し、
+      数日から数週間にわたる長時間エージェントセッションを安心して開き続けられるようになりました。
+      メモリ増加の停止 (2.22.0 以降) と 0.5 秒未満の起動により、1 台のラップトップで 15 の並行セッションも現実的になっています。
+    </p>
+    <p>👉 Kiro CLI を利用中の場合は、<strong>最新バージョン (2.25.0 以降) へのアップデートを推奨</strong>します。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://kiro.dev/blog/agents-run-for-days/" target="_blank" rel="noopener noreferrer" class="aws-link">公式ブログ: Your agents run for days: now Kiro CLI keeps up</a></li>
+      <li><a href="https://kiro.dev/changelog/" target="_blank" rel="noopener noreferrer" class="aws-link">Kiro Changelog</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-11-23-kiro-agents-run-for-days.md) をもとに作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

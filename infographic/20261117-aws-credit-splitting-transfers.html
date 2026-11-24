@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Billing - クレジットの分割と転送</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 34px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 8px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .card ul { margin: 8px 0 0 0; padding-left: 20px; }
+    .card li { margin: 4px 0; }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 720px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box .box-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+    .after-box .box-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+
+    .before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+    .before-box li, .after-box li { margin: 6px 0; font-size: 14px; }
+
+    /* 統計カード */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* フロー図 */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-squid-ink);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      padding: 10px 12px;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--aws-light-gray);
+    }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    code.inline {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-smile-orange);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .usecase p { margin: 6px 0; font-size: 14px; }
+    .usecase .label { color: var(--aws-white); font-weight: 600; }
+
+    /* ステップ */
+    .step-item {
+      display: flex;
+      gap: 12px;
+      margin: 12px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 14px;
+    }
+
+    .step-body { flex: 1; }
+    .step-body .step-title { font-weight: 600; color: var(--aws-white); }
+    .step-body p { margin: 4px 0 0 0; font-size: 14px; }
+
+    .aws-link { color: var(--aws-teal); text-decoration: none; }
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 720px) {
+      .two-col { grid-template-columns: 1fr; }
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a { word-break: break-all; }
+    footer ul { margin: 8px 0; padding-left: 20px; }
+    footer li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div class="service-badge">AWS Billing and Cost Management</div>
+      <h1>💳 AWS クレジットの分割と転送</h1>
+      <div class="subtitle">Credit Splitting and Transfers | リリース日: 2026 年 11 月 17 日</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>
+        AWS クレジットを<span class="highlight">複数の小さなクレジットに分割 (Split)</span> し、支払いアカウント配下の
+        <span class="highlight">リンクされたアカウントに転送 (Transfer)</span> できるようになりました。
+        FinOps チームは<strong style="color:#FFFFFF;">金額指定、パーセンテージ指定、均等分割</strong>のいずれかの方法でクレジットを分割し、
+        クレジットを獲得したチームに届けられます。
+      </p>
+      <p>
+        分割後の各クレジットは元のクレジットと同じ<strong style="color:#FFFFFF;">有効期限および対象サービス</strong>を継承し、共有設定もデフォルトで保持されます。
+        転送されたアカウントは、そのクレジットを<span class="highlight">最優先で消費</span>できます。
+        クレジットレベル共有やクレジットの一時停止といった既存機能とも組み合わせ可能です。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <div class="box-title">❌ アップデート前の課題</div>
+          <ul>
+            <li>クレジットはまず所有アカウントに適用され、余剰分のみ共有される仕組みで、特定チームへの正確な金額割り当てが困難</li>
+            <li>1 つの大きなクレジットが複数チーム向けの場合、所有アカウントが他チーム分まで消費する可能性</li>
+            <li>FinOps チームは毎月何時間もの手作業によるチャージバック作業が必要</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <div class="box-title">✅ アップデート後の改善</div>
+          <ul>
+            <li>金額指定、パーセンテージ指定、均等分割で複数の小さなクレジットに分割可能</li>
+            <li>組織内の任意のアカウントに転送し、チームごとに予測可能なクレジット予算を提供</li>
+            <li>転送先アカウントが最優先で消費でき、意図したチームに確実にクレジットが届く</li>
+            <li>コンソール、CLI、API から操作でき、チャージバックの自動化が可能</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value">3 種類</div>
+          <div class="stat-label">分割方法<br>金額 / % / 均等</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">最優先</div>
+          <div class="stat-label">転送先アカウントの<br>クレジット消費順位</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">$0 追加</div>
+          <div class="stat-label">分割・転送の<br>追加料金なし</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">全リージョン</div>
+          <div class="stat-label">すべての AWS<br>商用リージョンで利用可能</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Org["🏢 AWS Organizations 支払いアカウント配下"]
+        subgraph Mgmt["👑 管理アカウント"]
+            Original["💳 元のクレジット<br/>$1,000,000"]
+            Split{"✂️ 分割<br/>金額 / % / 均等"}
+            Child1["💳 分割クレジット A<br/>$600,000"]
+            Child2["💳 分割クレジット B<br/>$400,000"]
+        end
+        subgraph Member["👥 メンバーアカウント"]
+            Media["📺 Media アカウント"]
+        end
+    end
+
+    Original --> Split
+    Split --> Child1
+    Split --> Child2
+    Child2 -->|🚚 転送| Media
+    Media -->|最優先で消費| Media
+
+    classDef org fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef mgmt fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef credit fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef account fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Org org
+    class Mgmt,Member mgmt
+    class Original,Child1,Child2 credit
+    class Split decision
+    class Media account
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        管理アカウントが保有する $1,000,000 のクレジットを $600,000 と $400,000 に分割し、$400,000 分を Media アカウントに転送する例です。
+        転送を受けた Media アカウントはそのクレジットを最優先で消費し、未使用分は各クレジットの共有設定に従って他アカウントに共有されます。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚙️ 主要機能</h2>
+
+      <div class="card">
+        <div class="card-title">✂️ 1. クレジットの分割 (Split)</div>
+        <ul>
+          <li>クレジットの残高を同一アカウント内の複数の新しいクレジットに分割</li>
+          <li>分割方法は<strong style="color:#FFFFFF;">均等分割 (新しいクレジット数を指定)、パーセンテージ指定、金額指定</strong>の 3 種類</li>
+          <li>各新クレジットは独自のクレジット ID、共有設定、消費トラッキングを持つ</li>
+          <li>分割後、元のクレジットの残高は $0 となり、ステータスが「Expired」として Credits ページに残る</li>
+          <li>部分的に消費済みのクレジットも分割可能で、残高のみが分割対象</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🚚 2. クレジットの転送 (Transfer)</div>
+        <ul>
+          <li>クレジットを組織内の別のアカウントに移動し、受領アカウントが新しい所有者となる</li>
+          <li>転送されたクレジットは受領アカウントの Credits ページに即座に表示</li>
+          <li>転送時にクレジットレベルの共有設定は削除される (転送後に管理アカウントが新しい共有設定を構成可能)</li>
+          <li>転送済みクレジットの再転送 (元の所有アカウントへの返却など) も可能</li>
+          <li>分割と転送は独立した操作であり、分割のみ、転送のみの実行も可能</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🧬 3. 分割クレジットの継承プロパティ</div>
+        <ul>
+          <li><strong style="color:#FFFFFF;">有効期限</strong>: 分割しても有効期限は変更・延長されない</li>
+          <li><strong style="color:#FFFFFF;">対象サービス</strong>: 元のクレジットが Amazon EC2 のみに適用される場合、分割後も Amazon EC2 のみに適用</li>
+          <li><strong style="color:#FFFFFF;">クレジットレベル共有設定</strong>: デフォルトで継承され、分割後に各クレジットごとに個別変更が可能</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🧩 4. 既存のクレジット管理機能との組み合わせ</div>
+        <ul>
+          <li><strong style="color:#FFFFFF;">クレジットレベル共有</strong>: 分割クレジットごとに共有範囲を制御可能</li>
+          <li><strong style="color:#FFFFFF;">クレジットの一時停止</strong>: 将来のプロジェクト用に確保したクレジットを一時停止し、必要なときに再開可能</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>🔐 操作権限</h3>
+      <table>
+        <tr>
+          <th>アクション</th>
+          <th>管理アカウント (支払いアカウント)</th>
+          <th>メンバーアカウント (リンクされたアカウント)</th>
+        </tr>
+        <tr>
+          <td>✂️ 分割 (Split)</td>
+          <td>組織内の任意のクレジット</td>
+          <td>自身が所有するクレジットのみ</td>
+        </tr>
+        <tr>
+          <td>🚚 転送 (Transfer)</td>
+          <td>任意のクレジットを組織内の任意のアカウントへ</td>
+          <td>❌ 利用不可</td>
+        </tr>
+      </table>
+      <p style="font-size:14px;">
+        アクセス制御には IAM アクション <code class="inline">billing:SplitCredit</code> および <code class="inline">billing:TransferCredit</code> を使用します。
+      </p>
+
+      <h3>📏 クォータと制限</h3>
+      <table>
+        <tr><th>項目</th><th>制限</th></tr>
+        <tr><td>クレジットファミリーあたりの分割回数 (累計)</td><td><span class="highlight">100 回</span></td></tr>
+        <tr><td>新しいクレジット 1 件あたりの最小金額</td><td><span class="highlight">$100 USD</span></td></tr>
+        <tr><td>分割後の合計金額</td><td>分割対象クレジットの残高と正確に一致する必要あり</td></tr>
+        <tr><td>分割の取り消し</td><td>❌ 不可 (分割は恒久的)</td></tr>
+        <tr><td>組織外への転送</td><td>❌ 不可</td></tr>
+      </table>
+      <p style="font-size:14px;">
+        クレジットファミリーとは、元のクレジットとそこから分割されたすべてのクレジット (分割クレジットからさらに分割されたものを含む) を指します。
+      </p>
+
+      <h3>📡 API 変更履歴</h3>
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/11/17</td>
+          <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/a370bc-billing.html" target="_blank" rel="noopener noreferrer">AWS Billing</a></td>
+          <td>2 new 2 updated api methods - クレジットの分割・転送用に <code class="inline">SplitCredit</code> および <code class="inline">TransferCredit</code> API を追加。あわせて <code class="inline">GetBillingPreferences</code> と <code class="inline">UpdateBillingPreferences</code> に Reserved Instances と Savings Plans のベネフィットレベル共有 (<code class="inline">BENEFIT_LEVEL_SHARING</code>) を追加</td>
+        </tr>
+      </table>
+
+      <h3>💻 SplitCredit API のリクエスト例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">SplitCredit API</span>
+        </div>
+        <pre><code class="language-python">response = client.split_credit(
+    creditId='string',
+    portions=[
+        {
+            'amount': 'string',
+            'description': 'string'
+        },
+    ],
+    clientToken='string',
+    dryRun=True|False
+)</code></pre>
+      </div>
+      <p style="font-size:14px;">
+        レスポンスには <code class="inline">parentCreditId</code> と分割後の <code class="inline">childCredits</code> (各クレジットの <code class="inline">creditId</code> と <code class="inline">amount</code>) が含まれます。
+        <code class="inline">dryRun</code> パラメータにより、実際に分割を実行する前に検証のみを行うことができます。
+      </p>
+
+      <h3>💻 TransferCredit API のリクエスト例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">TransferCredit API</span>
+        </div>
+        <pre><code class="language-python">response = client.transfer_credit(
+    creditId='string',
+    destinationAccountId='string',
+    clientToken='string',
+    dryRun=True|False
+)</code></pre>
+      </div>
+      <p style="font-size:14px;">
+        レスポンスには <code class="inline">sourceCreditId</code>、転送後の <code class="inline">newCreditId</code>、<code class="inline">destinationAccountId</code>、<code class="inline">amount</code> が含まれます。
+      </p>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>📋 前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>AWS Organizations の管理アカウント、または分割対象クレジットを所有するメンバーアカウントであること (転送は管理アカウントのみ)</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>IAM アクション <code class="inline">billing:SplitCredit</code> および <code class="inline">billing:TransferCredit</code> の権限が付与されていること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>分割後の各クレジットが $100 以上になること</span></div>
+
+      <div class="flow-diagram">
+        <div class="flow-step">💳 クレジット<br>を選択</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">✂️ 分割<br>金額 / % / 均等</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🚚 転送<br>受領アカウント指定</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🔍 追跡<br>API / CloudTrail</div>
+      </div>
+
+      <h3>✂️ ステップ 1: クレジットを分割する</h3>
+      <div class="step-item"><div class="step-number">1</div><div class="step-body"><p><a class="aws-link" href="https://console.aws.amazon.com/costmanagement/" target="_blank" rel="noopener noreferrer">AWS Billing and Cost Management コンソール</a> を開く</p></div></div>
+      <div class="step-item"><div class="step-number">2</div><div class="step-body"><p>ナビゲーションペインで [Credits] を選択する</p></div></div>
+      <div class="step-item"><div class="step-number">3</div><div class="step-body"><p>対象のクレジットを選択して詳細ページを開く</p></div></div>
+      <div class="step-item"><div class="step-number">4</div><div class="step-body"><p>[Split credit] を選択する</p></div></div>
+      <div class="step-item"><div class="step-number">5</div><div class="step-body"><p>残高の分割方法を選択する。[Equal split] (新しいクレジット数を入力)、[Percentage]、[Amount] のいずれかを指定する</p></div></div>
+      <div class="step-item"><div class="step-number">6</div><div class="step-body"><p>サマリーを確認し、分割を確定する。各新クレジットは $100 以上である必要があります</p></div></div>
+
+      <h3>🚚 ステップ 2: クレジットを転送する</h3>
+      <div class="step-item"><div class="step-number">1</div><div class="step-body"><p>組織の管理アカウントでコンソールにサインインしていることを確認する</p></div></div>
+      <div class="step-item"><div class="step-number">2</div><div class="step-body"><p>ナビゲーションペインで [Credits] を選択する</p></div></div>
+      <div class="step-item"><div class="step-number">3</div><div class="step-body"><p>対象のクレジットを選択して詳細ページを開く</p></div></div>
+      <div class="step-item"><div class="step-number">4</div><div class="step-body"><p>[Transfer] を選択する</p></div></div>
+      <div class="step-item"><div class="step-number">5</div><div class="step-body"><p>クレジットを受け取るアカウントを選択する</p></div></div>
+      <div class="step-item"><div class="step-number">6</div><div class="step-body"><p>転送を確定する。転送されたクレジットは、受領アカウントの [Credits] ページに即座に表示されます</p></div></div>
+
+      <h3>🔍 ステップ 3: 分割・転送の追跡</h3>
+      <p style="font-size:14px;">
+        クレジット詳細ページにはクレジットファミリーが表示されないため、どのクレジットがどの元クレジットから分割されたかを追跡するには、
+        Credits API の <code class="inline">parentCreditId</code> フィールド、または AWS CloudTrail の <code class="inline">SplitCredit</code> / <code class="inline">TransferCredit</code> イベントを使用します。
+      </p>
+    </div>
+
+    <!-- メリット / デメリット -->
+    <div class="section">
+      <h2>⚖️ メリットと制約事項</h2>
+      <div class="two-col">
+        <div>
+          <h3 style="margin-top:0;">💼 ビジネス面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">チャージバック作業の削減</strong>: 毎月の手作業が不要になり、数時間分の工数を削減</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">予測可能なクレジット予算</strong>: チームやビジネスユニットごとに正確な金額を事前に割り当て</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">公平なクレジット配分</strong>: クレジットを獲得したチームに確実に届けられる</span></div>
+
+          <h3>🔬 技術面のメリット</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">API による自動化</strong>: コンソールに加え CLI と API で操作でき、配分の自動化が可能</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">dryRun による事前検証</strong>: 実行前に操作の妥当性を検証できる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">CloudTrail との統合</strong>: イベント記録により監査証跡とファミリー追跡が可能</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:#FFFFFF;">既存機能との組み合わせ</strong>: クレジットレベル共有や一時停止と柔軟に併用可能</span></div>
+        </div>
+        <div>
+          <h3 style="margin-top:0;">🚧 制限事項</h3>
+          <div class="check-item"><span class="cross-icon">✗</span><span>分割は恒久的で取り消し不可。分割したクレジットを 1 つに結合し直すことはできない</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>クレジットファミリーあたりの分割回数は累計 100 回まで。上限到達後はファミリー内のどのクレジットも分割不可</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>分割後の各クレジットは最低 $100 必要</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>転送は組織内に限定され、別の組織のアカウントには転送不可</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>メンバーアカウントは自身所有のクレジットの分割のみ可能で、転送は管理アカウントのみ</span></div>
+
+          <h3>⚠️ 考慮すべき点</h3>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>転送時にクレジットレベルの共有設定が削除されるため、必要に応じて管理アカウントが再構成する</span></div>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>転送先でクレジット共有が無効かつ使用量が不足していると、未使用分は有効期限に失効する</span></div>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>元のクレジット ID を参照する自動化、予算、アラートは新しいクレジット ID への更新が必要</span></div>
+          <div class="check-item"><span class="warn-icon">⚠</span><span>分割前に配分を計画し、ファミリーを追跡しやすく 100 回のクォータ内に収めることを推奨</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">1️⃣ 複数チームへのクレジット配分</div>
+        <p><span class="label">シナリオ</span>: 管理アカウントが $1,000,000 の大型クレジットを保有しており、プラットフォームチームに $600,000、Media チームに $400,000 を配分したい。</p>
+        <div class="flow-diagram" style="margin:12px 0;">
+          <div class="flow-step">💳 $1,000,000<br>を金額指定で分割</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step">💳 A: $600,000<br>💳 B: $400,000</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step">🚚 B を Media<br>アカウントに転送</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step">📺 Media が<br>最優先で消費</div>
+        </div>
+        <p><span class="label">効果</span>: 各チームが意図した金額のクレジットを確実に利用でき、所有アカウントによる他チーム分の消費を防止できる。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">2️⃣ FinOps チームによるチャージバックの自動化</div>
+        <p><span class="label">シナリオ</span>: FinOps チームが毎月、クレジット消費実績を集計して各ビジネスユニットに手動でチャージバックを行っており、多くの工数がかかっている。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Python</span>
+            <span class="code-title">分割と転送の自動化例</span>
+          </div>
+          <pre><code class="language-python"># dryRun で検証してからクレジットを均等相当の金額で分割し、各 BU のアカウントに転送
+response = client.split_credit(
+    creditId='credit-id',
+    portions=[
+        {'amount': '25000', 'description': 'BU-A'},
+        {'amount': '25000', 'description': 'BU-B'},
+    ],
+    clientToken='unique-token-1',
+    dryRun=False
+)
+for child in response['childCredits']:
+    client.transfer_credit(
+        creditId=child['creditId'],
+        destinationAccountId=bu_account_map[child['creditId']],
+        clientToken=f"transfer-{child['creditId']}",
+    )</code></pre>
+        </div>
+        <p><span class="label">効果</span>: 毎月の手作業によるチャージバック作業が不要になり、クレジット配分がコードで再現可能かつ監査可能になる。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">3️⃣ 将来プロジェクト用クレジットの確保</div>
+        <p><span class="label">シナリオ</span>: 四半期後に開始する新プロジェクト用にクレジットの一部を確保しておき、それまで他のワークロードに消費されないようにしたい。</p>
+        <div class="flow-diagram" style="margin:12px 0;">
+          <div class="flow-step">✂️ プロジェクト用<br>金額で分割</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step">⏸️ 分割クレジット<br>を一時停止</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-step">▶️ 開始時に再開し<br>担当アカウントに転送</div>
+        </div>
+        <p><span class="label">効果</span>: 将来の用途に向けたクレジットを確実に温存でき、プロジェクト開始時に即座に利用を開始できる。有効期限は分割で延長されないため、期限内の利用計画が前提となる。</p>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金と利用可能リージョン</h2>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">💵 料金</div>
+          <p style="margin:0; font-size:14px;">クレジットの分割と転送に<span class="highlight">追加料金はかかりません</span>。</p>
+        </div>
+        <div class="card">
+          <div class="card-title">🌍 利用可能リージョン</div>
+          <p style="margin:0; font-size:14px;"><span class="highlight">すべての AWS 商用リージョン</span>で利用可能です。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <div class="card-title">🏢 AWS Organizations</div>
+        <p style="margin:0; font-size:14px;">分割・転送の対象は同一組織 (支払いアカウント配下) のアカウントに限定され、管理アカウントとメンバーアカウントで実行可能な操作が異なる。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🤝 クレジットレベル共有 (Credit-Level Sharing)</div>
+        <p style="margin:0; font-size:14px;">分割後の各クレジットに対して個別に共有範囲を設定でき、分割・転送と組み合わせて柔軟な配分が可能。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">📜 AWS CloudTrail</div>
+        <p style="margin:0; font-size:14px;"><code class="inline">SplitCredit</code> / <code class="inline">TransferCredit</code> イベントが記録され、クレジットファミリーの追跡と監査に利用できる。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 AWS Cost and Usage Report</div>
+        <p style="margin:0; font-size:14px;">各分割クレジットは、使用量に適用された際に独自のクレジット ID を持つ個別の行項目として表示される。</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        クレジットの分割と転送により、FinOps チームは大型クレジットを<span class="highlight">チームやビジネスユニット単位の正確な予算</span>として配分できるようになり、
+        毎月の手動チャージバック作業を排除できます。
+        分割は<strong style="color:#FFFFFF;">取り消し不可で最小 $100、ファミリーあたり累計 100 回まで</strong>という制約があるため、分割前に配分計画を立てることが重要です。
+        大型クレジットを保有する組織は、AWS Billing コンソールまたは <code class="inline">SplitCredit</code> / <code class="inline">TransferCredit</code> API での運用を検討することを推奨します。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-credit-splitting-transfers/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/aws-credit-splitting-transfers/</a></li>
+        <li><a href="https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/credits-split-transfer.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Splitting and transferring AWS credits</a></li>
+        <li><a href="https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/useconsolidatedbilling-credits.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Applying AWS credits</a></li>
+        <li><a href="https://awsapichanges.com/archive/changes/a370bc-billing.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 (awsapichanges.com)</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-11-17) をもとに作成されました。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

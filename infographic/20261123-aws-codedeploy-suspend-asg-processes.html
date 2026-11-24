@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS CodeDeploy - EC2 Auto Scaling プロセスの一時停止サポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF8A73; }
+.after-box .ba-title { color: #6FCF52; }
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; font-size: 14px; }
+
+/* プロセスチップ */
+.process-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .process-grid { grid-template-columns: 1fr; }
+}
+
+.process-card {
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(140, 79, 255, 0.5);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.process-name {
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  color: var(--aws-purple);
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.process-desc { font-size: 14px; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+code {
+  font-family: 'Courier New', monospace;
+  background: rgba(255, 153, 0, 0.12);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.92em;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #6FCF52; font-size: 17px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 17px; flex-shrink: 0; }
+.warn-icon { font-size: 16px; flex-shrink: 0; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  background: transparent;
+  color: inherit;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid { display: flex; justify-content: center; }
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: -8px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase-label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+/* ステップ */
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  margin-right: 8px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.step-heading {
+  display: flex;
+  align-items: center;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 24px 0 8px 0;
+}
+
+/* メリットグリッド */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .merit-grid { grid-template-columns: 1fr; }
+}
+
+.merit-box {
+  background: var(--aws-squid-ink);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.merit-box h3 { margin-top: 0; color: var(--aws-teal); font-size: 16px; }
+.merit-box ul { margin: 0; padding-left: 18px; }
+.merit-box li { margin: 8px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">AWS CodeDeploy</span>
+    <h1>🚀 Amazon EC2 Auto Scaling プロセスの一時停止サポート</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 23 日 | 機能: デプロイ中の EC2 Auto Scaling プロセスの自動一時停止・再開</div>
+  </div>
+
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>AWS CodeDeploy が、Auto Scaling グループへの<span class="highlight">インプレースデプロイ中に EC2 Auto Scaling プロセスを一時停止</span>する機能をサポートしました。<code>Terminate</code>、<code>AZRebalance</code>、<code>InstanceRefresh</code>、<code>ScheduledActions</code> の 4 つのプロセスを任意の組み合わせで指定でき、デプロイグループ単位またはデプロイ単位で設定できます。</p>
+    <p>CodeDeploy はデプロイ開始前に指定プロセスを自動的に一時停止し、デプロイの<span class="highlight">成功・失敗・停止のいずれの時点でも自動的に再開</span>します。これにより、デプロイ途中のスケールインイベントや AZ リバランスによるインスタンス削除・置換でデプロイが失敗する問題を防止でき、独自に運用していた一時停止・再開スクリプトが不要になります。</p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>デプロイ中のスケールインで更新中のインスタンスが削除され、デプロイが失敗することがあった</li>
+          <li>AZ リバランスや Instance Refresh により、デプロイ中のインスタンスが置換されるリスクがあった</li>
+          <li><code>SuspendProcesses</code> / <code>ResumeProcesses</code> を呼び出すカスタムスクリプトの自前運用が必要だった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>デプロイ前に自動で一時停止、成功・失敗・停止時に自動で再開。カスタムスクリプトが不要に</li>
+          <li>4 つのプロセスを任意の組み合わせで指定可能に</li>
+          <li>デプロイグループ単位の設定は既存パイプラインからのデプロイにも適用され、個々のデプロイで上書きも可能に</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+sequenceDiagram
+    participant U as 👤 開発者 / パイプライン
+    participant CD as 🚀 AWS CodeDeploy
+    participant ASG as ⚖️ EC2 Auto Scaling
+    participant EC2 as 🖥️ EC2 インスタンス
+
+    U->>CD: インプレースデプロイを開始
+    CD->>ASG: SuspendProcesses
+    Note over ASG: Terminate や AZRebalance など<br/>指定したプロセスを一時停止
+    CD->>EC2: アプリケーションをデプロイ
+    Note over EC2: デプロイ中もスケールインや<br/>リバランスによる削除が発生しない
+    alt デプロイが成功 / 失敗 / 停止
+        CD->>ASG: ResumeProcesses
+        Note over ASG: プロセスを自動的に再開
+    end
+      </pre>
+    </div>
+    <p class="diagram-caption">CodeDeploy がデプロイ開始前に指定された Auto Scaling プロセスを一時停止し、デプロイ終了時 (成功・失敗・停止のいずれでも) に自動的に再開する流れ</p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <h3>1️⃣ 一時停止できる 4 つのプロセス</h3>
+    <div class="process-grid">
+      <div class="process-card">
+        <div class="process-name">Terminate</div>
+        <div class="process-desc">スケールインイベントによるインスタンス削除を防止</div>
+      </div>
+      <div class="process-card">
+        <div class="process-name">AZRebalance</div>
+        <div class="process-desc">アベイラビリティーゾーン間でインスタンスを移動するリバランスを防止</div>
+      </div>
+      <div class="process-card">
+        <div class="process-name">InstanceRefresh</div>
+        <div class="process-desc">インスタンスを置換するインスタンスの更新を防止</div>
+      </div>
+      <div class="process-card">
+        <div class="process-name">ScheduledActions</div>
+        <div class="process-desc">スケジュールされたスケーリングアクションの実行を防止 (デプロイ中に開始予定だったアクションはスキップされ、後から実行されない)</div>
+      </div>
+    </div>
+
+    <h3>2️⃣ 自動的な一時停止と再開</h3>
+    <div class="card">
+      <div class="check-item"><span class="check-icon">✓</span><span>デプロイ前に一時停止し、デプロイの成功・失敗・停止時に自動で再開</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>デプロイ開始時点ですでに一時停止されていたプロセスは、デプロイ後も再開されない (既存の運用設定を尊重)</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>一時停止に失敗した場合は、インスタンスが更新される前にデプロイが失敗する (安全側に倒れる設計)</span></div>
+    </div>
+
+    <h3>3️⃣ 柔軟な設定スコープ</h3>
+    <div class="card">
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>デプロイグループ単位</strong>: そのグループへのすべてのデプロイ (既存パイプラインからのデプロイを含む) に適用</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>デプロイ単位</strong>: 個々のデプロイでグループ設定を上書き可能。空のリストを指定すれば一時停止なしも選択可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>CodeDeploy コンソール、AWS CLI、AWS SDK から設定可能</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>利用条件</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>デプロイタイプ</td><td>インプレースデプロイのみ (Blue/Green デプロイは対象外)</td></tr>
+      <tr><td>デプロイグループ</td><td>少なくとも 1 つの Auto Scaling グループを含むこと (タグ指定インスタンスやオンプレミスインスタンスの併用は可)</td></tr>
+      <tr><td>一時停止の対象</td><td>デプロイグループ内の Auto Scaling グループのみ (タグ指定・オンプレミスインスタンスには影響しない)</td></tr>
+      <tr><td>指定可能なプロセス</td><td><code>Terminate</code>、<code>AZRebalance</code>、<code>InstanceRefresh</code>、<code>ScheduledActions</code> (プロセス名は大文字小文字を区別)</td></tr>
+      <tr><td>対象外のプロセス</td><td><code>Launch</code>、<code>HealthCheck</code>、<code>ReplaceUnhealthy</code> など、グループの健全性維持に必要なプロセスは一時停止できない</td></tr>
+    </table>
+
+    <h3>必要な IAM 権限</h3>
+    <p>デプロイグループのサービスロールに、対象の Auto Scaling グループへの以下のアクションが必要です。</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">サービスロールに必要な権限</span>
+      </div>
+      <pre><code class="language-json">{
+  "Effect": "Allow",
+  "Action": [
+    "autoscaling:DescribeAutoScalingGroups",
+    "autoscaling:SuspendProcesses",
+    "autoscaling:ResumeProcesses"
+  ],
+  "Resource": "*"
+}</code></pre>
+    </div>
+    <p><code>AWSCodeDeployRole</code> マネージドポリシーを使用している場合、これらの権限はすでに含まれています。カスタムサービスロールの場合は上記アクションの追加が必要です。権限が不足している場合、CodeDeploy はデプロイを作成せず、<span class="highlight">不足している IAM アクション名を含むエラー</span>を返します。</p>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>インプレースデプロイタイプのデプロイグループであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>デプロイグループに少なくとも 1 つの Auto Scaling グループが含まれていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>サービスロールに <code>autoscaling:SuspendProcesses</code> / <code>autoscaling:ResumeProcesses</code> / <code>autoscaling:DescribeAutoScalingGroups</code> の権限があること</span></div>
+
+    <div class="step-heading"><span class="step-number">1</span>デプロイグループに一時停止プロセスを設定する</div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">デプロイグループ単位の設定</span>
+      </div>
+      <pre><code class="language-bash">aws deploy update-deployment-group \
+    --application-name my-application \
+    --current-deployment-group-name my-deployment-group \
+    --ec2-deployment-options '{"autoScalingGroupProcessesToSuspend":["Terminate","AZRebalance"]}'</code></pre>
+    </div>
+    <p><code>--ec2-deployment-options</code> の <code>autoScalingGroupProcessesToSuspend</code> に一時停止するプロセスを指定します。この例では、デプロイグループへのすべてのデプロイで <code>Terminate</code> と <code>AZRebalance</code> が一時停止されます。コンソールの場合は、デプロイグループの [Environment configuration] で [Auto Scaling process suspension] を展開して選択します。</p>
+
+    <div class="step-heading"><span class="step-number">2</span>個々のデプロイで設定を上書きする (オプション)</div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">デプロイ単位の上書き</span>
+      </div>
+      <pre><code class="language-bash">aws deploy create-deployment \
+    --application-name my-application \
+    --deployment-group-name my-deployment-group \
+    --s3-location bucket=amzn-s3-demo-bucket,key=my-app.zip,bundleType=zip \
+    --ec2-deployment-options '{"autoScalingGroupProcessesToSuspend":["Terminate"]}'</code></pre>
+    </div>
+    <p><code>create-deployment</code> で <code>--ec2-deployment-options</code> を指定すると、そのデプロイに限りデプロイグループの設定を上書きできます。空のリスト (<code>[]</code>) を指定すると、そのデプロイではプロセスを一時停止しません。オプションを指定しない場合は、デプロイグループの設定が使用されます。</p>
+
+    <div class="step-heading"><span class="step-number">3</span>一時停止されたままのプロセスを手動で再開する (障害時)</div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">確認と手動再開</span>
+      </div>
+      <pre><code class="language-bash"># 一時停止中のプロセスを確認
+aws autoscaling describe-auto-scaling-groups \
+    --auto-scaling-group-names my-asg \
+    --query 'AutoScalingGroups[0].SuspendedProcesses'
+
+# プロセスを再開
+aws autoscaling resume-processes \
+    --auto-scaling-group-name my-asg \
+    --scaling-processes Terminate AZRebalance</code></pre>
+    </div>
+    <p>CodeDeploy がプロセスを再開できなかった場合、デプロイは失敗し、プロセスは一時停止されたままになります (エラーメッセージに対象の Auto Scaling グループとプロセスが表示されます)。上記コマンドで確認し、手動で再開します。</p>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <h3>💼 ビジネス面</h3>
+        <ul>
+          <li><strong>デプロイ成功率の向上</strong>: スケーリング活動との競合によるデプロイ失敗を防ぎ、リリースの信頼性が向上</li>
+          <li><strong>運用コストの削減</strong>: 一時停止・再開を行うカスタムスクリプトの開発・保守が不要に</li>
+          <li><strong>既存パイプラインへの容易な適用</strong>: デプロイグループに設定するだけで、既存パイプラインからのデプロイにも自動適用</li>
+        </ul>
+      </div>
+      <div class="merit-box">
+        <h3>🔧 技術面</h3>
+        <ul>
+          <li><strong>自動的なライフサイクル管理</strong>: 成功・失敗・停止のいずれでも CodeDeploy がプロセスを自動再開</li>
+          <li><strong>柔軟な制御</strong>: 4 つのプロセスを任意の組み合わせで指定でき、デプロイ単位での上書きも可能</li>
+          <li><strong>安全側に倒れる設計</strong>: 一時停止に失敗した場合は、インスタンス更新前にデプロイが失敗</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>インプレースデプロイのみ対応で、Blue/Green デプロイでは利用できない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>デプロイグループに Auto Scaling グループが含まれない場合、設定リクエストは拒否される</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>一時停止できるのは <code>Terminate</code>、<code>AZRebalance</code>、<code>InstanceRefresh</code>、<code>ScheduledActions</code> の 4 つのみ (<code>Launch</code> や <code>HealthCheck</code> などは対象外)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>タグで指定したインスタンスやオンプレミスインスタンスには影響しない</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span><code>Terminate</code> を一時停止している間は、Auto Scaling が異常なインスタンスを置換しない。デプロイ失敗時の通知 (トリガーや Amazon EventBridge ルール) の設定を推奨</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span><code>Terminate</code> の一時停止は、スポットインスタンスの中断や手動のインスタンス終了を防ぐものではない</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span><code>Terminate</code> のみ一時停止して <code>AZRebalance</code> を停止しない場合、リバランス中にグループが最大サイズを最大 10% 超過することがある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>ロールバックデプロイは、元のデプロイと同じプロセスを一時停止する</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>2 つのデプロイグループが同じ Auto Scaling グループを共有している場合、一方のデプロイがもう一方の実行中にプロセスを再開してしまう可能性がある。各 Auto Scaling グループは 1 つのデプロイグループにのみ関連付けることを推奨</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>デプロイ中に開始予定だった <code>ScheduledActions</code> はスキップされ、後から実行されない</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📈 ユースケース 1: スケールイン頻度の高い環境でのデプロイ安定化</div>
+      <p><span class="usecase-label">シナリオ</span>: トラフィック変動が大きく、ターゲット追跡スケーリングによるスケールインが頻繁に発生する Web アプリケーションで、デプロイ中にインスタンスが削除されてデプロイが失敗することがある。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws deploy update-deployment-group \
+    --application-name web-app \
+    --current-deployment-group-name production \
+    --ec2-deployment-options '{"autoScalingGroupProcessesToSuspend":["Terminate"]}'</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: デプロイ中のスケールインによるインスタンス削除がなくなり、デプロイ失敗率が低下。デプロイ終了後はスケールインが自動的に再開され、コスト最適化も維持される。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔄 ユースケース 2: カスタムスクリプトからの移行</div>
+      <p><span class="usecase-label">シナリオ</span>: CI/CD パイプラインのデプロイ前後に <code>aws autoscaling suspend-processes</code> / <code>resume-processes</code> を呼び出すスクリプトを運用しているが、デプロイ失敗時に再開処理が漏れてプロセスが停止したままになる事故が発生していた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># パイプラインから一時停止・再開スクリプトを削除し、
+# デプロイグループの設定に置き換える
+aws deploy update-deployment-group \
+    --application-name my-app \
+    --current-deployment-group-name staging \
+    --ec2-deployment-options '{"autoScalingGroupProcessesToSuspend":["Terminate","AZRebalance","InstanceRefresh"]}'</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: デプロイの成功・失敗・停止のいずれでも CodeDeploy が再開を処理するため、再開漏れのリスクが減り、パイプラインの保守対象コードも削減できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🌙 ユースケース 3: メンテナンスウィンドウ中のデプロイとスケジュールアクションの競合回避</div>
+      <p><span class="usecase-label">シナリオ</span>: 夜間のスケジュールされたスケーリングアクションと定期デプロイの時間帯が重なり、デプロイ中にインスタンス数が変動して問題が発生していた。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws deploy create-deployment \
+    --application-name batch-app \
+    --deployment-group-name nightly \
+    --s3-location bucket=amzn-s3-demo-bucket,key=batch-app.zip,bundleType=zip \
+    --ec2-deployment-options '{"autoScalingGroupProcessesToSuspend":["ScheduledActions","Terminate"]}'</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: デプロイ中はスケジュールアクションが実行されず、インスタンス構成が安定した状態でデプロイできる。なお、スキップされたスケジュールアクションは後から実行されない点に注意が必要。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>この機能自体の追加料金に関する言及は公式発表にありません。AWS CodeDeploy の EC2 インスタンスへのデプロイは<span class="highlight">追加料金なし</span>で利用できます。</p>
+    <p>ただし、プロセスの一時停止中はスケールインが抑制されるため、デプロイ時間が長い場合はインスタンスが通常より長く稼働し、EC2 の利用料金がわずかに増加する可能性があります。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>AWS GovCloud (US) リージョンおよび中国リージョンを含む、<span class="highlight">すべての AWS リージョン</span>で利用可能です。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">⚖️ Amazon EC2 Auto Scaling</div>
+      <p style="margin:0; font-size:14px;">一時停止の対象となるスケーリングプロセス (<code>Terminate</code>、<code>AZRebalance</code> など) を提供するサービス。プロセス一時停止の影響範囲は EC2 Auto Scaling 側のドキュメントも参照。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔁 AWS CodePipeline</div>
+      <p style="margin:0; font-size:14px;">デプロイグループ単位の設定は、CodePipeline など既存のパイプラインから起動されるデプロイにも自動的に適用される。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📡 Amazon EventBridge</div>
+      <p style="margin:0; font-size:14px;"><code>Terminate</code> 一時停止中は異常インスタンスの置換が行われないため、デプロイ失敗を検知する EventBridge ルールやトリガーの設定が推奨される。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>AWS CodeDeploy が EC2 Auto Scaling プロセスの一時停止・再開を<span class="highlight">デプロイのライフサイクルに合わせて自動化</span>し、スケーリング活動との競合によるデプロイ失敗を防げるようになりました。Auto Scaling グループへのインプレースデプロイで独自の一時停止スクリプトを運用している場合は、デプロイグループの <code>ec2DeploymentOptions</code> 設定への移行を検討することを推奨します。その際、<code>Terminate</code> 一時停止中は異常インスタンスが置換されない点を踏まえ、デプロイ失敗の通知設定を併せて整備してください。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-codedeploy-suspend-asg-processes/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): AWS CodeDeploy - Suspend Auto Scaling Processes</a></li>
+      <li><a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/integrations-aws-auto-scaling-suspend-processes.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Suspending Amazon EC2 Auto Scaling processes during deployments</a></li>
+      <li><a href="https://docs.aws.amazon.com/codedeploy/latest/APIReference/API_EC2DeploymentOptions.html" target="_blank" rel="noopener noreferrer" class="aws-link">API リファレンス: EC2DeploymentOptions</a></li>
+      <li><a href="https://aws.amazon.com/codedeploy/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS CodeDeploy 製品ページ</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-23) に基づいて作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
