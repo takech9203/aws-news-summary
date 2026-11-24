@@ -261,8 +261,9 @@ flowchart TB
    - Phase 1 and Phase 2 run as separate jobs (`run.py --phase reports` and `run.py --phase infographics`)
    - AWS credentials expire after 1 hour (`role-duration-seconds: 3600`), so each job requests its own credentials, stops after 50 minutes (`--time-budget 50`), and commits and pushes the files it has created
    - When the report job stops at the time budget, the `generate-reports-backlog` job creates the remaining reports with fresh credentials
-   - Each run creates up to 60 infographics: new reports first, then existing reports without HTML, oldest first
+   - Each run creates up to 60 infographics: new reports first, then existing reports without HTML with the rest of the cap. Both are processed newest date first, so when the cap is reached, the newest articles at the top of the site get their infographics first
    - GitHub Pages is deployed with everything committed so far, even when a generation job fails or stops at the time budget
+   - Only one run is in progress at a time (`concurrency`). A run that starts while another is in progress waits for it to finish. Only one run can wait: when a newer run starts, the waiting run is canceled
    - When you run the workflow manually, set `days` in [Run workflow] to choose how many days to look back (default: 3)
 
 ### Sequence Diagram
@@ -539,7 +540,7 @@ The setup guide includes:
 ```yaml
 # .github/workflows/aws-news-summary.yml
 - name: Configure AWS credentials
-  uses: aws-actions/configure-aws-credentials@v4
+  uses: aws-actions/configure-aws-credentials@v6
   with:
     role-to-assume: ${{ vars.AWS_ROLE_ARN }}
     aws-region: ${{ vars.AWS_REGION }}

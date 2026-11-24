@@ -262,8 +262,9 @@ flowchart TB
    - Phase 1 と Phase 2 を別のジョブで実行する (`run.py --phase reports` と `run.py --phase infographics`)
    - AWS の認証情報は 1 時間 (`role-duration-seconds: 3600`) で失効するため、各ジョブは認証情報を取得し直し、50 分 (`--time-budget 50`) で打ち切って、それまでに作成したファイルを commit & push する
    - レポートのジョブが打ち切られた日は、`generate-reports-backlog` ジョブが新しい認証情報で残りのレポートを作成する
-   - インフォグラフィックは 1 回の実行で最大 60 件作成する。新しいレポートを先に処理し、残りの枠で HTML のない既存レポートを古い順に処理する
+   - インフォグラフィックは 1 回の実行で最大 60 件作成する。新しいレポートを先に処理し、残りの枠で HTML のない既存レポートを処理する。どちらも新しい日付から処理するので、上限を超えた日も、サイトの一覧の先頭に並ぶ新しい記事から画像が付く
    - GitHub Pages へのデプロイは、生成のジョブが失敗した場合や打ち切られた場合も、それまでに commit した内容で行う
+   - 実行は同時に 1 つだけ行う (`concurrency`)。実行中に始まった実行は、実行中のものが終わるまで待つ。待っている実行は 1 つだけで、さらに新しい実行が始まると、待っていた実行は取り消される
    - 手動で実行する場合は、[Run workflow] の `days` で遡る日数を指定できる (デフォルト: 3)
 
 ### シーケンス図
@@ -560,7 +561,7 @@ MCP 設定は Claude Agent SDK の `setting_sources=["project"]` により自動
 ```yaml
 # .github/workflows/aws-news-summary.yml
 - name: Configure AWS credentials
-  uses: aws-actions/configure-aws-credentials@v4
+  uses: aws-actions/configure-aws-credentials@v6
   with:
     role-to-assume: ${{ vars.AWS_ROLE_ARN }}
     aws-region: ${{ vars.AWS_REGION }}

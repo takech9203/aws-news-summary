@@ -1063,6 +1063,20 @@ def _report_to_infographic_path(report_path: str) -> str:
     return f"infographic/{filename}.html"
 
 
+def _newest_first(report_paths: list[str]) -> list[str]:
+    """レポートのパスを、ファイル名の日付の新しい順に並べる。同じ日付の中はパスの順にする。
+
+    サイトの一覧は新しい順なので、INFOGRAPHIC_MAX の枠を新しい日付から使う。
+
+    Example:
+        ['reports/2026/2026-11-20-b.md', 'reports/2026/2026-11-21-a.md', 'reports/2026/2026-11-20-a.md']
+        -> ['reports/2026/2026-11-21-a.md', 'reports/2026/2026-11-20-a.md', 'reports/2026/2026-11-20-b.md']
+    """
+    by_path = sorted(report_paths)
+    # sorted() は安定なので、同じ日付の中ではパスの順が残る
+    return sorted(by_path, key=lambda p: Path(p).name[:10], reverse=True)
+
+
 def read_report_list(project_dir: Path, list_file: str) -> list[str]:
     """1 行に 1 つのレポートのパスを書いたファイルを読み、実在するレポートだけを返す。
 
@@ -1566,7 +1580,7 @@ def main() -> None:
             pass
 
     if missing_infographics:
-        missing_infographics.sort()
+        missing_infographics = _newest_first(missing_infographics)
         print(f"\nFound {len(missing_infographics)} report(s) with infographic link but missing HTML:")
         for rp in missing_infographics:
             print(f"  ! {rp}")
@@ -1574,6 +1588,9 @@ def main() -> None:
     # Phase 2: Generate infographics for new reports + missing ones
     # INFOGRAPHIC_MAX caps the total per run (unset: no cap). New reports come
     # first; the backfill gets what is left, up to INFOGRAPHIC_BACKFILL_MAX.
+    # Both lists are processed newest date first, because the site lists the
+    # newest articles first.
+    new_reports = _newest_first(new_reports)
     max_total_env = os.environ.get("INFOGRAPHIC_MAX", "").strip()
     MAX_TOTAL = int(max_total_env) if max_total_env else None
     MAX_BACKFILL = int(os.environ.get("INFOGRAPHIC_BACKFILL_MAX", "10"))
