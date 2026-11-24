@@ -10,11 +10,14 @@ GitHub Actions または GitLab CI で毎日自動実行されることを想定
     python run.py "カスタムプロンプト"       # カスタムプロンプトで実行
     python run.py --prompt "カスタムプロンプト"  # カスタムプロンプト (明示的フラグ)
     python run.py --days 7                  # 過去7日間のニュースを取得
+    python run.py --phase reports --time-budget 50   # レポートだけを作成し、50 分で打ち切る
 
 環境変数:
     DEBUG=1         デバッグモード (詳細ログ出力)
     VERBOSE=1       詳細モード (タイミング情報出力)
     AWS_REGION      Bedrock の AWS リージョン (デフォルト: us-east-1)
+    INFOGRAPHIC_MAX             1 回の実行で作るインフォグラフィックの上限 (未設定なら上限なし)
+    INFOGRAPHIC_BACKFILL_MAX    HTML のない既存レポートから作るインフォグラフィックの上限 (デフォルト: 10)
 """
 
 import argparse
@@ -44,6 +47,10 @@ from claude_agent_sdk.types import (
 # 遡って取得する日数のデフォルト値。
 # 日次実行では 3 日、キャッチアップ実行では --days 7 などを指定。
 DEFAULT_DAYS = 3
+
+# --time-budget で打ち切ったときの終了コード。
+# GitHub Actions はこの値を見て、積み残しのレポートを次のジョブで処理する。
+EXIT_TIME_BUDGET_REACHED = 3
 
 # オーケストレーターに渡すデフォルトのプロンプトテンプレート。
 # {days} プレースホルダーは実際の日数に置換される。
@@ -1056,6 +1063,31 @@ def _report_to_infographic_path(report_path: str) -> str:
     return f"infographic/{filename}.html"
 
 
+def read_report_list(project_dir: Path, list_file: str) -> list[str]:
+    """1 行に 1 つのレポートのパスを書いたファイルを読み、実在するレポートだけを返す。
+
+    GitHub Actions では、レポートのジョブが追加したレポートの一覧を
+    インフォグラフィックのジョブに渡すのに使う。
+
+    Args:
+        project_dir: パスの基準にするプロジェクトのルート。
+        list_file: 一覧のファイル。パスは project_dir からの相対パス。
+
+    Returns:
+        重複を除いて並べ替えたレポートのパスのリスト。
+    """
+    path = Path(list_file)
+    if not path.is_file():
+        print(f"WARNING: {list_file} not found. No reports are treated as new.")
+        return []
+    reports: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        rel_path = line.strip()
+        if rel_path.endswith(".md") and (project_dir / rel_path).is_file():
+            reports.add(rel_path)
+    return sorted(reports)
+
+
 async def generate_infographics(report_paths: list[str]) -> list[str]:
     """Claude Agent SDK サブエージェントを使ってインフォグラフィックを生成する。
 
@@ -1351,6 +1383,12 @@ Examples:
 
   python run.py --debug
       Run with full debug logging (all message details)
+
+  python run.py --phase reports --time-budget 50
+      Generate reports only, and stop after 50 minutes (used by GitHub Actions)
+
+  python run.py --phase infographics --new-reports-file new_reports.txt
+      Generate infographics only, starting with the reports listed in the file
         """,
     )
     parser.add_argument(
@@ -1380,19 +1418,55 @@ Examples:
         action="store_true",
         help="Enable debug logging (full message details)",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--phase",
+        choices=["all", "reports", "infographics"],
+        default="all",
+        help=(
+            "Phase to run: 'all' (default) runs reports then infographics, "
+            "'reports' runs Phase 1 only, 'infographics' runs Phase 2 only"
+        ),
+    )
+    parser.add_argument(
+        "--time-budget",
+        type=float,
+        default=None,
+        metavar="MINUTES",
+        help=(
+            "Stop each phase after this many minutes. Files written before the stop are kept, "
+            f"and the run exits with code {EXIT_TIME_BUDGET_REACHED}. "
+            "Use it in CI to stop before the AWS credentials expire"
+        ),
+    )
+    parser.add_argument(
+        "--new-reports-file",
+        default=None,
+        metavar="PATH",
+        help=(
+            "File listing report paths (one per line, relative to the project root) "
+            "to treat as new in the 'infographics' phase. They get infographics before the backfill"
+        ),
+    )
+    args = parser.parse_args()
+    if args.days < 1:
+        parser.error("--days must be 1 or more")
+    if args.time_budget is not None and args.time_budget <= 0:
+        parser.error("--time-budget must be greater than 0")
+    return args
 
 
 
 def main() -> None:
     """自動化スクリプトのメインエントリーポイント。
 
-    2 つのフェーズを実行:
+    2 つのフェーズを実行 (--phase で片方だけを実行できる):
     - Phase 1: AWS What's New からレポートを生成
     - Phase 2: レポートからインフォグラフィックを生成
 
     各フェーズは独立して失敗可能。Phase 1 が部分的に成功した場合
     (エラー前に一部レポートが作成された場合) でも Phase 2 は実行される。
+    --time-budget を指定すると、各フェーズをその時間で打ち切り、
+    終了コード EXIT_TIME_BUDGET_REACHED で終了する。
     """
     global logger
 
@@ -1411,46 +1485,69 @@ def main() -> None:
     prompt = args.prompt_flag if args.prompt_flag else args.prompt
     days = args.days
 
-    # Phase 1 の前に既存レポートのスナップショットを取得
-    # run_skill() がレポート書き込み後に例外を投げても新規作成を検出できるようにする
     project_dir = Path(__file__).parent
     output_dir = project_dir / "reports"
-    existing_reports = set()
-    for md_file in output_dir.rglob("*.md"):
-        existing_reports.add(str(md_file.relative_to(project_dir)))
+    phase = args.phase
+    budget_seconds = args.time_budget * 60 if args.time_budget else None
+    budget_reached = False
+
+    def with_budget(coro):
+        """--time-budget の指定があれば、その時間でフェーズを打ち切る。"""
+        if budget_seconds is None:
+            return coro
+        return asyncio.wait_for(coro, timeout=budget_seconds)
 
     new_reports: list[str] = []
     phase1_failed = False
 
-    try:
-        # Phase 1: レポート生成
-        new_reports = asyncio.run(run_skill(prompt=prompt, days=days))
-    except Exception:
-        # run_skill は既にエラー詳細を出力済み。
-        # SDK がエラーを投げても、サブエージェントがレポートを
-        # ディスクに書き込んでいる可能性がある。検出して Phase 2 を実行可能に。
-        phase1_failed = True
-        for md_file in output_dir.rglob("*.md"):
-            rel_path = str(md_file.relative_to(project_dir))
-            if rel_path not in existing_reports:
-                new_reports.append(rel_path)
-        new_reports.sort()
-        if new_reports:
-            print(f"\nPhase 1 ended with error, but {len(new_reports)} new report(s) found on disk:")
-            for rp in new_reports:
-                print(f"  + {rp}")
-        # Even if the SDK threw an error, sub-agents may have written
-        # reports to disk. Detect them so Phase 2 can still run.
-        phase1_failed = True
-        for md_file in output_dir.rglob("*.md"):
-            rel_path = str(md_file.relative_to(project_dir))
-            if rel_path not in existing_reports:
-                new_reports.append(rel_path)
-        new_reports.sort()
-        if new_reports:
-            print(f"\nPhase 1 ended with error, but {len(new_reports)} new report(s) found on disk:")
-            for rp in new_reports:
-                print(f"  + {rp}")
+    if phase in ("all", "reports"):
+        # Phase 1 の前に既存レポートのスナップショットを取得
+        # run_skill() がレポート書き込み後に例外を投げても新規作成を検出できるようにする
+        existing_reports = {
+            str(md_file.relative_to(project_dir)) for md_file in output_dir.rglob("*.md")
+        }
+
+        def reports_written_on_disk() -> list[str]:
+            return sorted(
+                str(md_file.relative_to(project_dir))
+                for md_file in output_dir.rglob("*.md")
+                if str(md_file.relative_to(project_dir)) not in existing_reports
+            )
+
+        try:
+            # Phase 1: レポート生成
+            new_reports = asyncio.run(with_budget(run_skill(prompt=prompt, days=days)))
+        except (TimeoutError, asyncio.TimeoutError):
+            # 打ち切りまでに書き込まれたレポートは残る。
+            # 残りの更新は、次の実行の重複チェックで未作成として拾われる。
+            budget_reached = True
+            new_reports = reports_written_on_disk()
+            print(
+                f"\nPhase 1 stopped at the time budget ({args.time_budget:g} min). "
+                f"{len(new_reports)} new report(s) were written; "
+                "the remaining updates will be picked up by the next run."
+            )
+        except Exception:
+            # run_skill は既にエラー詳細を出力済み。
+            # SDK がエラーを投げても、サブエージェントがレポートを
+            # ディスクに書き込んでいる可能性がある。検出して Phase 2 を実行可能に。
+            phase1_failed = True
+            new_reports = reports_written_on_disk()
+            if new_reports:
+                print(f"\nPhase 1 ended with error, but {len(new_reports)} new report(s) found on disk:")
+                for rp in new_reports:
+                    print(f"  + {rp}")
+
+    if phase == "reports":
+        if phase1_failed:
+            sys.exit(1)
+        if budget_reached:
+            sys.exit(EXIT_TIME_BUDGET_REACHED)
+        return
+
+    if phase == "infographics" and args.new_reports_file:
+        new_reports = read_report_list(project_dir, args.new_reports_file)
+        print(f"\n{len(new_reports)} new report(s) listed in {args.new_reports_file}")
 
     # Collect reports that have infographic links but missing HTML files
     missing_infographics: list[str] = []
@@ -1475,25 +1572,50 @@ def main() -> None:
             print(f"  ! {rp}")
 
     # Phase 2: Generate infographics for new reports + missing ones
-    # Limit backfill batch size to avoid excessively long CI runs
+    # INFOGRAPHIC_MAX caps the total per run (unset: no cap). New reports come
+    # first; the backfill gets what is left, up to INFOGRAPHIC_BACKFILL_MAX.
+    max_total_env = os.environ.get("INFOGRAPHIC_MAX", "").strip()
+    MAX_TOTAL = int(max_total_env) if max_total_env else None
     MAX_BACKFILL = int(os.environ.get("INFOGRAPHIC_BACKFILL_MAX", "10"))
-    backfill = missing_infographics[:MAX_BACKFILL]
-    if len(missing_infographics) > MAX_BACKFILL:
+
+    capped_new = new_reports if MAX_TOTAL is None else new_reports[:MAX_TOTAL]
+    if len(capped_new) < len(new_reports):
         print(
-            f"\n  (Processing {MAX_BACKFILL} of "
+            f"\n  (Processing {MAX_TOTAL} of "
+            f"{len(new_reports)} new reports; "
+            f"remaining will be picked up as backfill in next runs)"
+        )
+    if MAX_TOTAL is None:
+        backfill_limit = MAX_BACKFILL
+    else:
+        backfill_limit = min(MAX_BACKFILL, max(0, MAX_TOTAL - len(capped_new)))
+    backfill = missing_infographics[:backfill_limit]
+    if len(missing_infographics) > backfill_limit:
+        print(
+            f"\n  (Backfilling {backfill_limit} of "
             f"{len(missing_infographics)} missing; "
             f"remaining will be picked up in next runs)"
         )
-    all_targets = new_reports + backfill
+    all_targets = capped_new + backfill
     if all_targets:
         print()
-        asyncio.run(generate_infographics(all_targets))
+        try:
+            asyncio.run(with_budget(generate_infographics(all_targets)))
+        except (TimeoutError, asyncio.TimeoutError):
+            # 作成済みの HTML は残る。残りは次の実行でバックフィルとして拾われる。
+            budget_reached = True
+            print(
+                f"\nPhase 2 stopped at the time budget ({args.time_budget:g} min). "
+                "The remaining infographics will be picked up as backfill by the next run."
+            )
     else:
-        print("\nNo new reports created. Skipping infographic generation.")
+        print("\nNo infographics to generate. Skipping infographic generation.")
 
     # Exit with error code if Phase 1 failed (after Phase 2 has had a chance to run)
     if phase1_failed:
         sys.exit(1)
+    if budget_reached:
+        sys.exit(EXIT_TIME_BUDGET_REACHED)
 
 
 

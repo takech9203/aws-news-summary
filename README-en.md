@@ -103,7 +103,7 @@ The following detailed diagram represents the actual technical implementation an
 ```mermaid
 flowchart TB
     subgraph CI["CI/CD Environment"]
-        Trigger["⏰ Scheduled Trigger<br/>(Daily 06:00 JST / 21:00 UTC)"]
+        Trigger["⏰ Scheduled Trigger<br/>(Daily 06:17 JST / 21:17 UTC)"]
         SDK["Claude Agent SDK<br/>(run.py)"]
     end
 
@@ -256,6 +256,14 @@ flowchart TB
    - The orchestrator delegates to `infographic-generator` subagents defined via `AgentDefinition`, spawning them in parallel via the Task tool
    - Each subagent runs in an isolated context, using the `creating-infographic` skill to generate HTML infographics
    - Saves to `infographic/{YYYYMMDD}-{slug}.html`
+
+6. **Running on GitHub Actions**
+   - Phase 1 and Phase 2 run as separate jobs (`run.py --phase reports` and `run.py --phase infographics`)
+   - AWS credentials expire after 1 hour (`role-duration-seconds: 3600`), so each job requests its own credentials, stops after 50 minutes (`--time-budget 50`), and commits and pushes the files it has created
+   - When the report job stops at the time budget, the `generate-reports-backlog` job creates the remaining reports with fresh credentials
+   - Each run creates up to 60 infographics: new reports first, then existing reports without HTML, oldest first
+   - GitHub Pages is deployed with everything committed so far, even when a generation job fails or stops at the time budget
+   - When you run the workflow manually, set `days` in [Run workflow] to choose how many days to look back (default: 3)
 
 ### Sequence Diagram
 

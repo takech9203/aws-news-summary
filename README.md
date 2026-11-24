@@ -104,7 +104,7 @@ flowchart TD
 ```mermaid
 flowchart TB
     subgraph CI["CI/CD Environment"]
-        Trigger["⏰ Scheduled Trigger<br/>(Daily 06:00 JST / 21:00 UTC)"]
+        Trigger["⏰ Scheduled Trigger<br/>(Daily 06:17 JST / 21:17 UTC)"]
         SDK["Claude Agent SDK<br/>(run.py)"]
     end
 
@@ -257,6 +257,14 @@ flowchart TB
    - `AgentDefinition` で定義した `infographic-generator` subagent を Task ツール経由で並列に起動
    - 各 subagent が独立したコンテキストで `creating-infographic` スキルを使用して HTML インフォグラフィックを生成
    - `infographic/{YYYYMMDD}-{slug}.html` に保存
+
+6. **GitHub Actions での実行**
+   - Phase 1 と Phase 2 を別のジョブで実行する (`run.py --phase reports` と `run.py --phase infographics`)
+   - AWS の認証情報は 1 時間 (`role-duration-seconds: 3600`) で失効するため、各ジョブは認証情報を取得し直し、50 分 (`--time-budget 50`) で打ち切って、それまでに作成したファイルを commit & push する
+   - レポートのジョブが打ち切られた日は、`generate-reports-backlog` ジョブが新しい認証情報で残りのレポートを作成する
+   - インフォグラフィックは 1 回の実行で最大 60 件作成する。新しいレポートを先に処理し、残りの枠で HTML のない既存レポートを古い順に処理する
+   - GitHub Pages へのデプロイは、生成のジョブが失敗した場合や打ち切られた場合も、それまでに commit した内容で行う
+   - 手動で実行する場合は、[Run workflow] の `days` で遡る日数を指定できる (デフォルト: 3)
 
 ### シーケンス図
 

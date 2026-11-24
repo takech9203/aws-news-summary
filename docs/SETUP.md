@@ -252,7 +252,7 @@ steps:
 
 1. リポジトリの **Actions** タブに移動
 2. **AWS News Summary** ワークフローを選択
-3. **Run workflow** → **Run workflow** をクリック
+3. **Run workflow** をクリックし、必要に応じて `days` (遡る日数、デフォルト: 3) を変更して **Run workflow** をクリック
 
 ## パート 3: GitLab CI 向けセットアップ (AWS + プロジェクト)
 

@@ -8,17 +8,41 @@
 # - AWS_REGION: AWS region (default: us-east-1)
 # - BEDROCK_MODEL_ID: Bedrock model ID (default: global.anthropic.claude-opus-4-6-v1)
 # - INFOGRAPHIC_BASE_URL: Base URL for infographic pages (e.g. https://your-user.github.io/your-repo, without trailing slash)
+#
+# Job layout:
+# The AWS credentials are requested with role-duration-seconds: 3600, so they
+# expire one hour after each job requests them. A job that keeps calling
+# Bedrock past that point fails for the rest of its run. The work is therefore
+# split into jobs that each request their own credentials, stop run.py after
+# TIME_BUDGET_MIN minutes, and commit and push what they created. Each job
+# starts from the latest branch, so it builds on the commits of the jobs before it.
+#
+#   generate-reports           Reports (run.py --phase reports)
+#   generate-reports-backlog   Remaining reports, only when generate-reports stopped at the time budget
+#   generate-infographics      Infographics (run.py --phase infographics)
+#   build-pages                Builds public/ and uploads the GitHub Pages artifact
+#   deploy-pages               Deploys the artifact to GitHub Pages
+#
+# build-pages runs even when a generation job fails or stops at the time
+# budget, so the site is deployed with everything committed so far.
 
 name: AWS News Summary
 
 on:
   schedule:
-    - cron: '0 21 * * *'  # Daily at 6:00 AM JST
+    # Not on the hour: scheduled runs at minute 0 are often delayed under high load
+    - cron: '17 21 * * *'  # Daily at 6:17 AM JST
 
   repository_dispatch:
     types: [generate-aws-news-summary]
 
   workflow_dispatch:
+    inputs:
+      days:
+        description: 'Number of days to look back for updates (run.py --days)'
+        type: number
+        required: false
+        default: 3
 
 # Required for AWS OIDC authentication and GitHub Pages deployment
 permissions:
@@ -30,20 +54,40 @@ permissions:
 env:
   PYTHON_VERSION: "3.14"
   AWS_DEFAULT_REGION: "us-east-1"
+  # Write run.py output to the log right away, so it is not lost when a step is stopped
+  PYTHONUNBUFFERED: "1"
+  # Scheduled and repository_dispatch runs have no inputs and use 3 days
+  DAYS: ${{ inputs.days || 3 }}
+  # Minutes after which run.py stops each phase. Leaves time before the
+  # credentials expire (role-duration-seconds: 3600) to finish the API calls in flight
+  TIME_BUDGET_MIN: "50"
   # INFOGRAPHIC_BASE_URL: GitHub Repository Variables で設定すること
   #   Settings > Secrets and variables > Actions > Variables > INFOGRAPHIC_BASE_URL
   #   例: https://your-user.github.io/your-repo (末尾スラッシュなし)
 
 jobs:
-  generate-summary:
-    name: Generate AWS News Summary
+  generate-reports:
+    name: Generate reports
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 70
+    outputs:
+      budget_reached: ${{ steps.generate.outputs.budget_reached }}
 
     steps:
-      - name: Checkout repository
+      - name: Check inputs
+        run: |
+          case "${DAYS}" in
+            ''|*[!0-9]*|0)
+              echo "::error::days must be a positive integer (got '${DAYS}')"
+              exit 1
+              ;;
+          esac
+          echo "Looking back ${DAYS} day(s)"
+
+      - name: Checkout the latest branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
 
       - name: Set up Python
@@ -54,102 +98,67 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          echo "Setting up Python environment..."
-          python --version
-          pip --version
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Create artifact directories
-        run: mkdir -p artifacts/new_reports artifacts/new_infographics
+      - name: Configure git
+        run: |
+          git config --global user.name "AWS News Bot"
+          git config --global user.email "aws-news-bot@users.noreply.github.com"
+          echo "Working on ${GITHUB_REF_NAME}: $(git log --oneline -1)"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          role-session-name: github-actions-${{ github.run_id }}
+          role-session-name: github-actions-${{ github.run_id }}-reports
           role-duration-seconds: 3600
 
       - name: Verify AWS credentials
         run: |
-          echo "Verifying AWS credentials..."
           if ! aws sts get-caller-identity; then
-            echo "============================================"
-            echo "ERROR: AWS authentication failed."
-            echo "  GitHub Repository: ${{ github.repository }}"
-            echo "  Role ARN:          ${{ secrets.AWS_ROLE_ARN }}"
-            echo "  AWS Region:        ${{ vars.AWS_REGION || 'us-east-1' }}"
-            echo ""
-            echo "Check the IAM role trust policy conditions:"
-            echo "  - OIDC provider for token.actions.githubusercontent.com"
-            echo "  - Allowed repository: ${{ github.repository }}"
-            echo "============================================"
+            echo "::error::AWS authentication failed. Check the IAM role trust policy for the OIDC provider token.actions.githubusercontent.com and the repository ${GITHUB_REPOSITORY}."
             exit 1
           fi
-          echo "AWS authentication successful"
 
-      - name: Configure git
-        run: |
-          git config --global user.name "AWS News Bot"
-          git config --global user.email "aws-news-bot@users.noreply.github.com"
-
-      - name: Generate AWS News Summary
+      - name: Generate reports
+        id: generate
+        # Fallback in case run.py does not stop at the time budget
+        timeout-minutes: 55
         env:
           CLAUDE_CODE_USE_BEDROCK: "1"
           USE_BEDROCK: "1"
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
           ANTHROPIC_MODEL: ${{ vars.BEDROCK_MODEL_ID || 'global.anthropic.claude-opus-4-6-v1' }}
           INFOGRAPHIC_BASE_URL: ${{ vars.INFOGRAPHIC_BASE_URL }}
-          INFOGRAPHIC_BACKFILL_MAX: "16"
           DEBUG: "1"
         run: |
-          echo "Starting AWS News Summary generation..."
-          python run.py --debug || true
-
-      - name: Update index files
-        run: |
-          echo "Updating index files..."
-          python -c "from run import generate_reports_index; from pathlib import Path; generate_reports_index(Path('reports'))"
-          python -c "from run import generate_infographic_index; from pathlib import Path; generate_infographic_index(Path('infographic'))"
-
-      - name: Collect artifacts and commit
-        id: check_changes
-        run: |
-          # Collect report artifacts
-          git status --porcelain reports/ | while IFS= read -r line; do
-            [ -z "$line" ] && continue
-            file="${line:3}"
-            if [ -f "$file" ]; then
-              mkdir -p "artifacts/new_reports/$(dirname "$file")"
-              cp "$file" "artifacts/new_reports/$file"
-            fi
-          done
-
-          # Collect infographic artifacts
-          git status --porcelain infographic/ | while IFS= read -r line; do
-            [ -z "$line" ] && continue
-            file="${line:3}"
-            [ -f "$file" ] && cp "$file" "artifacts/new_infographics/"
-          done
-
-          # Commit all changes (reports + infographics + index files)
-          if [ -n "$(git status --porcelain reports/ infographic/)" ]; then
-            echo "changes=true" >> $GITHUB_OUTPUT
-            echo "Committing all new reports and infographics..."
-            git add reports/ infographic/
-            git commit -m "docs(reports): add reports for $(date -u +"%Y-%m-%d")" -m "[skip ci]" || true
-
-            echo "Fetching latest changes..."
-            git fetch origin ${{ github.ref_name }} 2>/dev/null || true
-            git rebase origin/${{ github.ref_name }} 2>/dev/null || git rebase --abort 2>/dev/null || true
-
-            git push origin ${{ github.ref_name }} || true
-            echo "Done"
+          rc=0
+          python run.py --phase reports --days "${DAYS}" --debug --time-budget "${TIME_BUDGET_MIN}" || rc=$?
+          echo "run.py exited with code ${rc}"
+          echo "rc=${rc}" >> "$GITHUB_OUTPUT"
+          if [ "${rc}" -eq 3 ]; then
+            echo "budget_reached=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Report generation stopped at the ${TIME_BUDGET_MIN}-minute time budget. generate-reports-backlog creates the remaining reports."
           else
-            echo "changes=false" >> $GITHUB_OUTPUT
-            echo "No new reports or infographics to commit."
+            echo "budget_reached=false" >> "$GITHUB_OUTPUT"
+            if [ "${rc}" -ne 0 ]; then
+              echo "::warning::run.py exited with code ${rc}. Reports written before the error are committed."
+            fi
           fi
+
+      - name: Update the reports index
+        if: ${{ !cancelled() }}
+        run: python -c "from run import generate_reports_index; from pathlib import Path; generate_reports_index(Path('reports'))"
+
+      - name: Commit and push reports
+        if: ${{ !cancelled() }}
+        env:
+          COMMIT_PATHS: reports/
+          COMMIT_MESSAGE: "docs(reports): add reports"
+          ARTIFACT_DIR: artifacts/new_reports
+        run: bash scripts/ci-commit-and-push.sh
 
       - name: Upload report artifacts
         if: always()
@@ -159,61 +168,251 @@ jobs:
           path: artifacts/new_reports/
           retention-days: 30
 
+      - name: Job summary
+        if: always()
+        env:
+          RC: ${{ steps.generate.outputs.rc }}
+          BUDGET_REACHED: ${{ steps.generate.outputs.budget_reached }}
+        run: |
+          {
+            echo "## Reports"
+            echo ""
+            echo "- Days: ${DAYS}"
+            echo "- run.py exit code: ${RC:-not run}"
+            echo "- Stopped at the time budget: ${BUDGET_REACHED:-false}"
+            echo "- Files added or updated: $(find artifacts/new_reports -type f 2>/dev/null | wc -l)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Runs only when generate-reports stopped at the time budget.
+  # Creates the remaining reports with new credentials.
+  generate-reports-backlog:
+    name: Generate remaining reports
+    runs-on: ubuntu-latest
+    needs: generate-reports
+    if: ${{ !cancelled() && needs.generate-reports.result == 'success' && needs.generate-reports.outputs.budget_reached == 'true' }}
+    timeout-minutes: 70
+
+    steps:
+      - name: Checkout the latest branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Configure git
+        run: |
+          git config --global user.name "AWS News Bot"
+          git config --global user.email "aws-news-bot@users.noreply.github.com"
+          echo "Working on ${GITHUB_REF_NAME}: $(git log --oneline -1)"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-session-name: github-actions-${{ github.run_id }}-backlog
+          role-duration-seconds: 3600
+
+      - name: Verify AWS credentials
+        run: |
+          if ! aws sts get-caller-identity; then
+            echo "::error::AWS authentication failed. Check the IAM role trust policy for the OIDC provider token.actions.githubusercontent.com and the repository ${GITHUB_REPOSITORY}."
+            exit 1
+          fi
+
+      - name: Generate remaining reports
+        id: generate
+        timeout-minutes: 55
+        env:
+          CLAUDE_CODE_USE_BEDROCK: "1"
+          USE_BEDROCK: "1"
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          ANTHROPIC_MODEL: ${{ vars.BEDROCK_MODEL_ID || 'global.anthropic.claude-opus-4-6-v1' }}
+          INFOGRAPHIC_BASE_URL: ${{ vars.INFOGRAPHIC_BASE_URL }}
+          DEBUG: "1"
+        run: |
+          rc=0
+          python run.py --phase reports --days "${DAYS}" --debug --time-budget "${TIME_BUDGET_MIN}" || rc=$?
+          echo "run.py exited with code ${rc}"
+          echo "rc=${rc}" >> "$GITHUB_OUTPUT"
+          if [ "${rc}" -eq 3 ]; then
+            echo "::warning::Report generation stopped at the time budget again. The next run picks up the remaining updates."
+          elif [ "${rc}" -ne 0 ]; then
+            echo "::warning::run.py exited with code ${rc}. Reports written before the error are committed."
+          fi
+
+      - name: Update the reports index
+        if: ${{ !cancelled() }}
+        run: python -c "from run import generate_reports_index; from pathlib import Path; generate_reports_index(Path('reports'))"
+
+      - name: Commit and push reports
+        if: ${{ !cancelled() }}
+        env:
+          COMMIT_PATHS: reports/
+          COMMIT_MESSAGE: "docs(reports): add reports"
+          ARTIFACT_DIR: artifacts/new_reports
+        run: bash scripts/ci-commit-and-push.sh
+
+      - name: Upload report artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aws-news-summary-reports-backlog
+          path: artifacts/new_reports/
+          retention-days: 30
+
+      - name: Job summary
+        if: always()
+        env:
+          RC: ${{ steps.generate.outputs.rc }}
+        run: |
+          {
+            echo "## Remaining reports"
+            echo ""
+            echo "- run.py exit code: ${RC:-not run}"
+            echo "- Files added or updated: $(find artifacts/new_reports -type f 2>/dev/null | wc -l)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Runs even when the report jobs fail, so that the backfill of existing
+  # reports still makes progress.
+  generate-infographics:
+    name: Generate infographics
+    runs-on: ubuntu-latest
+    needs: [generate-reports, generate-reports-backlog]
+    if: ${{ !cancelled() }}
+    timeout-minutes: 70
+
+    steps:
+      - name: Checkout the latest branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Configure git
+        run: |
+          git config --global user.name "AWS News Bot"
+          git config --global user.email "aws-news-bot@users.noreply.github.com"
+          echo "Working on ${GITHUB_REF_NAME}: $(git log --oneline -1)"
+
+      - name: List the reports added by this run
+        run: |
+          mkdir -p artifacts
+          git diff --name-only --diff-filter=A "${GITHUB_SHA}" HEAD -- ':(glob)reports/[0-9][0-9][0-9][0-9]/*.md' > artifacts/new_reports.txt
+          echo "Reports added by this run: $(wc -l < artifacts/new_reports.txt)"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-session-name: github-actions-${{ github.run_id }}-infographics
+          role-duration-seconds: 3600
+
+      - name: Verify AWS credentials
+        run: |
+          if ! aws sts get-caller-identity; then
+            echo "::error::AWS authentication failed. Check the IAM role trust policy for the OIDC provider token.actions.githubusercontent.com and the repository ${GITHUB_REPOSITORY}."
+            exit 1
+          fi
+
+      - name: Generate infographics
+        id: generate
+        timeout-minutes: 55
+        env:
+          CLAUDE_CODE_USE_BEDROCK: "1"
+          USE_BEDROCK: "1"
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          ANTHROPIC_MODEL: ${{ vars.BEDROCK_MODEL_ID || 'global.anthropic.claude-opus-4-6-v1' }}
+          INFOGRAPHIC_BASE_URL: ${{ vars.INFOGRAPHIC_BASE_URL }}
+          # New reports first, then existing reports without HTML (oldest first) with the rest of the cap
+          INFOGRAPHIC_MAX: "60"
+          INFOGRAPHIC_BACKFILL_MAX: "60"
+          DEBUG: "1"
+        run: |
+          rc=0
+          python run.py --phase infographics --new-reports-file artifacts/new_reports.txt --debug --time-budget "${TIME_BUDGET_MIN}" || rc=$?
+          echo "run.py exited with code ${rc}"
+          echo "rc=${rc}" >> "$GITHUB_OUTPUT"
+          if [ "${rc}" -eq 3 ]; then
+            echo "::warning::Infographic generation stopped at the ${TIME_BUDGET_MIN}-minute time budget. The next run picks up the rest as backfill."
+          elif [ "${rc}" -ne 0 ]; then
+            echo "::warning::run.py exited with code ${rc}."
+          fi
+
+      - name: Update the infographic index
+        if: ${{ !cancelled() }}
+        run: python -c "from run import generate_infographic_index; from pathlib import Path; generate_infographic_index(Path('infographic'))"
+
+      - name: Commit and push infographics
+        if: ${{ !cancelled() }}
+        env:
+          COMMIT_PATHS: infographic/
+          COMMIT_MESSAGE: "docs(infographic): add infographics"
+          ARTIFACT_DIR: artifacts/new_infographics
+          ARTIFACT_FLAT: "1"
+        run: bash scripts/ci-commit-and-push.sh
+
       - name: Upload infographic artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: aws-news-summary-infographics
-          path: artifacts/new_infographics/
+          path: |
+            artifacts/new_infographics/
+            artifacts/new_reports.txt
           retention-days: 30
 
       - name: Job summary
         if: always()
+        env:
+          RC: ${{ steps.generate.outputs.rc }}
         run: |
-          echo "## AWS News Summary Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Execution Time:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Infographics"
+            echo ""
+            echo "- Reports added by this run: $(wc -l < artifacts/new_reports.txt 2>/dev/null || echo 0)"
+            echo "- run.py exit code: ${RC:-not run}"
+            echo "- Files added or updated: $(find artifacts/new_infographics -type f 2>/dev/null | wc -l)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "${{ steps.check_changes.outputs.changes }}" = "true" ]; then
-            echo "**Result:** New reports generated and committed" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### New Reports" >> $GITHUB_STEP_SUMMARY
-            git diff HEAD~1 --name-only reports/ 2>/dev/null | head -10 | while read file; do
-              echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
-            done
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### New Infographics" >> $GITHUB_STEP_SUMMARY
-            git diff HEAD~1 --name-only infographic/ 2>/dev/null | head -10 | while read file; do
-              echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
-            done
-          else
-            echo "**Result:** No new reports generated" >> $GITHUB_STEP_SUMMARY
-          fi
-
-  # GitHub Pages deployment for infographic HTML files
-  deploy-pages:
-    name: Deploy to GitHub Pages
+  # Builds the GitHub Pages content from the latest branch, including the
+  # commits of the generation jobs, even when one of them failed or stopped
+  # at the time budget.
+  build-pages:
+    name: Build GitHub Pages content
     runs-on: ubuntu-latest
-    needs: generate-summary
-    if: ${{ !cancelled() && needs.generate-summary.result == 'success' }}
+    needs: [generate-reports, generate-reports-backlog, generate-infographics]
+    if: ${{ !cancelled() }}
     timeout-minutes: 15
 
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
-      - name: Checkout repository
+      - name: Checkout the latest branch
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           ref: ${{ github.ref_name }}
-
-      - name: Pull latest changes
-        run: |
-          git pull origin ${{ github.ref_name }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -228,25 +427,42 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aws-news-summary-infographics
-          path: artifacts/new_infographics/
+          path: artifacts/
         continue-on-error: true
 
       - name: Build Pages content
         run: |
+          echo "Building from ${GITHUB_REF_NAME}: $(git log --oneline -1)"
           mkdir -p public
           # Copy infographics from repo
           cp infographic/*.html public/ 2>/dev/null || true
-          # Overlay any new infographics from artifacts
+          # Overlay any new infographics from artifacts (in case the push failed)
           cp artifacts/new_infographics/*.html public/ 2>/dev/null || true
           # Regenerate index from public/ contents
           python -c "from run import generate_infographic_index; from pathlib import Path; generate_infographic_index(Path('public'))"
-          echo "Total HTML files in public/:" && ls public/*.html 2>/dev/null | wc -l
+          echo "Total HTML files in public/: $(find public -maxdepth 1 -name '*.html' | wc -l)"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
 
+  # Deploys in a separate job from the upload, as in the GitHub Pages starter
+  # workflows. Deploying in the same job right after the upload intermittently
+  # fails with 'No artifacts named "github-pages" were found'
+  # (https://github.com/actions/deploy-pages/issues/451).
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: build-pages
+    if: ${{ !cancelled() && needs.build-pages.result == 'success' }}
+    timeout-minutes: 15
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

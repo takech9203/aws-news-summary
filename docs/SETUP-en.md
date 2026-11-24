@@ -236,7 +236,7 @@ steps:
 
 1. Go to **Actions** tab in your repository
 2. Select **AWS News Summary** workflow
-3. Click **Run workflow** → **Run workflow**
+3. Click **Run workflow**, change `days` (number of days to look back, default: 3) if needed, and click **Run workflow**
 
 ## Part 3: GitLab CI Setup (AWS + Project)
 
