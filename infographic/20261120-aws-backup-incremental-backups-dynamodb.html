@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Backup - Amazon DynamoDB の増分バックアップサポート</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+  margin-right: 8px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover {
+  color: var(--aws-smile-orange);
+}
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.5);
+  border-radius: 8px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ba-box {
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ba-box li {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 17px; flex-shrink: 0; }
+.cross-icon { color: var(--aws-red); font-size: 17px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 17px; flex-shrink: 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.18);
+  color: var(--aws-white);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.td-strong {
+  color: var(--aws-orange);
+  font-weight: 700;
+}
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+
+.code-title {
+  color: var(--aws-light-gray);
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p {
+  margin: 6px 0;
+  font-size: 14px;
+}
+
+.usecase .label {
+  color: var(--aws-white);
+  font-weight: 600;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-content {
+  flex: 1;
+}
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+/* まとめボックス */
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  margin-top: 8px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+footer li {
+  margin: 4px 0;
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">AWS Backup</span>
+    <span class="service-badge">Amazon DynamoDB</span>
+    <h1>💾 AWS Backup が DynamoDB テーブルの増分バックアップをサポート</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 20 日</div>
+  </div>
+
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      AWS Backup が <span class="highlight">Amazon DynamoDB テーブルの増分バックアップ</span>をサポートしました。初回のフルバックアップ取得後は<span class="highlight">変更されたデータのみを増分として取得</span>するため、バックアップストレージの使用量を大幅に削減できます。あわせて<span class="highlight">最短 1 時間ごと</span>の高頻度バックアップスケジュールに対応し、復旧ポイント目標 RPO の短縮が可能になりました。
+    </p>
+    <p>
+      増分バックアップのチェーンは <span class="highlight">15 日ごと</span>に新しいフルバックアップで更新され、チェーン内の任意の復旧ポイントから復元できます。保存先は標準のバックアップボールトに加えて<span class="highlight">論理的エアギャップボールト</span>にも対応し、<span class="highlight">クロスリージョンコピーも増分で転送</span>されるため、リージョン間のデータ保護コストも削減できます。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">変更分のみ</div>
+        <div class="stat-label">初回フル以降は増分取得で<br>ストレージ使用量を削減</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">最短 1 時間</div>
+        <div class="stat-label">高頻度スケジュールで<br>RPO を短縮</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">15 日ごと</div>
+        <div class="stat-label">フルバックアップを自動更新<br>チェーン管理は AWS が実施</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">増分コピー</div>
+        <div class="stat-label">クロスリージョンコピーも<br>増分転送でコスト削減</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>DynamoDB テーブルのバックアップは毎回フルコピーとして取得され、テーブルサイズに比例してストレージコストが増大</li>
+          <li>高頻度でバックアップを取得すると、変更量にかかわらずフルバックアップが蓄積し、コスト面で現実的ではなかった</li>
+          <li>クロスリージョンコピーもフルコピーとして転送され、リージョン間のデータ保護コストが高かった</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>初回フルバックアップ以降は変更データのみを取得する増分バックアップで、ストレージ使用量を削減</li>
+          <li>最短 1 時間ごと〜最長 1 週間ごとのスケジュール設定が可能になり、RPO を短縮しながらコストを抑制</li>
+          <li>クロスリージョンコピーも増分で転送され、リージョン間コピーのコストも削減</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    DDB[("📋 Amazon DynamoDB<br/>テーブル")]
+
+    subgraph Chain["💾 AWS Backup 増分バックアップチェーン"]
+        direction LR
+        Full1["🟦 フルバックアップ<br/>初回"]
+        Inc1["🟩 増分バックアップ<br/>変更分のみ"]
+        Inc2["🟩 増分バックアップ<br/>変更分のみ"]
+        Full2["🟦 フルバックアップ<br/>15 日ごとに更新"]
+        Full1 --> Inc1 --> Inc2 --> Full2
+    end
+
+    subgraph Vaults["🔐 保存先ボールト"]
+        direction LR
+        SV["🗄️ 標準バックアップボールト"]
+        LAG["🧊 論理的エアギャップボールト"]
+        SV ~~~ LAG
+    end
+
+    XR["🌍 別リージョンのボールト"]
+    Restore(["♻️ 任意の復旧ポイントから復元"])
+
+    DDB -->|最短 1 時間ごとのスケジュール| Chain
+    Chain --> Vaults
+    Vaults -.->|増分クロスリージョンコピー| XR
+    Chain --> Restore
+
+    classDef table fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef chain fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef full fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef inc fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef vault fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef restore fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class DDB table
+    class Chain,Vaults chain
+    class Full1,Full2 full
+    class Inc1,Inc2 inc
+    class SV,LAG,XR vault
+    class Restore restore
+      </pre>
+    </div>
+    <p class="diagram-note">
+      初回フルバックアップの後は変更分のみを増分として取得し、15 日ごとに新しいフルバックアップでチェーンを更新します。チェーン内の任意の復旧ポイントから復元でき、クロスリージョンコピーも増分で転送されます。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ 増分バックアップによるストレージ削減</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>初回にフルバックアップを取得し、以降は前回からの変更データのみを増分として取得</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>15 日ごとに新しいフルバックアップを自動取得してチェーンを更新</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>チェーン内の任意の復旧ポイントから復元可能</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ 高頻度バックアップスケジュール</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>最短 1 時間ごとから最長 1 週間ごとまでのスケジュールを設定可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>増分方式によりコストを抑えながら RPO を短縮できる</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 多様な保存先とクロスリージョンコピー</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>標準のバックアップボールトと論理的エアギャップボールトの両方に保存可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>クロスリージョンコピーも増分で転送され、リージョン間のコピーコストを削減</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ 有効化の管理</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>新規に DynamoDB バックアップを利用するアカウントではデフォルトで有効</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>既存ユーザーは AWS Backup 設定の高度な機能からオプトイン可能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>アカウント単位・リージョン単位で管理し、コンソール、CLI、API から操作可能</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📋 増分バックアップの仕様</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対象リソース</td><td>Amazon DynamoDB テーブル</td></tr>
+      <tr><td>バックアップ方式</td><td class="td-strong">初回フル + 以降は増分</td></tr>
+      <tr><td>フルバックアップの更新間隔</td><td class="td-strong">15 日ごと</td></tr>
+      <tr><td>スケジュール頻度</td><td class="td-strong">最短 1 時間ごと〜最長 1 週間ごと</td></tr>
+      <tr><td>復元</td><td>チェーン内の任意の復旧ポイントから可能</td></tr>
+      <tr><td>保存先</td><td>標準バックアップボールト、論理的エアギャップボールト</td></tr>
+      <tr><td>クロスリージョンコピー</td><td>増分で転送</td></tr>
+      <tr><td>有効化の単位</td><td>アカウント単位・リージョン単位</td></tr>
+      <tr><td>デフォルト設定</td><td>新規 DynamoDB バックアップユーザーは有効、既存ユーザーはオプトイン</td></tr>
+    </table>
+
+    <h3>🔄 API 変更履歴</h3>
+    <table>
+      <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+      <tr>
+        <td>2026/11/20</td>
+        <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/e9d2b3-backup.html" target="_blank" rel="noopener noreferrer">backup</a></td>
+        <td>2 updated api methods - <code>UpdateRegionSettings</code> リクエストと <code>DescribeRegionSettings</code> レスポンスに <code>ResourceTypeOptInIncremental</code> が追加され、増分バックアップのオプトイン / オプトアウトが可能に (現時点では DynamoDB テーブルのバックアップのみ対象)</td>
+      </tr>
+    </table>
+
+    <h3>🧾 リージョン設定の確認例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">DescribeRegionSettings レスポンス抜粋</span>
+      </div>
+      <pre><code class="language-json">{
+    "ResourceTypeOptInPreference": {
+        "DynamoDB": true
+    },
+    "ResourceTypeManagementPreference": {
+        "DynamoDB": true
+    },
+    "ResourceTypeOptInIncremental": {
+        "DynamoDB": true
+    }
+}</code></pre>
+    </div>
+    <p>
+      <code>DescribeRegionSettings</code> API のレスポンスに <span class="highlight">ResourceTypeOptInIncremental</span> フィールドが追加され、リソースタイプごとの増分バックアップ有効化状態を確認できます。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Backup で DynamoDB リソースタイプのオプトインが有効であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Backup の高度な機能 (フルマネジメント) で DynamoDB が有効であること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>設定変更に必要な IAM 権限 (<code>backup:UpdateRegionSettings</code> など) があること</span></div>
+
+    <h3>🚀 手順</h3>
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">現在のリージョン設定を確認する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI</span>
+          </div>
+          <pre><code class="language-bash">aws backup describe-region-settings</code></pre>
+        </div>
+        <p>現在のリージョンにおけるリソースタイプごとのオプトイン状態と、増分バックアップの有効化状態 (<code>ResourceTypeOptInIncremental</code>) を確認します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">増分バックアップを有効化する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">AWS CLI</span>
+          </div>
+          <pre><code class="language-bash">aws backup update-region-settings \
+  --resource-type-opt-in-incremental DynamoDB=true</code></pre>
+        </div>
+        <p>リージョン設定を更新し、DynamoDB テーブルの増分バックアップを有効化します。既存ユーザーはこの操作、またはコンソールの AWS Backup 設定にある高度な機能からオプトインします。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">バックアッププランのスケジュールを調整する</div>
+        <p>バックアッププランのルールでバックアップ頻度を設定します。増分バックアップにより、最短 1 時間ごとの高頻度スケジュールもコストを抑えて運用できます。必要に応じてクロスリージョンコピーや論理的エアギャップボールトへの保存もルールに追加します。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ストレージコストの削減</strong>: 変更データのみを保存するため、フルバックアップを毎回保存する場合と比べてバックアップストレージコストを削減できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>RPO の短縮</strong>: 最短 1 時間ごとのバックアップにより、障害時のデータ損失リスクを低減できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>DR コストの最適化</strong>: クロスリージョンコピーも増分で転送されるため、災害対策のコストを抑えられる</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用の簡素化</strong>: フルバックアップの自動更新 (15 日ごと) を AWS Backup が管理するため、チェーン管理の運用負荷がない</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な復元</strong>: チェーン内の任意の復旧ポイントから復元でき、増分方式を意識する必要がない</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ランサムウェア対策との両立</strong>: 論理的エアギャップボールトへの保存に対応し、増分方式でも改ざん耐性のある保護を実現できる</span></div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>🚫 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>対象は Amazon DynamoDB テーブルのバックアップのみ (他のリソースタイプは現時点で対象外)</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>フルバックアップは 15 日ごとに自動取得されるため、その分のストレージは定期的に発生する</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>利用可能なのは AWS Backup が DynamoDB を保護しているリージョンに限られる</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>既存の DynamoDB バックアップユーザーはデフォルトでは無効のため、AWS Backup 設定の高度な機能から明示的にオプトインする必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>設定はアカウント単位・リージョン単位で管理されるため、マルチリージョン / マルチアカウント環境では各リージョンでの有効化状況を確認する必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>変更量が非常に多いテーブルでは、増分バックアップによる削減効果が相対的に小さくなる可能性がある</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. 大規模テーブルのバックアップコスト最適化</div>
+      <p><span class="label">シナリオ</span>: 数 TB 規模の DynamoDB テーブルを毎日バックアップしており、フルコピーの蓄積によりバックアップストレージコストが増大している。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">実装例</span>
+        </div>
+        <pre><code class="language-bash">aws backup update-region-settings \
+  --resource-type-opt-in-incremental DynamoDB=true</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 日次バックアップが変更分のみの増分となり、バックアップストレージコストを大幅に削減できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. 高頻度バックアップによる RPO 短縮</div>
+      <p><span class="label">シナリオ</span>: 金融・EC 系のワークロードで、日次バックアップでは障害時に最大 24 時間分のデータ損失リスクがあり、RPO を短縮したい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">バックアップルール例</span>
+        </div>
+        <pre><code class="language-json">{
+  "RuleName": "HourlyDynamoDBBackup",
+  "TargetBackupVaultName": "my-backup-vault",
+  "ScheduleExpression": "cron(0 * * * ? *)",
+  "Lifecycle": { "DeleteAfterDays": 35 }
+}</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 1 時間ごとの増分バックアップにより、コストを抑えながら RPO を 1 時間に短縮できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. 増分クロスリージョンコピーによる DR 構成</div>
+      <p><span class="label">シナリオ</span>: コンプライアンス要件により DynamoDB のバックアップを別リージョンに保管する必要があるが、フルコピーの転送コストが課題となっている。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">クロスリージョンコピールール例</span>
+        </div>
+        <pre><code class="language-json">{
+  "RuleName": "DailyWithCrossRegionCopy",
+  "TargetBackupVaultName": "primary-vault",
+  "ScheduleExpression": "cron(0 3 * * ? *)",
+  "CopyActions": [
+    {
+      "DestinationBackupVaultArn": "arn:aws:backup:us-west-2:123456789012:backup-vault:dr-vault"
+    }
+  ]
+}</code></pre>
+      </div>
+      <p><span class="label">効果</span>: クロスリージョンコピーも増分で転送されるため、DR 要件を満たしながらリージョン間コピーのコストを削減できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      AWS Backup の料金は保存したバックアップデータ量などに基づいて課金されます。増分バックアップでは初回フルバックアップ以降は<span class="highlight">変更データのみが保存</span>されるため、毎回フルバックアップを保存する従来方式と比べてストレージコストを削減できます。クロスリージョンコピーも増分で転送されるため、コピーにかかるコストも削減されます。
+    </p>
+    <p>具体的な料金は <a class="aws-link" href="https://aws.amazon.com/backup/pricing/" target="_blank" rel="noopener noreferrer">AWS Backup 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>AWS Backup が Amazon DynamoDB を保護している<span class="highlight">すべての AWS リージョン</span>で利用可能です。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">📋 Amazon DynamoDB</div>
+      <p style="margin:0; font-size:14px;">今回のアップデートの対象リソース。DynamoDB 自体のオンデマンドバックアップやポイントインタイムリカバリ (PITR) と AWS Backup を組み合わせたデータ保護戦略を設計できる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🧊 AWS Backup 論理的エアギャップボールト</div>
+      <p style="margin:0; font-size:14px;">増分バックアップの保存先として利用でき、ランサムウェア対策としての改ざん耐性を提供。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 AWS Backup クロスリージョンコピー</div>
+      <p style="margin:0; font-size:14px;">増分転送に対応し、DR 構成のコストを削減。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin:0;">
+        AWS Backup の DynamoDB 増分バックアップにより、<span class="highlight">ストレージコストを削減しながら最短 1 時間ごとの高頻度バックアップ</span>が可能になりました。新規ユーザーはデフォルトで有効ですが、既存ユーザーは AWS Backup 設定の高度な機能からのオプトインが必要です。大規模な DynamoDB テーブルを運用している場合は、まず <code>DescribeRegionSettings</code> で現在の設定を確認し、有効化とバックアップスケジュールの見直しを検討することを推奨します。
+      </p>
+    </div>
+  </div>
+
+  <footer>
+    <p>📎 出典</p>
+    <ul>
+      <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-backup-incremental-backups-dynamodb/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/11/aws-backup-incremental-backups-dynamodb/</a></li>
+      <li>AWS Blog: <a class="aws-link" href="https://aws.amazon.com/blogs/storage/reduce-amazon-dynamodb-backup-storage-costs-with-incremental-backups-in-aws-backup/" target="_blank" rel="noopener noreferrer">Reduce Amazon DynamoDB backup storage costs with incremental backups in AWS Backup</a></li>
+      <li>ドキュメント: <a class="aws-link" href="https://docs.aws.amazon.com/aws-backup/latest/devguide/working-with-supported-services.html#working-with-ddb" target="_blank" rel="noopener noreferrer">Working with Amazon DynamoDB</a></li>
+      <li>API 変更: <a class="aws-link" href="https://awsapichanges.com/archive/changes/e9d2b3-backup.html" target="_blank" rel="noopener noreferrer">https://awsapichanges.com/archive/changes/e9d2b3-backup.html</a></li>
+      <li>料金ページ: <a class="aws-link" href="https://aws.amazon.com/backup/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/backup/pricing/</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-11-20-aws-backup-incremental-backups-dynamodb.md) を基に作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

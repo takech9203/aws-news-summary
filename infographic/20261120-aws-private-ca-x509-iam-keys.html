@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Private CA - X.509 IAM 条件キーのサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  text-align: right;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .ba-title { color: #FF6B4A; }
+.after-box .ba-title { color: #4CAF50; }
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+.before-box li, .after-box li {
+  margin: 8px 0;
+  padding-left: 24px;
+  position: relative;
+  font-size: 14px;
+}
+.before-box li::before {
+  content: "✗";
+  color: #FF6B4A;
+  position: absolute;
+  left: 0;
+  font-weight: bold;
+}
+.after-box li::before {
+  content: "✓";
+  color: #4CAF50;
+  position: absolute;
+  left: 0;
+  font-weight: bold;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Tables */
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 12px 0;
+}
+.spec-table th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  padding: 8px 10px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+.spec-table td {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+.spec-table code {
+  background: rgba(0, 161, 201, 0.15);
+  color: var(--aws-teal);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  word-break: break-all;
+}
+.table-wrap { overflow-x: auto; }
+
+/* inline code */
+p code, li code {
+  background: rgba(0, 161, 201, 0.15);
+  color: var(--aws-teal);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: 'Courier New', monospace;
+}
+
+/* Code block */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+.code-title {
+  color: var(--aws-light-gray);
+}
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Check / cross lists */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Steps */
+.step-card {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  align-items: flex-start;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 16px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+.usecase-label {
+  font-weight: 700;
+  color: var(--aws-white);
+}
+.effect-box {
+  background: rgba(29, 129, 2, 0.12);
+  border-left: 4px solid var(--aws-green);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+/* Benefit grid */
+.benefit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 760px) {
+  .benefit-grid { grid-template-columns: 1fr; }
+}
+.benefit-col {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.benefit-col-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+.benefit-col .b-label {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+/* Policy layers */
+.layer-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+.layer-badge {
+  background: rgba(140, 79, 255, 0.15);
+  border: 1px solid var(--aws-purple);
+  color: #C9A8FF;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Related services */
+.related-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 760px) {
+  .related-grid { grid-template-columns: 1fr; }
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <div class="service-badge">AWS Private Certificate Authority</div>
+      <h1>🔐 X.509 IAM 条件キーのサポート</h1>
+      <p style="margin: 8px 0 0 0; color: var(--aws-light-gray);">証明書の「中身」を IAM ポリシーで制御できるように</p>
+    </div>
+    <div class="subtitle">
+      <div class="release-date">📅 2026 年 11 月 20 日</div>
+      <div>AWS What's New</div>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>
+      AWS Private CA が、発行しようとしている証明書の内容を記述する <span class="highlight">IAM 条件キー</span>をサポートしました。サブジェクト、SAN、公開鍵、署名アルゴリズム、有効期間、Key Usage、Extended Key Usage、Basic Constraints といった <span class="highlight">X.509 証明書の属性</span>に基づいて、証明書リクエストを許可または拒否する IAM ポリシーを記述できます。
+    </p>
+    <p>
+      <code>IssueCertificate</code> API が呼び出されると、AWS Private CA は CSR、証明書テンプレート、API パススルー値から<span class="highlight">署名前の証明書 (TBS 証明書)</span> を構築し、その属性に対してポリシーを評価します。非準拠のリクエストは署名前に拒否され、<code>AccessDeniedException</code> が返されます。条件キーの値は最終的な証明書から取得されるため、<span class="highlight">属性の入力元を変えてもポリシーを回避できません</span>。
+    </p>
+    <p>
+      1 つのプライベート CA を複数のチームやアカウント間で共有しながら、各チームが発行できる証明書をポリシーで細かく制御できるようになります。マルチアカウント環境で PKI を集中管理する組織や、証明書発行のガバナンスを強化したいセキュリティチームに特に有用です。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: 証明書の内容は制御できない</div>
+        <ul>
+          <li>IAM で制御できるのは「誰が」「どの CA に」「どのテンプレートで」まで。ドメイン名や有効期間など証明書の中身は制御不可</li>
+          <li>チームごとに発行可能な証明書を分離するには、チームごとに別々の CA が必要で、月額料金と運用負荷が増加</li>
+          <li>あるいは証明書リクエストを検証する独自の認可レイヤー (申請ワークフローやプロキシ) の構築・維持が必要</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: 証明書の内容そのものをポリシーで制御</div>
+        <ul>
+          <li>1 つの CA を共有しつつ、アカウントごとに発行可能な DNS 名を自身のサブドメインに限定できる</li>
+          <li>有効期間の上限や、組織全体で必須とするキーアルゴリズム・キーサイズをポリシーで強制できる</li>
+          <li>CA 証明書 (下位 CA) の発行を PKI チームのみに限定するなど、役割に応じた発行権限の分離が可能</li>
+          <li>SCP、RCP、VPC エンドポイントポリシー、AWS RAM 許可でも利用でき、組織全体へ一括適用できる</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Requesters["👥 証明書リクエスト元"]
+        direction LR
+        TeamA["🧑‍💻 チーム A<br/>アカウント A"]
+        TeamB["🧑‍💻 チーム B<br/>アカウント B"]
+        TeamA ~~~ TeamB
+    end
+
+    subgraph PCA["☁️ AWS Private CA 共有 CA"]
+        API["🔌 IssueCertificate API"]
+        Build["⚙️ TBS 証明書の構築<br/>CSR + テンプレート + API パススルー"]
+        Eval{"🛡️ IAM ポリシー評価<br/>X.509 条件キー"}
+        Sign["✍️ CA による署名"]
+    end
+
+    Policy["📜 IAM ポリシー / SCP / RCP<br/>VPC エンドポイントポリシー<br/>AWS RAM 許可"]
+    Cert["📄 発行された証明書"]
+    Denied["🚫 AccessDeniedException"]
+
+    TeamA --> API
+    TeamB --> API
+    API --> Build
+    Build --> Eval
+    Policy -.-> Eval
+    Eval -->|準拠| Sign
+    Eval -->|非準拠| Denied
+    Sign --> Cert
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef error fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+
+    class Requesters,PCA boundary
+    class TeamA,TeamB input
+    class API,Sign,Cert process
+    class Build,Policy internal
+    class Eval decision
+    class Denied error
+      </pre>
+    </div>
+    <p class="diagram-caption">署名前に構築された TBS 証明書の属性に対して IAM ポリシーが評価され、非準拠のリクエストは証明書が発行される前に拒否されます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ 証明書内容に基づくポリシー評価</div>
+      <div class="check-item"><span class="check-icon">✓</span><span><code>acm-pca:IssueCertificate</code> アクションの実行時に、発行予定の証明書 (TBS 証明書) の属性に対してポリシーを評価</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>条件キーは「最終的にどのような証明書になるか」を表すため、CSR・テンプレート・API パススルーのどこで属性を指定しても回避不能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>非準拠のリクエストには <code>AccessDeniedException</code> が返され、証明書は発行されない</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ 幅広い証明書属性のカバレッジ</div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>サブジェクト</strong>: CN、C、O、OU、空サブジェクトの判定</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>SAN</strong>: DNS 名、IP アドレス、URI (SPIFFE ID など)、メールアドレス、ディレクトリ名、OtherName、エントリ数、critical フラグ</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>鍵と署名</strong>: 鍵アルゴリズム (RSA、EC、SM2、ML-DSA)、鍵サイズ、楕円曲線、CA の署名アルゴリズム</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>有効期間</strong>: notBefore、notAfter、日数・時間単位の期間</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>拡張領域</strong>: Key Usage、Extended Key Usage、Basic Constraints (CA フラグ、pathLen)</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 多様なポリシータイプのサポート</div>
+      <div class="layer-badges">
+        <span class="layer-badge">アイデンティティベースポリシー</span>
+        <span class="layer-badge">SCP</span>
+        <span class="layer-badge">RCP</span>
+        <span class="layer-badge">VPC エンドポイントポリシー</span>
+        <span class="layer-badge">AWS RAM カスタマーマネージド許可</span>
+      </div>
+      <p style="font-size: 14px; margin: 8px 0 0 0;">AWS RAM のカスタマーマネージド許可は、クロスアカウントで CA を共有する場合の発行制御に有効です。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様: 主な条件キー</h2>
+    <p style="font-size: 14px;">
+      すべての条件キーは <code>acm-pca:</code> プレフィックスを使用し、署名前の TBS 証明書を記述します。証明書に該当しない属性のキーはリクエストコンテキストに存在しません (例: RSA 鍵の場合 <code>acm-pca:x509Key/curve</code> は存在しない)。
+    </p>
+    <div class="table-wrap">
+      <table class="spec-table">
+        <thead>
+          <tr><th>カテゴリ</th><th>条件キーの例</th><th>型</th><th>説明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>サブジェクト</td><td><code>x509Subject/CN</code></td><td>ArrayOfString</td><td>サブジェクトのコモンネーム</td></tr>
+          <tr><td>サブジェクト</td><td><code>x509Subject/C</code> / <code>O</code> / <code>OU</code></td><td>ArrayOfString</td><td>国 (2 文字コード)、組織、組織単位</td></tr>
+          <tr><td>サブジェクト</td><td><code>x509Subject/empty</code></td><td>Bool</td><td>サブジェクト DN が空かどうか (常に存在)</td></tr>
+          <tr><td>SAN</td><td><code>x509SAN/DNS</code></td><td>ArrayOfString</td><td>DNS 名エントリ (小文字、末尾ドットなし)</td></tr>
+          <tr><td>SAN</td><td><code>x509SAN/IP</code></td><td>ArrayOfIPAddress</td><td>IP アドレスエントリ</td></tr>
+          <tr><td>SAN</td><td><code>x509SAN/URI</code></td><td>ArrayOfString</td><td>URI エントリ (SPIFFE ワークロード ID など)</td></tr>
+          <tr><td>SAN</td><td><code>x509SAN/count</code></td><td>Numeric</td><td>SAN エントリの総数</td></tr>
+          <tr><td>SAN</td><td><code>x509SAN/OtherName/${OID}</code></td><td>ArrayOfString</td><td>OtherName エントリ (例: Microsoft UPN は <code>1.3.6.1.4.1.311.20.2.3</code>)</td></tr>
+          <tr><td>鍵</td><td><code>x509Key/algorithm</code></td><td>String</td><td>公開鍵アルゴリズム: RSA、EC、SM2、ML-DSA-44/65/87</td></tr>
+          <tr><td>鍵</td><td><code>x509Key/size</code></td><td>Numeric</td><td>鍵サイズ (ビット)。RSA はモジュラス長、EC は曲線のフィールドサイズ</td></tr>
+          <tr><td>鍵</td><td><code>x509Key/curve</code></td><td>String</td><td>EC / SM2 鍵の曲線名 (例: prime256v1、secp384r1)</td></tr>
+          <tr><td>署名</td><td><code>x509Signature/algorithm</code></td><td>String</td><td>CA の署名アルゴリズム (例: ecdsa-with-SHA384)</td></tr>
+          <tr><td>有効期間</td><td><code>x509Validity/durationDays</code></td><td>Numeric</td><td>有効期間の日数 (切り捨て)</td></tr>
+          <tr><td>有効期間</td><td><code>x509Validity/notBefore</code> / <code>notAfter</code></td><td>Date</td><td>有効期間の開始 / 終了 (UTC)</td></tr>
+          <tr><td>拡張</td><td><code>x509Ext/KeyUsage</code></td><td>ArrayOfString</td><td>RFC 5280 の名称によるキー使用法 (digitalSignature など)</td></tr>
+          <tr><td>拡張</td><td><code>x509Ext/ExtendedKeyUsage</code></td><td>ArrayOfString</td><td>拡張キー使用法 (serverAuth、clientAuth、codeSigning、OID など)</td></tr>
+          <tr><td>拡張</td><td><code>x509Ext/BasicConstraints/CA</code></td><td>Bool</td><td>CA 証明書かどうか</td></tr>
+          <tr><td>拡張</td><td><code>x509Ext/BasicConstraints/pathLen</code></td><td>Numeric</td><td>CA 証明書のパス長制約</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size: 13px;">条件キーの完全な一覧は <a class="aws-link" href="https://docs.aws.amazon.com/privateca/latest/userguide/certguard-condition-keys.html" target="_blank" rel="noopener noreferrer">ユーザーガイド</a> を参照してください。</p>
+
+    <h3>📜 ポリシー例: 有効期間を 90 日以内に制限</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">有効期間 90 日超の証明書発行を拒否</span>
+      </div>
+      <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "DenyLongLivedCertificates",
+            "Effect": "Deny",
+            "Action": "acm-pca:IssueCertificate",
+            "Resource": "*",
+            "Condition": {
+                "NumericGreaterThan": {
+                    "acm-pca:x509Validity/durationDays": "90"
+                }
+            }
+        }
+    ]
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Private CA でプライベート CA が作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>IAM ポリシー、SCP、RCP などを編集する権限があること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>本番適用前に非本番アカウントでポリシーをテストできる環境があること</span></div>
+
+    <h3>手順</h3>
+    <div class="step-card">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">制御したい証明書属性と条件キーを決定する</div>
+        <p style="margin: 0; font-size: 14px;">ユーザーガイドの条件キーリファレンスを確認し、組織のポリシー要件 (許可するドメイン、鍵アルゴリズム、有効期間の上限など) を条件キーにマッピングします。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">ポリシーを作成してテスト用プリンシパルにアタッチする</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">インラインポリシーのアタッチ</span>
+          </div>
+          <pre><code class="language-bash">aws iam put-role-policy \
+  --role-name CertificateIssuerRole \
+  --policy-name RestrictCertificateContents \
+  --policy-document file://certificate-policy.json</code></pre>
+        </div>
+        <p style="margin: 0; font-size: 14px;">作成したポリシードキュメントをテスト用の IAM ロールにインラインポリシーとしてアタッチします。SCP や RCP として組織全体に適用する場合は AWS Organizations で設定します。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">準拠・非準拠のリクエストで動作を検証する</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">非準拠リクエストの拒否確認 (有効期間 100 日)</span>
+          </div>
+          <pre><code class="language-bash">aws acm-pca issue-certificate \
+  --certificate-authority-arn arn:aws:acm-pca:ap-northeast-1:123456789012:certificate-authority/example \
+  --csr fileb://test.csr \
+  --signing-algorithm SHA256WITHECDSA \
+  --validity Value=100,Type=DAYS</code></pre>
+        </div>
+        <p style="margin: 0; font-size: 14px;">ポリシーに違反する証明書リクエスト (この例では有効期間 100 日) を実行し、<code>AccessDeniedException</code> で拒否されることを確認します。準拠するリクエストが正常に発行されることも併せて確認します。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">影響範囲を確認してから本番環境へ展開する</div>
+        <p style="margin: 0; font-size: 14px;">新しい <code>Deny</code> ステートメントは、AWS サービスやコネクタがユーザーに代わって行う証明書リクエストも拒否する可能性があります。ユーザーガイドの「Before you deploy a policy」を確認し、非本番アカウントでテストしてから段階的に適用します。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="benefit-grid">
+      <div class="benefit-col">
+        <div class="benefit-col-title">💼 ビジネス面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><span class="b-label">CA 統合によるコスト削減</span>: チームごとに CA を分ける必要がなくなり、CA の月額料金と運用負荷を削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><span class="b-label">独自認可レイヤーの廃止</span>: 自前の申請ワークフローやプロキシが不要になり、開発・保守コストを削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><span class="b-label">コンプライアンスの強化</span>: 組織標準を IAM ポリシーとして宣言的に強制でき、監査対応が容易に</span></div>
+      </div>
+      <div class="benefit-col">
+        <div class="benefit-col-title">🔧 技術面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><span class="b-label">回避不能な制御</span>: 値は最終的な証明書から取得されるため、どの入力元で属性を指定しても回避できない</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><span class="b-label">多層的な適用</span>: アイデンティティベースポリシー、SCP、RCP、VPC エンドポイントポリシー、AWS RAM 許可の複数レイヤーで適用可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><span class="b-label">きめ細かな制御</span>: ワイルドカードマッチ、CIDR 範囲、数値比較など IAM の条件演算子をフル活用</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><span class="b-label">ポスト量子暗号への対応</span>: ML-DSA 鍵のみを許可するポリシーも記述でき、将来の暗号移行を強制可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3 style="margin-top: 0;">制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>X.509 条件キーは <code>acm-pca:IssueCertificate</code> アクションでのみ利用可能。<code>acm-pca:RevokeCertificate</code> や <code>acm-pca:GetCertificate</code> など他のアクションのステートメントで使用すると、キーが存在しないため意図しない評価結果になる</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>証明書に該当しない属性のキーはリクエストコンテキストに存在しないため、<code>Null</code> 条件や <code>ForAllValues</code> の評価挙動を正しく理解してポリシーを設計する必要がある</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span><code>acm-pca:x509Subject/CN</code> は証明書に記載されたとおりに評価され、小文字化されない (大文字小文字を区別しない比較には <code>StringEqualsIgnoreCase</code> などが必要)</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>新しい <code>Deny</code> ステートメントは、AWS サービスやコネクタ (AWS Certificate Manager との連携など) が代理で行う証明書リクエストも拒否する可能性がある。本番適用前に非本番アカウントでのテストが推奨される</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span><code>Allow</code> ステートメントで <code>ForAllValues</code> を使う場合、対象キーの値が存在しない証明書も条件を満たすため、<code>Null</code> 条件や <code>acm-pca:x509SAN/count</code> と組み合わせて抜け道を塞ぐ設計が必要</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>SAN の OtherName エントリは OID ごとに個別のキーとなるため、単一の条件ですべての OtherName タイプをカバーすることはできない</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. 共有 CA でアカウントごとにサブドメインを制限</div>
+      <p style="font-size: 14px; margin: 0 0 8px 0;"><span class="usecase-label">シナリオ</span>: 組織の PKI チームが 1 つのプライベート CA を AWS RAM で各アカウントに共有し、各アカウントは自身のサブドメインの証明書のみ発行できるようにしたい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">承認済みドメイン以外の DNS 名を拒否</span>
+        </div>
+        <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "DenyUnapprovedDomains",
+            "Effect": "Deny",
+            "Action": "acm-pca:IssueCertificate",
+            "Resource": "*",
+            "Condition": {
+                "ForAnyValue:StringNotLike": {
+                    "acm-pca:x509SAN/DNS": ["team-a.example.com", "*.team-a.example.com"]
+                }
+            }
+        }
+    ]
+}</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: チームごとに CA を分けることなく、他チームのドメイン名を含む証明書の発行を防止できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. 組織全体で鍵強度と有効期間の標準を強制</div>
+      <p style="font-size: 14px; margin: 0 0 8px 0;"><span class="usecase-label">シナリオ</span>: セキュリティチームが、組織内のすべての証明書に対して RSA 2048 ビット以上または承認済み EC 曲線の使用と、90 日以内の有効期間を義務付けたい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">弱い RSA 鍵と長期有効期間を拒否</span>
+        </div>
+        <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "DenyShortRSAKeys",
+            "Effect": "Deny",
+            "Action": "acm-pca:IssueCertificate",
+            "Resource": "*",
+            "Condition": {
+                "StringEquals": { "acm-pca:x509Key/algorithm": "RSA" },
+                "NumericLessThan": { "acm-pca:x509Key/size": "2048" }
+            }
+        },
+        {
+            "Sid": "DenyLongLivedCertificates",
+            "Effect": "Deny",
+            "Action": "acm-pca:IssueCertificate",
+            "Resource": "*",
+            "Condition": {
+                "NumericGreaterThan": { "acm-pca:x509Validity/durationDays": "90" }
+            }
+        }
+    ]
+}</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: SCP として組織全体に適用することで、どのアカウント・どのツールから発行しても組織標準を満たさない証明書は発行されない。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. CA 証明書の発行を PKI チームに限定</div>
+      <p style="font-size: 14px; margin: 0 0 8px 0;"><span class="usecase-label">シナリオ</span>: 下位 CA 証明書の発行は PKI チームのみに許可し、一般の開発者ロールにはエンドエンティティ証明書のみ発行させたい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">エンドエンティティ専用ロールによる CA 証明書発行を拒否</span>
+        </div>
+        <pre><code class="language-json">{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "DenyCACertificatesForEndEntityRoles",
+            "Effect": "Deny",
+            "Action": "acm-pca:IssueCertificate",
+            "Resource": "*",
+            "Condition": {
+                "Bool": { "acm-pca:x509Ext/BasicConstraints/CA": "true" },
+                "StringEquals": { "aws:PrincipalTag/CertificateType": "EndEntityOnly" }
+            }
+        }
+    ]
+}</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: プリンシパルタグと組み合わせることで、アカウントごとに個別のポリシーを用意せずに役割別の発行権限を実現できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金・利用可能リージョン</h2>
+    <div class="card">
+      <div class="card-title">💵 料金</div>
+      <p style="margin: 0; font-size: 14px;">この機能は<span class="highlight">追加料金なし</span>で利用できます。AWS Private CA 自体の料金 (CA の月額料金と証明書発行料金) は通常どおり適用されます。詳細は <a class="aws-link" href="https://aws.amazon.com/private-ca/pricing/" target="_blank" rel="noopener noreferrer">AWS Private CA 料金ページ</a> を参照してください。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌏 利用可能リージョン</div>
+      <p style="margin: 0; font-size: 14px;">AWS Private CA が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます (東京・大阪リージョンを含む)。</p>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="card">
+        <div class="card-title">🔑 AWS IAM</div>
+        <p style="margin: 0; font-size: 14px;">条件キーを利用するポリシー評価の基盤。アイデンティティベースポリシーで個別のロール・ユーザーを制御。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🏢 AWS Organizations (SCP / RCP)</div>
+        <p style="margin: 0; font-size: 14px;">組織・OU 単位で証明書発行のガードレールを一括適用。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🤝 AWS RAM</div>
+        <p style="margin: 0; font-size: 14px;">プライベート CA のクロスアカウント共有。カスタマーマネージド許可に条件キーを組み込むことで、共有先の発行内容を制御。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">📜 AWS Certificate Manager (ACM)</div>
+        <p style="margin: 0; font-size: 14px;">Private CA と連携して証明書を発行・管理するサービス。Deny ポリシーが ACM 経由の発行に影響しないか事前確認が必要。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>
+      AWS Private CA の X.509 IAM 条件キーにより、証明書の<span class="highlight">「中身」に対するガバナンスを IAM ポリシーだけで実現</span>できるようになりました。チームごとの CA 分割や独自の認可レイヤーが不要になるため、マルチアカウントで PKI を運用している組織は、まず非本番環境でポリシーを検証し、<span class="highlight">SCP / RCP による組織全体のガードレール</span>としての適用を検討することを推奨します。
+    </p>
+    <div class="flow-diagram" style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 24px 0;">
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">📖 条件キーを<br/>マッピング</div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">🧪 非本番環境で<br/>ポリシー検証</div>
+      <span style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+      <div style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">🛡️ SCP / RCP で<br/>組織全体に適用</div>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典</p>
+    <ul>
+      <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-private-ca-x509-iam-keys/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/11/aws-private-ca-x509-iam-keys/</a></li>
+      <li>ドキュメント: X.509 certificate condition keys: <a class="aws-link" href="https://docs.aws.amazon.com/privateca/latest/userguide/certguard-condition-keys.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/privateca/latest/userguide/certguard-condition-keys.html</a></li>
+      <li>ドキュメント: Example policies: <a class="aws-link" href="https://docs.aws.amazon.com/privateca/latest/userguide/certguard-example-policies.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/privateca/latest/userguide/certguard-example-policies.html</a></li>
+      <li>AWS Private CA 製品ページ: <a class="aws-link" href="https://aws.amazon.com/private-ca/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/private-ca/</a></li>
+      <li>料金ページ: <a class="aws-link" href="https://aws.amazon.com/private-ca/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/private-ca/pricing/</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-11-20) をもとに生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

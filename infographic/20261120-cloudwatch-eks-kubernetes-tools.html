@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon CloudWatch - EKS Container Insights によるオープンソース Kubernetes ツールの組み込みモニタリング</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF8A73; }
+.after-box h3 { color: #6FCF5A; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #6FCF5A; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Stats */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase-label {
+  font-weight: 600;
+  color: var(--aws-white);
+}
+
+/* Steps */
+.step-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  border-radius: 999px;
+  padding: 2px 12px;
+  margin-right: 8px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">Amazon CloudWatch - EKS Container Insights</span>
+    <h1>☁️ EKS Container Insights によるオープンソース Kubernetes ツールの組み込みモニタリング</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 20 日 | 🏷️ 機能: オープンソース Kubernetes ツール向け組み込みモニタリング</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon CloudWatch の EKS Container Insights が、Amazon EKS クラスター上で稼働する
+      <span class="highlight">オープンソース Kubernetes ツールの組み込みモニタリング</span>を提供するようになりました。
+      対象は Karpenter、KEDA、vLLM、KServe、SGLang、Ray、Knative Serving の 7 つのツールで、
+      <span class="highlight">OTel Container Insights を有効化するだけ</span>で自動的にモニタリングが開始され、専用のダッシュボードが利用できます。
+    </p>
+    <p>
+      最大の価値は「すでに使用しているツールのダッシュボードを、<span class="highlight">Prometheus や Grafana を自前で運用することなく</span>入手できる」点です。
+      AI 推論ワークロードではキュー内リクエスト数、Time to First Token、KV キャッシュ使用率を確認でき、
+      オートスケーリングでは失敗しているスケーラーやスケールループの所要時間が表示されます。
+      すべてのメトリクスに Pod、ワークロード、ノードのタグが付与されるため、遅延しているモデルサーバーを基盤ノードまで遡って追跡できます。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">7 つ</div>
+        <div class="stat-label">対応オープンソースツール<br>Karpenter / KEDA / vLLM / KServe / SGLang / Ray / Knative Serving</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">v8.0.0+</div>
+        <div class="stat-label">必要なアドオン / Helm チャートのバージョン</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">30 秒</div>
+        <div class="stat-label">OTLP によるメトリクス収集の粒度</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>オープンソースツールのメトリクス可視化には Prometheus と Grafana の自前構築・運用が必要だった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ツールごとにスクレイプ設定やダッシュボードを個別に作成・保守する必要があり、運用負荷が高かった</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>ツールのメトリクスとノード・Pod の情報が分離しており、推論遅延やスケーリング失敗の原因切り分けに時間がかかった</span></div>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span>OTel Container Insights を有効化するだけで、7 つのツールのモニタリングが自動的に開始される</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>Prometheus / Grafana の自前運用なしで、CloudWatch の組み込みダッシュボードを利用できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>全メトリクスに Pod / ワークロード / ノードのタグが付与され、遅いモデルサーバーを基盤ノードまでトレースできる</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph EKS["☁️ Amazon EKS クラスター"]
+        subgraph Tools["🧩 オープンソース Kubernetes ツール"]
+            direction LR
+            T1["⚖️ Karpenter"]
+            T2["📈 KEDA"]
+            T3["🤖 vLLM / SGLang"]
+            T4["🧠 KServe / Ray / Knative Serving"]
+            T1 ~~~ T2 ~~~ T3 ~~~ T4
+        end
+        Addon["📡 amazon-cloudwatch-observability アドオン<br/>OTel Container Insights v8.0.0 以降"]
+    end
+
+    subgraph CW["☁️ Amazon CloudWatch"]
+        Metrics[("📊 OpenTelemetry メトリクス<br/>Pod / ワークロード / ノードタグ付き")]
+        Dash["📋 組み込みダッシュボード"]
+    end
+
+    User(["👤 運用担当者"])
+
+    Tools --> Addon
+    Addon -->|OTLP で取り込み| Metrics
+    Metrics --> Dash
+    Dash --> User
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class EKS,CW cloud
+    class Tools layer
+    class T1,T2,T3,T4 process
+    class Addon internal
+    class Metrics database
+    class Dash process
+    class User user
+      </pre>
+    </div>
+    <p class="diagram-note">
+      EKS クラスター上の各ツールのメトリクスを amazon-cloudwatch-observability アドオン (OTel Container Insights) が収集し、OTLP で CloudWatch に取り込んで組み込みダッシュボードとして可視化する流れを示しています。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">🔄 オープンソースツールの自動モニタリング</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>OTel Container Insights を有効化すると、対象ツールのモニタリングが自動的に開始</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>Karpenter、KEDA、vLLM、KServe、SGLang、Ray、Knative Serving の 7 つに対応</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ツールごとの組み込みダッシュボードが提供され、個別のダッシュボード作成が不要</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🤖 AI 推論ワークロードの可視化</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>モデルサーバーごとのキュー内リクエスト数を確認できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>最初のトークンまでの時間 Time to First Token を可視化できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>KV キャッシュ使用率をモデルサーバー単位で把握できる</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📈 オートスケーリングの可視化</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>失敗しているスケーラーをダッシュボードで特定できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>スケールループの所要時間を確認できる</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🏷️ Pod・ワークロード・ノードによるメトリクスのタグ付け</div>
+      <div class="check-item"><span class="check-icon">✓</span><span>すべてのメトリクスに Pod、ワークロード、ノードのタグが付与される</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>遅延しているモデルサーバーを、稼働している基盤ノードまで遡って追跡できる</span></div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+    <h3>🧩 対応ツールと主な用途</h3>
+    <table>
+      <tr><th>ツール</th><th>分類</th><th>主な用途</th></tr>
+      <tr><td>Karpenter</td><td>オートスケーリング</td><td>ノードのプロビジョニングとスケーリング</td></tr>
+      <tr><td>KEDA</td><td>オートスケーリング</td><td>イベント駆動型の Pod オートスケーリング</td></tr>
+      <tr><td>vLLM</td><td>AI 推論</td><td>LLM の高スループット推論サービング</td></tr>
+      <tr><td>SGLang</td><td>AI 推論</td><td>LLM の高速推論サービング</td></tr>
+      <tr><td>KServe</td><td>AI 推論</td><td>Kubernetes 上のモデルサービングプラットフォーム</td></tr>
+      <tr><td>Ray</td><td>AI / 分散処理</td><td>分散コンピューティングと ML ワークロード</td></tr>
+      <tr><td>Knative Serving</td><td>サーバーレス</td><td>リクエスト駆動型のサーバーレスコンテナ実行</td></tr>
+    </table>
+
+    <h3>📡 OTel Container Insights の特徴</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>必要バージョン</td><td>アドオンおよび Helm チャート v8.0.0 以降</td></tr>
+      <tr><td>アドオン名</td><td>amazon-cloudwatch-observability</td></tr>
+      <tr><td>メトリクス収集</td><td>OpenTelemetry Protocol (OTLP) による 30 秒粒度の収集</td></tr>
+      <tr><td>メトリクス名</td><td>ソース元のオリジナルのメトリクス名を保持し、PromQL でクエリ可能</td></tr>
+      <tr><td>ラベル付与</td><td>テレメトリソースのネイティブラベル、OTel リソース属性、Kubernetes の Pod / ノードラベルで最大 150 ラベル</td></tr>
+      <tr><td>有効化設定</td><td>アドオン設定で <code>otelContainerInsights.enabled</code> を <code>true</code> に設定</td></tr>
+    </table>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>📋 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon EKS クラスターが稼働していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>amazon-cloudwatch-observability アドオンまたは Helm チャートのバージョン 8.0.0 以降を使用すること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>モニタリング対象のオープンソースツール (Karpenter、KEDA、vLLM など) がクラスターにデプロイされていること</span></div>
+
+    <h3><span class="step-badge">STEP 1</span>現在のアドオンバージョンを確認する</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">アドオンバージョンの確認</span>
+      </div>
+      <pre><code class="language-bash">aws eks describe-addon \
+  --cluster-name &lt;cluster-name&gt; \
+  --addon-name amazon-cloudwatch-observability \
+  --query addon.addonVersion --output text</code></pre>
+    </div>
+    <p>インストール済みの amazon-cloudwatch-observability アドオンのバージョンを表示します。v8.0.0 以降でない場合はアップグレードが必要です。</p>
+
+    <h3><span class="step-badge">STEP 2</span>OTel Container Insights を有効化する</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">OTel Container Insights の有効化</span>
+      </div>
+      <pre><code class="language-bash">aws eks update-addon \
+  --cluster-name &lt;cluster-name&gt; \
+  --addon-name amazon-cloudwatch-observability \
+  --configuration-values '{"otelContainerInsights":{"enabled":true}}'</code></pre>
+    </div>
+    <p>このコマンドはアドオン設定全体を置き換えるため、他の設定値を使用している場合は<span class="highlight">既存の設定にマージして指定</span>します。有効化すると、対象ツールのモニタリングが自動的に開始されます。</p>
+
+    <h3><span class="step-badge">STEP 3</span>CloudWatch コンソールでダッシュボードを確認する</h3>
+    <div class="flow-diagram" style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:16px 0;">
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;">🖥️ CloudWatch<br>コンソール</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;">📦 Container<br>Insights</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;">📋 ツール別<br>組み込みダッシュボード</div>
+    </div>
+    <p>AI 推論ワークロードではキュー内リクエスト数、Time to First Token、KV キャッシュ使用率を、オートスケーリングでは失敗しているスケーラーとスケールループ所要時間を確認できます。</p>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: Prometheus や Grafana を自前で構築・運用する必要がなくなり、モニタリング基盤の運用工数を削減できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>障害対応の迅速化</strong>: 推論の遅延やスケーリングの失敗を組み込みダッシュボードで即座に特定でき、MTTR の短縮につながる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>AI 基盤の信頼性向上</strong>: LLM 推論サーバーの健全性を標準的な方法で可視化でき、AI サービスの品質管理が容易になる</span></div>
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>自動セットアップ</strong>: OTel Container Insights を有効化するだけでモニタリングが開始され、ツールごとのスクレイプ設定が不要</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>コンテキストの紐付け</strong>: すべてのメトリクスに Pod、ワークロード、ノードのタグが付与され、アプリケーション層からインフラ層まで一貫して追跡できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>PromQL 互換</strong>: メトリクスはオリジナルのソース名を保持するため、コミュニティの既存 PromQL クエリやナレッジを活用できる</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚧 制限事項</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>アドオンおよび Helm チャートのバージョン 8.0.0 以降が必要</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>対応ツールは Karpenter、KEDA、vLLM、KServe、SGLang、Ray、Knative Serving の 7 つに限定される</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>CloudWatch が OpenTelemetry メトリクスをサポートするリージョンでのみ利用可能</span></div>
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>メトリクスは Amazon EKS の OpenTelemetry 取り込みレート (1 GB あたり 0.08 USD) で課金されるため、取り込み量の増加によるコストを見積もる必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠️</span><span>既存バージョン (6.x / 7.x) からのアップグレード時は、メトリクスの系列やラベルの変更に伴い、既存のクエリ・ダッシュボード・アラームへの影響を事前に確認することが推奨される</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1️⃣ vLLM による LLM 推論基盤のパフォーマンス監視</div>
+      <p><span class="usecase-label">シナリオ</span>: EKS 上で vLLM を使用して LLM 推論 API を提供しており、応答遅延の原因特定に時間がかかっている。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">実装例</span>
+        </div>
+        <pre><code class="language-bash">aws eks update-addon \
+  --cluster-name llm-inference-cluster \
+  --addon-name amazon-cloudwatch-observability \
+  --configuration-values '{"otelContainerInsights":{"enabled":true}}'</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: モデルサーバーごとのキュー内リクエスト数、Time to First Token、KV キャッシュ使用率が組み込みダッシュボードで可視化され、遅延しているモデルサーバーを基盤ノードまで遡って特定できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2️⃣ KEDA によるイベント駆動オートスケーリングの健全性監視</div>
+      <p><span class="usecase-label">シナリオ</span>: KEDA でキューの深さに応じた Pod オートスケーリングを構成しているが、スケーラーの失敗に気づくのが遅れ、処理遅延が発生することがある。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Text</span>
+          <span class="code-title">確認手順</span>
+        </div>
+        <pre><code class="language-text">CloudWatch コンソール → Container Insights →
+対象クラスターの KEDA ダッシュボードで
+失敗しているスケーラーとスケールループ所要時間を確認</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 失敗しているスケーラーをダッシュボードで即座に特定でき、スケーリング不全による処理遅延を未然に防止できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3️⃣ Prometheus / Grafana 自前運用からの移行</div>
+      <p><span class="usecase-label">シナリオ</span>: Karpenter と Knative Serving の監視のために Prometheus と Grafana を自前で運用しており、監視基盤自体の保守 (バージョンアップ、ストレージ管理、可用性確保) が負担になっている。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Text</span>
+          <span class="code-title">移行ステップ</span>
+        </div>
+        <pre><code class="language-text">1. アドオンを v8.0.0 以降にアップグレード
+2. OTel Container Insights を有効化
+3. 組み込みダッシュボードで監視項目を検証
+4. 自前運用の Prometheus / Grafana を段階的に廃止</code></pre>
+      </div>
+      <p><span class="usecase-label">効果</span>: 監視基盤の自前運用が不要になり、マネージドな CloudWatch ダッシュボードに集約することで運用負荷とインフラコストを削減できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>メトリクスは Amazon EKS の OpenTelemetry 取り込みレートである <span class="highlight">1 GB あたり 0.08 USD</span> で課金されます。詳細は CloudWatch の料金ページを参照してください。</p>
+    <table>
+      <tr><th>使用量</th><th>月額料金 (概算)</th></tr>
+      <tr><td>取り込み量 10 GB / 月</td><td>0.80 USD</td></tr>
+      <tr><td>取り込み量 100 GB / 月</td><td>8.00 USD</td></tr>
+    </table>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>CloudWatch が <span class="highlight">OpenTelemetry メトリクスをサポートするすべての AWS リージョン</span>で利用可能です。</p>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">☸️ Amazon EKS</div>
+      <p style="margin:0;">モニタリング対象の Kubernetes クラスターを提供するマネージドサービス。amazon-cloudwatch-observability アドオンを通じて本機能を利用する。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📦 CloudWatch Container Insights</div>
+      <p style="margin:0;">コンテナワークロードのメトリクスとログを収集・可視化する機能。本アップデートは OTel Container Insights の拡張にあたる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📡 AWS Distro for OpenTelemetry</div>
+      <p style="margin:0;">OpenTelemetry の AWS ディストリビューション。OTel Container Insights は OpenTelemetry Collector を基盤としている。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>✅ まとめ</h2>
+    <p>
+      EKS 上で広く使われるオープンソースツールのモニタリングが、<span class="highlight">OTel Container Insights の有効化だけ</span>で利用できるようになり、
+      Prometheus / Grafana の自前運用が不要になる重要なアップデートです。
+      特に vLLM や SGLang などで LLM 推論基盤を運用するチームにとって、Time to First Token や KV キャッシュ使用率を標準ダッシュボードで確認できる価値は大きいといえます。
+    </p>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>推奨アクション</strong>: まずはアドオンを v8.0.0 以降にアップグレードし、検証環境で組み込みダッシュボードの内容を確認する</span></div>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/cloudwatch-eks-kubernetes-tools/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/11/cloudwatch-eks-kubernetes-tools/</a></li>
+      <li>ドキュメント: OTel Container Insights (Amazon CloudWatch User Guide): <a class="aws-link" href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/container-insights-eks-otel.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/container-insights-eks-otel.html</a></li>
+      <li>料金ページ: Amazon CloudWatch pricing: <a class="aws-link" href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/cloudwatch/pricing/</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-20) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon CloudWatch - Observability EKS アドオンのカスタム OpenTelemetry / Prometheus テレメトリ対応</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+
+    .release-date {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      margin-left: 8px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.4;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 12px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+
+    .card ul {
+      margin: 8px 0 0 0;
+      padding-left: 20px;
+    }
+
+    .card li { margin: 6px 0; }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 700px) {
+      .before-after { grid-template-columns: 1fr; }
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box .box-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+    .after-box .box-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .before-box li, .after-box li { margin: 8px 0; font-size: 14px; }
+
+    /* 統計カード */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--aws-orange);
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+    }
+
+    td code, li code, p code {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+      word-break: break-all;
+    }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+    .warn-icon { font-size: 16px; flex-shrink: 0; }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .usecase p { margin: 8px 0; font-size: 14px; }
+
+    .effect-label {
+      display: inline-block;
+      background: rgba(29, 129, 2, 0.25);
+      color: #4CAF50;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 6px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* ステップ */
+    .step {
+      display: flex;
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .step-content { flex: 1; min-width: 0; }
+    .step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+    .step-content p { margin: 8px 0; font-size: 14px; }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    .note-box {
+      background: rgba(255, 153, 0, 0.08);
+      border-left: 4px solid var(--aws-orange);
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer a { word-break: break-all; }
+    footer ul { margin: 8px 0; padding-left: 20px; }
+    footer li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div>
+        <span class="service-badge">Amazon CloudWatch</span>
+        <span class="release-date">📅 2026 年 11 月 20 日</span>
+      </div>
+      <h1>📡 Observability EKS アドオンがカスタム OpenTelemetry / Prometheus テレメトリに対応</h1>
+      <div class="subtitle">CloudWatch エージェントが OTLP 取り込みと ServiceMonitor / PodMonitor スクレイピングをサポート — 追加コレクター不要に</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        Amazon CloudWatch Observability EKS アドオンが、<span class="highlight">ユーザー独自のアプリケーションテレメトリの取り込み</span>に対応しました。クラスター内で既に稼働している CloudWatch エージェントが、アプリケーションのメトリクス、トレース、ログを直接受け付けるようになり、CloudWatch へデータを転送するための<span class="highlight">別のコレクターを運用する必要がなくなります</span>。
+      </p>
+      <p>
+        OpenTelemetry SDK で計装されたアプリケーションは、各ノード上のエージェントが公開する OTLP エンドポイント (デフォルトで有効) にデータを送信できます。また、標準の ServiceMonitor / PodMonitor オブジェクトで定義された Prometheus ターゲットをエージェントがスクレイプできるようになり、Prometheus オペレーターの導入やスクレイプ設定の書き換えは不要です。
+      </p>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value">v8.0.0+</div>
+          <div class="stat-label">EKS アドオン / Helm チャートの必要バージョン</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">4317 / 4318</div>
+          <div class="stat-label">OTLP エンドポイント (gRPC / HTTP)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">30 秒</div>
+          <div class="stat-label">デフォルトの Prometheus スクレイプ間隔</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">USD 0.08/GB</div>
+          <div class="stat-label">OpenTelemetry 取り込み料金</div>
+        </div>
+      </div>
+
+      <div class="before-after">
+        <div class="before-box">
+          <div class="box-title">❌ Before: アップデート前の課題</div>
+          <ul>
+            <li>独自テレメトリを CloudWatch に送るには、<strong>ADOT Collector など別のコレクター</strong>を構築・運用する必要があった</li>
+            <li>ServiceMonitor / PodMonitor のスクレイプ設定を活用するには、<strong>Prometheus オペレーターや別の Prometheus 環境</strong>が必要だった</li>
+            <li>アプリケーションテレメトリとインフラメトリクスで<strong>付与される属性が異なり</strong>、相関分析が難しかった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <div class="box-title">✅ After: アップデート後の改善</div>
+          <ul>
+            <li>CloudWatch エージェントが <strong>OTLP エンドポイント (gRPC 4317 / HTTP 4318)</strong> を公開し、追加コレクターなしでメトリクス、トレース、ログを取り込み可能に</li>
+            <li>標準の <strong>ServiceMonitor / PodMonitor をそのまま利用</strong>して Prometheus ターゲットをスクレイプ可能に</li>
+            <li>両ソースのテレメトリに<strong>同じ Kubernetes / ホスト / クラウド / サービス属性</strong>が自動付与され、結合分析が可能に</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    subgraph Cluster["☁️ Amazon EKS クラスター"]
+        subgraph Node["🖥️ 各ノード"]
+            direction LR
+            OtelApp["📦 アプリ Pod&lt;br/&gt;OpenTelemetry SDK"]
+            PromApp["📦 アプリ Pod&lt;br/&gt;Prometheus メトリクス公開"]
+            Agent["🤖 CloudWatch エージェント&lt;br/&gt;OTLP: gRPC 4317 / HTTP 4318"]
+        end
+        Monitors["📄 ServiceMonitor / PodMonitor&lt;br/&gt;スクレイプ対象の定義"]
+    end
+
+    subgraph AWS["☁️ AWS"]
+        direction LR
+        CWM[("📊 CloudWatch メトリクス&lt;br/&gt;PromQL でクエリ")]
+        CWL[("📋 CloudWatch Logs")]
+        XRay[("🔍 AWS X-Ray&lt;br/&gt;Transaction Search")]
+    end
+
+    OtelApp --&gt;|OTLP 送信| Agent
+    Agent --&gt;|30 秒ごとにスクレイプ| PromApp
+    Monitors -.-&gt;|ラベルセレクターで選択| Agent
+
+    Agent --&gt;|メトリクス| CWM
+    Agent --&gt;|ログ| CWL
+    Agent --&gt;|トレース| XRay
+
+    classDef cluster fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef node fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef app fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef agent fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef monitor fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef dest fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+
+    class Cluster cluster
+    class Node,AWS node
+    class OtelApp,PromApp app
+    class Agent agent
+    class Monitors monitor
+    class CWM,CWL,XRay dest
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        各ノードの CloudWatch エージェントが OTLP エンドポイントでアプリケーションテレメトリを受信し、ServiceMonitor / PodMonitor で定義された Prometheus ターゲットをスクレイプして、メトリクス、ログ、トレースをそれぞれの CloudWatch 送信先へ転送します。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="card">
+        <div class="card-title">1️⃣ OTLP 取り込みエンドポイント</div>
+        <ul>
+          <li>各ノードの CloudWatch エージェントが OTLP エンドポイントを公開 (<strong>デフォルトで有効</strong>)</li>
+          <li>gRPC はポート <code>4317</code>、HTTP はポート <code>4318</code> で平文の OTLP を受け付け、HTTP の場合はリクエストボディ最大 20 MiB まで対応</li>
+          <li>送信先は <code>amazon-cloudwatch</code> 名前空間の <code>cloudwatch-agent</code> Service で、リクエストは送信元と同じノード上のエージェントにルーティング</li>
+          <li>メトリクスは OpenTelemetry メトリクスとして CloudWatch に送信され、<strong>PromQL でクエリ可能</strong></li>
+          <li>トレースは X-Ray と Transaction Search に送信され、スパンメトリクスが有効な場合はリクエスト数、エラー、レイテンシのメトリクスも自動計算</li>
+          <li>ログはロググループ <code>/aws/cwagent/{cluster-name}/otlp</code> に送信され、<code>aws.log.group.name</code> / <code>aws.log.stream.name</code> リソース属性で送信先を変更可能</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-title">2️⃣ ServiceMonitor / PodMonitor による Prometheus スクレイピング</div>
+        <ul>
+          <li><code>monitoring.coreos.com/v1</code> の標準 ServiceMonitor / PodMonitor オブジェクトで定義されたターゲットをスクレイプ (<strong>デフォルトで有効</strong>)</li>
+          <li><strong>Prometheus オペレーターは不要</strong>で、既存のスクレイプ設定の書き換えも不要</li>
+          <li>デフォルトではクラスター内のすべてのモニターを 30 秒間隔でスクレイプし、ラベルセレクターで対象を絞り込み可能</li>
+          <li>CRD が存在しない場合のみ CloudWatch エージェントオペレーターが作成し、既存の CRD には変更を加えない</li>
+          <li>ターゲットごとに <code>up</code> メトリクスを保持し、<code>up == 0</code> でスクレイプ失敗を検知可能</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-title">3️⃣ テレメトリの属性エンリッチメント</div>
+        <ul>
+          <li>両ソースのテレメトリに、送信元 Pod の Kubernetes 属性 (<code>k8s.*</code>)、ホスト・クラウド属性、サービスアイデンティティ属性 (<code>service.name</code> など) を自動付与</li>
+          <li>OTLP 取り込みでは Pod / ノードラベルも <code>k8s.pod.label.*</code> / <code>k8s.node.label.*</code> として付与され、<code>otelFilters</code> 設定で対象ラベルを制御可能</li>
+          <li>Container Insights が収集するインフラメトリクスと<strong>同じ属性体系</strong>のため、相関分析が容易</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>OTLP エンドポイントの設定値</h3>
+      <table>
+        <tr><th>設定値</th><th>デフォルト</th><th>説明</th></tr>
+        <tr><td><code>otlp.enabled</code></td><td><code>true</code></td><td>エンドポイントの有効 / 無効</td></tr>
+        <tr><td><code>otlp.grpc.enabled</code></td><td><code>true</code></td><td>gRPC での OTLP 受信</td></tr>
+        <tr><td><code>otlp.grpc.port</code></td><td><code>4317</code></td><td>gRPC 用ノードポート</td></tr>
+        <tr><td><code>otlp.http.enabled</code></td><td><code>true</code></td><td>HTTP での OTLP 受信</td></tr>
+        <tr><td><code>otlp.http.port</code></td><td><code>4318</code></td><td>HTTP 用ノードポート</td></tr>
+        <tr><td><code>otlp.spanMetrics.enabled</code></td><td><code>true</code></td><td>受信トレースからのスパンメトリクス計算</td></tr>
+      </table>
+      <div class="note-box">
+        ⚠️ 少なくとも 1 つのプロトコルを有効にする必要があり、2 つのポートは異なる値にする必要があります。エージェントが既に使用しているポート (2000、4311、4314、4315、4316、8125、25826、25888) は指定できません。
+      </div>
+
+      <h3>Prometheus スクレイピングの設定値</h3>
+      <table>
+        <tr><th>設定値</th><th>デフォルト</th><th>説明</th></tr>
+        <tr><td><code>otelPrometheusMonitor.enabled</code></td><td><code>true</code></td><td>スクレイピングの有効 / 無効</td></tr>
+        <tr><td><code>otelPrometheusMonitor.scrapeInterval</code></td><td><code>30s</code></td><td>スクレイプ間隔</td></tr>
+        <tr><td><code>otelPrometheusMonitor.serviceMonitorSelector</code></td><td>空</td><td>スクレイプ対象の ServiceMonitor を選択するラベルセレクター (空はすべて選択)</td></tr>
+        <tr><td><code>otelPrometheusMonitor.podMonitorSelector</code></td><td>空</td><td>スクレイプ対象の PodMonitor を選択するラベルセレクター (空はすべて選択)</td></tr>
+        <tr><td><code>otelPrometheusMonitor.readSecrets</code></td><td><code>false</code></td><td>モニターが参照する Secret (basicAuth、authorization、oauth2、tlsConfig) の読み取り許可</td></tr>
+      </table>
+
+      <h3>スクレイプ対象を絞り込む設定例</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">アドオン設定</span>
+        </div>
+        <pre><code class="language-json">{
+  "otelPrometheusMonitor": {
+    "readSecrets": true,
+    "scrapeInterval": "60s",
+    "serviceMonitorSelector": {
+      "matchLabels": {
+        "cloudwatch": "true"
+      }
+    },
+    "podMonitorSelector": {
+      "matchExpressions": [
+        {
+          "key": "team",
+          "operator": "In",
+          "values": ["payments", "checkout"]
+        }
+      ]
+    }
+  }
+}</code></pre>
+      </div>
+      <p style="font-size: 14px;">
+        ラベル <code>cloudwatch: "true"</code> を持つ ServiceMonitor と、<code>team</code> ラベルが <code>payments</code> または <code>checkout</code> の PodMonitor のみを 60 秒間隔でスクレイプし、それらのモニターが参照する Secret の読み取りを許可する設定です。
+      </p>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>Amazon CloudWatch Observability EKS アドオンまたは Helm チャートのバージョン 8.0.0 以降</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>CloudWatch エージェントがメトリクス、ログ、トレースを書き込むための IAM 権限 (<code>CloudWatchAgentServerPolicy</code> マネージドポリシー)</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>トレースを利用する場合は、対象アカウント・リージョンで Transaction Search を有効化</span></div>
+
+      <h3>手順</h3>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <div class="step-title">アドオンをバージョン 8.0.0 以降に更新</div>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">AWS CLI</span>
+            </div>
+            <pre><code class="language-bash">aws eks update-addon \
+  --cluster-name my-cluster \
+  --addon-name amazon-cloudwatch-observability \
+  --addon-version v8.0.0-eksbuild.1</code></pre>
+          </div>
+          <p>EKS クラスターの CloudWatch Observability アドオンをバージョン 8.0.0 以降に更新します。OTLP エンドポイントと Prometheus スクレイピングはデフォルトで有効になります。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <div class="step-title">アプリケーションから OTLP エンドポイントへ送信</div>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">YAML</span>
+              <span class="code-title">コンテナの環境変数</span>
+            </div>
+            <pre><code class="language-yaml">env:
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: http://cloudwatch-agent.amazon-cloudwatch:4318
+  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+    value: http/protobuf</code></pre>
+          </div>
+          <p>OpenTelemetry SDK を使用するコンテナに環境変数を設定し、<code>amazon-cloudwatch</code> 名前空間の <code>cloudwatch-agent</code> Service に OTLP over HTTP で送信します。SDK がシグナルごとのパス (<code>/v1/metrics</code>、<code>/v1/traces</code> など) を自動的に付加します。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <div class="step-title">ServiceMonitor でスクレイプ対象を定義</div>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">YAML</span>
+              <span class="code-title">ServiceMonitor</span>
+            </div>
+            <pre><code class="language-yaml">apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: orders
+  namespace: shop
+  labels:
+    cloudwatch: "true"
+spec:
+  selector:
+    matchLabels:
+      app: orders
+  endpoints:
+    - port: metrics
+      path: /metrics</code></pre>
+          </div>
+          <p>ラベル <code>app: orders</code> を持つ Service の背後の Pod から、<code>metrics</code> という名前のポートの <code>/metrics</code> パスをスクレイプする ServiceMonitor を作成します。デフォルト設定ではすべてのモニターがスクレイプ対象になるため、作成するだけでメトリクスが CloudWatch に送信されます。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+
+      <h3>💼 ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: 別のコレクター (ADOT Collector や独自の Prometheus サーバーなど) の構築・運用・パッチ適用が不要になり、運用負荷を削減できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>既存資産の活用</strong>: 既存の ServiceMonitor / PodMonitor 定義をそのまま利用でき、CloudWatch への移行コストを最小化できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>チームの自律性向上</strong>: 中央のアドオン設定ではなく、各チームがアプリケーションと一緒にスクレイプ対象を定義できる</span></div>
+
+      <h3>⚙️ 技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>統一された属性体系</strong>: アプリケーションテレメトリとインフラメトリクスに同じ Kubernetes / クラウド属性が付与され、PromQL での結合分析や障害の相関分析が容易になる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>デフォルト有効で即利用可能</strong>: バージョン 8.0.0 以降では OTLP エンドポイントとスクレイピングがデフォルトで有効であり、追加のデプロイ作業なしで利用を開始できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な制御</strong>: ラベルセレクターによるモニターの絞り込み、ポート変更、スパンメトリクスの無効化、OpenTelemetry フィルターによる送信テレメトリの制御が可能</span></div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>EKS アドオンおよび Helm チャートのバージョン 8.0.0 以降が必要</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>OTLP エンドポイントは平文での受信であり、HTTP エンドポイントのリクエストボディは最大 20 MiB</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>エージェント Pod はホストネットワークを使用するため、ノード上の別のコレクターがポート 4317 / 4318 を使用していると Pod が <code>Pending</code> になる (ポート変更で回避可能)</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>Prometheus スクレイピングで取得したメトリクスにはノードラベルは付与されない</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>トレースの利用には Transaction Search の有効化が必要</span></div>
+
+      <h3>考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>旧バージョンの Helm チャートの <code>default:otel</code> エージェント設定は無視されるようになり、<code>otlp.enabled</code> のみがエンドポイントの有効 / 無効を決定する</span></div>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>同じ Pod に ServiceMonitor と PodMonitor の両方を定義すると二重にスクレイプされ、重複した系列が送信される</span></div>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span><code>readSecrets</code> を有効にすると、エージェントの Target Allocator にすべての名前空間の Secret への <code>get</code> 権限が付与されるため、セキュリティ要件を確認する必要がある</span></div>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>アドオンをアンインストールしても ServiceMonitor / PodMonitor の CRD とオブジェクトはクラスターに残る。CRD を削除すると、他の Prometheus が使用しているものを含むすべてのモニターが削除される点に注意</span></div>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>カスタムテレメトリの取り込みは Amazon EKS の OpenTelemetry 取り込み料金 (USD 0.08/GB) で課金されるため、送信量を OpenTelemetry フィルターなどで制御することが望ましい</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">📦 ユースケース 1: 追加コレクターなしでのアプリケーション計装</div>
+        <p><strong>シナリオ</strong>: OpenTelemetry SDK で計装済みのマイクロサービスを EKS 上で運用しており、ADOT Collector を別途運用せずにメトリクス、トレース、ログを CloudWatch に送信したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">YAML</span>
+            <span class="code-title">実装例</span>
+          </div>
+          <pre><code class="language-yaml">env:
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: http://cloudwatch-agent.amazon-cloudwatch:4318
+  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+    value: http/protobuf</code></pre>
+        </div>
+        <p><span class="effect-label">効果</span>コレクターの運用が不要になり、トレースは X-Ray と Transaction Search で分析でき、スパンメトリクスによりリクエスト数、エラー、レイテンシを自動取得できる。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🔄 ユースケース 2: 既存の Prometheus 定義を利用した CloudWatch への移行</div>
+        <p><strong>シナリオ</strong>: kube-prometheus-stack で ServiceMonitor / PodMonitor を利用してきたが、Prometheus サーバーの運用をやめて CloudWatch にメトリクスを集約したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <span class="code-title">実装例</span>
+          </div>
+          <pre><code class="language-json">{
+  "otelPrometheusMonitor": {
+    "serviceMonitorSelector": {
+      "matchLabels": {
+        "cloudwatch": "true"
+      }
+    }
+  }
+}</code></pre>
+        </div>
+        <p><span class="effect-label">効果</span>スクレイプ設定を書き換えずに段階的に移行でき、ラベルセレクターにより一部のモニターを既存の Prometheus に残したまま並行運用できる。</p>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🔍 ユースケース 3: アプリケーションメトリクスとインフラメトリクスの相関分析</div>
+        <p><strong>シナリオ</strong>: アプリケーションのカスタムメトリクスの異常が、Pod のリソース不足やノード障害と関係しているかを迅速に切り分けたい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">PromQL</span>
+            <span class="code-title">実装例</span>
+          </div>
+          <pre><code class="language-bash"># PromQL でアプリケーションメトリクスとコンテナメトリクスを k8s 属性で結合して分析
+sum by (k8s_workload_name) (rate(orders_processed_total[5m]))</code></pre>
+        </div>
+        <p><span class="effect-label">効果</span>両方のテレメトリに同じ Kubernetes / クラウド属性が付与されているため、PromQL でワークロード単位の結合分析が可能になり、障害の切り分け時間を短縮できる。</p>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>
+        カスタムテレメトリの取り込みは、Amazon EKS の OpenTelemetry 取り込みレートである <span class="highlight">USD 0.08/GB</span> で課金されます。詳細は <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">CloudWatch 料金ページ</a> を参照してください。
+      </p>
+      <table>
+        <tr><th>使用量</th><th>月額料金 (概算)</th></tr>
+        <tr><td>カスタムテレメトリ 100 GB/月</td><td>USD 8.00</td></tr>
+        <tr><td>カスタムテレメトリ 1,000 GB/月</td><td>USD 80.00</td></tr>
+      </table>
+    </div>
+
+    <!-- 利用可能リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>CloudWatch が OpenTelemetry メトリクスをサポートする<span class="highlight">すべての AWS リージョン</span>で利用可能です。</p>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>Amazon EKS</strong>: 本アドオンの対象となるマネージド Kubernetes サービス</span></div>
+      <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>CloudWatch Container Insights</strong>: クラスターのインフラメトリクスを収集する機能。カスタムテレメトリと同じ属性体系で相関分析が可能</span></div>
+      <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>CloudWatch Application Signals</strong>: アプリケーションのパフォーマンス監視機能。本アップデートで独自テレメトリも同じエージェントで取り込み可能に</span></div>
+      <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>AWS X-Ray / Transaction Search</strong>: OTLP で送信されたトレースの送信先となる分散トレーシング機能</span></div>
+      <div class="check-item"><span class="arrow" style="color: var(--aws-orange);">→</span><span><strong>AWS Distro for OpenTelemetry (ADOT)</strong>: 従来、独自テレメトリの転送に利用されていたコレクター。本アップデートにより用途によっては不要になる</span></div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        CloudWatch Observability EKS アドオンのバージョン 8.0.0 以降では、<span class="highlight">既存の CloudWatch エージェントだけで OpenTelemetry と Prometheus のカスタムテレメトリを取り込める</span>ようになり、別コレクターの運用が不要になりました。既存の ServiceMonitor / PodMonitor 資産を活用しながら、アプリケーションとインフラのテレメトリを<span class="highlight">統一された属性体系で相関分析</span>できる点が大きな価値です。EKS で独自テレメトリを収集しているチームは、アドオンの更新と取り込み料金 (USD 0.08/GB) の試算から検討を始めることを推奨します。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/cloudwatch-eks-addon-custom-telemetry/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/cloudwatch-eks-addon-custom-telemetry/</a></li>
+        <li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/eks-observability-addon-custom-telemetry.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Custom telemetry</a></li>
+        <li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/eks-observability-addon-otlp-endpoint.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: OTLP ingestion</a></li>
+        <li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/eks-observability-addon-prometheus-monitors.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Scraping ServiceMonitor and PodMonitor targets</a></li>
+        <li><a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+      </ul>
+      <p>リリース日: 2026 年 11 月 20 日 | サービス: Amazon CloudWatch (CloudWatch Observability EKS アドオン)</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

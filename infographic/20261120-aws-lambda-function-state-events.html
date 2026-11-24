@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Lambda - Event Function 状態変化イベントの EventBridge への発行</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-right: 8px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.card p { margin: 0; font-size: 14px; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 720px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.1);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF6B4A; }
+.after-box h3 { color: #4CAF50; }
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+.before-box li, .after-box li {
+  margin: 8px 0;
+  font-size: 14px;
+  padding-left: 24px;
+  position: relative;
+}
+.before-box li::before {
+  content: "✗";
+  color: var(--aws-red);
+  position: absolute;
+  left: 0;
+  font-weight: bold;
+}
+.after-box li::before {
+  content: "✓";
+  color: #4CAF50;
+  position: absolute;
+  left: 0;
+  font-weight: bold;
+}
+
+/* 統計カード */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 720px) {
+  .stat-row { grid-template-columns: 1fr; }
+}
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-orange);
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 4px;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* テーブル */
+.table-wrap { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 12px 0;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--aws-orange);
+  white-space: nowrap;
+}
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  vertical-align: top;
+}
+tr:hover td { background: rgba(255, 153, 0, 0.05); }
+td code, li code, p code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: var(--aws-red); font-size: 16px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 14px 0;
+}
+.usecase h4 {
+  margin: 0 0 8px 0;
+  color: var(--aws-orange);
+  font-size: 16px;
+}
+.usecase p { margin: 6px 0; font-size: 14px; }
+.usecase .label { font-weight: 600; color: var(--aws-white); }
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-content h4 { margin: 4px 0 8px 0; color: var(--aws-white); font-size: 16px; }
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+ul.plain {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+ul.plain li { margin: 6px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { padding-left: 20px; margin: 8px 0; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">⚡ AWS Lambda</span>
+      <span class="service-badge">📨 Amazon EventBridge</span>
+    </div>
+    <h1>Event Function 状態変化イベントの<br>Amazon EventBridge への自動発行</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 20 日 | 🌍 すべての AWS 商用リージョンで利用可能</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      AWS Lambda が、Event Function のバージョンが顧客のアクション (関数の作成、更新、バージョン発行、削除など) によって状態を変化させるたびに、<span class="highlight">Amazon EventBridge へイベントを自動発行</span>するようになりました。新しいバージョンが呼び出し可能になったタイミングや、更新の成功・失敗を <code>GetFunction</code> API をポーリングすることなく検知できます。
+    </p>
+    <p>
+      イベントは<span class="highlight">有効化・オプトイン・権限変更が一切不要</span>で、関数を所有するアカウントのデフォルトイベントバス (関数と同じリージョン) に配信されます。EventBridge ルールで絞り込み、Step Functions、Lambda、SNS、SQS などへルーティングできます。
+    </p>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">イベント発行・デフォルトバス配信は追加料金なし</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">設定不要</div>
+        <div class="stat-label">オプトイン・権限変更なしでデフォルト配信</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">11 種類</div>
+        <div class="stat-label">ライフサイクルを網羅するイベントタイプ</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>😣 アップデート前の課題</h3>
+        <ul>
+          <li>状態確認には <code>GetFunction</code> API の繰り返しポーリングが必要だった</li>
+          <li>大規模環境ではポーリングが API クォータを消費し、パイプラインを低速化</li>
+          <li>タイムアウトやリトライのカスタムロジックを独自に実装・保守する必要があった</li>
+          <li>更新中も <code>State</code> は <code>Active</code> のままで、更新失敗を成功と誤認するリスクがあった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>😊 アップデート後の改善</h3>
+        <ul>
+          <li>状態変化イベントがデフォルトイベントバスへ自動配信され、ポーリングが不要に</li>
+          <li><code>Updated</code> / <code>Update Failed</code> イベントで更新の成否を明確に区別</li>
+          <li>EventBridge ルールで条件を絞り込み、後続処理を自動実行</li>
+          <li>イベント発行は追加料金なしで利用可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Dev["🔧 デプロイパイプライン"]
+        CI["🚀 CI/CD<br/>CreateFunction や<br/>UpdateFunctionCode を実行"]
+    end
+
+    subgraph Lambda["⚡ AWS Lambda"]
+        Fn["📦 Event Function<br/>バージョンの状態変化<br/>Pending → Active など"]
+    end
+
+    subgraph EB["📨 Amazon EventBridge"]
+        Bus["🚌 デフォルトイベントバス"]
+        Rule["🎯 ルール<br/>source: aws.lambda<br/>detail-type でフィルタ"]
+    end
+
+    subgraph Targets["🎬 ターゲット"]
+        direction LR
+        SF["🪜 Step Functions"]
+        L2["⚡ Lambda"]
+        SNS["📢 Amazon SNS"]
+        SQS["📬 Amazon SQS"]
+        SF ~~~ L2 ~~~ SNS ~~~ SQS
+    end
+
+    CI --> Fn
+    Fn -->|状態変化イベントを自動発行| Bus
+    Bus --> Rule
+    Rule --> SF
+    Rule --> L2
+    Rule --> SNS
+    Rule --> SQS
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Dev,Lambda,EB,Targets boundary
+    class CI input
+    class Fn compute
+    class Bus internal
+    class Rule decision
+    class SF,L2,SNS,SQS process
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      CI/CD パイプラインなどの操作で Lambda 関数バージョンの状態が変化すると、Lambda がイベントをデフォルトイベントバスへ自動発行し、EventBridge ルールで絞り込んだうえで各種ターゲットに後続処理を実行させるフローです。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⭐ 主要機能</h2>
+    <div class="card">
+      <h4>🔄 関数ライフサイクルイベントの自動発行</h4>
+      <p>関数の作成、更新、バージョン発行、削除といった顧客アクションによる状態変化のたびにイベントを発行。すべて <code>"source": "aws.lambda"</code> として発行され、<code>detail-type</code> が状態遷移の種類を表します。有効化・オプトイン・権限変更は不要です。</p>
+    </div>
+    <div class="card">
+      <h4>🚌 デフォルトイベントバスへの配信とクロスアカウント転送</h4>
+      <p>イベントは関数を所有するアカウントの、関数と同じリージョンのデフォルトイベントバスに配信。他アカウントのロールが API を呼び出してもイベントを受け取るのは常に所有アカウントです。中央監視アカウントへ送るには所有アカウント側で転送用ルールを作成します。</p>
+    </div>
+    <div class="card">
+      <h4>🎯 柔軟なルールマッチングとターゲット連携</h4>
+      <p>関数 ARN (バージョンを含む修飾 ARN)、<code>detail-type</code>、<code>state</code> などのフィールドでマッチング可能。ターゲットとして Step Functions、Lambda、SNS、SQS などを指定でき、ルールはコンソール、CLI、SDK、CloudFormation、CDK、SAM から作成できます。</p>
+    </div>
+    <div class="card">
+      <h4>✅ 更新の成否を正確に判別</h4>
+      <p>更新中も <code>State</code> は <code>Active</code> のままで、完了までは以前のコードと設定が使用されます。<code>Event Function Version Updated</code> と <code>Event Function Version Update Failed</code> のイベントにより、<code>State</code> だけでは判別できない更新の失敗を検知できます。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📋 イベントタイプ一覧</h3>
+    <p style="font-size: 14px;">各イベントの <code>detail-type</code> が状態遷移を表します。</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Detail Type</th><th>送信されるタイミング</th></tr>
+        <tr><td>Event Function Version Activating</td><td><code>CreateFunction</code> または <code>PublishVersion</code> の後、State が Pending になったとき</td></tr>
+        <tr><td>Event Function Version Activated</td><td>State が Active になり、バージョンが呼び出し可能になったとき</td></tr>
+        <tr><td>Event Function Version Activation Failed</td><td>State が Failed になったとき</td></tr>
+        <tr><td>Event Function Version Active Non Invocable</td><td>Lambda Managed Instances 関数の $LATEST バージョンが ActiveNonInvocable になったとき</td></tr>
+        <tr><td>Event Function Version Updating</td><td>LastUpdateStatus が InProgress になったとき</td></tr>
+        <tr><td>Event Function Version Updated</td><td>LastUpdateStatus が Successful になったとき</td></tr>
+        <tr><td>Event Function Version Update Failed</td><td>LastUpdateStatus が Failed になったとき</td></tr>
+        <tr><td>Event Function Version Deactivating</td><td>State が Deactivating になったとき (Lambda Managed Instances の <code>PutFunctionScalingConfig</code> のみ)</td></tr>
+        <tr><td>Event Function Version Deactivated</td><td>State が Deactivated になったとき (Lambda Managed Instances の <code>PutFunctionScalingConfig</code> のみ)</td></tr>
+        <tr><td>Event Function Version Deleting</td><td>非同期削除 (Lambda Managed Instances および durable functions) の削除開始時のみ</td></tr>
+        <tr><td>Event Function Version Deleted</td><td>関数全体または発行済みバージョンの削除完了時 (同期・非同期の両方)</td></tr>
+      </table>
+    </div>
+
+    <h3>📄 イベント例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">Event Function Version Activated イベント</span>
+      </div>
+      <pre><code class="language-json">{
+  "version": "0",
+  "id": "7bf73129-1428-4cd3-a780-95db273d1602",
+  "detail-type": "Event Function Version Activated",
+  "source": "aws.lambda",
+  "account": "111122223333",
+  "time": "2026-09-26T18:43:48Z",
+  "region": "us-east-1",
+  "resources": ["arn:aws:lambda:us-east-1:111122223333:function:my-fn:1"],
+  "detail": {
+    "action": "CreateFunction",
+    "state": "Active",
+    "lastUpdateStatus": "Successful",
+    "revisionId": "8f3b1c2a-4e5d-4a6b-9c8d-1e2f3a4b5c6d"
+  }
+}</code></pre>
+    </div>
+    <ul class="plain">
+      <li><strong style="color:#FFFFFF;">resources</strong>: バージョンを含む修飾 ARN が入り、特定バージョンのイベントをフィルタリング可能。関数全体を名前または非修飾 ARN で削除した場合、削除イベントには非修飾 ARN が入り、バージョンごとの個別イベントは送信されない</li>
+      <li><strong style="color:#FFFFFF;">time</strong>: イベント送信時刻ではなく、状態が変化した時刻を示す</li>
+      <li><strong style="color:#FFFFFF;">detail.action</strong>: 変化のきっかけとなった API を示す (<code>CreateFunction</code>、<code>PublishVersion</code>、<code>UpdateFunctionCode</code>、<code>UpdateFunctionConfiguration</code>、<code>DeleteFunction</code>、<code>PutRuntimeManagementConfig</code>、<code>PutFunctionScalingConfig</code>)</li>
+      <li><strong style="color:#FFFFFF;">detail.state / lastUpdateStatus など</strong>: <code>GetFunction</code> が返す値と同じ値を使用し、値がないフィールドは省略される</li>
+    </ul>
+
+    <h3>📦 配信特性</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>配信保証</td><td>少なくとも 1 回の配信 (at-least-once)。重複する可能性がある</td></tr>
+        <tr><td>重複排除</td><td>同じ <code>detail-type</code> 内では <code>revisionId</code> で重複を除去できる</td></tr>
+        <tr><td>順序</td><td>同じバージョンのイベントでも順不同で到着する可能性がある。<code>time</code> を比較するか、最新状態が必要な場合は <code>GetFunction</code> を呼び出す</td></tr>
+        <tr><td>削除イベントの revisionId</td><td>各イベントは固有の <code>revisionId</code> を持つが、同一削除の Deleting と Deleted イベントは同じ <code>revisionId</code> を共有する</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+
+    <h3>📌 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>対象の Lambda 関数が存在すること (イベント発行自体に設定は不要)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>EventBridge ルールを作成する IAM 権限があること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ターゲット (Lambda、Step Functions など) への呼び出し権限を設定できること</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h4>イベントにマッチするルールを作成</h4>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">EventBridge ルールの作成</span></div>
+          <pre><code class="language-bash">aws events put-rule --name lambda-fn-activated \
+  --event-pattern '{"source":["aws.lambda"],"detail-type":["Event Function Version Activated"]}'</code></pre>
+        </div>
+        <p><code>Event Function Version Activated</code> イベント (バージョンが Active になり呼び出し可能になったとき) にマッチするルールをデフォルトイベントバス上に作成します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h4>EventBridge にターゲット関数の呼び出し権限を付与</h4>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">リソースベースポリシーの追加</span></div>
+          <pre><code class="language-bash">aws lambda add-permission --function-name on-fn-ready --statement-id eb-fn-activated \
+  --action lambda:InvokeFunction --principal events.amazonaws.com \
+  --source-arn arn:aws:events:us-east-1:111122223333:rule/lambda-fn-activated</code></pre>
+        </div>
+        <p>ターゲット関数 <code>on-fn-ready</code> のリソースベースポリシーに、作成したルールからの <code>lambda:InvokeFunction</code> を許可するステートメントを追加します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h4>ルールにターゲットを追加</h4>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">ターゲットの登録</span></div>
+          <pre><code class="language-bash">aws events put-targets --rule lambda-fn-activated \
+  --targets 'Id=1,Arn=arn:aws:lambda:us-east-1:111122223333:function:on-fn-ready'</code></pre>
+        </div>
+        <p>ルールにターゲット関数を登録します。以降、マッチしたイベントはこの関数に配信されます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3>💼 ビジネス面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>デプロイパイプラインの高速化</strong>: ポーリングの待機時間やリトライ間隔が不要になり、新バージョンが Active になった瞬間に後続処理を開始できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: ポーリング用カスタムロジックの実装・保守が不要になり、追加料金なしで利用できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>大規模環境での信頼性向上</strong>: 数千の関数を運用する環境でも API クォータを消費せずにライフサイクルを追跡できる</span></div>
+        <h3>🔧 技術面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>イベント駆動アーキテクチャへの統合</strong>: EventBridge ルールにより Step Functions、Lambda、SNS、SQS と宣言的に連携できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>失敗検知の精度向上</strong>: <code>Update Failed</code> や <code>Activation Failed</code> のイベントで、<code>State</code> のみでは判別できない失敗を確実に検知</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>設定不要で即時利用可能</strong>: オプトインや権限変更なしで、すべての関数のイベントがデフォルトイベントバスに配信される</span></div>
+      </div>
+      <div>
+        <h3>🚧 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>配信は at-least-once であり、重複イベントが届く可能性がある (<code>revisionId</code> による重複排除が必要)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>イベントは順不同で到着する可能性があるため、順序に依存する処理では <code>time</code> の比較や <code>GetFunction</code> での確認が必要</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>イベントは関数所有アカウントのデフォルトイベントバスにのみ配信。他アカウントへ送るには転送用ルールを所有アカウント側に作成する必要がある</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span><code>Deleting</code> イベントは非同期削除 (Lambda Managed Instances、durable functions) の場合のみ送信される</span></div>
+        <h3>💡 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>最新状態の確定が必要な場面では、イベントだけに依存せず <code>GetFunction</code> と組み合わせる</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>更新中は <code>State</code> が <code>Active</code> のまま以前のコードで呼び出しが継続されるため、更新完了の判定には <code>Updated</code> / <code>Update Failed</code> イベントを使用する</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>ターゲットの呼び出しには各サービスの標準料金が発生するため、ルールのマッチ条件を適切に絞り込む</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <h4>🚀 ユースケース 1: デプロイパイプラインでの自動テストとトラフィック切り替え</h4>
+      <p><span class="label">シナリオ</span>: 新しい関数バージョンを発行した後、統合テストを実行し、成功したらエイリアスのトラフィックを新バージョンへ切り替えたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">イベントパターン例</span></div>
+        <pre><code class="language-json">{
+  "source": ["aws.lambda"],
+  "detail-type": ["Event Function Version Activated"],
+  "resources": [{"prefix": "arn:aws:lambda:us-east-1:111122223333:function:my-api"}]
+}</code></pre>
+      </div>
+      <p><span class="label">効果</span>: <code>GetFunction</code> のポーリングなしで、バージョンが Active になった瞬間に Step Functions ステートマシンで統合テストとエイリアス更新を自動実行できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>🚨 ユースケース 2: 更新失敗の即時通知</h4>
+      <p><span class="label">シナリオ</span>: 本番環境の関数でコードや設定の更新が失敗した場合、運用チームへ即座に通知したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">イベントパターン例</span></div>
+        <pre><code class="language-json">{
+  "source": ["aws.lambda"],
+  "detail-type": [
+    "Event Function Version Update Failed",
+    "Event Function Version Activation Failed"
+  ]
+}</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 失敗イベントを Amazon SNS トピックへルーティングすることで、失敗を見逃さずに即時対応できる。<code>State</code> のみの監視では検知できない更新失敗もカバーできる。</p>
+    </div>
+
+    <div class="usecase">
+      <h4>🏢 ユースケース 3: 中央監視アカウントでの関数ライフサイクル集約</h4>
+      <p><span class="label">シナリオ</span>: マルチアカウント環境で、全アカウントの Lambda 関数のライフサイクルイベントをセキュリティ・ガバナンス用の中央アカウントに集約したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">各メンバーアカウントで転送用ルールを作成</span></div>
+        <pre><code class="language-bash"># 各メンバーアカウントで、中央アカウントのイベントバスへ転送するルールを作成
+aws events put-rule --name forward-lambda-state \
+  --event-pattern '{"source":["aws.lambda"]}'
+aws events put-targets --rule forward-lambda-state \
+  --targets 'Id=1,Arn=arn:aws:events:us-east-1:999999999999:event-bus/central-bus,RoleArn=arn:aws:iam::111122223333:role/eb-forward-role'</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 組織全体の関数の作成・更新・削除を一元的に可視化し、構成変更の監査や異常なデプロイの検知に活用できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card">
+        <h4>💵 料金</h4>
+        <p>Lambda はこれらのイベントの発行に対して<span class="highlight">課金しません</span>。デフォルトイベントバスへのイベント配信についても EventBridge の課金は発生しません。ルールによって呼び出されるターゲット (Lambda、Step Functions、SNS、SQS など) には、各サービスの標準料金が適用されます。</p>
+      </div>
+      <div class="card">
+        <h4>🌍 利用可能リージョン</h4>
+        <p>すべての <span class="highlight">AWS 商用リージョン</span>で利用可能です。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <h4>📨 Amazon EventBridge</h4>
+      <p>イベントの受け口となるサービス。ルールによるフィルタリングと多様なターゲットへのルーティングを提供する。</p>
+    </div>
+    <div class="card">
+      <h4>🪜 AWS Step Functions</h4>
+      <p>イベントをトリガーにテストやトラフィック切り替えなどのワークフローをオーケストレーションできる。</p>
+    </div>
+    <div class="card">
+      <h4>🖥️ AWS Lambda Managed Instances</h4>
+      <p><code>ActiveNonInvocable</code>、<code>Deactivating</code>、<code>Deactivated</code> など、本機能の一部イベントタイプは Lambda Managed Instances 関数に固有のもの。</p>
+    </div>
+    <div class="card">
+      <h4>⏳ AWS Lambda durable functions</h4>
+      <p>durable functions の削除は非同期で行われるため、<code>Deleting</code> と <code>Deleted</code> の両イベントが送信される。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      AWS Lambda の関数バージョンの状態変化が EventBridge イベントとして自動発行されるようになり、<code>GetFunction</code> のポーリングに依存していたデプロイ自動化や監視を<span class="highlight">イベント駆動に置き換え</span>られるようになりました。
+    </p>
+    <p>
+      追加料金・追加設定なしで利用できるため、CI/CD パイプラインを運用しているチームは、まず <code>Event Function Version Activated</code> と <code>Update Failed</code> のイベントに対するルール作成から導入を検討することを推奨します。
+    </p>
+    <div class="flow-diagram" style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:24px 0;">
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;">🚀 デプロイ実行</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;">📨 イベント自動発行</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;">🎯 ルールでフィルタ</div>
+      <span style="color:var(--aws-orange);font-size:24px;font-weight:bold;">→</span>
+      <div style="background:var(--aws-dark-squid);border:2px solid var(--aws-orange);border-radius:8px;padding:12px 20px;text-align:center;">✅ 後続処理を自動実行</div>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-lambda-function-state-events/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): AWS Lambda function state events</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/monitoring-eventbridge-function-state.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Lambda Function state events in Amazon EventBridge</a></li>
+      <li><a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-rules.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Amazon EventBridge rules</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/api/API_GetFunction.html" target="_blank" rel="noopener noreferrer" class="aws-link">API リファレンス: GetFunction</a></li>
+    </ul>
+    <p>📅 リリース日: 2026 年 11 月 20 日 | 本インフォグラフィックは AWS News レポート (2026-11-20) をもとに作成</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

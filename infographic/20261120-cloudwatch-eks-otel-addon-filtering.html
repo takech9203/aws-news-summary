@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon CloudWatch - Observability EKS アドオンのテレメトリフィルタリング対応</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+.card li { margin: 4px 0; }
+
+code {
+  font-family: 'Courier New', monospace;
+  background: rgba(255, 153, 0, 0.12);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.1);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF6B4A; }
+.after-box .ba-title { color: #4CAF50; }
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.before-box ul, .after-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.before-box li, .after-box li { margin: 6px 0; font-size: 14px; }
+
+/* 統計カード */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--aws-orange);
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 4px;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block pre code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  background: transparent;
+  display: block;
+}
+
+/* チェックリスト */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-content { flex: 1; min-width: 0; }
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .before-after { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">Amazon CloudWatch</span>
+    <h1>📡 CloudWatch Observability EKS アドオンが<br>テレメトリフィルタリングに対応</h1>
+    <div class="subtitle">🗓️ リリース日: 2026 年 11 月 20 日 | 機能: OpenTelemetry フィルター (otelFilters) によるクラスター全体のテレメトリフィルタリング</div>
+  </div>
+
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>Amazon CloudWatch Observability EKS アドオンが、<span class="highlight">テレメトリフィルタリング</span>に対応しました。名前空間、メトリクス名、Pod / ノードラベルに対するクラスター全体の include / exclude リストを定義することで、利用していないテレメトリの取り込みを<span class="highlight">送信前に停止</span>し、取り込みコストを削減できます。</p>
+    <p>CloudWatch の OpenTelemetry テレメトリは取り込み量 (GB) に応じて課金されるため、フィルタリングが<span class="highlight">そのままコスト削減</span>につながります。フィルターはアドオン設定の <code>otelFilters</code> として定義され、要件が変化しても 1 回のアドオン設定更新だけで変更できます。</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">v8.0.0+</div>
+        <div class="stat-label">EKS アドオン / Helm チャートの必要バージョン</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">USD 0.08/GB</div>
+        <div class="stat-label">OpenTelemetry 取り込みレート (EKS)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">最大 150</div>
+        <div class="stat-label">メトリクスに付与されるラベル数 (フィルターで制御可能)</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ アップデート前の課題</div>
+        <ul>
+          <li>監視していない名前空間や未使用メトリクスにも取り込み料金が発生</li>
+          <li>最大 150 のラベル付与により、高カーディナリティラベルがデータ量を増加</li>
+          <li>取り込み量の制御には、アプリ側の計装変更やコレクター設定の個別調整が必要</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <ul>
+          <li>名前空間、メトリクス名、Pod / ノードラベルの include / exclude をクラスター全体で定義し、不要なテレメトリを送信前に破棄</li>
+          <li>取り込み課金の対象データ量が減少し、コストを直接削減</li>
+          <li>1 回のアドオン設定更新でフィルターを変更でき、要件変化に追随しやすい</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Cluster["☁️ Amazon EKS クラスター"]
+        subgraph Sources["📥 テレメトリソース"]
+            direction LR
+            CI["📊 OTel Container Insights<br/>メトリクス / ログ"]
+            OTLP["📦 OTLP エンドポイント<br/>メトリクス / トレース / ログ"]
+            Prom["🔍 ServiceMonitor / PodMonitor<br/>スクレイピング"]
+            CI ~~~ OTLP ~~~ Prom
+        end
+        Agent["🤖 CloudWatch エージェント"]
+        Filter{"🔀 otelFilters<br/>namespaces / metricNames<br/>podLabels / nodeLabels"}
+    end
+
+    Drop["🗑️ 送信前に破棄<br/>取り込み課金なし"]
+
+    subgraph AWS["☁️ AWS"]
+        direction LR
+        CWM[("📊 CloudWatch メトリクス")]
+        CWL[("📋 CloudWatch Logs")]
+        XRay[("🔍 AWS X-Ray")]
+    end
+
+    CI --> Agent
+    OTLP --> Agent
+    Prom --> Agent
+    Agent --> Filter
+    Filter -.->|除外リストに一致| Drop
+    Filter -->|通過| CWM
+    Filter -->|通過| CWL
+    Filter -->|通過| XRay
+
+    classDef cluster fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef sources fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef agent fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef drop fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+    classDef dest fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+
+    class Cluster cluster
+    class Sources,AWS sources
+    class CI,OTLP,Prom input
+    class Agent agent
+    class Filter decision
+    class Drop drop
+    class CWM,CWL,XRay dest
+      </pre>
+    </div>
+    <p>CloudWatch エージェントが収集した各ソースのテレメトリは、<code>otelFilters</code> で定義した include / exclude リストで評価され、除外対象は CloudWatch へ送信される前に破棄されるため、<span class="highlight">取り込み課金の対象になりません</span>。</p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ 名前空間フィルター (otelFilters.namespaces)</div>
+      <ul>
+        <li>除外した名前空間の Pod / コンテナテレメトリを破棄</li>
+        <li>OTel Container Insights のメトリクスとログ、OTLP 受信のメトリクス・トレース・ログ、ServiceMonitor / PodMonitor スクレイピングに適用</li>
+        <li>ノードレベルメトリクス、ホストログ、Karpenter や KEDA などコントロールプレーンコンポーネントには適用されず、Kubernetes 名前空間を持たないレコードは常に通過</li>
+        <li>GPU、AWS Trainium / Inferentia、EFA のデバイスメトリクスは破棄されない。除外対象の名前空間の Pod がデバイスを使用している場合、デバイスメトリクスは保持され、Pod・名前空間・コンテナ属性のみ除去</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ メトリクス名フィルター (otelFilters.metricNames)</div>
+      <ul>
+        <li>CloudWatch へ送信される時点のメトリクス名に大文字小文字を区別してマッチング</li>
+        <li>OTel Container Insights のメトリクス、OTLP 受信のメトリクス (スパンメトリクス含む)、ServiceMonitor / PodMonitor スクレイピングに適用。ログには適用されない</li>
+        <li>空でない <code>include</code> リストを指定すると、リストにあるメトリクスのみが保持され、スパンメトリクスを含む他のすべてのメトリクスが破棄される</li>
+        <li><code>include</code> リストに <code>up</code> を含めない場合、スクレイプ対象の <code>up</code> メトリクスも破棄される点に注意</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ Pod / ノードラベルフィルター (otelFilters.podLabels / nodeLabels)</div>
+      <ul>
+        <li>エージェントが <code>k8s.pod.label.*</code> / <code>k8s.node.label.*</code> 属性として付与するラベルを制御</li>
+        <li><code>include</code> (収集するラベル)、<code>exclude</code> (収集後に除去)、<code>recommendedExclusions</code> (高カーディナリティラベルの組み込み除外リスト、デフォルト <code>true</code>) の 3 つの設定</li>
+        <li>組み込み除外リストには、トポロジー、ホスト名、インスタンスタイプのラベル、Karpenter / EKS Auto Mode のインスタンスラベル、<code>pod-template-hash</code> などのコントローラーリビジョンマーカーを含む</li>
+        <li>優先順位は exclude &gt; 名前指定の include エントリ &gt; 組み込みリスト。組み込みリストの特定ラベルだけ残したい場合は <code>include</code> に名前を指定</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ シンプルなマッチングルール</div>
+      <ul>
+        <li>エントリは完全一致の名前、<code>prod-*</code> のようなプレフィックス + <code>*</code>、または <code>*</code> 単独のいずれか</li>
+        <li>空の <code>include</code> リスト、または <code>*</code> を含む <code>include</code> リストはすべてを含める</li>
+        <li>exclude が include より優先され、マッチングは大文字小文字を区別</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📌 フィルターの適用範囲</h3>
+    <table>
+      <tr><th>フィルター</th><th>適用対象</th></tr>
+      <tr><td><code>otelFilters.namespaces</code></td><td>OTel Container Insights のメトリクス / ログ、OTLP 受信のメトリクス / トレース / ログ、ServiceMonitor / PodMonitor スクレイピング</td></tr>
+      <tr><td><code>otelFilters.metricNames</code></td><td>OTel Container Insights のメトリクス、OTLP 受信のメトリクス (スパンメトリクス含む)、ServiceMonitor / PodMonitor スクレイピング (ログは対象外)</td></tr>
+      <tr><td><code>otelFilters.podLabels</code> / <code>otelFilters.nodeLabels</code></td><td>OTel Container Insights のメトリクス / ログ、OTLP 受信のメトリクス / トレース / ログ、ServiceMonitor / PodMonitor スクレイピング</td></tr>
+    </table>
+
+    <h3>📌 マッチングルール</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>エントリ形式</td><td>完全一致の名前、プレフィックス + <code>*</code> (例: <code>prod-*</code>)、または <code>*</code> 単独</td></tr>
+      <tr><td>空の include</td><td>すべてを含める (<code>*</code> を含む場合も同様)</td></tr>
+      <tr><td>優先順位</td><td>exclude が include より優先</td></tr>
+      <tr><td>大文字小文字</td><td>区別する (<code>dcgm_fi_dev_gpu_util</code> は <code>DCGM_FI_DEV_GPU_UTIL</code> にマッチしない)</td></tr>
+      <tr><td>ラベルフィルターの優先順位</td><td>exclude &gt; 名前指定の include エントリ &gt; <code>recommendedExclusions</code> の組み込みリスト</td></tr>
+    </table>
+
+    <h3>📌 設定例</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">otelFilters 設定例</span>
+      </div>
+      <pre><code class="language-json">{
+  "otelFilters": {
+    "namespaces": {
+      "exclude": [
+        "kube-system",
+        "test-*"
+      ]
+    },
+    "metricNames": {
+      "exclude": [
+        "container_network_*"
+      ]
+    },
+    "podLabels": {
+      "include": [
+        "app",
+        "team"
+      ]
+    },
+    "nodeLabels": {
+      "include": [
+        "node.kubernetes.io/instance-type",
+        "topology.kubernetes.io/zone"
+      ]
+    }
+  }
+}</code></pre>
+    </div>
+    <p><code>kube-system</code> 名前空間と <code>test-</code> で始まる名前空間のテレメトリを破棄し、<code>container_network_*</code> メトリクスを除外し、Pod ラベルは <code>app</code> と <code>team</code>、ノードラベルは指定した 2 つのみを収集する設定です。</p>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon CloudWatch Observability EKS アドオンまたは Helm チャートのバージョン 8.0.0 以降</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>OTel Container Insights、OTLP 取り込み、ServiceMonitor / PodMonitor スクレイピングのいずれかを利用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>アドオン設定を更新するための IAM 権限 (<code>eks:UpdateAddon</code> など)</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">アドオンのバージョンを確認</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">アドオンバージョンの確認</span>
+          </div>
+          <pre><code class="language-bash">aws eks describe-addon \
+  --cluster-name my-cluster \
+  --addon-name amazon-cloudwatch-observability \
+  --query addon.addonVersion --output text</code></pre>
+        </div>
+        <p>8.0.0 未満の場合は <code>aws eks update-addon</code> の <code>--addon-version</code> でバージョン 8.0.0 以降に更新します。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">otelFilters を含むアドオン設定を適用</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">アドオン設定の更新</span>
+          </div>
+          <pre><code class="language-bash">aws eks update-addon \
+  --cluster-name my-cluster \
+  --addon-name amazon-cloudwatch-observability \
+  --configuration-values '{
+    "otelFilters": {
+      "namespaces": {
+        "exclude": ["kube-system", "test-*"]
+      },
+      "metricNames": {
+        "exclude": ["container_network_*"]
+      }
+    }
+  }'</code></pre>
+        </div>
+        <p><code>--configuration-values</code> はアドオン設定全体を置き換えるため、既存の設定値がある場合はマージした JSON を指定します。フィルターを変更すると、影響を受けるエージェント Pod が再起動されます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">取り込み量の変化を確認</div>
+        <p>CloudWatch の請求メトリクスや Cost Explorer で、フィルター適用前後の取り込み量 (GB) を比較します。除外しすぎた場合は、<code>include</code> / <code>exclude</code> リストを調整して再度アドオン設定を更新します。ダッシュボードやアラームが参照しているメトリクス・ラベルを誤って除外していないかも確認します。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>取り込みコストの直接削減</strong>: OpenTelemetry テレメトリは取り込み量 (GB) 課金のため、不要なテレメトリの破棄がそのままコスト削減になる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用の一元化</strong>: アプリケーションごとの計装変更ではなく、クラスター全体のアドオン設定 1 か所でコスト制御を実施できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>変化への追随が容易</strong>: クラスターの要件が変わっても、1 回のアドオン設定更新でフィルターを変更できる</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>複数ソースへの一貫した適用</strong>: OTel Container Insights、OTLP 取り込み、ServiceMonitor / PodMonitor スクレイピングのすべてに同じフィルターが適用される</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>ラベルのカーディナリティ制御</strong>: <code>recommendedExclusions</code> により高カーディナリティラベルがデフォルトで除外され、保存・クエリ対象のデータ量を抑制できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>シンプルなルール体系</strong>: 完全一致とプレフィックスワイルドカードのみの明快なマッチングルールで、意図しないフィルタリングを避けやすい</span></div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚧 制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>EKS アドオンおよび Helm チャートのバージョン 8.0.0 以降が必要</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>マッチングは大文字小文字を区別し、プレフィックス + <code>*</code> と <code>*</code> 単独以外のパターン (正規表現など) は使用できない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>名前空間フィルターはノードレベルメトリクス、ホストログ、コントロールプレーンコンポーネントのメトリクスには適用されない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>GPU / Trainium / Inferentia / EFA のデバイスメトリクスは名前空間フィルターでは破棄されない (Pod・名前空間・コンテナ属性のみ除去)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>メトリクス名フィルターはログには適用されない</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>フィルターを変更すると影響を受けるエージェント Pod が再起動される (エージェントは起動時にのみ設定を読み込むため)</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span><code>metricNames</code> に空でない <code>include</code> リストを指定すると、スパンメトリクスを含むリスト外のすべてのメトリクスが破棄される。スクレイプ失敗検知に使う <code>up</code> メトリクスも <code>include</code> に含めないと破棄される</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>エージェントは <code>topology.kubernetes.io/zone</code> など一部のラベルを内部処理用に常に読み取り、フィルターで除外されている場合は使用後に除去する</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>ダッシュボード、アラーム、PromQL クエリが参照しているメトリクスやラベルを除外すると、データ欠落によりアラームが意図しない状態になる可能性があるため、適用前に影響範囲の確認が必要</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📁 ユースケース 1: 非本番名前空間のテレメトリ除外</div>
+      <p><strong>シナリオ</strong>: 開発・検証用の名前空間が多数存在するが、CloudWatch で実際に監視しているのは本番の名前空間のみで、非本番分の取り込みコストを削減したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-json">{
+  "otelFilters": {
+    "namespaces": {
+      "exclude": ["dev-*", "staging-*", "test-*"]
+    }
+  }
+}</code></pre>
+      </div>
+      <p><strong>効果</strong>: 非本番名前空間の Pod / コンテナテレメトリが送信前に破棄され、取り込み量と料金を削減できる。本番の監視には影響しない。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📉 ユースケース 2: 高カーディナリティメトリクスの破棄</div>
+      <p><strong>シナリオ</strong>: cAdvisor のネットワーク系メトリクスなど、系列数が多いわりにダッシュボードやアラームで使用していないメトリクスが取り込み量を押し上げている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-json">{
+  "otelFilters": {
+    "metricNames": {
+      "exclude": ["container_network_*", "node_scrape_*"]
+    }
+  }
+}</code></pre>
+      </div>
+      <p><strong>効果</strong>: 使用していない高カーディナリティメトリクスを名前 (プレフィックス) 指定で破棄し、取り込み量を削減できる。必要になったら設定更新だけで復元できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🏷️ ユースケース 3: グルーピングに使うラベルのみの収集</div>
+      <p><strong>シナリオ</strong>: メトリクスに最大 150 のラベルが付与されるが、PromQL でのグルーピングに使うのは <code>app</code> と <code>team</code> のみで、残りのラベルはデータ量を増やしているだけになっている。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-json">{
+  "otelFilters": {
+    "podLabels": {
+      "include": ["app", "team"]
+    },
+    "nodeLabels": {
+      "include": ["topology.kubernetes.io/zone"]
+    }
+  }
+}</code></pre>
+      </div>
+      <p><strong>効果</strong>: 必要なラベルのみが <code>k8s.pod.label.*</code> / <code>k8s.node.label.*</code> 属性として付与され、各データポイントのサイズが減少して保存・クエリ対象のデータ量を抑制できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>テレメトリフィルタリング機能自体に<span class="highlight">追加料金はありません</span>。アドオン経由で送信されるテレメトリは Amazon EKS の OpenTelemetry 取り込みレートである <span class="highlight">USD 0.08/GB</span> で課金されるため、フィルタリングによる取り込み量の削減がそのまま料金の削減になります。</p>
+    <h3>📊 料金例</h3>
+    <table>
+      <tr><th>使用量</th><th>月額料金 (概算)</th></tr>
+      <tr><td>フィルタリングなし: 取り込み 1,000 GB/月</td><td>USD 80.00</td></tr>
+      <tr><td>フィルタリングで 40% 削減: 取り込み 600 GB/月</td><td>USD 48.00</td></tr>
+    </table>
+    <p>詳細は <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">CloudWatch 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>CloudWatch が OpenTelemetry メトリクスをサポートする<span class="highlight">すべての AWS リージョン</span>で利用可能です。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="icon-text"><span>☸️ <strong>Amazon EKS</strong>: 本アドオンの対象となるマネージド Kubernetes サービス</span></div>
+    </div>
+    <div class="card">
+      <div class="icon-text"><span>📊 <strong>CloudWatch OTel Container Insights</strong>: クラスターのメトリクス / ログを収集する構成。本フィルターの主な適用対象</span></div>
+    </div>
+    <div class="card">
+      <div class="icon-text"><span>📦 <strong>OTLP 取り込み / ServiceMonitor・PodMonitor スクレイピング</strong>: 同じバージョン 8.0.0 で追加されたカスタムテレメトリ取り込み機能。本フィルターで送信量を制御できる</span></div>
+    </div>
+    <div class="card">
+      <div class="icon-text"><span>🔍 <strong>AWS X-Ray</strong>: OTLP で受信したトレースの送信先。名前空間・ラベルフィルターの適用対象</span></div>
+    </div>
+    <div class="card">
+      <div class="icon-text"><span>💰 <strong>AWS Cost Explorer / CloudWatch 請求メトリクス</strong>: フィルター適用前後の取り込み量・コストの効果測定に利用</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>CloudWatch Observability EKS アドオンのバージョン 8.0.0 以降では、<code>otelFilters</code> による名前空間、メトリクス名、Pod / ノードラベルの<span class="highlight">クラスター全体フィルタリング</span>で、利用していないテレメトリの取り込みを送信前に停止できるようになりました。OpenTelemetry テレメトリは取り込み量課金のため、不要データの破棄が<span class="highlight">直接的なコスト削減</span>につながります。OTel Container Insights やカスタムテレメトリ取り込みを利用しているチームは、非本番名前空間と未使用メトリクス・ラベルの棚卸しから始め、アドオン設定更新によるフィルター適用を検討することを推奨します。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/cloudwatch-eks-otel-addon-filtering/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/eks-observability-addon-telemetry-filters.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: OpenTelemetry filters</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/eks-observability-addon-cost-controls.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Optimizing costs</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/container-insights-eks-otel.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: OTel Container Insights</a></li>
+      <li><a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-11-20-cloudwatch-eks-otel-addon-filtering.md) を基に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

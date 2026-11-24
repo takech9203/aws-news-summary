@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon S3 - 汎用バケットの読み取りリクエストレートを最大 2 倍に向上</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover {
+  color: var(--aws-smile-orange);
+}
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.5);
+  border-radius: 8px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After 比較 */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+@media (max-width: 720px) {
+  .before-after {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ba-box {
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ba-box li {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 17px; flex-shrink: 0; }
+.cross-icon { color: var(--aws-red); font-size: 17px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 17px; flex-shrink: 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.18);
+  color: var(--aws-white);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.td-strong {
+  color: var(--aws-orange);
+  font-weight: 700;
+}
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang {
+  color: var(--aws-orange);
+  font-weight: bold;
+}
+
+.code-title {
+  color: var(--aws-light-gray);
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.usecase p {
+  margin: 6px 0;
+  font-size: 14px;
+}
+
+.usecase .label {
+  color: var(--aws-white);
+  font-weight: 600;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-content {
+  flex: 1;
+}
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+footer li {
+  margin: 4px 0;
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">Amazon S3</span>
+    <h1>🪣 Amazon S3 汎用バケットの読み取りリクエストレートが最大 2 倍に</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 20 日 | GET/HEAD リクエストレートの引き上げ</div>
+  </div>
+
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>Amazon S3 は、汎用バケットにおける読み取りリクエストレートを<span class="highlight">最大 2 倍</span>に引き上げました。プレフィックスあたり毎秒 5,500 リクエストだった GET/HEAD リクエストの性能が、<span class="highlight">毎秒 11,000 リクエスト以上</span>に向上します。</p>
+    <p>すべての AWS リージョンの既存の読み取りリクエストに<span class="highlight">自動的に適用</span>され、アプリケーション変更や追加設定は一切不要、<span class="highlight">追加コストもなし</span>です。ML トレーニング、データ分析、データ転送など読み取り集約型ワークロードがより高速になります。</p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">2 倍</div>
+        <div class="stat-label">読み取りリクエストレート従来比</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">11,000+</div>
+        <div class="stat-label">毎秒の GET/HEAD リクエスト数プレフィックスあたり</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">追加料金 標準リクエスト料金のみ</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">全リージョン</div>
+        <div class="stat-label">自動適用 設定変更不要</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">❌ アップデート前の課題</div>
+        <ul>
+          <li>GET/HEAD はプレフィックスあたり毎秒 5,500 リクエストが性能の目安</li>
+          <li>読み取り集約型ワークロードでは、早い段階で多数のプレフィックスへの分散設計が必要</li>
+          <li>ML トレーニングや大規模分析では、リクエストレートが制約になる場合があった</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">✅ アップデート後の改善</div>
+        <ul>
+          <li>プレフィックスあたり毎秒 11,000 リクエスト以上に向上 (従来比最大 2 倍)</li>
+          <li>すべての AWS リージョンで自動適用、アプリ変更や設定作業が不要</li>
+          <li>追加料金なしで、同じプレフィックス設計のままより高いスループットを実現</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Workloads["👥 読み取り集約型ワークロード"]
+        direction LR
+        ML["🤖 ML トレーニング"]
+        DA["📊 データ分析"]
+        DT["🚚 データ転送"]
+        ML ~~~ DA ~~~ DT
+    end
+
+    subgraph Bucket["🪣 S3 汎用バケット"]
+        direction LR
+        P1["📁 プレフィックス /a<br/>毎秒 11,000 以上の<br/>GET/HEAD リクエスト"]
+        P2["📁 プレフィックス /b<br/>毎秒 11,000 以上の<br/>GET/HEAD リクエスト"]
+        P3["📁 プレフィックス /c<br/>毎秒 11,000 以上の<br/>GET/HEAD リクエスト"]
+        P1 ~~~ P2 ~~~ P3
+    end
+
+    Workloads -->|"読み取りリクエスト<br/>従来比最大 2 倍のレート"| Bucket
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+
+    class Workloads,Bucket boundary
+    class ML,DA,DT input
+    class P1,P2,P3 storage
+      </pre>
+    </div>
+    <p>各プレフィックスが毎秒 11,000 以上の GET/HEAD リクエストを独立して処理できるため、複数のプレフィックスに分散することでバケット全体のスループットをさらにスケールできます。</p>
+  </div>
+
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">📈 GET/HEAD リクエストレートの引き上げ</div>
+      <p style="margin:0; font-size:14px;">プレフィックスあたり毎秒 5,500 リクエストから 11,000 リクエスト以上へ向上。従来比で最大 2 倍の読み取り性能。対象は S3 汎用バケット。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔄 自動適用</div>
+      <p style="margin:0; font-size:14px;">すべての AWS リージョンで既存の読み取りリクエストに自動的に適用。アプリケーションコードや設定の変更は不要で、既存ワークロードもそのまま恩恵を受けられる。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📂 プレフィックス単位の独立スケーリング</div>
+      <p style="margin:0; font-size:14px;">リクエストレートはプレフィックス単位で適用。複数のプレフィックスに分散することで S3 が各プレフィックスを独立してスケールし、バケット全体では事実上の上限なくスループットを拡張可能。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>📊 リクエストレートの比較</h3>
+    <table>
+      <tr><th>項目</th><th>アップデート前</th><th>アップデート後</th></tr>
+      <tr><td>GET/HEAD リクエストレート (プレフィックスあたり)</td><td>毎秒 5,500 リクエスト</td><td class="td-strong">毎秒 11,000 リクエスト以上</td></tr>
+      <tr><td>対象バケットタイプ</td><td>汎用バケット</td><td>汎用バケット</td></tr>
+      <tr><td>適用方法</td><td>-</td><td>自動適用 (設定変更不要)</td></tr>
+      <tr><td>追加料金</td><td>-</td><td>なし (標準のリクエスト料金のみ)</td></tr>
+    </table>
+
+    <h3>🚀 スループット拡張の考え方</h3>
+    <table>
+      <tr><th>プレフィックス数</th><th>バケット全体の GET/HEAD レートの目安</th></tr>
+      <tr><td>1</td><td>毎秒 11,000 リクエスト以上</td></tr>
+      <tr><td>5</td><td>毎秒 55,000 リクエスト以上</td></tr>
+      <tr><td>10</td><td class="td-strong">毎秒 110,000 リクエスト以上</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+    <p><span class="highlight">前提条件</span>: S3 汎用バケットを使用していること。特別な設定は不要 (自動適用) です。</p>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">何もする必要はありません</div>
+        <p style="margin:4px 0; font-size:14px;">すべての AWS リージョンの既存の読み取りリクエストに自動的に適用されます。アプリケーションの変更、API の変更、設定作業は一切不要です。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">さらに高いスループットが必要な場合はプレフィックスを分散する</div>
+        <p style="margin:4px 0; font-size:14px;">オブジェクトキーの先頭部分 (プレフィックス) を分けてリクエストを分散すると、S3 は各プレフィックスを独立してスケールするため、バケット全体のスループットをさらに引き上げられます。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Text</span>
+            <span class="code-title">プレフィックス分散の例</span>
+          </div>
+          <pre><code class="language-text">s3://my-bucket/dataset-a/images/0001.jpg
+s3://my-bucket/dataset-b/images/0001.jpg
+s3://my-bucket/dataset-c/images/0001.jpg</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">リクエストレートの状況を確認する</div>
+        <p style="margin:4px 0; font-size:14px;">S3 リクエストメトリクスを有効にしたバケットで 5xx エラー数を取得し、503 Slow Down などのスロットリングが発生していないかを確認します。アップデート後もスロットリングが続く場合は、プレフィックスの分散を検討します。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">CloudWatch で S3 の 5xx エラーを確認</span>
+          </div>
+          <pre><code class="language-bash">aws cloudwatch get-metric-statistics \
+  --namespace AWS/S3 \
+  --metric-name 5xxErrors \
+  --dimensions Name=BucketName,Value=my-bucket Name=FilterId,Value=EntireBucket \
+  --start-time 2026-11-19T00:00:00Z \
+  --end-time 2026-11-20T00:00:00Z \
+  --period 3600 \
+  --statistics Sum</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:var(--aws-white);">追加コストなしの性能向上</strong>: 標準の S3 リクエスト料金のまま、読み取り性能が最大 2 倍になる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:var(--aws-white);">移行作業が不要</strong>: 自動適用のため、エンジニアリングリソースを使わずに恩恵を受けられる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:var(--aws-white);">ワークロードの高速化</strong>: ML トレーニングや分析ジョブの実行時間短縮により、ビジネスの意思決定サイクルを加速できる</span></div>
+
+    <h3>🛠️ 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:var(--aws-white);">シンプルなプレフィックス設計</strong>: 同じスループット要件に対して必要なプレフィックス数が半分で済み、キー設計を簡素化できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:var(--aws-white);">スロットリングの低減</strong>: 毎秒 5,500 リクエスト超でも 503 エラーが発生しにくくなり、リトライ処理の負荷が減る</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong style="color:var(--aws-white);">スケーラビリティの向上</strong>: プレフィックス分散と組み合わせることで、より少ない工夫で大規模な読み取りスループットを実現できる</span></div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚫 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>対象は GET/HEAD リクエスト (読み取り) であり、PUT などの書き込みリクエストレートの変更は発表されていない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>対象は汎用バケットであり、他のバケットタイプについては言及されていない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>リクエストレートはプレフィックス単位で適用されるため、単一プレフィックスに集中するアクセスパターンでは上限に達する可能性が残る</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>毎秒 11,000 を超える読み取りが必要な場合は、引き続き複数プレフィックスへの分散設計が推奨される</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>急激なリクエスト増加時には S3 の内部スケーリングが追従するまで一時的に 503 が返る場合があるため、エクスポネンシャルバックオフによるリトライは引き続き実装しておくべき</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🤖 ユースケース 1: 機械学習トレーニングデータの読み込み</div>
+      <p><span class="label">シナリオ</span>: 大量の画像ファイルを S3 から読み込んで GPU クラスターで分散トレーニングを実行。トレーニング開始時に数百万オブジェクトの読み取りが集中する。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">シャード分割の例</span></div>
+        <pre><code class="language-text">s3://ml-training-data/shard-00/...
+s3://ml-training-data/shard-01/...
+s3://ml-training-data/shard-02/...</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 各シャード (プレフィックス) が毎秒 11,000 以上の読み取りを処理できるため、データロードのボトルネックが緩和され、GPU の待機時間を削減できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📊 ユースケース 2: データレイクに対する大規模分析クエリ</div>
+      <p><span class="label">シナリオ</span>: Amazon Athena や Apache Spark から S3 上の Parquet ファイルに対して多数の並列スキャンを実行する。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">パーティション構成の例</span></div>
+        <pre><code class="language-text">s3://datalake/table/dt=2026-11-19/...
+s3://datalake/table/dt=2026-11-20/...</code></pre>
+      </div>
+      <p><span class="label">効果</span>: パーティションごとのプレフィックスで毎秒 11,000 以上の GET を処理できるため、高並列クエリでもスロットリングが起きにくく、クエリ実行時間を短縮できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🚚 ユースケース 3: 大容量データの移行・転送</div>
+      <p><span class="label">シナリオ</span>: S3 から別リージョンやオンプレミスへ大量のオブジェクトを並列転送する。転送ツールが多数の同時 GET を発行する。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI の並列度を高めて転送する例</span></div>
+        <pre><code class="language-bash">aws configure set default.s3.max_concurrent_requests 256
+aws s3 sync s3://source-bucket/ s3://dest-bucket/</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 読み取りレートの上限が 2 倍になったことで、同じプレフィックス構成のままより高い並列度で転送でき、移行時間を短縮できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p><span class="highlight">追加料金はありません</span>。向上した読み取り性能は、標準の S3 リクエスト料金の範囲内で利用できます。GET などのリクエスト料金はリージョンとストレージクラスにより異なるため、詳細は<a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a>を参照してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p><span class="highlight">すべての AWS リージョン</span>で利用可能です。既存の読み取りリクエストに自動的に適用されます。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">⚡ Amazon S3 Express One Zone</div>
+      <p style="margin:0; font-size:14px;">さらに高いリクエスト性能と低レイテンシーが必要な場合の選択肢となるディレクトリバケット。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📈 Amazon CloudWatch</div>
+      <p style="margin:0; font-size:14px;">S3 リクエストメトリクスにより、リクエストレートや 5xx エラーを監視可能。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔍 Amazon Athena / AWS Glue</div>
+      <p style="margin:0; font-size:14px;">S3 上のデータレイクに対する分析で、読み取りレート向上の恩恵を受けやすいサービス。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>Amazon S3 汎用バケットの GET/HEAD リクエストレートが、プレフィックスあたり毎秒 5,500 から 11,000 以上へと<span class="highlight">最大 2 倍に向上</span>しました。すべてのリージョンで<span class="highlight">追加料金なし・設定変更なし</span>で自動適用されるため、ユーザー側の対応は不要です。ML トレーニングや大規模分析などの読み取り集約型ワークロードを運用している場合は、現在のスロットリング状況を確認し、必要に応じてプレフィックス分散設計を見直すことを推奨します。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-s3-increases-read-request-rate/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-s3-increases-read-request-rate/</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Best practices design patterns - optimizing Amazon S3 performance</a></li>
+      <li><a href="https://aws.amazon.com/s3/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon S3 製品ページ</a></li>
+      <li><a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-11-20-amazon-s3-increases-read-request-rate.md) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Lambda - SQS FIFO キューで最大 10,000 メッセージのバッチサイズをサポート</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-right: 8px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: var(--aws-squid-ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+
+.aws-link:hover {
+  color: var(--aws-smile-orange);
+}
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 200px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* Before/After 比較 */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  flex: 1;
+  min-width: 280px;
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+
+.before-after ul { margin: 0; padding-left: 20px; }
+.before-after li { margin: 6px 0; font-size: 14px; }
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+.table-wrap { overflow-x: auto; }
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 16px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase p { margin: 8px 0; font-size: 14px; }
+
+.effect-box {
+  background: rgba(29, 129, 2, 0.12);
+  border-left: 4px solid var(--aws-green);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.two-col > div { flex: 1; min-width: 280px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer a { word-break: break-all; }
+
+ul { padding-left: 22px; }
+li { margin: 6px 0; }
+
+@media (max-width: 640px) {
+  h1 { font-size: 24px; }
+  h2 { font-size: 20px; }
+  body { padding: 12px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS Lambda</span>
+      <span class="service-badge">Amazon SQS</span>
+    </div>
+    <h1>⚡ AWS Lambda が SQS FIFO キューで<br>最大 10,000 メッセージのバッチサイズをサポート</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 20 日 | プロビジョンドモードのイベントソースマッピングで利用可能</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      AWS Lambda は、Amazon SQS FIFO キューをイベントソースとするイベントソースマッピング (ESM) において、<span class="highlight">プロビジョンドモード</span>使用時の最大バッチサイズを従来の 10 メッセージから <span class="highlight">10,000 メッセージ</span>へと大幅に拡張しました。あわせて、<span class="highlight">最大 300 秒のバッチウィンドウ</span> (MaximumBatchingWindowInSeconds) を設定できるようになり、大量の順序保証付きメッセージをより少ない呼び出し回数で処理できます。
+    </p>
+    <p>
+      金融取引、注文処理、在庫更新といった厳密な順序保証と重複排除が求められるワークロードで、<strong style="color: var(--aws-white);">メッセージグループ内の順序保証を維持したまま</strong>、呼び出し回数の削減とスループット向上を実現します。アプリケーションの再設計は不要で、設定変更のみで対応できます。
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">10,000</div>
+        <div class="stat-label">最大バッチサイズ (従来比 1,000 倍)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">300 秒</div>
+        <div class="stat-label">最大バッチウィンドウ</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">100,000</div>
+        <div class="stat-label">最大同時実行数 (デフォルトモードの 80 倍)</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>SQS FIFO の ESM はバッチサイズが最大 10 メッセージに制限</li>
+          <li>大量メッセージ処理には呼び出し回数を増やす必要があり、呼び出しコストが増加</li>
+          <li>まとめて処理するには独自のバッファリング機構が必要で、運用負荷が高い</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>プロビジョンドモードで最大 10,000 メッセージのバッチサイズを設定可能</li>
+          <li>最大 300 秒のバッチウィンドウでメッセージを蓄積してからまとめて処理</li>
+          <li>メッセージグループごとの順序保証を維持したまま高スループットを実現</li>
+          <li>アプリケーションの再設計や独自バッファリング機構が不要</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Producer["📤 プロデューサー"]
+        direction LR
+        P1["💳 金融取引"]
+        P2["🛒 注文処理"]
+        P3["📦 在庫更新"]
+        P1 ~~~ P2 ~~~ P3
+    end
+
+    subgraph Queue["📨 Amazon SQS FIFO キュー"]
+        direction LR
+        G1["グループ A<br/>順序保証"]
+        G2["グループ B<br/>順序保証"]
+        G3["グループ C<br/>順序保証"]
+        G1 ~~~ G2 ~~~ G3
+    end
+
+    subgraph ESM["⚙️ イベントソースマッピング プロビジョンドモード"]
+        Poller["🔄 専用イベントポーラー<br/>最小 2 - 最大 10,000"]
+        Batch["🗃️ バッチ組み立て<br/>最大 10,000 メッセージ<br/>バッチウィンドウ最大 300 秒"]
+        Poller --> Batch
+    end
+
+    Lambda["⚡ Lambda 関数<br/>少ない呼び出しで大量処理"]
+
+    Producer --> Queue
+    Queue --> Poller
+    Batch --> Lambda
+
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef queue fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class P1,P2,P3 input
+    class G1,G2,G3 queue
+    class Poller,Batch internal
+    class Lambda compute
+    class Producer,Queue,ESM layer
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      複数のメッセージグループから届いたメッセージを、プロビジョンドモードの専用イベントポーラーが最大 10,000 メッセージのバッチにまとめて Lambda 関数を呼び出す流れを示しています。各メッセージグループ内の順序は維持されます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🚀 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">📈 1. 最大バッチサイズの拡張 (10 → 10,000 メッセージ)</div>
+      <p style="margin: 4px 0; font-size: 14px;">プロビジョンドモードの SQS FIFO イベントソースマッピングで最大 10,000 メッセージを設定可能。呼び出し回数が削減され、呼び出しあたりの処理効率とスループットが向上します。バッチサイズが 10 を超える場合は、1 秒以上のバッチウィンドウの設定が必要です。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⏱️ 2. 最大 300 秒のバッチウィンドウ</div>
+      <p style="margin: 4px 0; font-size: 14px;">MaximumBatchingWindowInSeconds を最大 300 秒まで設定可能。バッチウィンドウの満了、呼び出しペイロードサイズ上限への到達、最大バッチサイズへの到達のいずれかの条件を満たすまでメッセージを蓄積してから関数を呼び出します。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔒 3. メッセージグループ単位の順序保証の維持</div>
+      <p style="margin: 4px 0; font-size: 14px;">SQS は、あるメッセージグループの先行メッセージが処理中 (インフライト) の間、そのグループから追加のメッセージを返しません。このため 1 つのバッチに含まれる同一メッセージグループのメッセージは最大 10 件です。より大きなバッチを構成するには、メッセージを多くのメッセージグループに分散して送信します。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚡ 4. プロビジョンドモードによる高スループット</div>
+      <p style="margin: 4px 0; font-size: 14px;">専用のイベントポーラーを最小 2 から最大 10,000 まで設定可能。デフォルトモード比で 3 倍高速なスケーリング (毎分最大 1,000 同時実行の増加) と 80 倍の同時実行数 (最大 100,000 同時実行) をサポートします。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+
+    <h3>📊 バッチ処理の仕様比較</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>デフォルトモード (FIFO)</th><th>プロビジョンドモード (FIFO、拡張後)</th></tr>
+        <tr><td>最大バッチサイズ</td><td>10 メッセージ</td><td><span class="highlight">10,000 メッセージ</span></td></tr>
+        <tr><td>最大バッチウィンドウ</td><td>設定不可 (プロビジョンドモードが必要)</td><td>300 秒</td></tr>
+        <tr><td>バッチサイズ 10 超の条件</td><td>-</td><td>バッチウィンドウ 1 秒以上が必須</td></tr>
+        <tr><td>同一メッセージグループのメッセージ数 / バッチ</td><td>-</td><td>最大 10 件</td></tr>
+        <tr><td>順序保証</td><td>メッセージグループ単位</td><td>メッセージグループ単位 (維持)</td></tr>
+      </table>
+    </div>
+
+    <h3>⚙️ プロビジョンドモードの仕様</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>最小イベントポーラー数 (MinimumPollers)</td><td>2〜200 (デフォルト: 2)</td></tr>
+        <tr><td>最大イベントポーラー数 (MaximumPollers)</td><td>2〜10,000 (デフォルト: 200)</td></tr>
+        <tr><td>ポーラーあたりの処理能力</td><td>最大 1 MB/秒のスループット、最大 10 同時呼び出し、最大 10 回/秒の SQS ポーリング API 呼び出し</td></tr>
+        <tr><td>スケーリング速度</td><td>毎分最大 1,000 同時実行 (デフォルトモードの 3 倍)</td></tr>
+        <tr><td>最大同時実行数</td><td>最大 100,000 (デフォルトモードの 80 倍)</td></tr>
+        <tr><td>制約</td><td>最大同時実行数 (Maximum Concurrency) 設定とは併用不可</td></tr>
+      </table>
+    </div>
+
+    <h3>📄 設定例 (ProvisionedPollerConfig)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">イベントソースマッピング設定例</span>
+      </div>
+      <pre><code class="language-json">{
+  "EventSourceArn": "arn:aws:sqs:ap-northeast-1:123456789012:orders.fifo",
+  "FunctionName": "process-orders",
+  "BatchSize": 10000,
+  "MaximumBatchingWindowInSeconds": 60,
+  "ProvisionedPollerConfig": {
+    "MinimumPollers": 5,
+    "MaximumPollers": 100
+  }
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon SQS FIFO キューが作成済みであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>Lambda 関数と SQS FIFO キューが同一リージョンに存在すること (アカウントは別でも可)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>イベントソースマッピングでプロビジョンドモードを有効化すること (バッチサイズ 10 超にはプロビジョンドモードとバッチウィンドウ 1 秒以上が必須)</span></div>
+
+    <h3>ステップ 1: プロビジョンドモードを有効化してイベントソースマッピングを作成</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">AWS CLI - 新規作成</span>
+      </div>
+      <pre><code class="language-bash">aws lambda create-event-source-mapping \
+    --function-name process-orders \
+    --event-source-arn arn:aws:sqs:ap-northeast-1:123456789012:orders.fifo \
+    --batch-size 10000 \
+    --maximum-batching-window-in-seconds 60 \
+    --provisioned-poller-config '{"MinimumPollers": 5, "MaximumPollers": 100}'</code></pre>
+    </div>
+    <p style="font-size: 14px;">バッチサイズ 10,000、バッチウィンドウ 60 秒、プロビジョンドモード (最小ポーラー 5、最大ポーラー 100) のイベントソースマッピングを新規作成します。</p>
+
+    <h3>ステップ 2: 既存のイベントソースマッピングを更新する場合</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">AWS CLI - 既存設定の更新</span>
+      </div>
+      <pre><code class="language-bash">aws lambda update-event-source-mapping \
+    --uuid a1b2c3d4-5678-90ab-cdef-EXAMPLE11111 \
+    --batch-size 10000 \
+    --maximum-batching-window-in-seconds 60 \
+    --provisioned-poller-config '{"MinimumPollers": 5, "MaximumPollers": 100}'</code></pre>
+    </div>
+    <p style="font-size: 14px;">既存のイベントソースマッピングの UUID を指定して、バッチサイズとバッチウィンドウ、プロビジョンドモードの設定を更新します。</p>
+
+    <h3>ステップ 3: プロビジョンドモードを解除する場合</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">AWS CLI - プロビジョンドモード解除</span>
+      </div>
+      <pre><code class="language-bash">aws lambda update-event-source-mapping \
+    --uuid a1b2c3d4-5678-90ab-cdef-EXAMPLE11111 \
+    --provisioned-poller-config '{}' \
+    --maximum-batching-window-in-seconds 0 \
+    --batch-size 10</code></pre>
+    </div>
+    <p style="font-size: 14px;">バッチウィンドウを 0、バッチサイズを 10 以下に戻す操作を、解除前または同一の UpdateEventSourceMapping リクエスト内で行う必要があります。</p>
+
+    <div class="card">
+      <div class="card-title">💡 補足</div>
+      <p style="margin: 4px 0; font-size: 14px;">マネジメントコンソール、AWS SDK、AWS CloudFormation、AWS CDK、AWS SAM でも同様に設定できます。また、Agent Toolkit for AWS を利用すると、Kiro、Claude Code、Codex などのコーディングアシスタント経由での設定も可能です。</p>
+    </div>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3>💼 ビジネス面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>コスト効率の向上</strong>: 呼び出し回数の削減により呼び出し課金とオーバーヘッドが減少</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>再設計不要</strong>: 既存の SQS FIFO + Lambda 構成を変更せず、設定変更のみで対応</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の軽減</strong>: 独自のバッファリング機構やメッセージ集約処理の構築・運用が不要</span></div>
+
+        <h3>🔧 技術面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>スループットの向上</strong>: 1 回の呼び出しで最大 10,000 メッセージを処理</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>順序保証の維持</strong>: FIFO キューの順序保証と重複排除の特性を維持</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟なバッチ制御</strong>: 最大 300 秒のバッチウィンドウでレイテンシーとスループットのバランスを調整</span></div>
+      </div>
+      <div>
+        <h3>🚧 制限事項</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>バッチサイズ 10,000 はプロビジョンドモードの SQS FIFO ESM でのみ利用可能 (デフォルトモードは最大 10)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>バッチサイズ 10 超の場合、1 秒以上のバッチウィンドウが必須</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>1 バッチ内の同一メッセージグループのメッセージは最大 10 件 (多数のグループへの分散が必要)</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>最大同時実行数 (Maximum Concurrency) 設定と併用不可</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>呼び出しペイロード上限 (同期 6 MB) 到達時はバッチサイズ上限前に関数を呼び出し</span></div>
+
+        <h3>⚠️ 考慮すべき点</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>プロビジョンドモードはイベントポーラーに対する追加料金が発生</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>バッチウィンドウを長くするとレイテンシーが増加するため要件に応じた調整が必要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>部分バッチ応答 (ReportBatchItemFailures) の実装が重要</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>at-least-once 配信のため関数コードの冪等性を確保</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>関数のタイムアウト・メモリ設定、キューの可視性タイムアウトの見直しが必要</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">💳 ユースケース 1: 金融取引の順序保証付き一括処理</div>
+      <p><strong>シナリオ</strong>: 証券取引システムで、口座ごとの取引イベントを厳密な順序で処理しつつ、ピーク時には秒間数万件のメッセージを処理する必要がある。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">実装例</span>
+        </div>
+        <pre><code class="language-bash">aws lambda create-event-source-mapping \
+    --function-name process-trades \
+    --event-source-arn arn:aws:sqs:ap-northeast-1:123456789012:trades.fifo \
+    --batch-size 10000 \
+    --maximum-batching-window-in-seconds 5 \
+    --provisioned-poller-config '{"MinimumPollers": 20, "MaximumPollers": 500}' \
+    --function-response-types "ReportBatchItemFailures"</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: 口座 ID をメッセージグループ ID とすることで口座単位の順序を保証しながら、多数の口座のメッセージを 1 回の呼び出しでまとめて処理し、呼び出し回数とコストを削減できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🛒 ユースケース 2: EC サイトの注文処理パイプライン</div>
+      <p><strong>シナリオ</strong>: セール期間中に急増する注文イベントを、注文 ID 単位の順序を維持しながら在庫引当や決済処理に連携する。従来はバッチサイズ 10 の制限により呼び出し回数が膨大になっていた。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Bash</span>
+          <span class="code-title">実装例</span>
+        </div>
+        <pre><code class="language-bash">aws lambda update-event-source-mapping \
+    --uuid a1b2c3d4-5678-90ab-cdef-EXAMPLE11111 \
+    --batch-size 5000 \
+    --maximum-batching-window-in-seconds 10 \
+    --provisioned-poller-config '{"MinimumPollers": 10, "MaximumPollers": 200}'</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: 既存アーキテクチャを変更せずに設定変更のみでスループットを向上でき、セールなどのスパイク時もプロビジョンドモードの高速スケーリングで安定した処理を実現できる。</div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📦 ユースケース 3: 在庫更新イベントの集約処理</div>
+      <p><strong>シナリオ</strong>: 多数の店舗・倉庫から送信される在庫更新イベントを SKU 単位の順序で処理し、データベースへの書き込みをまとめて実行したい。1 件ずつの処理ではデータベース接続のオーバーヘッドが大きい。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">部分バッチ応答を使用したバルク書き込み</span>
+        </div>
+        <pre><code class="language-python">def handler(event, context):
+    updates = []
+    failures = []
+    for record in event["Records"]:
+        try:
+            updates.append(parse_inventory_update(record["body"]))
+        except Exception:
+            failures.append({"itemIdentifier": record["messageId"]})
+    # 最大 10,000 件の更新をまとめてバルク書き込み
+    bulk_write_inventory(updates)
+    return {"batchItemFailures": failures}</code></pre>
+      </div>
+      <div class="effect-box">✅ <strong>効果</strong>: 大きなバッチをバルク書き込みに活用することで、データベースへの接続回数とトランザクション数を削減し、全体の処理効率を大幅に改善できる。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top: 0;">💵 料金</h3>
+        <p style="font-size: 14px;">バッチサイズの拡張自体に追加料金はありませんが、前提となる<span class="highlight">プロビジョンドモードの利用には、イベントポーラーに対する追加料金</span>が発生します。これに加えて、通常の Lambda 料金 (リクエスト数と実行時間) および Amazon SQS の API リクエスト料金が適用されます。</p>
+        <p style="font-size: 14px;">バッチサイズを大きくすると呼び出し回数が減るためリクエスト課金は削減されますが、1 回あたりの実行時間は長くなる可能性があるため、ワークロードに応じた試算を推奨します。詳細は <a class="aws-link" href="https://aws.amazon.com/lambda/pricing/" target="_blank" rel="noopener noreferrer">AWS Lambda 料金ページ</a>を参照してください。</p>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">🌏 利用可能リージョン</h3>
+        <p style="font-size: 14px;">すべての AWS 商用リージョンで利用可能です (<span class="highlight">東京・大阪リージョンを含む</span>)。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">📨 Amazon SQS FIFO キュー</div>
+      <p style="margin: 4px 0; font-size: 14px;">メッセージグループ単位の順序保証と重複排除を提供するキュー。本アップデートのイベントソース。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">⚙️ Lambda イベントソースマッピング プロビジョンドモード</div>
+      <p style="margin: 4px 0; font-size: 14px;">専用イベントポーラーによる高スループット・高速スケーリングを提供。本アップデートの前提機能。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔁 部分バッチ応答 (ReportBatchItemFailures)</div>
+      <p style="margin: 4px 0; font-size: 14px;">バッチ内の失敗メッセージのみを再処理対象にする機能。大きなバッチの処理では特に重要。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🧰 Powertools for AWS Lambda (Batch Processor)</div>
+      <p style="margin: 4px 0; font-size: 14px;">部分バッチ応答のロジック実装を簡素化するユーティリティ。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔀 Amazon EventBridge Pipes</div>
+      <p style="margin: 4px 0; font-size: 14px;">Lambda 以外のターゲットへの配信やエンリッチメントが必要な場合の代替手段。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>🎯 まとめ</h2>
+    <p>
+      SQS FIFO キューと Lambda の組み合わせにおける最大 10 メッセージというバッチサイズの制約が、プロビジョンドモードで最大 10,000 メッセージへと <span class="highlight">1,000 倍に拡張</span>され、順序保証を維持したまま高ボリュームワークロードを少ない呼び出し回数で処理できるようになりました。
+    </p>
+    <p>
+      金融取引や注文処理などの順序保証が必要な大規模ワークロードを運用している場合は、プロビジョンドモードの追加コストと部分バッチ応答の実装を考慮したうえで、バッチサイズとバッチウィンドウの最適化を検討することを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul style="margin: 4px 0;">
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-lambda-10K-batch-size-SQSFIFO/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/aws-lambda-10K-batch-size-SQSFIFO/</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html" target="_blank" rel="noopener noreferrer">ドキュメント: Using Lambda with Amazon SQS</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html#sqs-provisioned-mode" target="_blank" rel="noopener noreferrer">ドキュメント: プロビジョンドモード</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/lambda/pricing/" target="_blank" rel="noopener noreferrer">料金ページ: https://aws.amazon.com/lambda/pricing/</a></li>
+    </ul>
+    <p>作成日: 2026 年 11 月 24 日 | ベースレポート: reports/2026/2026-11-20-aws-lambda-10K-batch-size-SQSFIFO.md</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

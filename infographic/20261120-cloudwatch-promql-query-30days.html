@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon CloudWatch - PromQL クエリウィンドウを 30 日間に拡張</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 200px;
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before/After */
+.before-after {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.before-box, .after-box {
+  flex: 1;
+  min-width: 280px;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF6B4A; }
+.after-box h3 { color: #4CAF50; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+.arrow { color: var(--aws-orange); flex-shrink: 0; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+td code, li code, p code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+ul { margin: 8px 0; padding-left: 22px; }
+li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+@media (max-width: 640px) {
+  h1 { font-size: 24px; }
+  .section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">☁️ Amazon CloudWatch</span>
+    <h1>📊 PromQL クエリウィンドウを 30 日間に拡張</h1>
+    <div class="subtitle">リリース日: 2026 年 11 月 20 日 | OpenTelemetry メトリクスに対する PromQL クエリの最大時間範囲が 7 日間から 30 日間へ</div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>💡 概要</h2>
+    <p>Amazon CloudWatch は、OpenTelemetry メトリクスに対する <span class="highlight">PromQL クエリの時間範囲を 7 日間から 30 日間に拡張</span>しました。1 回のリクエストで 1 か月分のデータを取得でき、月次・週次のトレンド比較や、ローリング 30 日間の SLO 監視・エラーバジェット計算を単一のクエリで実現できます。</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">7 日 → 30 日</div>
+        <div class="stat-label">1 クエリの最大時間範囲が約 4 倍に</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">1 クエリ</div>
+        <div class="stat-label">30 日間 SLO とエラーバジェットを計算</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">標準の CloudWatch 料金のみ</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ Before: 7 日間の制限</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span><code>start</code> と <code>end</code> の間隔が最大 7 日間に制限</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>30 日間 SLO の可用性・エラーバジェット計算には複数クエリの結果結合が必要</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>7 日間ベースラインは単一の繁忙な週末に偏り、キャパシティ予測が不正確になりがち</span></div>
+      </div>
+      <div class="after-box">
+        <h3>✅ After: 30 日間に拡張</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span>1 回のリクエストで最大 30 日間のメトリクスデータを取得</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>月次・週次のトレンド比較を単一ダッシュボードで可視化</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>30 日間ベースラインの CloudWatch アラームを設定可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>SLO 期間全体の可用性と残りのエラーバジェットを 1 クエリで計算</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Ingest["📥 メトリクスの取り込み"]
+        direction LR
+        OTLP["📡 OTLP メトリクス"]
+        Vended["📦 AWS エンリッチド<br/>ベンドメトリクス"]
+        OTLP ~~~ Vended
+    end
+
+    CW[("☁️ Amazon CloudWatch<br/>メトリクスストア")]
+
+    subgraph Query["🔍 PromQL クエリ 最大 30 日間に拡張"]
+        direction LR
+        Studio["🖥️ Query Studio"]
+        API["🔌 Prometheus 互換 API"]
+        Alarm["🔔 CloudWatch アラーム"]
+        Studio ~~~ API ~~~ Alarm
+    end
+
+    subgraph UseCase["📈 活用例"]
+        direction LR
+        SLO["🎯 30 日間 SLO と<br/>エラーバジェット計算"]
+        Trend["📊 月次・週次の<br/>トレンド比較"]
+        Capacity["📐 キャパシティ予測"]
+        SLO ~~~ Trend ~~~ Capacity
+    end
+
+    OTLP --> CW
+    Vended --> CW
+    CW --> Studio
+    CW --> API
+    CW --> Alarm
+    Studio --> Trend
+    API --> Capacity
+    Alarm --> SLO
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+
+    class Ingest,Query,UseCase layer
+    class OTLP,Vended input
+    class CW database
+    class Studio,API,Alarm process
+    class SLO,Trend,Capacity internal
+      </pre>
+    </div>
+    <p style="font-size: 14px;">OTLP で取り込まれたメトリクスに対し、Query Studio、Prometheus 互換 API、CloudWatch アラームの各インターフェイスから最大 30 日間の PromQL クエリを実行できます。</p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>🚀 主要機能</h2>
+    <div class="card">
+      <div class="card-title">📅 クエリウィンドウの 30 日間への拡張</div>
+      <div class="check-item"><span class="arrow">→</span><span>1 回のリクエストにおける <code>start</code> と <code>end</code> の間隔が 7 日間から <span class="highlight">30 日間</span>に拡張</span></div>
+      <div class="check-item"><span class="arrow">→</span><span><code>[5m]</code> のようなレンジセレクタはこの制限にカウントされない</span></div>
+      <div class="check-item"><span class="arrow">→</span><span>ウィンドウはメトリクス保持期間内の任意の位置に設定可能 (直近 30 日間に限定されない)</span></div>
+      <div class="check-item"><span class="arrow">→</span><span>30 日間を超える期間は、連続した複数リクエストの結果を結合して対応</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🔔 30 日間ベースラインによるアラーム</div>
+      <div class="check-item"><span class="arrow">→</span><span>30 日間のベースラインを使用した CloudWatch アラームを設定可能</span></div>
+      <div class="check-item"><span class="arrow">→</span><span>SLO 期間全体のエラーバジェット消費を監視し、枯渇予測時に通知</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📈 長期トレンドの可視化</div>
+      <div class="check-item"><span class="arrow">→</span><span>月次比較 month-over-month や週次比較 week-over-week を単一ダッシュボードで表示</span></div>
+      <div class="check-item"><span class="arrow">→</span><span>1 か月分の履歴に基づき、繁忙期に偏らない精度の高いキャパシティ予測が可能</span></div>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>⚙️ 技術仕様</h2>
+    <h3>PromQL クエリの制限事項</h3>
+    <table>
+      <tr><th>項目</th><th>値</th><th>補足</th></tr>
+      <tr><td>リクエストあたりの最大時間範囲</td><td><strong style="color: var(--aws-orange);">30 日間</strong></td><td>今回 7 日間から拡張。<code>start</code> と <code>end</code> の間隔に適用</td></tr>
+      <tr><td>クエリリクエストの最大 TPS</td><td>300/アカウント</td><td><code>/query</code>、<code>/query_range</code> が対象</td></tr>
+      <tr><td>ディスカバリリクエストの最大 TPS</td><td>10/アカウント</td><td><code>/series</code>、<code>/labels</code>、<code>/label_values</code> が対象</td></tr>
+      <tr><td>同時実行クエリ数</td><td>30/アカウント</td><td>超過時は 429 エラー</td></tr>
+      <tr><td>クエリあたりの最大返却系列数</td><td>500</td><td>超過分は切り捨て</td></tr>
+      <tr><td>24 時間あたりの最大スキャン系列数</td><td>100,000</td><td></td></tr>
+      <tr><td>24 時間あたりの最大スキャンサンプル数</td><td>300,000,000</td><td></td></tr>
+      <tr><td>クエリ実行タイムアウト</td><td>20 秒</td><td>キュー待ちとストレージ取得時間を除く</td></tr>
+    </table>
+    <p style="font-size: 14px;">クエリウィンドウ内のデータ解像度はデータの経過時間に依存し、CloudWatch のメトリクス保持ポリシーに従って古いデータポイントは集約されます。</p>
+
+    <h3>IAM 権限</h3>
+    <p style="font-size: 14px;">PromQL クエリの実行には <code>cloudwatch:GetMetricData</code> と <code>cloudwatch:ListMetrics</code> の両方の権限が必要です。</p>
+    <table>
+      <tr><th>API エンドポイントパス</th><th>HTTP メソッド</th><th>必要なアクション</th></tr>
+      <tr><td><code>/api/v1/query</code></td><td>GET、POST</td><td><code>GetMetricData</code>、<code>ListMetrics</code></td></tr>
+      <tr><td><code>/api/v1/query_range</code></td><td>GET、POST</td><td><code>GetMetricData</code>、<code>ListMetrics</code></td></tr>
+      <tr><td><code>/api/v1/series</code></td><td>GET、POST</td><td><code>ListMetrics</code></td></tr>
+      <tr><td><code>/api/v1/labels</code></td><td>GET、POST</td><td><code>ListMetrics</code></td></tr>
+      <tr><td><code>/api/v1/label/{label_name}/values</code></td><td>GET</td><td><code>ListMetrics</code></td></tr>
+    </table>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">IAM ポリシー例</span>
+      </div>
+      <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:GetMetricData",
+        "cloudwatch:ListMetrics"
+      ],
+      "Resource": "*"
+    }
+  ]
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🔧 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>PromQL クエリがサポートされているリージョンで CloudWatch を利用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>OTLP 経由でメトリクスを取り込んでいる、または AWS エンリッチドベンドメトリクスを利用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><code>cloudwatch:GetMetricData</code> と <code>cloudwatch:ListMetrics</code> の IAM 権限が付与されていること</span></div>
+
+    <div class="flow-diagram">
+      <div class="flow-step">🖥️ ステップ 1<br/>Query Studio で<br/>30 日間クエリ</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔌 ステップ 2<br/>Prometheus 互換 API で<br/>レンジクエリ</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔔 ステップ 3<br/>30 日間ベースラインの<br/>アラーム作成</div>
+    </div>
+
+    <h3>ステップ 1: Query Studio で 30 日間のクエリを実行する</h3>
+    <p style="font-size: 14px;">CloudWatch コンソールの Query Studio で時間範囲として過去 30 日間を選択し、PromQL クエリを実行します。</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">PromQL</span>
+        <span class="code-title">リクエストレートの計算</span>
+      </div>
+      <pre><code class="language-text">sum(rate({"http.server.requests", "@resource.service.name"="myservice"}[5m]))</code></pre>
+    </div>
+
+    <h3>ステップ 2: Prometheus 互換 API でレンジクエリを実行する</h3>
+    <p style="font-size: 14px;">Grafana などの外部ツールやスクリプトからは <code>/api/v1/query_range</code> エンドポイントを使用します。</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">30 日間のレンジクエリ</span>
+      </div>
+      <pre><code class="language-bash"># start と end の間隔を最大 30 日間まで指定できる
+POST /api/v1/query_range
+  query=sum(rate({"http.server.requests"}[5m]))
+  start=2026-10-21T00:00:00Z
+  end=2026-11-20T00:00:00Z
+  step=1h</code></pre>
+    </div>
+
+    <h3>ステップ 3: 30 日間ベースラインのアラームを作成する</h3>
+    <p style="font-size: 14px;">CloudWatch アラームの作成時に PromQL クエリをデータソースとして指定し、30 日間ウィンドウに基づく条件を設定します。SLO のエラーバジェット消費率をしきい値とすることで、バジェット枯渇の予兆を検知できます。</p>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">1. 30 日間 SLO のエラーバジェット監視</div>
+      <p style="font-size: 14px; margin: 6px 0;">ローリング 30 日間で可用性 99.9% の SLO を定義しているサービスで、SLO 期間全体の可用性と残りのエラーバジェットを継続的に監視。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">PromQL</span><span class="code-title">過去 30 日間の可用性を 1 クエリで計算</span></div>
+        <pre><code class="language-text">1 - (
+  sum(rate({"http.server.errors", "@resource.service.name"="myservice"}[5m]))
+  /
+  sum(rate({"http.server.requests", "@resource.service.name"="myservice"}[5m]))
+)</code></pre>
+      </div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>効果</strong>: SLO 期間全体を単一クエリでカバーし、エラーバジェット枯渇の予測をアラームで早期検知</span></div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">2. 月次・週次のトレンド比較ダッシュボード</div>
+      <p style="font-size: 14px; margin: 6px 0;">リクエスト数やレイテンシーの前月比・前週比トレンドを経営層向けダッシュボードで可視化。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">PromQL</span><span class="code-title">30 日間のリクエストレート推移を 1 時間解像度で取得</span></div>
+        <pre><code class="language-text">sum by ("@resource.service.name") (
+  rate({"http.server.requests"}[1h])
+)</code></pre>
+      </div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>効果</strong>: 複数クエリの結合が必要だった月次トレンドを、単一のクエリとダッシュボードで表示</span></div>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">3. 30 日間ベースラインによるキャパシティ予測</div>
+      <p style="font-size: 14px; margin: 6px 0;">ピークトラフィックに備えたキャパシティ計画のため、直近 1 か月の利用傾向からリソース需要を予測。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">PromQL</span><span class="code-title">同時アクティブリクエスト数の最大値を日次で把握</span></div>
+        <pre><code class="language-text">max_over_time({"http.server.active_requests", "@resource.service.name"="myservice"}[1d])</code></pre>
+      </div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>効果</strong>: 単一の繁忙な週末に偏っていた予測を 1 か月分のデータで平準化し、精度の高い計画を立案</span></div>
+    </div>
+  </div>
+
+  <!-- メリット / 制約 -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="before-after">
+      <div class="after-box">
+        <h3>✅ メリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>SLO 運用の効率化</strong>: 30 日間 SLO の可用性とエラーバジェットを 1 クエリで計算し、レポーティングの運用負荷を削減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: 本機能拡張に追加料金は発生しない</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>意思決定の精度向上</strong>: 1 か月分のデータに基づくトレンド分析でキャパシティ計画の判断材料が充実</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>クエリの簡素化</strong>: 7 日間ごとの分割・結合が不要になり単一リクエストに統合</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ウィンドウ位置の柔軟性</strong>: 保持期間内の任意の位置に設定でき、過去の特定の 30 日間も分析可能</span></div>
+      </div>
+      <div class="before-box">
+        <h3>⚠️ 制約・考慮点</h3>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>30 日間を超える期間は複数リクエストに分割して結果を結合する必要がある</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>最大返却系列数 500、24 時間あたりのスキャン上限 (系列 100,000 / サンプル 3 億) は引き続き適用</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>クエリ実行タイムアウトは 20 秒。広い時間範囲 x 多数の系列の重いクエリはタイムアウトの可能性</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>古い期間のデータは保持ポリシーにより集約され、解像度が低下する</span></div>
+        <div class="check-item"><span class="warn-icon">⚠</span><span>対象は OTLP 取り込みメトリクスと AWS エンリッチドベンドメトリクスのみ</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>今回のクエリウィンドウ拡張に<span class="highlight">追加料金はありません</span>。PromQL クエリの利用自体には、CloudWatch の標準的な料金体系が適用されます。詳細は <a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">CloudWatch の料金ページ</a>を参照してください。</p>
+  </div>
+
+  <!-- リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p style="font-size: 14px;">CloudWatch で OpenTelemetry メトリクスに対する PromQL クエリがサポートされているすべての AWS リージョンで利用できます (<span class="highlight">東京・大阪リージョンを含む</span>)。</p>
+    <table>
+      <tr><th>地域</th><th>リージョン</th></tr>
+      <tr><td>米国</td><td>us-east-1、us-east-2、us-west-1、us-west-2</td></tr>
+      <tr><td>カナダ</td><td>ca-central-1、ca-west-1</td></tr>
+      <tr><td>南米</td><td>sa-east-1</td></tr>
+      <tr><td>欧州</td><td>eu-west-1、eu-west-2、eu-west-3、eu-central-1、eu-central-2、eu-north-1、eu-south-1、eu-south-2</td></tr>
+      <tr><td>アジアパシフィック</td><td>ap-northeast-1 (東京)、ap-northeast-2、ap-northeast-3 (大阪)、ap-south-1、ap-south-2、ap-east-1、ap-east-2、ap-southeast-1、ap-southeast-2、ap-southeast-3、ap-southeast-4、ap-southeast-5、ap-southeast-6、ap-southeast-7</td></tr>
+      <tr><td>アフリカ</td><td>af-south-1</td></tr>
+      <tr><td>メキシコ</td><td>mx-central-1</td></tr>
+    </table>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="card">
+      <div class="card-title">🖥️ CloudWatch Query Studio</div>
+      <p style="margin: 0; font-size: 14px;">PromQL クエリをインタラクティブに実行できるコンソール上のクエリ環境。今回の拡張により 30 日間の分析が可能に。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔔 CloudWatch アラーム</div>
+      <p style="margin: 0; font-size: 14px;">PromQL クエリをデータソースとしたアラームを作成でき、30 日間ベースラインの監視に活用可能。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📡 Amazon Managed Service for Prometheus</div>
+      <p style="margin: 0; font-size: 14px;">Prometheus 互換のフルマネージドモニタリングサービス。Prometheus ネイティブなワークロードにはこちらも選択肢。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 Amazon Managed Grafana</div>
+      <p style="margin: 0; font-size: 14px;">Prometheus 互換 API 経由で CloudWatch の PromQL クエリ結果を可視化可能。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <p>CloudWatch の PromQL クエリウィンドウが <span class="highlight">7 日間から 30 日間に拡張</span>され、ローリング 30 日間の SLO 監視やエラーバジェット計算、月次トレンド分析を単一のクエリで実現できるようになりました。追加料金なしで利用できるため、OpenTelemetry メトリクスを CloudWatch に取り込んでいるチームは、SLO ダッシュボードやキャパシティ予測のクエリを 30 日間ウィンドウへ見直すことを推奨します。</p>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul style="margin: 4px 0; padding-left: 20px;">
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/cloudwatch-promql-query-30days/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/cloudwatch-promql-query-30days/</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-PromQL.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Query metrics with PromQL</a></li>
+      <li><a href="https://aws.amazon.com/cloudwatch/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-11-20) を基に作成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
