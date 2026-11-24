@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Lambda - durable functions の実行の一時停止・再開・削除サポート</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 8px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    /* Before / After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.5);
+    }
+
+    .before-box h3, .after-box h3 {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 { color: #FF6B6B; }
+    .after-box h3 { color: #6BCB77; }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: #6BCB77; flex-shrink: 0; }
+    .cross-icon { color: #FF6B6B; flex-shrink: 0; }
+
+    /* Feature cards */
+    .feature-card {
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 4px solid var(--aws-orange);
+      border-radius: 0 8px 8px 0;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .feature-card h3 {
+      margin: 0 0 8px 0;
+      color: var(--aws-smile-orange);
+      font-size: 17px;
+    }
+
+    .feature-card ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .feature-card li { margin: 4px 0; }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0 8px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin: 12px 0;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      vertical-align: top;
+    }
+
+    tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+    code.inline {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code blocks */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* Use cases */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .usecase h3 {
+      margin: 0 0 8px 0;
+      color: var(--aws-smile-orange);
+      font-size: 16px;
+    }
+
+    .usecase p { margin: 6px 0; font-size: 14px; }
+
+    .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    .effect strong { color: #6BCB77; }
+
+    /* Two-column grid */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .merit-box {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .merit-box h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      color: var(--aws-teal);
+    }
+
+    .merit-box ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .merit-box li { margin: 6px 0; }
+
+    /* Warning / caution */
+    .caution-box {
+      background: rgba(209, 50, 18, 0.08);
+      border: 1px solid rgba(209, 50, 18, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .caution-box h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      color: #FF8A73;
+    }
+
+    .caution-box ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+
+    .caution-box li { margin: 6px 0; }
+
+    /* Pricing */
+    .pricing-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    .pricing-icon { font-size: 20px; flex-shrink: 0; }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    .related-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(0, 161, 201, 0.35);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    .related-card strong { color: var(--aws-teal); }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    footer li { margin: 4px 0; }
+
+    .summary-box {
+      background: rgba(255, 153, 0, 0.1);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    @media (max-width: 700px) {
+      .before-after, .grid-2 { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+      table { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <span class="service-badge">⚡ AWS Lambda</span>
+      <h1>durable functions の実行の一時停止・再開・削除サポート</h1>
+      <div class="subtitle">📅 リリース日: 2026 年 11 月 17 日 | 機能: durable execution の Pause / Resume / Delete</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        AWS Lambda durable functions で、実行中の durable execution を<span class="highlight">一時停止 (Pause)</span> し、進捗を失うことなく後から<span class="highlight">再開 (Resume)</span> できるようになりました。再開した実行は、最後のチェックポイントから同じ関数バージョン上で処理を継続します。デフォルトでは、一時停止中の時間は実行タイムアウトにカウントされません。また、保持期間が終了する前に、完了した実行のデータを<span class="highlight">削除 (Delete)</span> できるようになりました。
+      </p>
+      <p>
+        ダウンストリームサービスの劣化やモデルプロバイダーのレート制限到達時に、リトライを使い果たす前に実行を保留して問題解決後に再開する運用や、個人データを含む実行の早期削除などのコンプライアンス対応が可能になります。Lambda コンソール、AWS CLI、AWS SDK から利用でき、durable functions が利用可能なすべての AWS リージョンで提供されます。
+      </p>
+
+      <div class="flow-diagram">
+        <div class="flow-step">⏸️ Pause<br/>進捗を保持して一時停止</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🔧 障害対応<br/>タイムアウトは停止</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">▶️ Resume<br/>チェックポイントから再開</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🗑️ Delete<br/>完了後にデータ削除</div>
+      </div>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>❌ アップデート前の課題</h3>
+          <div class="check-item"><span class="cross-icon">✗</span><span>障害時に実行を止める手段が Stop のみで再開できず、進捗を失うかリトライが尽きるまで放置するしかなかった</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>障害対応や調査のために実行を安全に保留する手段がなかった</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>完了した実行のデータは保持期間終了まで残り続け、個人データを含むペイロードを早期に削除できなかった</span></div>
+        </div>
+        <div class="after-box">
+          <h3>✅ アップデート後の改善</h3>
+          <div class="check-item"><span class="check-icon">✓</span><span>実行を一時停止し、最後のチェックポイントから同じ関数バージョンで再開できる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>デフォルトで一時停止中はタイムアウトが停止するため、長時間の障害対応でも期限を気にせず保留できる</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>成功・失敗・停止・タイムアウトした実行の履歴、チェックポイント、入出力ペイロードを保持期間前に削除できる</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ ステータス遷移図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+stateDiagram-v2
+    [*] --> RUNNING: 実行開始
+    RUNNING --> PAUSING: PauseDurableExecution 関数実行中
+    RUNNING --> PAUSED: PauseDurableExecution 待機中
+    PAUSING --> PAUSED: 次のチェックポイント保存
+    PAUSED --> RUNNING: ResumeDurableExecution
+    RUNNING --> SUCCEEDED: 正常終了
+    RUNNING --> FAILED: 失敗
+    PAUSED --> STOPPED: StopDurableExecution
+    SUCCEEDED --> DELETING: DeleteDurableExecution
+    FAILED --> DELETING: DeleteDurableExecution
+    STOPPED --> DELETING: DeleteDurableExecution
+    DELETING --> [*]: データ完全削除
+        </pre>
+      </div>
+      <p style="font-size: 14px;">
+        今回のアップデートで <span class="highlight">PAUSING</span>、<span class="highlight">PAUSED</span>、<span class="highlight">DELETING</span> の 3 つのステータスが追加され、一時停止からの再開と、終了状態 (SUCCEEDED、FAILED、STOPPED、TIMED_OUT) からの削除が可能になりました。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>🚀 主要機能</h2>
+
+      <div class="feature-card">
+        <h3>⏸️ 1. 実行の一時停止 PauseDurableExecution</h3>
+        <ul>
+          <li>実行 ARN を指定して 1 件ずつ一時停止し、理由 (Reason) を実行履歴に記録できる</li>
+          <li>関数が実行中でない場合 (wait、コールバック、リトライ遅延、子実行の待機中) は即座に PAUSED になる</li>
+          <li>関数が実行中の場合は PAUSING となり、次のチェックポイント保存後に PAUSED へ遷移する</li>
+          <li>一時停止中も待機時間の経過、コールバック完了、子実行の継続などの保留中の操作は進行し、再開時にまとめて処理される</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>▶️ 2. 実行の再開 ResumeDurableExecution</h3>
+        <ul>
+          <li>PAUSED または PAUSING 状態の実行を再開でき、最後のチェックポイントから同じ関数バージョンで継続する</li>
+          <li>デフォルト (<code class="inline">ExecutionTimeoutPaused=true</code>) では一時停止中にタイムアウトが停止し、再開時に一時停止分だけ延長される (開始から 366 日が上限)</li>
+          <li><code class="inline">--no-execution-timeout-paused</code> を指定すると、一時停止中もタイムアウトが進行する</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>🗑️ 3. 実行の削除 DeleteDurableExecution</h3>
+        <ul>
+          <li>SUCCEEDED、FAILED、STOPPED、TIMED_OUT の終了状態に達した実行を保持期間の終了前に削除できる</li>
+          <li>履歴、チェックポイントデータ、入出力ペイロードを含むすべての実行データが完全に削除される</li>
+          <li>削除は非同期で行われ、削除中は DELETING ステータスとなり、完了後は <code class="inline">ResourceNotFoundException</code> が返る</li>
+          <li>削除後は同じ実行名を再利用でき、新しい実行を開始できる</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
+        <h3>📊 4. モニタリングの拡張</h3>
+        <ul>
+          <li><code class="inline">GetDurableExecutionHistory</code> に <code class="inline">ExecutionPaused</code> / <code class="inline">ExecutionResumed</code> イベントが追加され、一時停止・再開の履歴を確認できる</li>
+          <li><code class="inline">ListDurableExecutionsByFunction</code> のステータスフィルタに PAUSED、PAUSING、DELETING が追加された</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+      <table>
+        <tr><th style="width: 30%;">項目</th><th>詳細</th></tr>
+        <tr><td>一時停止対象</td><td>RUNNING 状態の実行 (1 リクエストにつき 1 実行)</td></tr>
+        <tr><td>再開対象</td><td>PAUSED または PAUSING 状態の実行</td></tr>
+        <tr><td>削除対象</td><td>SUCCEEDED、FAILED、STOPPED、TIMED_OUT 状態の実行</td></tr>
+        <tr><td>タイムアウト動作</td><td>デフォルトで一時停止中は実行タイムアウトが停止 (上限は開始から 366 日)</td></tr>
+        <tr><td>一時停止中の動作</td><td>wait の経過、コールバック完了、子実行、リトライ遅延は継続して進行</td></tr>
+        <tr><td>削除されるデータ</td><td>実行履歴、チェックポイントデータ、入出力ペイロード</td></tr>
+        <tr><td>削除されないデータ</td><td>CloudWatch Logs、CloudTrail 記録、CloudWatch メトリクス、子実行のデータ</td></tr>
+        <tr><td>必要な IAM 権限</td><td><code class="inline">lambda:PauseDurableExecution</code>、<code class="inline">lambda:ResumeDurableExecution</code>、<code class="inline">lambda:DeleteDurableExecution</code></td></tr>
+        <tr><td>KMS 要件</td><td>カスタマーマネージドキー使用時、一時停止・再開には <code class="inline">kms:Decrypt</code> が必要 (削除には不要)</td></tr>
+      </table>
+
+      <h3>📦 対応 SDK バージョン</h3>
+      <p style="font-size: 14px;">実行中の呼び出しを一時停止するには、以下のバージョン以降の AWS Durable Execution SDK が必要です。</p>
+      <table>
+        <tr><th>言語</th><th>パッケージ</th><th>最低バージョン</th></tr>
+        <tr><td>JavaScript / TypeScript</td><td><code class="inline">@aws/durable-execution-sdk-js</code></td><td>2.5.0</td></tr>
+        <tr><td>Python</td><td><code class="inline">aws-durable-execution-sdk-python</code></td><td>2.1.0</td></tr>
+        <tr><td>Java</td><td><code class="inline">aws-durable-execution-sdk-java</code></td><td>2.3.0</td></tr>
+        <tr><td>Go</td><td><code class="inline">github.com/aws/aws-durable-execution-sdk-go</code></td><td>1.0.0</td></tr>
+        <tr><td>C# (.NET)</td><td><code class="inline">Amazon.Lambda.DurableExecution</code></td><td>2.2.0</td></tr>
+      </table>
+
+      <h3>📝 API 変更履歴</h3>
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/11/17</td>
+          <td><a href="https://awsapichanges.com/archive/changes/a370bc-lambda.html" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Lambda</a></td>
+          <td>3 new 3 updated api methods - PauseDurableExecution、ResumeDurableExecution、DeleteDurableExecution の新規追加。GetDurableExecution、GetDurableExecutionHistory、ListDurableExecutionsByFunction に PAUSED / PAUSING / DELETING ステータスと関連イベントを追加</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>⚙️ 設定方法</h2>
+
+      <h3>✅ 前提条件</h3>
+      <ul style="font-size: 14px;">
+        <li>AWS Lambda durable functions を使用する Lambda 関数が作成済みであること</li>
+        <li>対象の durable execution ARN に対する <code class="inline">lambda:PauseDurableExecution</code>、<code class="inline">lambda:ResumeDurableExecution</code>、<code class="inline">lambda:DeleteDurableExecution</code> 権限があること</li>
+        <li>カスタマーマネージド KMS キーを使用している場合、一時停止・再開には <code class="inline">kms:Decrypt</code> 権限があること</li>
+      </ul>
+
+      <h3>ステップ 1: 実行を一時停止する</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI - 一時停止</span></div>
+        <pre><code class="language-bash">aws lambda pause-durable-execution \
+  --durable-execution-arn arn:aws:lambda:us-east-1:123456789012:function:myDurableFunction:1/durable-execution/my-execution-name/my-execution-id \
+  --reason "Payment service outage"</code></pre>
+      </div>
+      <p style="font-size: 14px;"><code class="inline">--reason</code> は任意で、実行履歴に記録されます。デフォルトでは実行タイムアウトも一時停止します。タイムアウトを進行させたい場合は <code class="inline">--no-execution-timeout-paused</code> を追加します。</p>
+
+      <h3>ステップ 2: ステータスを確認する</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI - ステータス確認</span></div>
+        <pre><code class="language-bash">aws lambda get-durable-execution \
+  --durable-execution-arn arn:aws:lambda:us-east-1:123456789012:function:myDurableFunction:1/durable-execution/my-execution-name/my-execution-id</code></pre>
+      </div>
+      <p style="font-size: 14px;">PAUSING または PAUSED の間は、レスポンスに <code class="inline">PauseRequestTimestamp</code>、<code class="inline">Reason</code>、<code class="inline">ExecutionTimeoutPaused</code> を含む <code class="inline">PauseDetails</code> が返されます。</p>
+
+      <h3>ステップ 3: 実行を再開する</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI - 再開</span></div>
+        <pre><code class="language-bash">aws lambda resume-durable-execution \
+  --durable-execution-arn arn:aws:lambda:us-east-1:123456789012:function:myDurableFunction:1/durable-execution/my-execution-name/my-execution-id \
+  --reason "Payment service recovered"</code></pre>
+      </div>
+      <p style="font-size: 14px;">ステータスが RUNNING に戻り、最後のチェックポイントから処理を継続します。一時停止中に完了した操作がある場合、再開時の呼び出しでまとめて処理されます。</p>
+
+      <h3>ステップ 4: 完了した実行を削除する</h3>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI - 削除</span></div>
+        <pre><code class="language-bash">aws lambda delete-durable-execution \
+  --durable-execution-arn arn:aws:lambda:us-east-1:123456789012:function:myDurableFunction:1/durable-execution/my-execution-name/my-execution-id</code></pre>
+      </div>
+      <p style="font-size: 14px;">レスポンスには削除リクエストを受け付けた時刻 (<code class="inline">DeletionRequestTimestamp</code>) が返されます。削除は非同期で行われ、完了後は <code class="inline">get-durable-execution</code> が <code class="inline">ResourceNotFoundException</code> を返します。</p>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <div class="grid-2">
+        <div class="merit-box">
+          <h3>💼 ビジネス面</h3>
+          <ul>
+            <li><strong>障害時の損失防止</strong>: 処理進捗を失わずにワークフローを保留でき、長時間ワークフローのやり直しコストを削減</li>
+            <li><strong>コンプライアンス対応</strong>: 個人データを含む実行データを保持期間の終了を待たずに削除でき、GDPR などのデータ削除要件に対応しやすい</li>
+            <li><strong>運用コストの最小化</strong>: 一時停止中は関数が呼び出されないため、呼び出し課金が発生しない</li>
+          </ul>
+        </div>
+        <div class="merit-box">
+          <h3>🔧 技術面</h3>
+          <ul>
+            <li><strong>チェックポイントからの正確な再開</strong>: 同じ関数バージョンで継続するため、デプロイ中の予期しないバージョン混在を回避</li>
+            <li><strong>柔軟なタイムアウト制御</strong>: <code class="inline">ExecutionTimeoutPaused</code> により一時停止中のタイムアウトの扱いを選択可能</li>
+            <li><strong>可観測性の確保</strong>: 一時停止・再開イベントは理由付きで履歴に記録され、CloudWatch メトリクスや EventBridge でも監視できる</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <div class="caution-box">
+        <h3>🚧 制限事項</h3>
+        <ul>
+          <li>一時停止・削除は 1 リクエストにつき 1 実行が対象。複数の実行をまとめて操作するには <code class="inline">ListDurableExecutionsByFunction</code> で一覧を取得して個別に API を呼び出す必要がある</li>
+          <li>一時停止しても新しい実行の開始は防げない。新規実行も止めたい場合はイベントソースマッピングの無効化などが別途必要</li>
+          <li>実行タイムアウトを一時停止しても、実行開始から 366 日が経過するとタイムアウトする</li>
+          <li>削除できるのは終了状態の実行のみ。実行中や一時停止中の実行は先に <code class="inline">StopDurableExecution</code> で停止する必要がある</li>
+          <li>親実行を一時停止・削除しても、子実行は一時停止・削除されない</li>
+        </ul>
+      </div>
+      <div class="caution-box">
+        <h3>🤔 考慮すべき点</h3>
+        <ul>
+          <li>実行を削除しても保存データの課金は減らない。保持期間全体に対して課金されるため、ストレージコスト削減には保持期間自体の短縮が必要</li>
+          <li>一時停止中の実行は実行中の durable execution のクォータにカウントされ、保存データの課金も継続する</li>
+          <li>削除は永続的であり、削除後は実行の詳細、履歴、結果を取得できない。CloudTrail データイベントでの削除操作の監査を推奨</li>
+          <li>一時停止中も wait の経過やコールバックの完了・タイムアウトは進行するため、再開時の処理内容に注意が必要</li>
+          <li>実行中の呼び出しを一時停止するには、対応バージョン以降の AWS Durable Execution SDK が必要</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h3>💳 1. ダウンストリームサービス障害時のワークフロー保全</h3>
+        <p><strong>シナリオ</strong>: 決済サービスの障害により、注文処理ワークフローのリトライが失敗し続けている。リトライを使い果たして実行が失敗する前に、影響を受ける実行を保留したい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">障害対応の流れ</span></div>
+          <pre><code class="language-bash"># 実行中の実行を一覧表示
+aws lambda list-durable-executions-by-function \
+  --function-name order-workflow \
+  --statuses RUNNING
+
+# 影響を受ける実行を一時停止
+aws lambda pause-durable-execution \
+  --durable-execution-arn &lt;execution-arn&gt; \
+  --reason "Payment service outage"
+
+# 障害復旧後に再開
+aws lambda resume-durable-execution \
+  --durable-execution-arn &lt;execution-arn&gt; \
+  --reason "Payment service recovered"</code></pre>
+        </div>
+        <div class="effect"><strong>効果</strong>: それまでの処理進捗を失わずに障害をやり過ごし、復旧後に最後のチェックポイントから処理を再開できる。</div>
+      </div>
+
+      <div class="usecase">
+        <h3>🤖 2. AI ワークフローにおけるレート制限対応</h3>
+        <p><strong>シナリオ</strong>: AI エージェントワークフローで、モデルプロバイダーのレート制限に到達した。制限が解除されるまで実行を保留し、無駄なリトライを避けたい。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">レート制限時の一時停止</span></div>
+          <pre><code class="language-bash">aws lambda pause-durable-execution \
+  --durable-execution-arn &lt;execution-arn&gt; \
+  --reason "Model provider rate limit reached"</code></pre>
+        </div>
+        <div class="effect"><strong>効果</strong>: デフォルトで実行タイムアウトも一時停止するため、レート制限の解除を待つ時間がワークフローの実行期限を圧迫しない。</div>
+      </div>
+
+      <div class="usecase">
+        <h3>🔒 3. 個人データを含む実行データの早期削除</h3>
+        <p><strong>シナリオ</strong>: 個人データを入力に含む実行が完了した。コンプライアンス要件により、保持期間の終了を待たずにデータを削除する必要がある。</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実行データの削除と確認</span></div>
+          <pre><code class="language-bash"># 完了した実行を削除
+aws lambda delete-durable-execution \
+  --durable-execution-arn &lt;execution-arn&gt;
+
+# 削除完了の確認 (ResourceNotFoundException が返れば削除完了)
+aws lambda get-durable-execution \
+  --durable-execution-arn &lt;execution-arn&gt;</code></pre>
+        </div>
+        <div class="effect"><strong>効果</strong>: 実行履歴、チェックポイントデータ、入出力ペイロードが完全に削除され、データ削除要件に対応できる。バグが残した失敗実行のクリーンアップにも利用できる。</div>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>一時停止・再開・削除の API 呼び出し自体に<span class="highlight">追加料金はありません</span>。durable functions の既存の料金体系が適用されます。</p>
+      <div class="pricing-item"><span class="pricing-icon">✅</span><span>一時停止中は関数が呼び出されないため、呼び出しに伴う課金は発生しない</span></div>
+      <div class="pricing-item"><span class="pricing-icon">⚠️</span><span>一時停止中の実行は保存データの課金が継続する</span></div>
+      <div class="pricing-item"><span class="pricing-icon">⚠️</span><span>実行を削除しても保存データの課金は減らない (保持期間全体に対して課金されるため、コスト削減には保持期間の短縮が有効)</span></div>
+      <p style="font-size: 14px;">詳細は <a href="https://aws.amazon.com/lambda/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Lambda 料金ページ</a> を参照してください。</p>
+    </div>
+
+    <!-- 利用可能リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>AWS Lambda durable functions が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。</p>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="related-card"><strong>⚡ AWS Lambda durable functions</strong>: 本アップデートの対象機能。チェックポイントと自動リトライを備えた最長 1 年間のマルチステップワークフローを実行できる</div>
+      <div class="related-card"><strong>🪜 AWS Step Functions</strong>: 同様に長時間ワークフローを扱うサービス。実行の停止や Redrive などの運用機能があり、ワークフロー管理の選択肢となる</div>
+      <div class="related-card"><strong>🔍 AWS CloudTrail</strong>: DeleteDurableExecution の呼び出しをデータイベントとして記録でき、削除操作の監査に利用できる</div>
+      <div class="related-card"><strong>📡 Amazon EventBridge</strong>: durable execution のステータス変更イベントを受信して、一時停止・再開の監視を自動化できる (削除はイベント発行対象外)</div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section summary-box">
+      <h2>📝 まとめ</h2>
+      <p>
+        今回のアップデートにより、Lambda durable functions の長時間ワークフローに対する<span class="highlight">運用コントロールが大幅に強化</span>されました。障害時には進捗を失わずに実行を保留でき、完了後は保持期間を待たずにデータを削除できるため、本番運用とコンプライアンス対応の両面で実用性が向上しています。
+      </p>
+      <div class="check-item"><span class="check-icon">✓</span><span>障害対応 Runbook への一時停止・再開手順の組み込みを検討</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>個人データを扱うワークフローにおける削除運用の整備を検討</span></div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/lambda-durable-pause-delete/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+        <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-managing-executions.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Managing durable executions</a></li>
+        <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-pause-resume.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Pausing and resuming durable executions</a></li>
+        <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-delete.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Deleting durable executions</a></li>
+        <li><a href="https://aws.amazon.com/lambda/lambda-durable-functions/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Lambda durable functions 製品ページ</a></li>
+        <li><a href="https://aws.amazon.com/lambda/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ</a></li>
+      </ul>
+      <p>このインフォグラフィックは AWS News レポート (2026-11-17) を基に生成されました。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

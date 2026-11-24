@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Split Cost Allocation Data が Amazon S3 に対応 - プレフィックス単位のコスト配分</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  background: linear-gradient(135deg, var(--aws-dark-squid) 0%, #2d3b4e 100%);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 12px;
+  padding: 28px;
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-right: 8px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  color: var(--aws-white);
+  margin: 16px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3 { color: #FF8A73; margin-top: 0; }
+.after-box h3 { color: #6BCB4F; margin-top: 0; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: var(--aws-green); font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: var(--aws-red); font-size: 16px; flex-shrink: 0; }
+
+/* 機能カード */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+
+.feature-card h3 {
+  margin: 0 0 6px 0;
+  font-size: 17px;
+  color: var(--aws-smile-orange);
+}
+
+.feature-card p, .feature-card ul {
+  margin: 4px 0;
+  font-size: 15px;
+}
+
+ul { padding-left: 22px; }
+li { margin: 6px 0; }
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th, td {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+td code, li code, p code {
+  background: rgba(255, 153, 0, 0.12);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.92em;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-caption {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* ステップ */
+.step-card {
+  display: flex;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-content h3 { margin: 0 0 6px 0; font-size: 16px; }
+.step-content p { margin: 0; font-size: 14px; }
+
+/* ユースケース */
+.usecase-card {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.usecase-card h3 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+}
+
+.usecase-label {
+  font-weight: 600;
+  color: var(--aws-white);
+}
+
+.usecase-effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* タグチップ */
+.tag-chip {
+  display: inline-block;
+  background: rgba(140, 79, 255, 0.18);
+  border: 1px solid rgba(140, 79, 255, 0.6);
+  color: #C4A8FF;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin: 3px 4px 3px 0;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.merit-box {
+  background: rgba(0, 161, 201, 0.08);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.merit-box h3 { margin-top: 0; color: var(--aws-teal); font-size: 16px; }
+.merit-box ul { font-size: 14px; margin: 0; }
+
+.caution-box {
+  background: rgba(255, 153, 0, 0.07);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.caution-box h3 { margin-top: 0; color: var(--aws-smile-orange); font-size: 16px; }
+.caution-box ul { font-size: 14px; margin: 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12) 0%, rgba(255, 153, 0, 0.04) 100%);
+  border: 1px solid rgba(255, 153, 0, 0.5);
+  border-radius: 8px;
+  padding: 18px;
+  font-size: 15px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { padding-left: 20px; margin: 8px 0; }
+
+@media (max-width: 720px) {
+  .before-after, .two-col { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS Billing and Cost Management</span>
+      <span class="service-badge">Amazon S3</span>
+      <span class="service-badge">Cost and Usage Report</span>
+    </div>
+    <h1>💰 Split Cost Allocation Data が Amazon S3 に対応</h1>
+    <div class="subtitle">
+      共有 S3 バケットのコストを <span class="highlight">プレフィックス単位</span> で CUR に配分 — チャージバック / ショーバックをマネージドに実現
+    </div>
+    <div class="subtitle">📅 リリース日: <span class="release-date">2026 年 11 月 17 日</span></div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      AWS Split Cost Allocation Data が Amazon S3 に対応しました。共有された S3 汎用バケットの <span class="highlight">ストレージコスト</span> と <span class="highlight">Tier 1 / Tier 2 リクエストコスト</span> を、バケット内のプレフィックス単位で AWS Cost and Usage Report (CUR) に配分できます。
+    </p>
+    <p>
+      <code>marketing/</code> や <code>finance/</code> のようにプレフィックスで複数チーム / テナントのデータを 1 つのバケットに格納している組織向けに、S3 Storage Lens がプレフィックスレベルのメトリクスを Billing and Cost Management に発行し、最も深く一致するプレフィックスへコストを自動配分します。各明細行には AWS 生成コスト配分タグが付与され、チームやアプリケーション単位の集計とバケット全体の請求額との照合が可能です。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ Before: アップデート前の課題</h3>
+        <div class="check-item"><span class="cross-icon">✗</span><span>CUR ではバケット単位のコストしか確認できず、プレフィックス単位の配分は不可能</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>S3 Inventory や Storage Lens レポートを基にしたカスタムパイプラインの構築が必要</span></div>
+        <div class="check-item"><span class="cross-icon">✗</span><span>料金計算ロジックを自前で実装・保守する必要があり、正確なチャージバックが困難</span></div>
+      </div>
+      <div class="after-box">
+        <h3>✅ After: アップデート後の改善</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span>CUR 上でプレフィックス単位のストレージ / Tier 1 / Tier 2 リクエストコストを直接確認</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>カスタムパイプラインや独自の料金計算ロジックが不要に</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>AWS 生成コスト配分タグでチーム / アプリケーション単位の集計が容易に</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Bucket["🪣 Amazon S3 汎用バケット"]
+        direction LR
+        P1["📁 marketing/"]
+        P2["📁 finance/"]
+        P3["📁 engineering/"]
+        P1 ~~~ P2 ~~~ P3
+    end
+
+    subgraph Lens["🔍 S3 Storage Lens アドバンストティア"]
+        SL["📊 ダッシュボード設定<br/>Billing and Cost Management 発行を有効化<br/>プレフィックスレベル範囲を選択"]
+    end
+
+    subgraph BCM["💰 AWS Billing and Cost Management"]
+        Split["⚙️ Split Cost Allocation Data<br/>ストレージ + Tier 1 / Tier 2 リクエストコストを配分"]
+        CUR[("📋 Cost and Usage Report<br/>プレフィックス単位の明細行")]
+    end
+
+    User(["👤 FinOps 担当者"])
+
+    Bucket --> SL
+    SL -->|プレフィックスレベルの<br/>メトリクスを日次発行| Split
+    Split -->|最も深く一致する<br/>プレフィックスへ配分| CUR
+    CUR -->|チャージバック<br/>ショーバック| User
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Bucket,Lens,BCM layer
+    class P1,P2,P3 storage
+    class SL process
+    class Split internal
+    class CUR database
+    class User user
+      </pre>
+    </div>
+    <p class="diagram-caption">
+      S3 Storage Lens がプレフィックスレベルのメトリクスを Billing and Cost Management に発行し、バケットのコストをプレフィックス単位に配分して CUR に明細行として出力する流れ
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="feature-card">
+      <h3>1️⃣ プレフィックス単位のコスト配分</h3>
+      <p>汎用バケットのストレージコスト (全ストレージクラス対象) と Tier 1 / Tier 2 リクエストコストを、選択したプレフィックスレベル範囲内で <span class="highlight">最も深く一致するプレフィックス</span> に配分。バケット自体の明細行は合計の使用量とコストを保持したまま、追加の明細行として配分結果を出力します。</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>2️⃣ プレフィックスレベル範囲の選択</h3>
+      <p>S3 Storage Lens ダッシュボード設定で <code>MinDepth</code> と <code>MaxDepth</code> (いずれも 1〜15 の整数) を指定。未指定の場合のデフォルトは <code>MinDepth</code>=1、<code>MaxDepth</code>=3。<code>MaxDepth</code> − <code>MinDepth</code> は最大 4 (最大 5 つの隣接レベルを報告可能) です。</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>3️⃣ AWS 生成コスト配分タグ</h3>
+      <p>プレフィックスの明細行にプレフィックスパスの各セグメントとバケット名をタグとして付与します。</p>
+      <div>
+        <span class="tag-chip">aws:s3:PrefixLevel1 〜 aws:s3:PrefixLevel15</span>
+        <span class="tag-chip">aws:s3:BucketName</span>
+      </div>
+      <p>タグはデフォルトで非アクティブのため、Billing and Cost Management コンソールでのアクティブ化が必要です (反映まで最大 24 時間)。</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>4️⃣ 未配分コストの明示</h3>
+      <p>プレフィックスに属さないルートレベルオブジェクトのコストなどは、バケットレベルの未配分 (unattributed) カテゴリとして記録。未配分の明細行では <code>aws:s3:PrefixLevel1</code> の値は <code>(unattributed)</code> になります。</p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>対象バケット</td><td>汎用バケットのみ (ディレクトリバケット、テーブルバケット、ベクターバケットは対象外)</td></tr>
+      <tr><td>配分対象コスト</td><td>ストレージコスト (全ストレージクラス)、Tier 1 / Tier 2 リクエストコスト</td></tr>
+      <tr><td>プレフィックス区切り文字</td><td>S3 Storage Lens 設定の <code>PrefixDelimiter</code> は <code>/</code> (スラッシュ) である必要あり</td></tr>
+      <tr><td>プレフィックスレベル</td><td>1〜15、報告範囲は最大 5 つの隣接レベル</td></tr>
+      <tr><td>プレフィックス数上限</td><td>設定した深さにおいてバケットあたり 10,000 プレフィックスまで (超過時はより浅いレベルへフォールバック)</td></tr>
+      <tr><td>明細行の粒度</td><td>日次 (時間単位ではない)。使用量のないプレフィックスには明細行なし</td></tr>
+      <tr><td>設定 API</td><td>S3 Storage Lens 設定の <code>CostAndUsageReportsPublish</code> メンバー</td></tr>
+      <tr><td>有効化可能なアカウント</td><td>AWS Organizations の管理アカウント、またはスタンドアロンアカウント</td></tr>
+    </table>
+
+    <h3>📈 明細行数の見積もり式</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Text</span>
+        <span class="code-title">月間の追加明細行数</span>
+      </div>
+      <pre><code class="language-text">月間の追加明細行数 = (使用量のあるプレフィックス数 + 1)
+                  × 使用量のある使用タイプ数 (最大 2)
+                  × 月の日数
+
+例: 最深レベルに 2,000 プレフィックス、毎日ストレージとリクエストの両方を使用
+    → 30 日間で最大 (2,000 + 1) × 2 × 30 = 120,060 行</code></pre>
+    </div>
+
+    <h3>🔄 API 変更履歴</h3>
+    <p style="font-size: 14px;">今回のアップデートに直接対応する API 変更は、AWS API Changes フィード (直近 7 日間) には含まれていません。機能の設定は既存の S3 Storage Lens 設定 API に追加された <code>CostAndUsageReportsPublish</code> メンバーと、Billing and Cost Management コンソールの Cost Management preferences で行います。</p>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>✅ 前提条件</h3>
+    <ul style="font-size: 14px;">
+      <li>S3 Storage Lens の <span class="highlight">アドバンストティア</span> ダッシュボードを使用していること (無料ティアでは利用不可)</li>
+      <li>S3 Storage Lens 設定の <code>PrefixDelimiter</code> が <code>/</code> であること</li>
+      <li>有効化は AWS Organizations の管理アカウントまたはスタンドアロンアカウントから行うこと</li>
+      <li>CUR (レガシー CUR または CUR 2.0) のエクスポート設定で Split Cost Allocation Data とリソース ID を含めること</li>
+    </ul>
+
+    <div class="step-card">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h3>S3 Storage Lens で Billing and Cost Management 発行を有効化</h3>
+        <p>Storage Lens ダッシュボード設定 (アドバンストティア) で AWS Billing and Cost Management への発行を有効化し、対象バケットとプレフィックスレベルの範囲 (<code>MinDepth</code> / <code>MaxDepth</code>) を選択。API では <code>CostAndUsageReportsPublish</code> メンバーを使用します。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h3>Billing and Cost Management で Split Cost Allocation Data を有効化</h3>
+        <p>Cost Management preferences で Split Cost Allocation Data の対象として Amazon S3 を選択。あわせて CUR エクスポート設定で Split Cost Allocation Data とリソース ID を含めるよう構成します。</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h3>コスト配分タグのアクティブ化と CUR の確認</h3>
+        <p>コスト配分タグページで <code>aws:s3:PrefixLevel1</code> 〜 <code>aws:s3:PrefixLevel15</code> および <code>aws:s3:BucketName</code> をアクティブ化 (反映まで最大 24 時間)。次回の日次 Storage Lens メトリクス発行後、プレフィックスのコストデータが CUR に表示されます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット / 制約 -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="two-col">
+      <div class="merit-box">
+        <h3>💼 ビジネス面のメリット</h3>
+        <ul>
+          <li><strong>チャージバック / ショーバックの実現</strong>: チーム、アプリケーション、テナント単位で正確に配賦し、コストの説明責任を明確化</li>
+          <li><strong>コスト最適化の促進</strong>: コストを押し上げているプレフィックスを特定し、的を絞った最適化が可能</li>
+          <li><strong>運用コストの削減</strong>: カスタムパイプラインの構築・保守が不要になり FinOps チームの工数を削減</li>
+        </ul>
+      </div>
+      <div class="merit-box">
+        <h3>🔩 技術面のメリット</h3>
+        <ul>
+          <li><strong>マネージドな配分処理</strong>: Storage Lens のメトリクスを基に自動でコストを計算・配分、独自実装が不要</li>
+          <li><strong>CUR との統合</strong>: Amazon Athena や Amazon QuickSight など既存の CUR 分析基盤をそのまま活用可能</li>
+          <li><strong>タグベースの柔軟な集計</strong>: 任意のプレフィックスレベルでの集計やバケット全体との照合が容易</li>
+        </ul>
+      </div>
+    </div>
+    <div class="two-col" style="margin-top: 16px;">
+      <div class="caution-box">
+        <h3>⚠️ 制限事項</h3>
+        <ul>
+          <li>汎用バケットのみ対応 (ディレクトリ / テーブル / ベクターバケットは対象外)</li>
+          <li>配分対象はストレージと Tier 1 / Tier 2 リクエストコストのみ (アノテーションやクロスリージョンレプリケーションのリクエストコストは対象外)</li>
+          <li>設定した深さでバケットあたり 10,000 プレフィックスまで。超過時は浅いレベルへフォールバック、<code>MinDepth</code> でも超過するとデータ生成なし</li>
+          <li>報告できるのは最大 5 つの隣接プレフィックスレベル</li>
+          <li>S3 Storage Lens アドバンストティアが必要</li>
+        </ul>
+      </div>
+      <div class="caution-box">
+        <h3>🤔 考慮すべき点</h3>
+        <ul>
+          <li>Requester Pays バケットで他アカウントからのリクエスト割合が大きい場合、リクエストコスト見積もりの精度が低下</li>
+          <li>ルート直下へのオブジェクト配置が多いと未配分カテゴリのコストが増加</li>
+          <li>プレフィックス数が多いと CUR の明細行数が大きく増加するため、クエリコストやデータ量に注意</li>
+          <li>コストはあくまで見積もり (estimated cost) であり、正式な請求額の算出基盤ではない</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase-card">
+      <h3>🏢 1. マルチテナント SaaS におけるテナント別チャージバック</h3>
+      <p style="font-size: 14px;"><span class="usecase-label">シナリオ</span>: 共有バケットに <code>tenant-a/</code>、<code>tenant-b/</code> のようにテナントごとのプレフィックスでデータを格納し、各テナントへの正確なコスト請求が必要。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-text">1. Storage Lens アドバンストティアで対象バケットの
+   Billing and Cost Management 発行を有効化 (MinDepth=1, MaxDepth=1)
+2. Split Cost Allocation Data の Amazon S3 を有効化
+3. CUR を Athena でクエリし、aws:s3:PrefixLevel1 タグで
+   テナント別にコストを集計</code></pre>
+      </div>
+      <div class="usecase-effect">✨ <strong>効果</strong>: テナントごとのストレージ / リクエストコストを日次で把握し、使用量に応じた正確な課金やコスト按分が可能に。</div>
+    </div>
+
+    <div class="usecase-card">
+      <h3>📊 2. 部門別ショーバックによるコスト意識の向上</h3>
+      <p style="font-size: 14px;"><span class="usecase-label">シナリオ</span>: データレイク用共有バケットに <code>marketing/</code>、<code>finance/</code>、<code>engineering/</code> のように部門別プレフィックスでデータを格納し、部門ごとのコストを可視化したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-text">1. MinDepth=1、MaxDepth=3 でプレフィックスレベルの発行を設定
+2. aws:s3:PrefixLevel1 〜 aws:s3:PrefixLevel3 タグをアクティブ化
+3. QuickSight ダッシュボードで部門別・プロジェクト別の
+   コスト推移を可視化し、各部門に共有</code></pre>
+      </div>
+      <div class="usecase-effect">✨ <strong>効果</strong>: 部門ごとの S3 コストが可視化され、不要データの削除やライフサイクルポリシー適用など自発的なコスト最適化を促進。</div>
+    </div>
+
+    <div class="usecase-card">
+      <h3>🔍 3. コストを押し上げているプレフィックスの特定と最適化</h3>
+      <p style="font-size: 14px;"><span class="usecase-label">シナリオ</span>: S3 のコストが増加傾向にあるが、バケット単位のコストしか見えず、どのワークロードが原因か特定できない。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Text</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-text">1. コストが大きいバケットで Billing and Cost Management 発行を有効化
+2. CUR をクエリし、プレフィックス別のストレージコストと
+   Tier 1 / Tier 2 リクエストコストをランキング
+3. コスト上位のプレフィックスに対して、ストレージクラスの変更や
+   S3 ライフサイクルポリシーの適用を検討</code></pre>
+      </div>
+      <div class="usecase-effect">✨ <strong>効果</strong>: コスト増加の原因プレフィックス (ワークロード) をデータに基づいて特定し、効果の大きい箇所から優先的に最適化。</div>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💵 料金と利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="merit-box">
+        <h3>💰 料金</h3>
+        <ul>
+          <li>Split Cost Allocation Data for Amazon S3 自体に <strong>追加料金なし</strong></li>
+          <li>S3 Storage Lens <span class="highlight">アドバンストティア</span> の料金のみ適用</li>
+          <li>Billing and Cost Management への発行にも追加料金なし</li>
+          <li>詳細は <a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon S3 の料金ページ</a> を参照</li>
+        </ul>
+      </div>
+      <div class="merit-box">
+        <h3>🌍 利用可能リージョン</h3>
+        <p style="font-size: 14px; margin: 0;">S3 Storage Lens アドバンストメトリクスが利用可能な <strong>すべての AWS 商用リージョン</strong> で利用できます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="feature-card">
+      <h3>🔍 Amazon S3 Storage Lens</h3>
+      <p>プレフィックスレベルのストレージ / リクエストメトリクスを Billing and Cost Management に発行する役割。アドバンストティアが必要。</p>
+    </div>
+    <div class="feature-card">
+      <h3>📋 AWS Cost and Usage Report (CUR)</h3>
+      <p>プレフィックス単位の明細行が出力される先。レガシー CUR と CUR 2.0 の両方に対応。</p>
+    </div>
+    <div class="feature-card">
+      <h3>⚙️ Split Cost Allocation Data (ECS / EKS / ネットワーキング)</h3>
+      <p>既存の Split Cost Allocation Data は ECS タスク / EKS ポッド単位のコンテナコスト配分や、NAT ゲートウェイなど共有ネットワークリソースのコスト配分に対応しており、今回 S3 が追加された。</p>
+    </div>
+    <div class="feature-card">
+      <h3>🏷️ AWS コスト配分タグ</h3>
+      <p><code>aws:s3:PrefixLevel1</code> 〜 <code>aws:s3:PrefixLevel15</code>、<code>aws:s3:BucketName</code> の AWS 生成タグを使用してコストを集計。</p>
+    </div>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>🎁 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin: 0;">
+        共有 S3 バケットの <span class="highlight">プレフィックス単位コスト配分</span> が、カスタムパイプライン不要のマネージド機能として CUR に統合されました。複数チームやテナントでバケットを共有している組織は、チャージバック / ショーバックの精度向上とコスト最適化の起点として、S3 Storage Lens アドバンストティアダッシュボードでの Billing and Cost Management 発行の有効化を検討することを推奨します。
+      </p>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/split-cost-allocation-data-s3/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Split Cost Allocation Data for Amazon S3</a></li>
+      <li><a href="https://aws.amazon.com/aws-cost-management/aws-cost-and-usage-reporting/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Cost and Usage Reports 製品ページ</a></li>
+      <li><a href="https://docs.aws.amazon.com/cur/latest/userguide/split-cost-allocation-data.html#split-cost-allocation-data-s3" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Understanding split cost allocation data</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-lens-cost-and-usage-reports.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Estimating Amazon S3 costs by prefix with S3 Storage Lens</a></li>
+      <li><a href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ: Amazon S3 pricing</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-11-17) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

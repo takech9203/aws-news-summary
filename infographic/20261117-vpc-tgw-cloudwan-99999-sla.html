@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VPC / Transit Gateway / Cloud WAN - クロスリージョン 99.999% SLA (Multipath Resilience)</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .service-badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .service-badge {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 12px;
+      border-radius: 16px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.3;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .release-date {
+      color: var(--aws-smile-orange);
+      font-weight: 600;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    /* 統計カード */
+    .stats-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+
+    .stat-card {
+      flex: 1;
+      min-width: 200px;
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.25), rgba(255, 153, 0, 0.08));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 34px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    /* Before / After */
+    .before-after {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+
+    .before-box, .after-box {
+      flex: 1;
+      min-width: 280px;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.12);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.5);
+    }
+
+    .before-title { color: #FF6B4A; font-weight: 700; margin-bottom: 10px; font-size: 16px; }
+    .after-title { color: #4CAF50; font-weight: 700; margin-bottom: 10px; font-size: 16px; }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: #4CAF50; font-size: 15px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B4A; font-size: 15px; flex-shrink: 0; }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .usecase-effect {
+      background: rgba(29, 129, 2, 0.12);
+      border-left: 3px solid var(--aws-green);
+      padding: 8px 12px;
+      margin-top: 10px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--aws-light-gray);
+    }
+
+    tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+    .credit-high { color: #FF6B4A; font-weight: 700; }
+    .credit-mid { color: var(--aws-smile-orange); font-weight: 700; }
+    .credit-low { color: #4CAF50; font-weight: 700; }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-note {
+      font-size: 14px;
+      color: var(--aws-light-gray);
+      margin-top: 8px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang { color: var(--aws-orange); font-weight: bold; }
+    .code-title { color: var(--aws-light-gray); }
+
+    .code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* リージョンバッジ */
+    .region-list {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 12px 0;
+    }
+
+    .region-badge {
+      background: rgba(0, 161, 201, 0.15);
+      border: 1px solid var(--aws-teal);
+      color: var(--aws-teal);
+      border-radius: 16px;
+      padding: 6px 14px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    /* メリット 2 カラム */
+    .merit-grid {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .merit-col {
+      flex: 1;
+      min-width: 280px;
+    }
+
+    .merit-head {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    /* 注意カード */
+    .warning-card {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 173, 51, 0.5);
+      border-left: 4px solid var(--aws-smile-orange);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    .steps-list { counter-reset: step; list-style: none; padding: 0; margin: 0; }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { margin: 8px 0; padding-left: 20px; }
+    footer li { margin: 4px 0; }
+
+    @media (max-width: 640px) {
+      h1 { font-size: 24px; }
+      h2 { font-size: 20px; }
+      body { padding: 12px; }
+      .section { padding: 16px; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div class="service-badges">
+        <span class="service-badge">Amazon VPC</span>
+        <span class="service-badge">AWS Transit Gateway</span>
+        <span class="service-badge">AWS Cloud WAN</span>
+      </div>
+      <h1>🌐 クロスリージョントラフィック向け 99.999% 可用性 SLA</h1>
+      <div class="subtitle">
+        Multipath Resilience の一般提供開始 | <span class="release-date">📅 リリース日: 2026 年 11 月 17 日</span>
+      </div>
+    </div>
+
+    <!-- 統計 -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">99.999%</div>
+        <div class="stat-label">Daily Uptime SLA<br/>(金銭的補償付き)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">99.9%</div>
+        <div class="stat-label">Daily Packet Delivery<br/>コミットメント</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">0</div>
+        <div class="stat-label">アプリケーション / OS の<br/>変更箇所</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">5</div>
+        <div class="stat-label">提供リージョン<br/>(2026 年 11 月時点)</div>
+      </div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📝 概要</h2>
+      <p>
+        AWS は、Amazon VPC のクロスリージョンピアリング、AWS Transit Gateway のクロスリージョンピアリングアタッチメント、AWS Cloud WAN のクロスリージョントラフィックを対象に、<span class="highlight">99.999% の可用性 SLA</span> を提供する新機能 <span class="highlight">Multipath Resilience</span> を発表しました。決済処理、金融取引、テレフォニー、ライブメディアストリーミングなど、リージョン間でトラフィックを送信するミッションクリティカルなアプリケーションのレジリエンス向上を容易にします。
+      </p>
+      <p>
+        有効化すると、ネットワークが各パケットのコピーを<span class="highlight">物理的に分離された複数の経路</span>で送信し、宛先リージョンに最初に到達したコピーを配信して重複を破棄します。1 つの経路でパケットがドロップしても別経路上にコピーが送信中のため、再ルーティングを待つことなくアプリケーションの接続が維持されます。レジリエンス確保の作業がアプリケーションからネットワークへ移され、アプリケーションは単一の接続を使い続けられます。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <div class="before-title">❌ アップデート前の課題</div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>自動再ルーティングで解決できない部分的な劣化では、接続の再確立に数分かかる場合があった</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>アプリや OS を改修し、単一接続を複数接続に分割するワークアラウンドが必要だった</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>クロスリージョン呼び出しを避けるため、全リージョンへのデータ複製が必要だった</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>アプリはネットワーク経路を制御できず、ワークアラウンドは常に機能するとは限らなかった</span></div>
+        </div>
+        <div class="after-box">
+          <div class="after-title">✅ アップデート後の改善</div>
+          <div class="check-item"><span class="check-icon">✓</span><span>クロスリージョントラフィックに 99.999% の可用性 SLA (金銭的補償付き) を提供</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>パケットのコピーが複数経路で同時送信され、単一経路の障害時も再ルーティングを待たずに接続維持</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>アプリケーションコード、OS の変更、リージョンごとのデータ複製が不要</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>設定で有効化するだけで利用でき、既存トラフィックへの中断なし</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ図</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart LR
+    subgraph RegionA["🌐 送信元リージョン"]
+        AppA["🖥️ アプリケーション"]
+        Rep["📡 パケット複製"]
+    end
+    subgraph Backbone["🌍 AWS グローバルバックボーン"]
+        direction LR
+        P1["🛤️ 経路 A<br/>物理的に分離されたファイバー"]
+        P2["🛤️ 経路 B<br/>物理的に分離されたファイバー"]
+    end
+    subgraph RegionB["🌐 宛先リージョン"]
+        Dedup["🔍 先着パケットを配信<br/>重複を破棄"]
+        AppB["🖥️ アプリケーション"]
+    end
+
+    AppA --> Rep
+    Rep --> P1
+    Rep --> P2
+    P1 --> Dedup
+    P2 --> Dedup
+    Dedup --> AppB
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class RegionA,RegionB,Backbone boundary
+    class AppA,AppB input
+    class Rep,Dedup internal
+    class P1,P2 process
+        </pre>
+      </div>
+      <p class="diagram-note">
+        Multipath Resilience を有効にすると、リージョン間ネットワークに入る各パケットが複製され、物理的に分離された複数のバックボーン経路で送信されます。宛先リージョンでは最初に到達したパケットが配信され、重複は破棄されます。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="card">
+        <div class="card-title">📡 1. パケット複製による経路冗長化</div>
+        <div class="check-item"><span class="check-icon">✓</span><span>各パケットのコピーを、リアルタイムの容量状況に応じて選定された物理的に分離された AWS グローバルバックボーン経路で送信</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>宛先リージョンに最初に到達したコピーを配信し、残りの重複パケットを破棄</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>通常時はパケットが最低レイテンシーの経路を通るため、定常状態のレイテンシー増加がない設計。単一経路配信と比較してジッターが低減する場合もある</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🛡️ 2. 99.999% 可用性 SLA (金銭的補償付き)</div>
+        <div class="check-item"><span class="check-icon">✓</span><span>ネットワークパスごと、1 日 (UTC) ごとに 99.999% のアップタイムをコミット</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>あわせて 1 日あたり 99.9% 以上のパケット配信率もコミット</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>SLA 未達の場合、Multipath Resilience 利用料金に対するサービスクレジットを提供</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🚀 3. アプリケーション変更不要の有効化</div>
+        <div class="check-item"><span class="check-icon">✓</span><span>クロスリージョン VPC ピアリング接続、Transit Gateway ピアリングアタッチメント、Cloud WAN のクロスリージョントラフィックで有効化可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>コンソール、CLI、API から有効化でき、有効化時に既存トラフィックの中断は発生しない</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span>アプリケーションは単一の接続をそのまま使用でき、コードや OS の変更は不要</span></div>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔬 技術仕様</h2>
+
+      <h3>📏 SLA の測定方法</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>Daily Uptime コミットメント</td><td>ネットワークパスごとに 1 日 (UTC) あたり <strong>99.999%</strong></td></tr>
+        <tr><td>Daily Packet Delivery コミットメント</td><td>1 日あたり <strong>99.9%</strong> 以上のパケット配信</td></tr>
+        <tr><td>Unavailable Second の定義</td><td>10% を超えるパケットがロスした秒</td></tr>
+        <tr><td>測定単位</td><td>ネットワークパスごと、トラフィック方向ごとに個別に評価</td></tr>
+        <tr><td>Qualifying Minutes</td><td>1 分あたり 250,000 パケット以上を伝送し、かつ単一フロー (5-tuple) が 1 Gbps を超えない分のみが対象</td></tr>
+        <tr><td>対象範囲</td><td>AWS バックボーン部分 (Protected Segment) のみ。リージョン内区間は対象外</td></tr>
+      </table>
+
+      <h3>💳 サービスクレジット</h3>
+      <table>
+        <tr><th>コミットメント</th><th>実績</th><th>クレジット率</th></tr>
+        <tr><td>Daily Uptime</td><td>99.999% 未満かつ 99.99% 以上</td><td class="credit-low">10%</td></tr>
+        <tr><td>Daily Uptime</td><td>99.99% 未満かつ 95.0% 以上</td><td class="credit-mid">25%</td></tr>
+        <tr><td>Daily Uptime</td><td>95.0% 未満</td><td class="credit-high">100%</td></tr>
+        <tr><td>Daily Packet Delivery</td><td>99.9% 未満かつ 95.0% 以上</td><td class="credit-low">10%</td></tr>
+        <tr><td>Daily Packet Delivery</td><td>95.0% 未満かつ 90.0% 以上</td><td class="credit-mid">25%</td></tr>
+        <tr><td>Daily Packet Delivery</td><td>90.0% 未満</td><td class="credit-high">100%</td></tr>
+      </table>
+      <p style="font-size: 14px;">
+        同じ日に両方のコミットメントが未達となった場合は、大きい方のクレジットのみが適用されます。クレジットは当該パスの Multipath Resilience 料金 (データ転送料金は対象外) に適用されます。
+      </p>
+
+      <h3>🔄 API 変更履歴</h3>
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/11/17</td>
+          <td><a href="https://awsapichanges.com/archive/changes/a370bc-ec2.html" target="_blank" rel="noopener noreferrer" class="aws-link">ec2</a></td>
+          <td>1 new 18 updated api methods - クロスリージョン VPC ピアリング接続および Transit Gateway ピアリングアタッチメントへの Multipath Resilience サポート追加</td>
+        </tr>
+        <tr>
+          <td>2026/11/17</td>
+          <td><a href="https://awsapichanges.com/archive/changes/a370bc-networkmanager.html" target="_blank" rel="noopener noreferrer" class="aws-link">networkmanager</a></td>
+          <td>1 updated api methods - コアネットワーク変更セットのレビュー時に Multipath Resilience の変更値を取得可能に</td>
+        </tr>
+      </table>
+
+      <h3>🧩 API パラメータ</h3>
+      <p style="font-size: 14px;">
+        <code>CreateVpcPeeringConnection</code>、<code>AcceptVpcPeeringConnection</code>、<code>CreateTransitGatewayPeeringAttachment</code>、<code>AcceptTransitGatewayPeeringAttachment</code>、<code>ModifyTransitGatewayPeeringAttachment</code> などの API に、Multipath Resilience を制御するオプションが追加されています。
+      </p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">Multipath Resilience オプション</span>
+        </div>
+        <pre><code class="language-json">{
+  "Options": {
+    "AllowMultipathResilience": true,
+    "MultipathResilienceMode": "always-on"
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>✅ 前提条件</h3>
+      <div class="check-item"><span class="check-icon">1.</span><span>クロスリージョン VPC ピアリング接続、クロスリージョン Transit Gateway ピアリングアタッチメント、または Cloud WAN のクロスリージョントラフィックを使用していること</span></div>
+      <div class="check-item"><span class="check-icon">2.</span><span>対象リージョンが Multipath Resilience の提供リージョンであること</span></div>
+      <div class="check-item"><span class="check-icon">3.</span><span>VPC ピアリング接続やピアリングアタッチメントを変更できる IAM 権限があること</span></div>
+
+      <h3>📍 ステップ 1: Transit Gateway ピアリングアタッチメントで有効化</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">boto3 - Transit Gateway ピアリングアタッチメントの変更</span>
+        </div>
+        <pre><code class="language-python">import boto3
+
+client = boto3.client("ec2")
+
+response = client.modify_transit_gateway_peering_attachment(
+    TransitGatewayAttachmentId="tgw-attach-0123456789abcdef0",
+    Options={
+        "AllowMultipathResilience": True,
+        "MultipathResilienceMode": "always-on"
+    }
+)</code></pre>
+      </div>
+      <p style="font-size: 14px;">
+        既存のクロスリージョン Transit Gateway ピアリングアタッチメントに対して Multipath Resilience を有効化します。<code>AllowMultipathResilience</code> を <code>True</code> に設定し、<code>MultipathResilienceMode</code> に <code>always-on</code> を指定します。有効化は既存トラフィックを中断せずに実行されます。
+      </p>
+
+      <h3>📍 ステップ 2: VPC ピアリング接続の作成時に有効化</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">boto3 - VPC ピアリング接続の作成</span>
+        </div>
+        <pre><code class="language-python">response = client.create_vpc_peering_connection(
+    VpcId="vpc-0123456789abcdef0",
+    PeerVpcId="vpc-0fedcba9876543210",
+    PeerRegion="us-west-2",
+    RequesterPeeringConnectionOptions={
+        "AllowMultipathResilience": True,
+        "MultipathResilienceMode": "always-on"
+    }
+)</code></pre>
+      </div>
+      <p style="font-size: 14px;">
+        クロスリージョン VPC ピアリング接続の作成時に、リクエスター側のオプションとして Multipath Resilience を有効化します。アクセプター側も <code>accept_vpc_peering_connection</code> で同様のオプションを指定できます。
+      </p>
+
+      <h3>📍 ステップ 3: 有効化状態の確認</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python</span>
+          <span class="code-title">boto3 - 設定の確認</span>
+        </div>
+        <pre><code class="language-python">response = client.describe_vpc_peering_connections(
+    VpcPeeringConnectionIds=["pcx-0123456789abcdef0"]
+)</code></pre>
+      </div>
+      <p style="font-size: 14px;">
+        <code>DescribeVpcPeeringConnections</code> や <code>DescribeTransitGatewayPeeringAttachments</code> で、対象リソースの Multipath Resilience 設定を確認します。Cloud WAN の場合は、コアネットワークの変更セットレビュー時に Multipath Resilience の変更値が表示されます。
+      </p>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <div class="merit-grid">
+        <div class="merit-col">
+          <div class="merit-head">💼 ビジネス面</div>
+          <div class="card">
+            <div class="card-title">🛡️ 金銭的補償付きの 99.999% SLA</div>
+            <p style="margin: 0; font-size: 14px;">クロスリージョン通信に対して明確な可用性コミットメントが得られ、規制産業やミッションクリティカルなワークロードの要件を満たしやすくなる</p>
+          </div>
+          <div class="card">
+            <div class="card-title">🏢 オンプレミスワークロードの移行促進</div>
+            <p style="margin: 0; font-size: 14px;">ネットワーク可用性を理由にオンプレミスに残していた決済処理や金融取引などのワークロードを AWS へ移行しやすくなる</p>
+          </div>
+          <div class="card">
+            <div class="card-title">💰 運用コストの削減</div>
+            <p style="margin: 0; font-size: 14px;">マルチリージョン構成のためのデータ複製やアプリケーション改修といったワークアラウンドの開発・維持コストが不要になる</p>
+          </div>
+        </div>
+        <div class="merit-col">
+          <div class="merit-head">⚙️ 技術面</div>
+          <div class="card">
+            <div class="card-title">🚀 アプリケーション変更不要</div>
+            <p style="margin: 0; font-size: 14px;">単一接続のまま利用でき、アプリケーションコードや OS の変更なしでレジリエンスが向上する</p>
+          </div>
+          <div class="card">
+            <div class="card-title">⚡ 再ルーティング待ちの排除</div>
+            <p style="margin: 0; font-size: 14px;">パケットのコピーが常に複数経路で送信中のため、経路障害時もプロトコルの再収束を待たずに通信が継続する</p>
+          </div>
+          <div class="card">
+            <div class="card-title">📉 レイテンシーへの影響なしの設計</div>
+            <p style="margin: 0; font-size: 14px;">通常時は最低レイテンシー経路のパケットが配信されるため定常状態のレイテンシーが増加せず、ジッターが低減する場合もある</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>🚧 制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>提供リージョンは米国東部 (バージニア北部)、米国東部 (オハイオ)、米国西部 (北カリフォルニア)、米国西部 (オレゴン)、欧州 (アイルランド) の 5 リージョンに限定される (2026 年 11 月時点)</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>SLA の対象はクロスリージョントラフィックのみで、単一リージョン内のトラフィックは対象外</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>SLA は AWS バックボーン部分 (Protected Segment) のみを対象とし、リージョン内区間はカバーされない</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>SLA の評価対象は Qualifying Minutes (1 分あたり 250,000 パケット以上、単一フロー 1 Gbps 以下) に限定される</span></div>
+
+      <h3>🤔 考慮すべき点</h3>
+      <div class="warning-card">💲 Multipath Resilience には追加料金が発生する (SLA クレジットは Multipath Resilience 料金に対して適用される)。詳細は Amazon VPC 料金ページで確認が必要</div>
+      <div class="warning-card">📮 サービスクレジットの請求には、所定の期限内 (インシデント発生後 2 請求サイクル以内) に AWS Support Center 経由での申請が必要</div>
+      <div class="warning-card">🔧 ルートテーブル、セキュリティグループ、ACL の設定ミスなど、顧客起因の問題は SLA の対象外</div>
+      <div class="warning-card">🎯 すべてのクロスリージョン通信に必要とは限らないため、数秒の中断も許容できないワークロードに絞って有効化を検討するのが望ましい</div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">💳 ユースケース 1: 決済処理システムのリージョン間連携</div>
+        <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>シナリオ</strong>: 決済フロントエンドを米国東部 (バージニア北部) に、トランザクションバックエンドを米国西部 (オレゴン) に配置しており、数秒の通信断でも決済失敗につながる。</p>
+        <div class="check-item"><span class="check-icon">1.</span><span>両リージョン間の Transit Gateway ピアリングアタッチメントで Multipath Resilience を有効化</span></div>
+        <div class="check-item"><span class="check-icon">2.</span><span>ModifyTransitGatewayPeeringAttachment で AllowMultipathResilience を true に設定</span></div>
+        <div class="check-item"><span class="check-icon">3.</span><span>既存のアプリケーションはそのまま単一接続で稼働を継続</span></div>
+        <div class="usecase-effect">✨ <strong>効果</strong>: ファイバー切断や部分的な経路劣化が発生しても、複製パケットが別経路で配信されるため決済トランザクションが中断されない。アプリケーション改修やデータ複製が不要になる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">📺 ユースケース 2: ライブメディアストリーミングの配信網</div>
+        <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>シナリオ</strong>: ライブスポーツ中継の映像をリージョン間で伝送しており、わずかなパケットロスやジッターが映像品質の劣化に直結する。</p>
+        <div class="check-item"><span class="check-icon">1.</span><span>伝送経路となるクロスリージョン VPC ピアリング接続で Multipath Resilience を有効化</span></div>
+        <div class="check-item"><span class="check-icon">2.</span><span>CreateVpcPeeringConnection の RequesterPeeringConnectionOptions で有効化</span></div>
+        <div class="check-item"><span class="check-icon">3.</span><span>映像伝送アプリケーションは変更せずに運用</span></div>
+        <div class="usecase-effect">✨ <strong>効果</strong>: 先着パケットの配信により単一経路配信と比較してジッターが低減する場合があり、経路障害時も映像が途切れない。99.999% SLA により放送品質の可用性要件を満たせる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🏢 ユースケース 3: AWS バックボーン上の企業 WAN</div>
+        <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>シナリオ</strong>: AWS Cloud WAN で複数リージョンにまたがる企業 WAN を構築しており、基幹システムのリージョン間通信に高い可用性保証が求められる。</p>
+        <div class="check-item"><span class="check-icon">1.</span><span>Cloud WAN のクロスリージョントラフィックで Multipath Resilience を有効化</span></div>
+        <div class="check-item"><span class="check-icon">2.</span><span>コアネットワークの変更セットレビューで Multipath Resilience の設定変更内容を確認して適用</span></div>
+        <div class="check-item"><span class="check-icon">3.</span><span>対象セグメントのリージョン間通信が複数経路で保護される</span></div>
+        <div class="usecase-effect">✨ <strong>効果</strong>: 金銭的補償付きの SLA がある企業 WAN を AWS バックボーン上で運用でき、専用線ベースの WAN からの移行判断がしやすくなる。</div>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>
+        Multipath Resilience の利用には<span class="highlight">追加料金</span>が発生します。SLA のサービスクレジットは Multipath Resilience の利用料金 (データ転送料金は対象外) に対して適用されます。料金の詳細は <a href="https://aws.amazon.com/vpc/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon VPC 料金ページ</a> を参照してください。
+      </p>
+    </div>
+
+    <!-- 利用可能リージョン -->
+    <div class="section">
+      <h2>🌍 利用可能リージョン</h2>
+      <p>Multipath Resilience は以下のリージョンで一般提供されています。</p>
+      <div class="region-list">
+        <span class="region-badge">🇺🇸 米国東部 (バージニア北部)</span>
+        <span class="region-badge">🇺🇸 米国東部 (オハイオ)</span>
+        <span class="region-badge">🇺🇸 米国西部 (北カリフォルニア)</span>
+        <span class="region-badge">🇺🇸 米国西部 (オレゴン)</span>
+        <span class="region-badge">🇮🇪 欧州 (アイルランド)</span>
+      </div>
+    </div>
+
+    <!-- 関連サービス・機能 -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <div class="card-title">🔀 Amazon VPC ピアリング</div>
+        <p style="margin: 0; font-size: 14px;">クロスリージョン VPC ピアリング接続で Multipath Resilience を有効化できる</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🚉 AWS Transit Gateway</div>
+        <p style="margin: 0; font-size: 14px;">クロスリージョンピアリングアタッチメントで Multipath Resilience を有効化できる</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🌐 AWS Cloud WAN</div>
+        <p style="margin: 0; font-size: 14px;">コアネットワークのクロスリージョントラフィックで Multipath Resilience を有効化でき、変更セットレビューで設定変更を確認できる</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🗺️ AWS Network Manager</div>
+        <p style="margin: 0; font-size: 14px;">コアネットワーク変更セットの API が更新され、Multipath Resilience の変更値を取得できる</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📌 まとめ</h2>
+      <p>
+        Multipath Resilience は、<span class="highlight">パケット複製と重複排除をネットワーク側で行う</span>ことで、クロスリージョントラフィックに <span class="highlight">99.999% の金銭的補償付き SLA</span> を実現する画期的なアップデートです。決済処理や金融取引、ライブメディアなど数秒の中断も許容できないワークロードをリージョン間で運用している場合、アプリケーション変更なしで有効化できるため、まず対象の VPC ピアリング接続や Transit Gateway ピアリングアタッチメントでの有効化と、料金と SLA 条件の確認を推奨します。
+      </p>
+      <div class="flow-diagram" style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 24px 0;">
+        <div class="flow-step" style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">🎯 対象ワークロード<br/>の特定</div>
+        <span class="flow-arrow" style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div class="flow-step" style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">💲 料金と SLA 条件<br/>の確認</div>
+        <span class="flow-arrow" style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div class="flow-step" style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">🛠️ 無停止で<br/>有効化</div>
+        <span class="flow-arrow" style="color: var(--aws-orange); font-size: 24px; font-weight: bold;">→</span>
+        <div class="flow-step" style="background: var(--aws-dark-squid); border: 2px solid var(--aws-orange); border-radius: 8px; padding: 12px 20px; text-align: center; min-width: 100px;">🛡️ 99.999% SLA で<br/>保護された通信</div>
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典</p>
+      <ul>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/vpc-tgw-cloudwan-99999-sla/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New)</a></li>
+        <li><a href="https://aws.amazon.com/vpc/features/vpc-multipath-resilience/" target="_blank" rel="noopener noreferrer" class="aws-link">Multipath Resilience 機能ページ</a></li>
+        <li><a href="https://aws.amazon.com/vpc/features/vpc-multipath-resilience/sla" target="_blank" rel="noopener noreferrer" class="aws-link">Multipath Resilience SLA</a></li>
+        <li><a href="https://aws.amazon.com/vpc/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon VPC 料金ページ</a></li>
+        <li><a href="https://awsapichanges.com/archive/changes/a370bc-ec2.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 (ec2)</a></li>
+        <li><a href="https://awsapichanges.com/archive/changes/a370bc-networkmanager.html" target="_blank" rel="noopener noreferrer" class="aws-link">API 変更履歴 (networkmanager)</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-11-17-vpc-tgw-cloudwan-99999-sla.md) を基に生成されました。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

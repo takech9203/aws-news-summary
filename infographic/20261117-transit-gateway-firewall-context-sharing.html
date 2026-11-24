@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Transit Gateway - ファイアウォールへのリソースコンテキスト共有</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 8px 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before/After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .box-title { color: #FF6B4A; font-weight: 700; margin-bottom: 8px; }
+.after-box .box-title { color: #4CAF50; font-weight: 700; margin-bottom: 8px; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 0; list-style: none; }
+.before-box li, .after-box li {
+  margin: 8px 0;
+  padding-left: 24px;
+  position: relative;
+  font-size: 14px;
+}
+.before-box li::before { content: "✗"; position: absolute; left: 0; color: #FF6B4A; font-weight: 700; }
+.after-box li::before { content: "✓"; position: absolute; left: 0; color: #4CAF50; font-weight: 700; }
+
+/* チェックリスト */
+.check-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.flow-step {
+  background: var(--aws-squid-ink);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 110px;
+  font-size: 14px;
+  color: var(--aws-white);
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+.table-wrap { overflow-x: auto; }
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.usecase-label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--aws-squid-ink);
+  background: var(--aws-smile-orange);
+  border-radius: 4px;
+  padding: 1px 8px;
+  margin-right: 6px;
+}
+.usecase p { margin: 8px 0; font-size: 14px; }
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-title { font-weight: 700; color: var(--aws-white); margin-bottom: 4px; }
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 760px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+ul.simple-list { margin: 8px 0; padding-left: 20px; }
+ul.simple-list li { margin: 6px 0; font-size: 14px; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div>
+      <span class="service-badge">AWS Transit Gateway</span>
+      <span class="service-badge">AWS Network Manager</span>
+      <span class="service-badge">AWS Network Firewall</span>
+    </div>
+    <h1>🔀 Transit Gateway: ファイアウォールへのリソースコンテキスト共有</h1>
+    <div class="subtitle">
+      IP アドレスではなく AWS リソースの定義でセグメンテーションポリシーを記述
+      <br>📅 リリース日: <span class="release-date">2026 年 11 月 17 日</span>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      AWS Transit Gateway が、アタッチされたファイアウォールなどのセキュリティサービスへの<span class="highlight">リソースコンテキスト共有</span>をサポートしました。
+      IP アドレスだけでなく、<strong>VPC、VPC サブネット、VPC セキュリティグループ、Transit Gateway アタッチメント</strong>をファイアウォールポリシーで直接参照できます。
+    </p>
+    <p>
+      Transit Gateway はファイアウォールに送信するトラフィックにリソースコンテキストを埋め込むため、ファイアウォールは<span class="highlight">最初のパケットから</span>適切なポリシーを適用できます。
+      IP アドレスの変化に応じたルール更新は不要です。
+    </p>
+
+    <div class="flow-diagram">
+      <div class="flow-step">📋 コンテキスト<br>ストア作成</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔗 TGW を<br>関連付け</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">👀 リソースを<br>自動監視</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🛡️ ファイアウォールと<br>コンテキスト共有</div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="box-title">❌ アップデート前の課題</div>
+        <ul>
+          <li>ファイアウォールは IP アドレスでトラフィックをセグメント化する必要があり、IP ベースのルールは計画と維持が困難</li>
+          <li>タグによるセグメンテーションは定期同期方式のため、同期の合間に起動した新しいワークロードを見逃す可能性</li>
+          <li>IP アドレスが変化するたびにファイアウォールルールの更新が必要</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="box-title">✅ アップデート後の改善</div>
+        <ul>
+          <li>VPC、サブネット、セキュリティグループ、TGW アタッチメントといったワークロード定義に基づいてセグメンテーションを適用</li>
+          <li>トラフィックにコンテキストが埋め込まれ、最初のパケットから正しいポリシーを適用</li>
+          <li>短命な Lambda 関数のような動的ワークロードにも、トラフィック送信開始と同時にポリシーを適用</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph NM["🗺️ AWS Network Manager"]
+        CS[("📋 コンテキストストア")]
+    end
+
+    subgraph AWSNet["☁️ AWS ネットワーク"]
+        subgraph Resources["🧩 監視対象リソース"]
+            direction LR
+            VPC1["🌐 Web 層 VPC<br/>セキュリティグループ"]
+            VPC2["🌐 DB 層 VPC<br/>サブネット"]
+            DX["🔌 Direct Connect<br/>アタッチメント"]
+            VPC1 ~~~ VPC2 ~~~ DX
+        end
+        TGW["🔀 Transit Gateway"]
+        FW["🛡️ ファイアウォール<br/>Network Firewall / Palo Alto"]
+    end
+
+    VPC1 --> TGW
+    VPC2 --> TGW
+    DX --> TGW
+    TGW -->|"コンテキスト付き<br/>トラフィック"| FW
+    CS -.->|"リソース監視"| TGW
+    CS -.->|"コンテキスト共有"| FW
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+
+    class NM,AWSNet,Resources boundary
+    class VPC1,VPC2,DX input
+    class TGW process
+    class CS database
+    class FW warning
+      </pre>
+    </div>
+    <p style="font-size: 14px;">
+      AWS Network Manager のコンテキストストアが Transit Gateway に接続されたリソースを監視し、そのコンテキストをファイアウォールと共有します。
+      Transit Gateway はファイアウォールへ送信するトラフィックにリソースコンテキストを埋め込むため、ファイアウォールは最初のパケットからリソースベースのポリシーを適用できます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+    <div class="card">
+      <div class="card-title">🎯 リソースコンテキストによるファイアウォールポリシー</div>
+      <p style="font-size: 14px; margin: 4px 0;">
+        IP アドレスに加えて VPC、VPC サブネット、VPC セキュリティグループ、TGW アタッチメントをポリシーで参照可能。
+        ワークロードやアタッチメントの定義に基づくセグメンテーションを適用でき、IP 変化に応じたルール更新が不要。
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-title">📋 コンテキストストア (AWS Network Manager)</div>
+      <p style="font-size: 14px; margin: 4px 0;">
+        グローバルネットワーク内にコンテキストストアを作成し、Transit Gateway を関連付けて利用。
+        接続されたリソースのコンテキストを監視してセキュリティサービスと共有。
+        <span class="highlight">複数リージョンの TGW を 1 つのストアに関連付け可能</span> (各リソースのリージョン情報を含む)。
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-title">🚀 ファーストパケットからのポリシー適用</div>
+      <p style="font-size: 14px; margin: 4px 0;">
+        トラフィックにリソースコンテキストが埋め込まれるため、最初のパケットから正しいポリシーを適用。
+        タグ同期方式と異なり新規ワークロードの見逃しが発生せず、短命な Lambda 関数にも即座に適用可能。
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-title">🛡️ 対応ファイアウォール</div>
+      <p style="font-size: 14px; margin: 4px 0;">
+        <strong>AWS Network Firewall</strong>: コンテキスト対応のステートフルルールグループで、コンテキストストアを参照する ContextSets を通じて AWS リソース ID をルールで参照可能。<br>
+        <strong>Palo Alto Networks Software Firewalls</strong>: IP ベースのルールと併用する形でリソースコンテキストポリシーをサポート。
+      </p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔧 技術仕様</h2>
+    <h3>コンテキスト共有の仕組みと制限</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>コンテキストストアの作成場所</td><td>AWS Network Manager のグローバルネットワーク内</td></tr>
+        <tr><td>グローバルネットワークあたりのストア数</td><td>1 つ</td></tr>
+        <tr><td>TGW あたりの関連付け可能なストア数</td><td>1 つ</td></tr>
+        <tr><td>共有されるリソースコンテキスト</td><td>VPC、サブネット、セキュリティグループ、TGW アタッチメント</td></tr>
+        <tr><td>対象トラフィック</td><td>タイプが AWS Network Firewall または Gateway Load Balancer の TGW ネットワークファンクションアタッチメント経由でルーティングされるトラフィックのみ</td></tr>
+        <tr><td>セキュリティグループの上限</td><td>コンテキストに含まれるのは最大 5 つ (6 つ以上の場合、セキュリティグループ情報は含まれない)</td></tr>
+        <tr><td>リージョン間ピアリング</td><td>リージョン間 TGW ピアリングアタッチメントをまたぐコンテキスト共有は不可</td></tr>
+      </table>
+    </div>
+
+    <h3>API 変更履歴</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/11/16</td>
+          <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/f1785c-networkmanager.html" target="_blank" rel="noopener noreferrer">networkmanager</a></td>
+          <td>12 new api methods - コンテキストストア関連 API の追加 (CreateContextStore、AssociateContextStore、ListContexts、ListContextChanges、GetContextVersion など)</td>
+        </tr>
+        <tr>
+          <td>2026/11/16</td>
+          <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/f1785c-network-firewall.html" target="_blank" rel="noopener noreferrer">network-firewall</a></td>
+          <td>2 new 9 updated api methods - コンテキスト対応ステートフルルールグループのサポート。ContextSets により AWS リソース ID をルールで参照可能</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>追加された主な API (AWS Network Manager)</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">API</span>
+        <span class="code-title">コンテキストストア関連 API</span>
+      </div>
+      <pre><code class="language-bash"># コンテキストストアのライフサイクル管理
+CreateContextStore / GetContextStore / UpdateContextStore / DeleteContextStore / ListContextStores
+
+# Transit Gateway との関連付け管理
+AssociateContextStore / DisassociateContextStore
+GetContextStoreAssociation / ListContextStoreAssociations
+
+# コンテキストの参照
+ListContexts / ListContextChanges / GetContextVersion</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>グローバルネットワークを作成し、リソースコンテキストを共有したい Transit Gateway を登録していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>ファイアウォールをネットワークファンクションアタッチメント経由で TGW に接続し、検査が必要なトラフィックをアタッチメントにルーティングしていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Network Manager でコンテキストストアとその TGW 関連付けを作成・管理する権限を持っていること</span></div>
+
+    <h3>手順</h3>
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">コンテキストストアの作成</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash">aws networkmanager create-context-store \
+  --global-network-id global-network-0123456789abcdef0 \
+  --description "Context store for TGW firewall segmentation"</code></pre>
+        </div>
+        <p>グローバルネットワーク内にコンテキストストアを作成します。グローバルネットワークあたり 1 つ作成できます。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">Transit Gateway の関連付け</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash">aws networkmanager associate-context-store \
+  --context-store-id &lt;context-store-id&gt; \
+  --transit-gateway-arn arn:aws:ec2:ap-northeast-1:123456789012:transit-gateway/tgw-0123456789abcdef0</code></pre>
+        </div>
+        <p>関連付け後、コンテキストストアは TGW に接続されたリソースの監視を開始します。複数リージョンの TGW を同一のストアに関連付けできます。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">コンテキストの確認とファイアウォールポリシーの設定</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">AWS CLI</span></div>
+          <pre><code class="language-bash"># 収集されたリソースコンテキストの一覧を確認
+aws networkmanager list-contexts \
+  --context-store-id &lt;context-store-id&gt;</code></pre>
+        </div>
+        <p>
+          収集されたリソースコンテキスト (VPC、サブネット、セキュリティグループ、アタッチメント) を確認します。
+          個々のコンテキストレコードの参照は API / AWS CLI を使用します (コンソールではストアと関連付けの表示のみ)。
+          その後、AWS Network Firewall のコンテキスト対応ステートフルルールグループなど、ファイアウォール側でリソースコンテキストを参照するポリシーを設定します。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3>💼 ビジネス面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>運用コストの削減</strong>: IP 変化に応じたルール更新が不要になり、ポリシー維持負荷を大幅に軽減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>セキュリティリスクの低減</strong>: タグ同期の合間の新規ワークロード見逃しがなくなり、最初のパケットから確実に適用</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ガバナンスの向上</strong>: 環境分離ポリシーをリソース定義に基づいて宣言的に適用可能</span></div>
+        <h3>🔬 技術面のメリット</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>意図ベースのセグメンテーション</strong>: ワークロードの論理的な定義でポリシーを記述</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>動的ワークロードへの即時適用</strong>: 短命な Lambda 関数にも送信した瞬間から適用</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>マルチリージョン対応</strong>: 複数リージョンの TGW を 1 つのストアに関連付け可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>ハイブリッド接続の検査</strong>: Direct Connect / Site-to-Site VPN 経由のトラフィックへの共通検査ポリシーが容易</span></div>
+      </div>
+      <div>
+        <h3>⚠️ 制限事項</h3>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>グローバルネットワークあたりコンテキストストアは 1 つまで</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>TGW は 1 つのコンテキストストアにのみ関連付け可能</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>対象は AWS Network Firewall / Gateway Load Balancer タイプのネットワークファンクションアタッチメント経由のトラフィックのみ</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>コンテキストに含まれるセキュリティグループは最大 5 つ (6 つ以上の場合は情報が含まれない)</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>リージョン間 TGW ピアリングアタッチメントをまたぐ共有は不可</span></div>
+        <div class="warn-item"><span class="warn-icon">⚠</span><span>中東 (バーレーン) および中東 (UAE) リージョンでは利用不可</span></div>
+        <h3>💭 考慮すべき点</h3>
+        <div class="warn-item"><span class="warn-icon">💡</span><span>事前にグローバルネットワーク作成、TGW 登録、ネットワークファンクションアタッチメント経由のファイアウォール接続が必要</span></div>
+        <div class="warn-item"><span class="warn-icon">💡</span><span>個々のコンテキストレコード参照は API / CLI のみ (コンソールはストアと関連付けの表示に限定)</span></div>
+        <div class="warn-item"><span class="warn-icon">💡</span><span>対応ファイアウォールは現時点で AWS Network Firewall と Palo Alto Networks Software Firewalls</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+    <div class="usecase">
+      <div class="usecase-title">1️⃣ Web 層と DB 層の間のマイクロセグメンテーション</div>
+      <p><span class="usecase-label">シナリオ</span>3 層アーキテクチャで Web 層から DB 層へのトラフィックにのみ脅威保護を適用したい。オートスケーリングで IP アドレスは頻繁に変化する。</p>
+      <p><span class="usecase-label">実装</span>コンテキストストアを作成して TGW を関連付け、Network Firewall のコンテキスト対応ステートフルルールグループで「Web 層 SG → DB 層 SG」のトラフィックを ContextSets で指定し IPS 検査を適用。</p>
+      <p><span class="usecase-label">効果</span>スケールイン・アウトで IP が変化してもルール更新が不要になり、セキュリティグループの定義に基づいた一貫した脅威保護を実現。</p>
+    </div>
+    <div class="usecase">
+      <div class="usecase-title">2️⃣ 開発環境から本番環境への到達ブロック</div>
+      <p><span class="usecase-label">シナリオ</span>同一の TGW に接続された開発 VPC と本番 VPC の間で、開発環境から本番環境へのアクセスを確実に遮断したい。</p>
+      <p><span class="usecase-label">実装</span>コンテキストストアで開発 VPC と本番 VPC のコンテキストを共有し、ファイアウォールポリシーで「開発 VPC → 本番 VPC」のトラフィックを VPC ID ベースで拒否。</p>
+      <p><span class="usecase-label">効果</span>VPC の CIDR 変更や VPC 追加のたびに IP ベースのルールを見直す必要がなくなり、環境分離ポリシーを宣言的に維持。</p>
+    </div>
+    <div class="usecase">
+      <div class="usecase-title">3️⃣ ハイブリッド接続トラフィックへの共通検査ポリシー</div>
+      <p><span class="usecase-label">シナリオ</span>オンプレミスから Direct Connect および Site-to-Site VPN 経由で AWS に入るすべてのトラフィックに共通のインスペクションポリシーを適用したい。</p>
+      <p><span class="usecase-label">実装</span>コンテキストストアに TGW を関連付けて Direct Connect / VPN アタッチメントのコンテキストを共有し、アタッチメントタイプを条件に共通の検査ルールを定義。</p>
+      <p><span class="usecase-label">効果</span>接続回線の追加や変更があってもアタッチメント単位のポリシーがそのまま適用され、ハイブリッド環境の入口対策を一元化。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">💵 料金</div>
+        <p style="font-size: 14px; margin: 4px 0;">
+          公式発表には本機能に関する追加料金の記載はありません。
+          AWS Transit Gateway のデータ処理料金とアタッチメント料金、および AWS Network Firewall などのファイアウォール側の料金が通常どおり適用されます。
+          最新の料金は各サービスの<a class="aws-link" href="https://aws.amazon.com/transit-gateway/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a>を確認してください。
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-title">🌍 利用可能リージョン</div>
+        <p style="font-size: 14px; margin: 4px 0;">
+          AWS Transit Gateway が利用可能なすべての商用 AWS リージョンで利用可能。
+          ただし<strong>中東 (バーレーン) と中東 (UAE) は除く</strong>。
+          AWS GovCloud (US-East) および AWS GovCloud (US-West) リージョンでも利用可能。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <ul class="simple-list">
+      <li><strong>AWS Network Manager</strong>: コンテキストストアの作成・管理と TGW の関連付けを行うサービス。グローバルネットワークにコンテキストストアを配置</li>
+      <li><strong>AWS Network Firewall</strong>: コンテキスト対応ステートフルルールグループにより、ContextSets を通じてリソースコンテキストをルールで参照可能</li>
+      <li><strong>TGW ネットワークファンクションアタッチメント</strong>: ファイアウォールを TGW に接続する仕組み。コンテキスト共有は AWS Network Firewall / Gateway Load Balancer タイプのアタッチメント経由のトラフィックが対象</li>
+      <li><strong>AWS Direct Connect / AWS Site-to-Site VPN</strong>: これらのアタッチメント経由で AWS に入るトラフィックにも、アタッチメントベースの共通検査ポリシーを適用可能</li>
+    </ul>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>🎯 まとめ</h2>
+    <p>
+      AWS Transit Gateway のコンテキスト共有により、ファイアウォールのセグメンテーションポリシーを IP アドレスではなく
+      <span class="highlight">VPC、サブネット、セキュリティグループ、アタッチメントといった AWS リソースの定義</span>に基づいて記述できるようになりました。
+      IP ベースルールの維持負荷やタグ同期によるワークロード見逃しの課題を解消し、最初のパケットから確実にポリシーを適用できます。
+    </p>
+    <p>
+      Transit Gateway 配下でファイアウォールによる East-West 検査やハイブリッド接続の検査を行っている場合は、
+      AWS Network Manager でのコンテキストストア作成から検証を開始することを推奨します。
+    </p>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/transit-gateway-firewall-context-sharing/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/transit-gateway-firewall-context-sharing/</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/network-manager/latest/tgwnm/context-stores.html" target="_blank" rel="noopener noreferrer">ドキュメント: Context sharing with security services</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/transit-gateway/" target="_blank" rel="noopener noreferrer">AWS Transit Gateway 製品ページ</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/transit-gateway/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a></li>
+    </ul>
+    <p>リリース日: 2026 年 11 月 17 日 | インフォグラフィック生成日: 2026 年 11 月 24 日</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

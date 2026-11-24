@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Security Hub - インストール済みソフトウェアと使用状況によるリソースクリティカリティの推論</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.date-badge {
+  background: var(--aws-dark-squid);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  color: var(--aws-white);
+  white-space: nowrap;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card h3 {
+  margin: 0 0 8px 0;
+  color: var(--aws-smile-orange);
+  font-size: 17px;
+}
+
+.card ul { margin: 8px 0 0 0; padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+.new-badge {
+  display: inline-block;
+  background: var(--aws-green);
+  color: var(--aws-white);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box h3, .after-box h3 { margin-top: 0; }
+.before-box h3 { color: #FF8A73; }
+.after-box h3 { color: #6BCB4A; }
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 6px 0; font-size: 15px; }
+
+/* Criticality scale */
+.crit-scale {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+.crit-level {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--aws-white);
+  text-align: center;
+}
+
+.crit-vh { background: #B71C1C; }
+.crit-h { background: #D13212; }
+.crit-m { background: #E07700; }
+.crit-l { background: #1D8102; }
+.crit-u { background: #546E7A; }
+
+/* Stats */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-orange);
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 4px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--aws-light-gray);
+}
+
+td code, p code, li code {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+.table-wrap { overflow-x: auto; }
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  background: rgba(0, 161, 201, 0.1);
+  border-left: 3px solid var(--aws-teal);
+  padding: 10px 14px;
+  border-radius: 0 8px 8px 0;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Check / cross lists */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #6BCB4A; font-size: 17px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 17px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 17px; flex-shrink: 0; }
+
+/* Steps */
+.step-card {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 10px 0;
+}
+
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-body h3 { margin: 0 0 6px 0; font-size: 16px; }
+.step-body p { margin: 0; font-size: 14px; }
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.usecase h3 { margin: 0 0 8px 0; color: var(--aws-smile-orange); font-size: 17px; }
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.usecase .effect {
+  background: rgba(29, 129, 2, 0.15);
+  border-left: 3px solid var(--aws-green);
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  margin-top: 10px;
+}
+
+.usecase-steps {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  margin: 8px 0;
+}
+
+.usecase-steps ol { margin: 0; padding-left: 20px; }
+.usecase-steps li { margin: 4px 0; }
+
+/* Merits grid */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.merit-col h3 { margin-top: 0; }
+
+/* Links */
+.aws-link { color: var(--aws-teal); text-decoration: none; word-break: break-all; }
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.related-card {
+  background: rgba(0, 161, 201, 0.08);
+  border: 1px solid rgba(0, 161, 201, 0.35);
+  border-left: 4px solid var(--aws-teal);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.related-card strong { color: var(--aws-white); }
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(0, 161, 201, 0.08));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  font-size: 15px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .before-after, .merit-grid { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <span class="service-badge">🛡️ AWS Security Hub</span>
+      <h1>インストール済みソフトウェアと使用状況による<br>リソースクリティカリティの推論</h1>
+      <div class="subtitle">タグ付けなしでも、リソースの「ビジネス上の重要度」を自動判定</div>
+    </div>
+    <div class="date-badge">📅 リリース日: 2026 年 11 月 17 日</div>
+  </div>
+
+  <div class="section">
+    <h2>📋 概要</h2>
+    <p>AWS Security Hub が、リソースクリティカリティ (リソースがビジネスにとってどれだけ重要かを示す指標) を判定するシグナルとして、<span class="highlight">インストール済みソフトウェア</span>と<span class="highlight">リソース使用状況</span>を追加しました。クリティカリティはエクスポージャー検出結果のランク付けに使用されるため、中央のセキュリティチームは最も重要なリソースに影響するエクスポージャーを優先的に対処できます。</p>
+    <p>例えば、データベースエンジンを実行し安定したトラフィックを処理している EC2 インスタンスは、監視エージェントのみを実行しアイドル状態のインスタンスよりも高いクリティカリティを受け取ります。</p>
+
+    <div class="crit-scale">
+      <div class="crit-level crit-vh">Very High</div>
+      <div class="crit-level crit-h">High</div>
+      <div class="crit-level crit-m">Medium</div>
+      <div class="crit-level crit-l">Low</div>
+      <div class="crit-level crit-u">Unknown</div>
+    </div>
+
+    <div class="before-after">
+      <div class="before-box">
+        <h3>❌ アップデート前の課題</h3>
+        <ul>
+          <li>クリティカリティの推論は<strong>リソースのタグと名前のみ</strong>に依存</li>
+          <li>タグ付けが一貫していないリソースは「Unknown」となり、優先順位付けが困難</li>
+          <li>意味のあるクリティカリティには、組織全体で一貫したタグ付け運用が必要</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <h3>✅ アップデート後の改善</h3>
+        <ul>
+          <li><strong>インストール済みソフトウェア (SBOM)</strong> と<strong>リソース使用状況 (CloudWatch メトリクス)</strong> が推論シグナルに追加</li>
+          <li>タグ付けや追加設定なしで、より多くのリソースが意味のあるクリティカリティを取得</li>
+          <li>エクスポージャー検出結果のランク付け精度が向上し、重要なリソースへの対応を優先可能</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">4 種類</div>
+        <div class="stat-label">推論シグナル (名前 / タグ / ソフトウェア / テレメトリ)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">過去 7 日間</div>
+        <div class="stat-label">使用状況の評価期間 (同一アカウント・リージョン内で相対評価)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">追加料金なし</div>
+        <div class="stat-label">Security Hub Essentials に含まれ、有効化作業も不要</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Signals["📡 クリティカリティ推論シグナル"]
+        direction LR
+        Name["🏷️ リソース名<br/>prod / pci など"]
+        Tags["🔖 タグ<br/>environment=production など"]
+        SBOM["📦 インストール済みソフトウェア<br/>SBOM 分析 ✨新規"]
+        CW["📈 CloudWatch テレメトリ<br/>過去 7 日間の使用状況 ✨新規"]
+        Name ~~~ Tags ~~~ SBOM ~~~ CW
+    end
+
+    subgraph Hub["🛡️ AWS Security Hub"]
+        Infer["⚙️ クリティカリティ推論<br/>利用可能なシグナルを統合"]
+        Rule{"📋 自動化ルール<br/>による上書き?"}
+        Crit["🎯 リソースクリティカリティ<br/>Very High / High / Medium / Low / Unknown"]
+    end
+
+    Exposure["🚨 エクスポージャー検出結果<br/>影響度と重要度の算出に使用"]
+    Team(["👤 セキュリティチーム<br/>優先順位に基づく対応"])
+
+    Signals --> Infer
+    Infer --> Rule
+    Rule -->|ルールあり| Crit
+    Rule -->|ルールなし| Crit
+    Crit --> Exposure
+    Exposure --> Team
+
+    classDef signal fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef newsignal fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#333333
+    classDef hub fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Name,Tags signal
+    class SBOM,CW newsignal
+    class Hub hub
+    class Infer process
+    class Rule decision
+    class Crit,Exposure internal
+    class Team user
+      </pre>
+    </div>
+    <p class="diagram-note">💡 Security Hub は 4 種類のシグナル (リソース名、タグ、インストール済みソフトウェア、CloudWatch テレメトリ) を統合して各リソースのクリティカリティを推論し、エクスポージャー検出結果の重要度算出に利用します。自動化ルールが設定されている場合は、推論結果よりもルールが常に優先されます。</p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <h3>📦 インストール済みソフトウェアによる推論<span class="new-badge">NEW</span></h3>
+      <ul>
+        <li>Security Hub がモニタリングするコンピューティングリソースについて、ソフトウェア部品表 (SBOM) を分析し、インストールされているソフトウェアを特定</li>
+        <li>データベースエンジン、ID・アクセスサービス、メッセージブローカーなどを実行するリソースは、監視エージェントのみのリソースより高いクリティカリティと判定</li>
+        <li>根拠として「データを保存するソフトウェアを実行している」といった理由が記録される</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>📈 CloudWatch テレメトリによる推論<span class="new-badge">NEW</span></h3>
+      <ul>
+        <li>リクエスト数、呼び出し数、メッセージ数、消費キャパシティ、データベース接続数、ネットワークトラフィックなどの CloudWatch メトリクスを読み取り</li>
+        <li>過去 7 日間の使用状況を、同一アカウント・同一リージョン内の同じタイプの他リソースと比較して相対的に評価</li>
+        <li>メトリクスはクリティカリティの推論のみに使用され、メトリクス値自体は表示されない</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>🔀 複数シグナルの統合とソースの可視化</h3>
+      <ul>
+        <li>利用可能なシグナルを 1 つのクリティカリティに統合。利用できないシグナルがあってもクリティカリティが下がることはない</li>
+        <li>リソース詳細の「How this was determined」から、どのソースがクリティカリティを決定したか、および各ソースの理由を確認可能</li>
+        <li>リソース固有のシグナルが見つからない場合は「Unknown」となり、リソースタイプのみに基づく判定は行われない</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>📋 自動化ルールによる上書き</h3>
+      <ul>
+        <li>自動化ルールを作成して、条件に一致するリソースにクリティカリティを明示的に設定可能</li>
+        <li>自動化ルールは推論されたクリティカリティよりも<strong>常に優先</strong>される</li>
+        <li>ルールで設定された場合、推論されたシグナルは「Inferred signals (overridden)」として表示</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>クリティカリティ推論の仕様</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>クリティカリティのレベル</td><td>Very High、High、Medium、Low、Unknown</td></tr>
+        <tr><td>推論シグナル</td><td>リソース名、タグ、インストール済みソフトウェア (新規)、CloudWatch テレメトリ (新規)</td></tr>
+        <tr><td>ソフトウェア分析の情報源</td><td>ソフトウェア部品表 (SBOM)</td></tr>
+        <tr><td>使用状況の評価期間</td><td>過去 7 日間</td></tr>
+        <tr><td>使用状況の比較対象</td><td>同一アカウント・同一リージョン内の同じリソースタイプ</td></tr>
+        <tr><td>上書き方法</td><td>自動化ルール (推論よりも常に優先)</td></tr>
+        <tr><td>エクスポージャー検出結果への影響</td><td>影響度と重要度の算出に使用 (Unknown は影響しない)</td></tr>
+        <tr><td>対象プラン</td><td>Security Hub Essentials (追加料金なし、有効化作業不要)</td></tr>
+      </table>
+    </div>
+
+    <h3>API の対応</h3>
+    <p><a class="aws-link" href="https://docs.aws.amazon.com/securityhub/1.0/APIReference/API_GetResourcesV2.html" target="_blank" rel="noopener noreferrer">GetResourcesV2</a> オペレーションが <code>ResourceCriticality</code> でクリティカリティを返し、<code>CriticalitySources</code> でソースの一覧を返します。各ソースは <code>Source</code> と <code>Reason</code> を持ちます。</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Source の値</th><th>意味</th></tr>
+        <tr><td><code>AutomationRule</code></td><td>自動化ルールによる設定</td></tr>
+        <tr><td><code>ResourceName</code></td><td>リソース名からの推論</td></tr>
+        <tr><td><code>TagInference</code></td><td>タグからの推論</td></tr>
+        <tr><td><code>InstalledSoftwareAndPackageInference</code></td><td>インストール済みソフトウェアからの推論 <span class="new-badge">NEW</span></td></tr>
+        <tr><td><code>CloudWatchTelemetryInference</code></td><td>CloudWatch テレメトリからの推論 <span class="new-badge">NEW</span></td></tr>
+      </table>
+    </div>
+
+    <h3>API 変更履歴</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/11/17</td>
+          <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/a370bc-securityhub.html" target="_blank" rel="noopener noreferrer">securityhub</a></td>
+          <td>20 updated api methods - タグ、CloudWatch メトリクス、SBOM データからのリソースクリティカリティ推論のサポートを追加</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>AWS Security Hub (Essentials プラン) が有効化されていること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>リソースインベントリが利用可能であること (Security Hub はサービスリンク設定レコーダーを通じて AWS リソースを記録)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>組織全体のリソースを確認する場合は、委任された管理者アカウントを使用すること</span></div>
+
+    <h3>手順</h3>
+    <div class="step-card">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h3>リソースのクリティカリティを確認する</h3>
+        <p>Security Hub コンソールの [Resources] ページを開き、[Criticality] 列で各リソースのクリティカリティを確認します。[Resource criticality] でソート、フィルタリング、グループ化が可能です。新しいシグナルは自動的に適用されるため、有効化作業は不要です。</p>
+      </div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h3>クリティカリティの判定根拠を確認する</h3>
+        <p>リソース詳細でクリティカリティの横にある [How this was determined] を選択します。[Resource criticality] パネルに、各ソース (Automation rule、Tags、Resource name、Installed software and packages、CloudWatch telemetry) とその判定理由が表示されます。例えば「このアカウントとリージョンの 40 個の Lambda 関数の中で使用状況は 92 パーセンタイル」といった理由が表示されます。</p>
+      </div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h3>API でクリティカリティを取得する</h3>
+        <p>GetResourcesV2 API を使用して、クリティカリティが Very High のリソースを抽出できます。レスポンスの <code>ResourceCriticality</code> フィールドにクリティカリティが、<code>CriticalitySources</code> フィールドに判定ソースと理由が含まれます。</p>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">クリティカリティが Very High のリソースを抽出</span>
+      </div>
+      <pre><code class="language-bash">aws securityhub get-resources-v2 \
+  --filters '{"CompositeFilters": [{"StringFilters": [{"FieldName": "resource_criticality", "Filter": {"Value": "VERY_HIGH", "Comparison": "EQUALS"}}]}]}'</code></pre>
+    </div>
+
+    <div class="step-card">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h3>必要に応じて自動化ルールで上書きする</h3>
+        <p>推論結果がビジネス上の重要度と一致しない場合は、自動化ルールを作成して、条件に一致するリソースにクリティカリティを明示的に設定します。自動化ルールは推論されたクリティカリティよりも常に優先されます。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>👍 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-col">
+        <h3>💼 ビジネス面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>優先順位付けの精度向上</strong>: 最も重要なリソースに影響するエクスポージャーから対応でき、限られたセキュリティリソースを効果的に配分</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>タグ運用への依存を軽減</strong>: 一貫したタグ付けが行われていない環境でも、意味のあるクリティカリティが自動付与</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>追加コストなし</strong>: Security Hub Essentials プランに追加料金なしで含まれ、新たな有効化作業も不要</span></div>
+      </div>
+      <div class="merit-col">
+        <h3>🔧 技術面</h3>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>実態に基づく評価</strong>: 実際のソフトウェアと使用状況という客観的シグナルに基づいて判定</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>判定根拠の透明性</strong>: どのソースが決定したか、および各ソースの理由を確認可能</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な上書き</strong>: 自動化ルールにより、組織固有の基準で明示的に制御可能</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>インストール済みソフトウェアの分析は、Security Hub がモニタリングするコンピューティングリソースが対象</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>CloudWatch テレメトリの比較は、同一アカウント・同一リージョン内の同じリソースタイプとの相対評価であり、メトリクスの値自体は表示されない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>リソース固有のシグナルが見つからない場合、クリティカリティは「Unknown」のまま (リソースタイプのみでの判定は行われない)</span></div>
+
+    <h3>考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>使用状況やインストール済みソフトウェアは時間とともに変化するため、リソースのクリティカリティも変化する可能性がある</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>エクスポージャー検出結果の重要度には評価時点のクリティカリティが使用されるため、再評価されるまで現在のクリティカリティと重要度が一致しない場合がある</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠️</span><span>推論結果が組織のビジネス上の重要度と異なる場合は、自動化ルールでの上書きを検討する必要がある</span></div>
+  </div>
+
+  <div class="section">
+    <h2>💡 ユースケース</h2>
+
+    <div class="usecase">
+      <h3>1️⃣ タグ付けが不完全な環境でのエクスポージャー優先順位付け</h3>
+      <p><strong>シナリオ</strong>: 複数のアカウントを運用する組織で、タグ付けポリシーの適用が徹底されておらず、多くのリソースのクリティカリティが「Unknown」。中央のセキュリティチームは、どのエクスポージャーから対応すべきか判断に迷っている。</p>
+      <div class="usecase-steps">
+        <ol>
+          <li>[Resources] ページで [Resource criticality] によるグループ化を実施</li>
+          <li>新しいシグナルにより Very High / High と判定されたリソースのエクスポージャー検出結果を確認</li>
+          <li>[Impact assessment] タブでリソースクリティカリティを確認し、対応順序を決定</li>
+        </ol>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: タグ付けの整備を待たずに、データベースエンジンを実行し高トラフィックを処理するリソースなど、ビジネス上重要なリソースのエクスポージャーから優先的に対応できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h3>2️⃣ アイドルリソースと本番リソースの切り分け</h3>
+      <p><strong>シナリオ</strong>: 検証用に起動したまま放置された EC2 インスタンスと、本番ワークロードを処理するインスタンスが同一アカウントに混在。同じ脆弱性が検出された場合にどちらを先に修正すべきか判断したい。</p>
+      <div class="usecase-steps">
+        <ol>
+          <li>[How this was determined] で判定根拠を確認<br>- 本番インスタンス: データベースエンジンを実行、使用状況が高パーセンタイル → High 以上<br>- 検証用インスタンス: 監視エージェントのみ、アイドル状態 → 低いクリティカリティ</li>
+          <li>エクスポージャー検出結果の重要度に基づき本番インスタンスの修正を優先</li>
+        </ol>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: 同じ脆弱性でも、実際の使用状況とインストール済みソフトウェアに基づいて修正の優先順位を合理的に決定できる。</p>
+    </div>
+
+    <div class="usecase">
+      <h3>3️⃣ 自動化ルールと推論の組み合わせによる運用</h3>
+      <p><strong>シナリオ</strong>: 基幹システムのリソースには明示的に Very High を設定しつつ、それ以外のリソースは自動推論に任せたい。</p>
+      <div class="usecase-steps">
+        <ol>
+          <li>基幹システムのリソースに一致する条件 (タグやアカウント ID) で自動化ルールを作成し、クリティカリティを Very High に設定</li>
+          <li>その他のリソースは、ソフトウェアと使用状況を含む推論シグナルによる自動判定に任せる</li>
+          <li>GetResourcesV2 API の CriticalitySources で設定ソース (AutomationRule / 推論) を定期的に監査</li>
+        </ol>
+      </div>
+      <p class="effect">✅ <strong>効果</strong>: 明示的な管理が必要な重要リソースと、自動推論で十分なリソースを組み合わせた、運用負荷の低いクリティカリティ管理を実現できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>今回追加されたシグナル (インストール済みソフトウェアと CloudWatch テレメトリ) は、<span class="highlight">Security Hub Essentials プランに追加料金なし</span>で含まれます。新たな有効化作業も不要です。</p>
+    <p>Security Hub 自体の料金の詳細は <a class="aws-link" href="https://aws.amazon.com/security-hub/pricing/" target="_blank" rel="noopener noreferrer">AWS Security Hub 料金ページ</a> を参照してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>Security Hub が利用可能なすべての AWS リージョンで利用できます。詳細は <a class="aws-link" href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/" target="_blank" rel="noopener noreferrer">AWS リージョン別サービス表</a> を参照してください。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-card"><strong>📈 Amazon CloudWatch</strong>: リソース使用状況の測定に使用されるメトリクス (リクエスト数、呼び出し数、消費キャパシティなど) を提供。Security Hub はこれらを読み取ってクリティカリティを推論する。</div>
+    <div class="related-card"><strong>📦 ソフトウェア部品表 (SBOM)</strong>: Security Hub がコンピューティングリソース上のインストール済みソフトウェアを特定するために分析する情報。2026 年 11 月には SBOM 関連の新 API (GetSoftwareV2 など) もリリースされている。</div>
+    <div class="related-card"><strong>📋 Security Hub 自動化ルール</strong>: 推論されたクリティカリティを明示的に上書きする手段。ルールは推論よりも常に優先される。</div>
+    <div class="related-card"><strong>🚨 エクスポージャー検出結果</strong>: クリティカリティが影響度と重要度の算出に使用される検出結果。[Impact assessment] タブでリソースクリティカリティを確認できる。</div>
+  </div>
+
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin-top: 0;">AWS Security Hub のリソースクリティカリティ推論に、<span class="highlight">インストール済みソフトウェア</span>と<span class="highlight">リソース使用状況</span>という実態に基づくシグナルが追加され、タグ付けが不完全な環境でもエクスポージャー検出結果の優先順位付けの精度が大幅に向上しました。</p>
+      <p style="margin-bottom: 0;">Security Hub Essentials プランで追加料金・追加設定なしに利用できるため、まずは [Resources] ページでクリティカリティとその判定根拠を確認し、必要に応じて自動化ルールによる上書きを検討することを推奨します。</p>
+    </div>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/security-hub-resource-criticality/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/11/security-hub-resource-criticality/</a></li>
+      <li>ドキュメント: Resources in Security Hub: <a class="aws-link" href="https://docs.aws.amazon.com/securityhub/latest/userguide/resources-adv.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/securityhub/latest/userguide/resources-adv.html</a></li>
+      <li>GetResourcesV2 API リファレンス: <a class="aws-link" href="https://docs.aws.amazon.com/securityhub/1.0/APIReference/API_GetResourcesV2.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/securityhub/1.0/APIReference/API_GetResourcesV2.html</a></li>
+      <li>AWS Security Hub 製品ページ: <a class="aws-link" href="https://aws.amazon.com/security-hub/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/security-hub/</a></li>
+      <li>料金ページ: <a class="aws-link" href="https://aws.amazon.com/security-hub/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/security-hub/pricing/</a></li>
+      <li>API 変更履歴: <a class="aws-link" href="https://awsapichanges.com/archive/changes/a370bc-securityhub.html" target="_blank" rel="noopener noreferrer">https://awsapichanges.com/archive/changes/a370bc-securityhub.html</a></li>
+    </ul>
+    <p>このインフォグラフィックは AWS News レポート (2026-11-17-security-hub-resource-criticality.md) を基に生成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
