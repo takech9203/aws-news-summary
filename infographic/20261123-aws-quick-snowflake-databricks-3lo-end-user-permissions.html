@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Quick - Snowflake / Databricks 向け 3LO によるアイデンティティ認識型アクセス</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+
+    .date-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      margin-left: 8px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.4;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: var(--aws-squid-ink);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover {
+      color: var(--aws-smile-orange);
+    }
+
+    /* Before/After 比較 */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 760px) {
+      .before-after {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box .box-title {
+      color: #FF6B4A;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .after-box .box-title {
+      color: #4CAF50;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+    .arrow-icon { color: var(--aws-orange); font-size: 16px; flex-shrink: 0; }
+
+    /* フロー図 */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-squid-ink);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 110px;
+      color: var(--aws-white);
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      vertical-align: top;
+    }
+
+    tr:nth-child(even) td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* ステップカード */
+    .step-card {
+      display: flex;
+      gap: 16px;
+      margin: 16px 0;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+    }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-smile-orange);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.12);
+      border-left: 3px solid #4CAF50;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* 注意ボックス */
+    .warning-box {
+      background: rgba(255, 153, 0, 0.1);
+      border: 1px solid rgba(255, 153, 0, 0.5);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    .warning-box .warn-title {
+      color: var(--aws-smile-orange);
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    ul {
+      padding-left: 20px;
+      margin: 8px 0;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul {
+      list-style: none;
+      padding-left: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div>
+        <span class="service-badge">AWS Quick</span>
+        <span class="date-badge">📅 2026 年 11 月 23 日リリース</span>
+      </div>
+      <h1>🔐 Snowflake / Databricks 向け 3LO によるアイデンティティ認識型アクセス</h1>
+      <div class="subtitle">Three-legged OAuth (3LO) とエンドユーザー権限のサポートで、クエリを<strong>エンドユーザー自身の ID</strong> で実行</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        AWS Quick が Snowflake および Databricks の構造化データソースに対する <span class="highlight">three-legged OAuth (3LO)</span> と
+        <span class="highlight">エンドユーザー権限</span>のサポートを発表。Chat、インタラクティブダッシュボード、Apps の利用時に、
+        クエリはエンドユーザー自身の Snowflake / Databricks の ID で実行されます。
+      </p>
+      <p>
+        Snowflake や Databricks Unity Catalog で設定済みのガバナンスポリシー (行・列レベルの制御、テーブル / ビューへのアクセス権限) が
+        <strong>ソースプラットフォーム側でそのまま適用</strong>されるため、Quick 側で同じポリシーを再作成する必要はありません。
+      </p>
+
+      <div class="flow-diagram">
+        <div class="flow-step">🛠️ 管理者が<br/>OAuth クライアント登録</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📦 作成者が 3LO +<br/>ID 伝播でデータソース作成</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">👤 ユーザーが<br/>自身の ID で認証</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">✅ 自分の権限の<br/>データのみ表示</div>
+      </div>
+
+      <div class="before-after">
+        <div class="before-box">
+          <div class="box-title">❌ アップデート前の課題</div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>データソース接続に作成者の資格情報が埋め込まれ、全ユーザーが同じ権限でデータにアクセス</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>Snowflake / Unity Catalog の行・列レベル制御を活かせず、Quick 側で RLS / CLS を再作成・二重管理</span></div>
+          <div class="check-item"><span class="cross-icon">✗</span><span>ガバナンスポリシーが BI 側とデータ基盤側に分散し、監査・コンプライアンス対応が複雑化</span></div>
+        </div>
+        <div class="after-box">
+          <div class="box-title">✅ アップデート後の改善</div>
+          <div class="check-item"><span class="check-icon">✓</span><span>クエリはエンドユーザー自身の Snowflake / Databricks ID で実行され、自分の権限で許可されたデータのみ参照</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>既存ガバナンスポリシーがソース側で適用され、Quick 側でのポリシー再作成が不要に</span></div>
+          <div class="check-item"><span class="check-icon">✓</span><span>Chat・ダッシュボード・Apps のすべてで一貫してエンドユーザー権限を適用</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ: 3LO 認証フロー</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+sequenceDiagram
+    participant U as 👤 エンドユーザー
+    participant Q as 📊 AWS Quick
+    participant O as 🔐 OAuth 認可サーバー
+    participant D as 🗄️ Snowflake / Databricks
+
+    U->>Q: Chat やダッシュボードにアクセス
+    Q->>O: 3LO 認可リクエスト
+    O->>U: 認証と同意を要求
+    U->>O: 自身の ID でサインイン
+    O-->>Q: ユーザー単位のアクセストークンを発行
+    Q->>D: エンドユーザーの ID でクエリ実行
+    Note over D: 行・列レベル制御や<br/>テーブルアクセス権限を適用
+    D-->>Q: 許可されたデータのみ返却
+    Q-->>U: 結果を表示
+        </pre>
+      </div>
+      <p style="font-size: 14px;">
+        3LO では、エンドユーザーが自身の ID で認可を行い、Quick はユーザー単位のトークンを使用してソースプラットフォームにクエリを実行します。
+        アクセス制御はソースプラットフォーム側で適用されるため、各ユーザーには自分の権限で許可されたデータのみが表示されます。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+      <div class="card">
+        <div class="card-title">🔑 Three-legged OAuth (3LO) によるエンドユーザー認証</div>
+        <div>Snowflake / Databricks のデータソース作成時に認証方式として 3LO を選択可能。エンドユーザーは自身の OAuth ログインで認証し、クエリは各ユーザー自身の ID で実行。Chat、インタラクティブダッシュボード、Apps のすべての利用体験で適用。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🪪 信頼されたアイデンティティ伝播 Trusted Identity Propagation</div>
+        <div>データソース作成時にオプションを有効化することで、ユーザー ID がソースシステムに伝播。<strong>有効化しない場合は作成者の資格情報が接続に埋め込まれ、全ユーザーが作成者の権限を共有</strong>する点に注意。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🛡️ ソースプラットフォーム側でのガバナンス適用</div>
+        <div>Snowflake のアクセス制御や Databricks Unity Catalog の ACL に基づき、行・列レベルの制限やテーブル / ビューへのアクセスがソース側で適用。Quick 側で RLS / CLS ルールを再作成する必要がなく、ポリシーの二重管理を解消。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🗂️ OAuth クライアントアプリケーションの一元管理</div>
+        <div>Quick アカウント管理者は、アカウント設定の [Manage OAuth Client Applications] で OAuth クライアントアプリケーションを登録・管理可能。Snowflake 用、Databricks 用をそれぞれ設定できる。</div>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>認証方式の比較 (Snowflake / Databricks 接続)</h3>
+      <div class="table-wrapper">
+        <table>
+          <tr><th>認証方式</th><th>実行 ID</th><th>権限管理</th><th>主な用途</th></tr>
+          <tr>
+            <td>ログイン資格情報 / PAT</td>
+            <td>作成者の ID</td>
+            <td>Quick 側で RLS / CLS を手動管理</td>
+            <td>シンプルな共有ダッシュボード</td>
+          </tr>
+          <tr>
+            <td>OAuth クライアント資格情報 (2LO)</td>
+            <td>サービスアカウント</td>
+            <td>Quick 側で RLS / CLS を手動管理</td>
+            <td>マシン間通信、API 経由のデータソース作成</td>
+          </tr>
+          <tr>
+            <td><span class="highlight">Three-legged OAuth (3LO)</span></td>
+            <td><strong>エンドユーザー自身の ID</strong></td>
+            <td><strong>ソースプラットフォーム側で適用</strong></td>
+            <td>ユーザーごとの権限を反映した分析体験</td>
+          </tr>
+        </table>
+      </div>
+
+      <h3>OAuth クライアントアプリケーションの設定項目</h3>
+      <div class="table-wrapper">
+        <table>
+          <tr><th>項目</th><th>説明</th></tr>
+          <tr><td>Config ID</td><td>設定の識別子</td></tr>
+          <tr><td>OAuth client application name</td><td>クライアントアプリケーション名</td></tr>
+          <tr><td>Authentication type</td><td>認証タイプ</td></tr>
+          <tr><td>Client ID / Client secret</td><td>OAuth クライアントの ID とシークレット</td></tr>
+          <tr><td>Token endpoint URL</td><td>トークンエンドポイント URL</td></tr>
+          <tr><td>Authorization endpoint URL</td><td>認可エンドポイント URL</td></tr>
+          <tr><td>OAuth scopes</td><td>要求する OAuth スコープ</td></tr>
+          <tr><td>VPC connection ARN</td><td>VPC 接続の ARN (オプション)</td></tr>
+          <tr><td>Data source type</td><td>SNOWFLAKE または DATABRICKS を選択</td></tr>
+        </table>
+      </div>
+
+      <h3>API 変更履歴</h3>
+      <div class="table-wrapper">
+        <table>
+          <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+          <tr>
+            <td>2026/11/21</td>
+            <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/b75654-quicksight.html" target="_blank" rel="noopener noreferrer">quicksight</a></td>
+            <td>26 new 17 updated api methods - Quicksight public SDK release for November 20</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="arrow-icon">→</span><span>AWS Quick アカウントがあり、管理者権限を持つユーザーがアカウント設定を変更できること</span></div>
+      <div class="check-item"><span class="arrow-icon">→</span><span>Snowflake / Databricks 側で OAuth クライアントアプリケーション (クライアント ID、シークレット、トークン / 認可エンドポイント) が構成済みであること</span></div>
+      <div class="check-item"><span class="arrow-icon">→</span><span>エンドユーザーごとに Snowflake / Databricks のアカウントと適切なアクセス権限が付与されていること</span></div>
+      <div class="check-item"><span class="arrow-icon">→</span><span>対象データセットが DirectQuery であること (SPICE データセットは 3LO によるエンドユーザー権限に非対応)</span></div>
+
+      <h3>設定手順</h3>
+      <div class="step-card">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <div class="step-title">🛡️ 管理者による OAuth クライアントアプリケーションの登録</div>
+          <div>Quick コンソールで [Manage Account] → [Security] の [Manage OAuth Client Applications] を選択。[Add OAuth client application] で Config ID、クライアント ID / シークレット、トークン / 認可エンドポイント URL、OAuth スコープなどを入力し、Data source type で SNOWFLAKE または DATABRICKS を選択して保存。</div>
+        </div>
+      </div>
+      <div class="step-card">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <div class="step-title">📦 作成者による 3LO データソースの作成</div>
+          <div>[Create Data Source] で Snowflake または Databricks を選択し、認証方式として [3LO] を選択。接続情報を入力 (Databricks の場合はアカウントに関連付けられたメールアドレスも入力) し、<span class="highlight">[Trusted Identity Propagation] を必ず選択</span>して [Create data source] を実行。</div>
+        </div>
+      </div>
+      <div class="step-card">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <div class="step-title">👤 エンドユーザーによる認証とダッシュボードの利用</div>
+          <div>作成者がデータソースとダッシュボードの両方をエンドユーザーに共有。エンドユーザーは Quick にサインインし、[Data Source] ページで自身の Snowflake / Databricks の OAuth ログインで認証して保存。以降、ダッシュボードでは自身の権限で許可されたデータのみが表示される。</div>
+        </div>
+      </div>
+
+      <div class="warning-box">
+        <div class="warn-title">⚠️ 重要な注意点</div>
+        Trusted Identity Propagation を選択しない場合、作成者の資格情報が接続に埋め込まれ、すべてのユーザーが作成者の権限を共有してしまうため注意してください。
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <h3>ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>ガバナンスの一元化</strong>: 行・列レベルのアクセス制御を Snowflake / Databricks Unity Catalog 側で一元管理でき、二重管理によるポリシー不整合リスクを排除</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>コンプライアンス強化</strong>: 誰がどのデータにアクセスしたかがエンドユーザー単位で記録され、監査対応が容易に</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>展開スピードの向上</strong>: Quick 側で権限設定を再構築する必要がなく、既存のガバナンス体制のまま分析体験を迅速に全社展開</span></div>
+      <h3>技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>エンドユーザー単位のクエリ実行</strong>: クエリがエンドユーザー自身の ID で実行され、ソースプラットフォームのアクセス制御がそのまま機能</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>設定の簡素化</strong>: 管理者が OAuth クライアントアプリケーションを一度登録すれば、作成者はデータソース作成時に 3LO を選択するだけ</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>既存フローとの共存</strong>: Databricks の agentic カタログ体験は PAT と 3LO の両方で動作し、3LO によるアイデンティティ強制はオプションかつ追加的な機能</span></div>
+    </div>
+
+    <!-- 制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+      <h3>制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>3LO によるエンドユーザー権限は <strong>DirectQuery データセットのみ</strong>でサポートされ、SPICE データセットでは利用不可</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>データセットを SPICE に切り替えた場合や変換を適用した場合、アイデンティティ強制は適用されない</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>エンドユーザーごとに Snowflake / Databricks のアカウントが必要</span></div>
+      <h3>考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>Trusted Identity Propagation を有効化しないと全ユーザーが作成者の権限を共有してしまうため、設定の確認が重要</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>エンドユーザーは初回利用時にデータソースページで自身の資格情報による認証が必要。利用開始手順の周知を</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>DirectQuery 実行のため、ソース側のコンピューティングコスト (Snowflake ウェアハウス、Databricks クラスターなど) とクエリパフォーマンスを考慮</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>3LO を利用しない場合は、従来どおり PAT などで接続し、Quick 側の RLS / CLS ルールで権限を手動管理することも引き続き可能</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">📈 1. 部門別の売上データを単一ダッシュボードで提供</div>
+        <div><strong>シナリオ</strong>: Snowflake に全社の売上データを保持し、行レベルポリシーで営業担当者が自部門のデータのみ参照できるよう制御している企業が、Quick のダッシュボードを全営業部門に展開したい。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">手順</span><span class="code-title">実装例</span></div>
+          <pre><code class="language-plaintext">1. 管理者が Quick に Snowflake 用 OAuth クライアントアプリケーションを登録
+2. データキュレーターが 3LO + Trusted Identity Propagation で
+   Snowflake データソースと DirectQuery データセットを作成
+3. 単一の売上ダッシュボードを全営業部門に共有</code></pre>
+        </div>
+        <div class="effect">✅ <strong>効果</strong>: 部門ごとにダッシュボードやデータセットを複製する必要がなく、Snowflake の行レベルポリシーに基づいて各担当者には自部門のデータのみが表示される。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">💬 2. Unity Catalog のガバナンスを活かした自然言語分析</div>
+        <div><strong>シナリオ</strong>: Databricks Unity Catalog で列レベルのマスキングやテーブルアクセス制御を運用している企業が、Quick の Chat 機能による自然言語でのデータ探索を安全に開放したい。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">手順</span><span class="code-title">実装例</span></div>
+          <pre><code class="language-plaintext">1. 管理者が Databricks 用 OAuth クライアントアプリケーションを登録
+2. 3LO 認証のデータソースを作成し、Trusted Identity Propagation を有効化
+3. エンドユーザーが自身の Databricks ID で認証し、Chat でデータに質問</code></pre>
+        </div>
+        <div class="effect">✅ <strong>効果</strong>: Chat 経由のクエリも各ユーザーの Unity Catalog 権限で実行され、マスキング対象の列や権限のないテーブルが露出するリスクを排除しながら自然言語分析を提供できる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">🔒 3. 機密データを扱う Apps のアクセス制御</div>
+        <div><strong>シナリオ</strong>: 人事・財務などの機密データを扱う業務アプリケーションを Quick の Apps で構築し、閲覧者の役職や所属に応じたデータアクセス制御を実現したい。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">手順</span><span class="code-title">実装例</span></div>
+          <pre><code class="language-plaintext">1. ソースプラットフォーム側で役職・所属に応じた行・列レベルポリシーを定義
+2. 3LO 認証のデータソースを使用して Apps を構築
+3. エンドユーザーは自身の ID で認証して Apps を利用</code></pre>
+        </div>
+        <div class="effect">✅ <strong>効果</strong>: アプリケーション側で複雑な権限ロジックを実装することなく、ソースプラットフォームのポリシーがそのまま適用された安全な業務アプリケーションを提供できる。</div>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金・利用可能リージョン</h2>
+      <div class="card">
+        <div class="card-title">💵 料金</div>
+        <div>3LO とエンドユーザー権限のサポート自体に<span class="highlight">追加料金はありません</span>。AWS Quick の利用料金に加えて、DirectQuery の実行に伴う Snowflake / Databricks 側のコンピューティング料金が発生します。詳細は AWS Quick の料金ページを参照してください。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🌍 利用可能リージョン</div>
+        <div>AWS Quick が利用可能なすべてのリージョンで利用できます。最新のリージョン一覧は <a class="aws-link" href="https://docs.aws.amazon.com/quick/latest/userguide/regions.html" target="_blank" rel="noopener noreferrer">Quick のリージョンに関するドキュメント</a>を参照してください。</div>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="check-item"><span class="arrow-icon">→</span><span><strong>Snowflake</strong>: AWS パートナーのデータクラウドプラットフォーム。行・列レベルのアクセス制御を含むガバナンスポリシーが 3LO 経由でそのまま適用される</span></div>
+      <div class="check-item"><span class="arrow-icon">→</span><span><strong>Databricks Unity Catalog</strong>: Databricks の統合ガバナンスソリューション。ACL に基づくテーブルアクセスやデータフィルターが Quick のエンドユーザーに適用される</span></div>
+      <div class="check-item"><span class="arrow-icon">→</span><span><strong>AWS Secrets Manager</strong>: OAuth クライアント資格情報 (2LO) を使用する場合の資格情報の保管に利用</span></div>
+      <div class="check-item"><span class="arrow-icon">→</span><span><strong>Amazon VPC</strong>: VPC 内の Snowflake / Databricks や IdP への接続には VPC 接続 ARN を設定可能</span></div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <p>
+        AWS Quick の 3LO サポートにより、Snowflake / Databricks Unity Catalog で定義済みのガバナンスポリシーをそのまま活かした
+        <span class="highlight">エンドユーザー単位のアクセス制御</span>が実現しました。権限管理の二重化を解消しながら、
+        Chat・ダッシュボード・Apps を安全に全社展開できます。
+      </p>
+      <p>
+        Snowflake や Databricks をデータ基盤として利用している組織は、OAuth クライアントアプリケーションの登録と
+        DirectQuery データセットでの 3LO 設定を検討することを推奨します。
+      </p>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典:</p>
+      <ul>
+        <li>・<a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/aws-quick-snowflake-databricks-3lo-end-user-permissions/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): AWS Quick - Snowflake / Databricks 3LO and end-user permissions</a></li>
+        <li>・<a class="aws-link" href="https://docs.aws.amazon.com/quick/latest/userguide/connecting-to-snowflake.html" target="_blank" rel="noopener noreferrer">ドキュメント: Using Snowflake with AWS Quick</a></li>
+        <li>・<a class="aws-link" href="https://docs.aws.amazon.com/quick/latest/userguide/catalog-integration-databricks-3lo.html" target="_blank" rel="noopener noreferrer">ドキュメント: Setting up identity enforcement with Databricks 3LO</a></li>
+        <li>・<a class="aws-link" href="https://docs.aws.amazon.com/quick/latest/userguide/regions.html" target="_blank" rel="noopener noreferrer">ドキュメント: Quick のリージョン</a></li>
+        <li>・<a class="aws-link" href="https://awsapichanges.com/archive/changes/b75654-quicksight.html" target="_blank" rel="noopener noreferrer">AWS API Changes: quicksight (2026/11/21)</a></li>
+      </ul>
+      <p>本インフォグラフィックは AWS News レポート (2026-11-23) を基に作成されました。</p>
+    </footer>
+  </div>
+
+  <!-- Mermaid.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+
+  <!-- highlight.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>

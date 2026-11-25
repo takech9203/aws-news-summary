@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon SageMaker HyperPod - Slurm クラスターでのハングジョブ検出と復旧</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 8px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: var(--aws-smile-orange);
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.ba-card {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.12);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.5);
+}
+
+.ba-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.ba-before .ba-title { color: #FF8A73; }
+.ba-after .ba-title { color: #6BCB4F; }
+
+.ba-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ba-card li { margin: 6px 0; font-size: 14px; }
+
+/* Feature cards */
+.feature-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid var(--aws-orange);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+
+.feature-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 6px;
+}
+
+.feature-card ul {
+  margin: 6px 0 0 0;
+  padding-left: 20px;
+}
+
+.feature-card li { margin: 4px 0; font-size: 14px; }
+
+/* Flow diagram */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 18px;
+  text-align: center;
+  min-width: 110px;
+  font-size: 14px;
+}
+
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+
+/* Check / cross lists */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+
+.check-icon { color: #6BCB4F; font-size: 17px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 17px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 17px; flex-shrink: 0; }
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.effect-label {
+  display: inline-block;
+  background: rgba(29, 129, 2, 0.25);
+  color: #6BCB4F;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-right: 6px;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 14px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* Step blocks */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 18px 0;
+  align-items: flex-start;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.step-content { flex: 1; min-width: 0; }
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+.step-content p { margin: 6px 0; font-size: 14px; }
+
+/* Stat cards */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-orange);
+}
+
+.stat-label { font-size: 13px; margin-top: 4px; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .before-after { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <span class="service-badge">Amazon SageMaker HyperPod</span>
+    <h1>🕵️ Slurm クラスターでのハングジョブ検出と復旧</h1>
+    <div class="subtitle">
+      <span class="date">📅 リリース日: 2026 年 11 月 23 日</span> ｜
+      機能: Hung Job Detection (ハングしたトレーニングジョブの検出と復旧)
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Amazon SageMaker HyperPod が、Slurm オーケストレーションクラスター上で<span class="highlight">ハング (進捗停止) したトレーニングジョブの検出</span>に対応しました。
+      進捗が止まったジョブを<span class="highlight">数分以内に特定</span>して Amazon CloudWatch にイベントを書き込み、オプションでジョブをキャンセルして Slurm のジョブキューに戻します。
+      ジョブは GPU をアイドル状態で占有し続ける代わりに、<span class="highlight">最後のチェックポイントから再開</span>できます。
+    </p>
+    <p>
+      検出エージェントは各ノード上で動作し、ジョブの出力 (stdout)、GPU アクティビティ、ユーザー定義のログパターン (トレーニングステップのメッセージや NCCL エラーなど) を監視します。
+      環境変数 <code class="inline">HYPERPOD_HANG_RULES</code> でルールファイルを指定するだけで有効化でき、<strong>トレーニングスクリプトやコンテナの変更は不要</strong>です。
+    </p>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">数分以内</div>
+        <div class="stat-label">ハングしたジョブを自動検出</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">コード変更ゼロ</div>
+        <div class="stat-label">環境変数の設定のみで有効化</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">FW 非依存</div>
+        <div class="stat-label">PyTorch / TensorFlow / JAX / カスタム</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-card ba-before">
+        <div class="ba-title">❌ Before: 手動運用に依存</div>
+        <ul>
+          <li>NCCL タイムアウトやデッドロックでハングしても、GPU を保持したまま Slurm 上は「実行中」と報告され続けた</li>
+          <li>誰かが手動で気付くまで、高価な GPU がアイドル状態で占有され続けた</li>
+          <li>既存の auto-resume はハードウェア障害で終了したジョブが対象で、終了せずにハングするジョブはカバー外</li>
+        </ul>
+      </div>
+      <div class="ba-card ba-after">
+        <div class="ba-title">✅ After: 検出から復旧まで自動化</div>
+        <ul>
+          <li>出力、GPU アクティビティ、ログパターンに基づき、ハングを数分以内に自動検出</li>
+          <li>検出イベントを CloudWatch に記録し、オプションで自動キャンセル + requeue が可能</li>
+          <li>環境変数の指定だけで有効化。コードやコンテナの変更なしに主要フレームワークで利用可能</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Cluster["☁️ SageMaker HyperPod Slurm クラスター"]
+        subgraph Node["🖥️ コンピュートノード"]
+            Job["🏋️ トレーニングジョブ<br/>PyTorch / TensorFlow / JAX"]
+            Agent["🕵️ ハングジョブ検出エージェント<br/>各ノードで動作"]
+        end
+        Rules[("📄 ルールファイル<br/>FSx for Lustre 等の共有ストレージ")]
+        Slurm["🧭 Slurm コントローラー"]
+    end
+
+    CW["📈 Amazon CloudWatch Logs<br/>HANG_DETECTED イベント"]
+    User(["👤 ML エンジニア"])
+
+    User -->|"HYPERPOD_HANG_RULES を指定して sbatch"| Slurm
+    Slurm --> Job
+    Rules -.->|検出ルールを読み込み| Agent
+    Agent -->|"stdout / GPU / ログパターンを監視"| Job
+    Agent -->|ハング検出イベント| CW
+    Agent -.->|"action: cancel の場合キャンセル"| Slurm
+    Slurm -.->|"requeue してチェックポイントから再開"| Job
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef warning fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#5D4037
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Cluster cloud
+    class Node layer
+    class Job process
+    class Agent internal
+    class Rules storage
+    class Slurm internal
+    class CW warning
+    class User user
+      </pre>
+    </div>
+    <p class="diagram-note">
+      各ノード上の検出エージェントが共有ストレージ上のルールファイルに従ってジョブを監視し、ハングを検出すると CloudWatch にイベントを書き込み、設定に応じてジョブをキャンセルして Slurm に再キューイングさせる流れを示しています。
+    </p>
+
+    <div class="flow-diagram">
+      <div class="flow-step">🏋️ ジョブ実行</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🕵️ 監視<br/>stdout / GPU / ログ</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🚨 ハング検出<br/>数分以内</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">📈 CloudWatch<br/>イベント記録</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🔄 cancel + requeue<br/>チェックポイント再開</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="feature-card">
+      <div class="feature-title">🔍 1. デフォルト検出 (出力と GPU アクティビティの監視)</div>
+      <ul>
+        <li>ルールファイルに <code class="inline">{"enabled": true}</code> のみを記述すると、stdout と GPU アクティビティを監視するデフォルト検出を使用</li>
+        <li>GPU がメモリを保持したままアイドル状態で、出力が長時間停止している場合にハングと判定 (ランデブーハングを捕捉)</li>
+        <li>GPU の状態にかかわらず、出力がさらに長い期間停止した場合もハングと判定</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">📐 2. カスタム検出ルール (ログパターン監視)</div>
+      <ul>
+        <li>RE2 正規表現 (最大 256 文字) でログパターンを定義し、ステップやエポックの進捗を追跡</li>
+        <li><code class="inline">timeout_minutes</code> 内にパターンがマッチしない場合にハングと判定</li>
+        <li><code class="inline">fault_on_match</code> で NCCL エラーなどの出現時に即座にハングと判定</li>
+        <li><code class="inline">stop_pattern</code>、<code class="inline">start_timeout_minutes</code>、<code class="inline">metric_evaluation_data_points</code> などの調整が可能</li>
+        <li>1 ファイルに最大 20 ルール、サイズは最大 1 MB</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🔔 3. 検出時のアクションと CloudWatch 連携</div>
+      <ul>
+        <li><code class="inline">action_policy.action</code> に <code class="inline">notify</code> (デフォルト、記録のみ) または <code class="inline">cancel</code> (キャンセルも実行) を指定</li>
+        <li>Slurm はデフォルトでキャンセルされたジョブを requeue し、最後のチェックポイントから再開可能 (<code class="inline">#SBATCH --no-requeue</code> で停止のみも可)</li>
+        <li>イベントは <code class="inline">HANG_DETECTED</code>、<code class="inline">HANG_ACTION_TAKEN</code>、<code class="inline">CONFIG_ERROR</code> として CloudWatch に記録</li>
+      </ul>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">🧩 4. フレームワーク非依存のシンプルな有効化</div>
+      <ul>
+        <li>環境変数 <code class="inline">HYPERPOD_HANG_RULES</code> にルールファイルのパスを指定するだけでジョブ単位に有効化</li>
+        <li>トレーニングスクリプトやコンテナの変更は不要。PyTorch、TensorFlow、JAX、カスタムスクリプトに対応</li>
+        <li><code class="inline">srun --no-hang-detection</code> で特定のジョブステップのみ無効化も可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📄 ルールファイルのフィールド</h3>
+    <table>
+      <tr><th>フィールド</th><th>必須</th><th>説明</th></tr>
+      <tr><td><code class="inline">enabled</code></td><td>はい</td><td>true で検出を有効化。false または未指定の場合は監視されない</td></tr>
+      <tr><td><code class="inline">monitoring.log_file</code></td><td>いいえ</td><td>監視対象のログファイル。デフォルトは Slurm の出力ファイル (<code class="inline">--output</code> または <code class="inline">slurm-{job-id}.out</code>)</td></tr>
+      <tr><td><code class="inline">rules</code></td><td>いいえ</td><td>最大 20 ルール。有効な <code class="inline">log_pattern</code> ルールはデフォルト検出を置き換える</td></tr>
+      <tr><td><code class="inline">action_policy.action</code></td><td>いいえ</td><td><code class="inline">notify</code> (デフォルト) はイベント記録のみ。<code class="inline">cancel</code> はジョブもキャンセル</td></tr>
+    </table>
+
+    <h3>📐 ルールのフィールド</h3>
+    <table>
+      <tr><th>フィールド</th><th>必須</th><th>説明</th></tr>
+      <tr><td><code class="inline">name</code></td><td>はい</td><td>ルール名。イベントに表示される</td></tr>
+      <tr><td><code class="inline">type</code></td><td>はい</td><td><code class="inline">log_pattern</code> のみサポート</td></tr>
+      <tr><td><code class="inline">enabled</code></td><td>いいえ</td><td>デフォルトは false。true で有効化</td></tr>
+      <tr><td><code class="inline">log_pattern</code></td><td>はい</td><td>RE2 正規表現。最大 256 文字</td></tr>
+      <tr><td><code class="inline">timeout_minutes</code></td><td>条件付き</td><td>パターンが未マッチのまま許容される時間 (<code class="inline">fault_on_match</code> が true の場合は不要)</td></tr>
+      <tr><td><code class="inline">fault_on_match</code></td><td>いいえ</td><td>true の場合、マッチした時点でハングと判定。エラーパターン向け</td></tr>
+      <tr><td><code class="inline">stop_pattern</code></td><td>いいえ</td><td>マッチするとルールを無効化するパターン (例: Training complete)</td></tr>
+      <tr><td><code class="inline">start_timeout_minutes</code></td><td>いいえ</td><td>ジョブ開始から最初のマッチまでの最大時間。起動時のハングを捕捉</td></tr>
+      <tr><td><code class="inline">metric_evaluation_data_points</code></td><td>いいえ</td><td>ハング判定に必要な 10 秒間隔の連続失敗チェック回数。デフォルトは 1</td></tr>
+    </table>
+
+    <h3>📈 CloudWatch 検出イベント</h3>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>ロググループ</td><td><code class="inline">/aws/sagemaker/Clusters/{cluster-name}/{cluster-id}</code></td></tr>
+      <tr><td>ログストリーム</td><td><code class="inline">SageMakerHangJobDetectionEvents/{controller-instance-group-name}/{controller-instance-id}</code></td></tr>
+      <tr><td>イベントタイプ</td><td><code class="inline">HANG_DETECTED</code> (ハング検出)、<code class="inline">HANG_ACTION_TAKEN</code> (キャンセル実行)、<code class="inline">CONFIG_ERROR</code> (ルールファイル不正)</td></tr>
+    </table>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">HANG_DETECTED イベントの例</span>
+      </div>
+      <pre><code class="language-json">{
+  "event_type": "HANG_DETECTED",
+  "job_id": "12345",
+  "step_id": "0",
+  "node": "ip-172-22-230-3",
+  "evidence": "stdout stale for 18 min and GPU idle with memory allocated",
+  "layer": "signal_evaluator",
+  "detected_at": "2026-04-22T00:58:47Z",
+  "job_action": "notify",
+  "config_source": "per_job_env_var"
+}</code></pre>
+    </div>
+    <p style="font-size: 14px;">
+      <code class="inline">layer</code> フィールドはデフォルト検出 (<code class="inline">signal_evaluator</code>) とカスタムルール (<code class="inline">pattern_evaluator</code>) のどちらが発火したかを示します。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>📋 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>SageMaker HyperPod の Slurm オーケストレーションクラスターを利用していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>既存クラスターの場合、クラスターソフトウェアを最新の AMI に更新していること (更新しない場合、ハングジョブ検出は利用不可)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>マルチノードジョブの場合、ルールファイルを全コンピュートノードから読み取り可能な共有ストレージ (Amazon FSx for Lustre など) に配置すること</span></div>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">ルールファイルを作成する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">最小構成のルールファイル</span></div>
+          <pre><code class="language-bash">echo '{"enabled": true}' &gt; /fsx/my-project/rules.json</code></pre>
+        </div>
+        <p>共有ストレージ上に検出を有効化するルールファイルを作成します。この最小構成では、ジョブの出力と GPU アクティビティを監視するデフォルト検出が使用され、ハング検出時にはイベントの記録のみが行われます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">ジョブ投入時に環境変数を設定する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">sbatch スクリプト</span></div>
+          <pre><code class="language-bash">#SBATCH --export=ALL,HYPERPOD_HANG_RULES=/fsx/my-project/rules.json</code></pre>
+        </div>
+        <p><code class="inline">HYPERPOD_HANG_RULES</code> 環境変数にルールファイルのパスを指定します。この環境変数を設定したジョブのみが監視対象となります。多数のジョブに適用する場合は、シェルプロファイルやサイト共通のプロファイルスクリプトでも設定できます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">カスタムルールと自動キャンセルを設定する (推奨)</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">進捗監視 + NCCL エラー即時検出 + 自動キャンセル</span></div>
+          <pre><code class="language-json">{
+  "enabled": true,
+  "rules": [
+    {
+      "name": "epoch_progress",
+      "type": "log_pattern",
+      "enabled": true,
+      "log_pattern": "Epoch \\d+/\\d+ complete",
+      "timeout_minutes": 45
+    },
+    {
+      "name": "nccl_error",
+      "type": "log_pattern",
+      "enabled": true,
+      "log_pattern": "NCCL error|NCCL WARN",
+      "fault_on_match": true
+    }
+  ],
+  "action_policy": {
+    "action": "cancel"
+  }
+}</code></pre>
+        </div>
+        <p>エポック完了のログが 45 分間出力されない場合、または NCCL エラーが出現した時点でハングと判定し、自動キャンセルする設定例です。キャンセルされたジョブは Slurm によって requeue され、最後のチェックポイントから再開されます。GPU がビジーのまま進捗しないジョブはデフォルト検出では捕捉できないため、進捗を追跡する <code class="inline">log_pattern</code> ルールを少なくとも 1 つ追加することが推奨されています。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">検出イベントを確認する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">CloudWatch Logs のフィルタリング</span></div>
+          <pre><code class="language-bash">aws logs filter-log-events \
+  --log-group-name /aws/sagemaker/Clusters/{cluster-name}/{cluster-id} \
+  --log-stream-name-prefix SageMakerHangJobDetectionEvents/ \
+  --filter-pattern '{ $.job_id = "12345" }'</code></pre>
+        </div>
+        <p><code class="inline">CONFIG_ERROR</code> は sbatch や squeue、ジョブ出力には表示されないため、新しいルールファイルは短いジョブでテストし、本番ジョブで使用する前にログストリームを確認してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>GPU コストの削減</strong>: ハングしたジョブが高価な GPU をアイドル状態で占有し続ける時間を数分以内の検出で最小化し、クラスターの投資対効果を向上</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>運用負荷の軽減</strong>: 進捗停止の手動監視が不要になり、オンコール対応や定期的なジョブ状態確認の工数を削減</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>トレーニング完了までの時間短縮</strong>: ハングからの自動復旧により、人が気付くまでの待ち時間なしでチェックポイントから再開可能</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>非侵襲的な導入</strong>: 環境変数の設定のみで有効化でき、トレーニングコードやコンテナイメージの変更が不要</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>フレームワーク非依存</strong>: PyTorch、TensorFlow、JAX、カスタムスクリプトなど、あらゆるワークロードで利用可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な検出ルール</strong>: デフォルト検出に加え、RE2 正規表現によるログパターン監視、即時検出、誤検知低減など細かな調整が可能</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>可観測性との統合</strong>: 検出イベントが CloudWatch Logs に集約され、既存のモニタリングやアラートの仕組みと連携しやすい</span></div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>🚫 制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>デフォルト検出は、GPU がビジーのまま進捗しないジョブ (ループに陥ったジョブなど) を捕捉できない。ステップやエポックを追跡する <code class="inline">log_pattern</code> ルールの追加が推奨される</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>デフォルト検出は持続的な非アクティブ期間を待つため、検出は即時ではない。短いカスタムタイムアウトは検出を速くするが、チェックポイント保存などの正常な停止を誤検知する可能性がある</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>パターンは RE2 構文のみ対応。後方参照や先読み / 後読みを使用したパターンはコンパイルされず、そのルールはスキップされる</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>ルールファイルは最大 20 ルール、最大 1 MB。超過したファイルは拒否され、ジョブは監視されない</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>既存クラスターでは、最新の AMI へのクラスターソフトウェア更新が必要</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>カスタムルールはそのジョブのデフォルト検出を置き換えるため、パターンがマッチし続ける限り GPU がアイドルでもハングと判定されない</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>エージェントはルールファイルの所有者や書き込み権限を検証しない。ルールファイルとそのディレクトリは所有者のみ書き込み可能に設定する (<code class="inline">chmod 600</code> または共有時は <code class="inline">chmod 644</code>)</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>ルールファイルの変更を確実に反映するには、ジョブをキャンセルして再投入する必要がある</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>ハングジョブ検出は、ハードウェア障害で終了したジョブを再起動する auto-resume とは独立した機能である</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🌐 ユースケース 1: 大規模分散トレーニングでの NCCL タイムアウト対策</div>
+      <p><strong>シナリオ</strong>: 数百 GPU を使用する LLM の事前トレーニングで、ノード間通信の問題により NCCL タイムアウトが発生し、全ノードがバリアで待機したままジョブがハングする。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">NCCL エラーの即時検出 + 自動キャンセル</span></div>
+        <pre><code class="language-json">{
+  "enabled": true,
+  "rules": [
+    {
+      "name": "nccl_error",
+      "type": "log_pattern",
+      "enabled": true,
+      "log_pattern": "NCCL error|NCCL WARN",
+      "fault_on_match": true
+    }
+  ],
+  "action_policy": { "action": "cancel" }
+}</code></pre>
+      </div>
+      <p><span class="effect-label">効果</span>NCCL エラーの出現と同時にジョブがキャンセル・requeue され、タイムアウトを待たずに最後のチェックポイントから再開。大規模クラスターのアイドル時間を大幅に削減。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">📊 ユースケース 2: トレーニング進捗の停滞監視</div>
+      <p><strong>シナリオ</strong>: データパイプラインの停止やデッドロックにより、GPU はビジーに見えるがトレーニングステップが進まない状態を検出したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">ステップ進捗の監視ルール</span></div>
+        <pre><code class="language-json">{
+  "enabled": true,
+  "rules": [
+    {
+      "name": "step_progress",
+      "type": "log_pattern",
+      "enabled": true,
+      "log_pattern": "step \\d+ loss",
+      "timeout_minutes": 30,
+      "start_timeout_minutes": 60,
+      "metric_evaluation_data_points": 3,
+      "stop_pattern": "Training complete"
+    }
+  ],
+  "action_policy": { "action": "cancel" }
+}</code></pre>
+      </div>
+      <p><span class="effect-label">効果</span>ステップログが 30 分間出力されない場合にハングと判定。デフォルト検出では捕捉できない「GPU ビジーのまま進捗停止」のケースもカバーし、起動時のハングや誤検知にも対応。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🪜 ユースケース 3: 通知のみで段階的に導入する</div>
+      <p><strong>シナリオ</strong>: 自動キャンセルによる誤検知のリスクを避けつつ、まずはハング発生状況を可視化して運用判断の材料にしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">notify のみの最小構成で全ジョブに適用</span></div>
+        <pre><code class="language-bash"># notify のみの最小構成でルールファイルを作成
+echo '{"enabled": true}' &gt; /fsx/team/rules.json
+chmod 644 /fsx/team/rules.json
+
+# サイト共通のプロファイルで全ジョブに適用
+export HYPERPOD_HANG_RULES=/fsx/team/rules.json</code></pre>
+      </div>
+      <p><span class="effect-label">効果</span>デフォルトの <code class="inline">notify</code> アクションにより、ジョブへの影響なしに CloudWatch へハング検出イベントが記録される。検出精度を確認した後、<code class="inline">action: cancel</code> へ段階的に移行することで安全に自動復旧を導入できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      ハングジョブ検出機能自体の追加料金に関する記載は、公式発表にはありません。SageMaker HyperPod の利用料金 (インスタンス料金など) と、CloudWatch Logs へのイベント書き込みに伴う CloudWatch の標準料金が適用されます。
+      詳細は <a href="https://aws.amazon.com/sagemaker/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">Amazon SageMaker の料金ページ</a>を参照してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>Amazon SageMaker HyperPod が利用可能な<span class="highlight">すべての AWS リージョン</span>で利用できます。</p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="feature-card">
+      <div class="feature-title">🔄 Amazon SageMaker HyperPod auto-resume</div>
+      <p style="margin: 0; font-size: 14px;">ハードウェア障害で終了したジョブを自動再起動する機能。終了せずにハングするジョブを対象とする今回の機能とは独立しており、組み合わせることで耐障害性が向上。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">📈 Amazon CloudWatch Logs</div>
+      <p style="margin: 0; font-size: 14px;">ハング検出イベント (<code class="inline">HANG_DETECTED</code> など) の記録先。メトリクスフィルターやアラームと組み合わせて通知を自動化可能。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🗄️ Amazon FSx for Lustre</div>
+      <p style="margin: 0; font-size: 14px;">マルチノードジョブでルールファイルを全ノードから参照するための共有ストレージとして利用。</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-title">🧭 Slurm</div>
+      <p style="margin: 0; font-size: 14px;">SageMaker HyperPod がサポートするワークロードオーケストレーター。キャンセルされたジョブのデフォルトの requeue 動作により、チェックポイントからの再開を実現。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      SageMaker HyperPod の Slurm クラスターで、NCCL タイムアウトやデッドロックなどによりハングしたトレーニングジョブを<span class="highlight">数分以内に自動検出</span>し、<span class="highlight">キャンセル・再キューイングまで自動化</span>できるようになりました。
+      環境変数の設定のみで導入でき、コード変更が不要なため、大規模 GPU クラスターを運用するチームはまず <code class="inline">notify</code> モードで検出状況を可視化し、進捗を追跡する <code class="inline">log_pattern</code> ルールを整備した上で自動キャンセルへ移行することを推奨します。
+    </p>
+  </div>
+
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-sagemaker-hyperpod-slurm-hung-jobs/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New) - Amazon SageMaker HyperPod Slurm Hung Jobs</a></li>
+      <li><a href="https://aws.amazon.com/blogs/machine-learning/introducing-workload-recovery-and-expanded-infrastructure-checks-on-amazon-sagemaker-hyperpod/" target="_blank" rel="noopener noreferrer" class="aws-link">AWS Blog - Introducing workload recovery and expanded infrastructure checks on Amazon SageMaker HyperPod</a></li>
+      <li><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-resiliency-slurm-hang-detection.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント - Hung job detection</a></li>
+      <li><a href="https://aws.amazon.com/sagemaker/pricing/" target="_blank" rel="noopener noreferrer" class="aws-link">料金ページ - Amazon SageMaker Pricing</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-23) を基に作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

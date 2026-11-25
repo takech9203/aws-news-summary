@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon SageMaker HyperPod - MultiNodeTrainingValidation によるトレーニング正常性の検証</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.subtitle .date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* 統計カード */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.15), rgba(140, 79, 255, 0.12));
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 18px 14px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--aws-orange);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 6px;
+}
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.ba-box { border-radius: 8px; padding: 16px; }
+
+.ba-before {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.ba-after {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.ba-before .ba-title { color: #FF6B4A; }
+.ba-after .ba-title { color: #4CAF50; }
+
+.ba-box ul { margin: 0; padding-left: 2px; list-style: none; }
+.ba-box li { margin: 8px 0; display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+.ba-before li::before { content: "✗"; color: #FF6B4A; font-weight: 700; flex-shrink: 0; }
+.ba-after li::before { content: "✓"; color: #4CAF50; font-weight: 700; flex-shrink: 0; }
+
+/* チェックリスト */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-item::before { content: "✅"; flex-shrink: 0; }
+.cross-item::before { content: "⚠️"; flex-shrink: 0; }
+.warn-item::before { content: "💡"; flex-shrink: 0; }
+
+/* テーブル */
+.table-wrap { overflow-x: auto; margin: 16px 0; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+
+tr.new-row td {
+  background: rgba(255, 153, 0, 0.08);
+}
+
+.badge-new {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 10px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+code.inline {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--aws-smile-orange);
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase p { margin: 6px 0; font-size: 14px; }
+
+.effect-label {
+  color: #4CAF50;
+  font-weight: 700;
+}
+
+/* ステップ */
+.step {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.step-num {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+.step-body { flex: 1; min-width: 0; }
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+/* 2 カラムグリッド */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 760px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  background: rgba(0, 161, 201, 0.1);
+  border-left: 3px solid var(--aws-teal);
+  padding: 10px 14px;
+  border-radius: 0 6px 6px 0;
+  margin-top: 12px;
+}
+
+ul.plain { margin: 8px 0; padding-left: 20px; }
+ul.plain li { margin: 6px 0; }
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0 0 0; padding-left: 20px; }
+footer li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="service-badge">☁️ Amazon SageMaker HyperPod</div>
+    <h1>🩺 MultiNodeTrainingValidation<br>実トレーニングでノードの計算正常性を検証</h1>
+    <div class="subtitle">
+      <span class="date">📅 2026 年 11 月 23 日リリース</span> ｜ 新しいディープヘルスチェック ｜ Amazon EKS オーケストレーション対応
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>📌 概要</h2>
+    <p>
+      Amazon EKS でオーケストレーションされた SageMaker HyperPod クラスターが、新しいディープヘルスチェック
+      <span class="highlight">MultiNodeTrainingValidation</span> をサポート。ジョブがスケジュールされる前に、
+      固定の <span class="highlight">Megatron-LM ワークロード</span>を各インスタンスおよび EFA を介した複数インスタンス間で実際にトレーニングし、
+      ノードが「正しくトレーニングできるか」を検証します。loss が <strong>NaN / 無限大</strong> になった場合、<strong>発散</strong>した場合、
+      <strong>制限時間内に完了しない</strong>場合、そのインスタンスは失敗と判定されます。
+    </p>
+    <p>
+      微細な故障のある GPU は、DCGM 診断や NCCL テストをすべてパスしながら誤った計算結果を返すことがあります
+      (silent data corruption)。この種の障害は本番トレーニング中に NaN loss として初めて顕在化し、
+      数日分の GPU 時間が無駄になる原因でした。本チェックにより、クラスターの <span class="highlight">goodput (有効稼働率)</span> を向上できます。
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">419 件</div>
+        <div class="stat-label">Meta の Llama 3 405B 事前トレーニング (54 日間) で発生した予期しない中断</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">6 件</div>
+        <div class="stat-label">うち silent data corruption に起因する中断</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">約 8 分</div>
+        <div class="stat-label">本チェックの追加所要時間の目安 (2 ノード ml.p5.48xlarge の例)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">3 種類</div>
+        <div class="stat-label">ディープヘルスチェックの種類 (本チェックが 3 つ目)</div>
+      </div>
+    </div>
+
+    <div class="before-after">
+      <div class="ba-box ba-before">
+        <div class="ba-title">😰 Before: アップデート前の課題</div>
+        <ul>
+          <li>既存チェック (InstanceStress / InstanceConnectivity) はハードウェアと通信の検証のみで、「正しい計算結果を返すか」は検証できなかった</li>
+          <li>微細な故障のある GPU が全テストをパスし、本番中に NaN / 無限大 loss として初めて顕在化</li>
+          <li>異常が数日後に発覚すると、消費した大量の GPU 時間が無駄に</li>
+          <li>障害の原因がハードウェアかモデル・コードかの切り分けが困難</li>
+        </ul>
+      </div>
+      <div class="ba-box ba-after">
+        <div class="ba-title">😊 After: アップデート後の改善</div>
+        <ul>
+          <li>ジョブ実行前に固定の Megatron-LM ワークロードによる実トレーニングで計算正常性を検証</li>
+          <li>固定ワークロードのため、失敗はハードウェア起因と明確に判断可能</li>
+          <li>自動ノード復旧と連携し、失敗インスタンスを自動的に再起動・交換</li>
+          <li>インスタンスの追加・交換時に毎回チェックを自動実行可能</li>
+          <li><code class="inline">StartClusterHealthCheck</code> API で任意のタイミングにオンデマンド実行</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    Trigger(["🚀 インスタンスの作成・更新<br/>または オンデマンド実行"])
+
+    subgraph DHC["🩺 ディープヘルスチェック"]
+        direction LR
+        Stress["🔧 InstanceStress<br/>DCGM 診断<br/>EFA テスト"]
+        Conn["🔗 InstanceConnectivity<br/>NCCL テスト"]
+        subgraph MNTV["🆕 MultiNodeTrainingValidation"]
+            Tiny["🎯 Tiny Megatron テスト<br/>各インスタンスの<br/>全 GPU でトレーニング"]
+            Mega["🌐 Megatron テスト<br/>EFA 経由で<br/>複数インスタンス間トレーニング"]
+        end
+        Stress ~~~ Conn ~~~ MNTV
+    end
+
+    Judge{"📊 loss の判定<br/>NaN / 無限大 / 発散<br/>時間内完了"}
+    Pass["✅ 合格ラベル付与<br/>ジョブのスケジュール許可"]
+    Fail["❌ 失敗ラベル付与"]
+    Recovery["🔄 自動ノード復旧<br/>再起動または交換"]
+    CW["📋 CloudWatch Logs<br/>チェック結果の記録"]
+
+    Trigger --> DHC
+    DHC --> Judge
+    Judge -->|正常| Pass
+    Judge -->|異常| Fail
+    Fail --> Recovery
+    Recovery -.-> DHC
+    Judge --> CW
+
+    classDef boundary fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef newfeat fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef ok fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef ng fill:#FFEBEE,stroke:#F44336,stroke-width:2px,color:#333333
+    classDef input fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class DHC boundary
+    class MNTV,Tiny,Mega newfeat
+    class Stress,Conn,CW process
+    class Judge decision
+    class Pass ok
+    class Fail,Recovery ng
+    class Trigger input
+      </pre>
+    </div>
+    <div class="diagram-note">
+      💡 MultiNodeTrainingValidation は、既存の InstanceStress と InstanceConnectivity に加わる 3 つ目のディープヘルスチェック。
+      実際のトレーニングワークロードにより GPU の計算正常性を検証し、失敗したインスタンスは自動ノード復旧により再起動または交換されます。
+    </div>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚡ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">🎯 1. Tiny Megatron テスト (インスタンスレベル)</div>
+      <p style="margin:0; font-size:14px;">
+        各インスタンスの全 GPU 上で短時間の Megatron-LM ベースのトレーニングワークロードを実行。
+        loss が NaN / 無限大、開始時平均に対するしきい値超過の上昇 (発散)、制限時間内の未完了で失敗と判定。
+        <code class="inline">MultiNodeTrainingValidation</code> を指定した場合にのみ実行されます。
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🌐 2. Megatron テスト (クラスターレベル)</div>
+      <p style="margin:0; font-size:14px;">
+        同じワークロードを同一インスタンスタイプの複数インスタンス間で EFA を介して実行。
+        インスタンス単体では検出できない、複数 GPU が協調トレーニングする際の数値異常を検出。
+        ワークロードが固定のため、失敗はモデルやコードではなくハードウェア起因と切り分け可能です。
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔄 3. 自動ノード復旧との連携</div>
+      <p style="margin:0; font-size:14px;">
+        チェックに失敗したインスタンスには失敗ラベルが付与され、自動ノード復旧が有効な場合は
+        HyperPod が自動的に再起動または交換。プロビジョニング時に実行すれば、ジョブ使用前に問題を排除できます。
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⏰ 4. 柔軟な実行タイミング</div>
+      <p style="margin:0; font-size:14px;">
+        インスタンスグループの <code class="inline">OnStartDeepHealthChecks</code> への指定で作成・更新時に自動実行。
+        <code class="inline">StartClusterHealthCheck</code> API で既存インスタンスに対するオンデマンド実行も可能
+        (特定のインスタンス ID の指定にも対応)。
+      </p>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>ディープヘルスチェックの種類 (EKS オーケストレーション)</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>チェック</th><th>実行内容</th><th>検出できる問題</th></tr>
+        <tr>
+          <td><strong>InstanceStress</strong></td>
+          <td>GPU / NVLink 数の確認、DCGM レベル 4 診断、EFA のレイテンシー・帯域テスト (Trainium は Neuron テスト)</td>
+          <td>ハードウェアの欠落、故障、不安定性</td>
+        </tr>
+        <tr>
+          <td><strong>InstanceConnectivity</strong></td>
+          <td>GPU インスタンス間の NCCL テスト (Trainium は NCCOM テスト)</td>
+          <td>インスタンス間通信の低速化・断絶</td>
+        </tr>
+        <tr class="new-row">
+          <td><strong>MultiNodeTrainingValidation</strong><span class="badge-new">NEW</span></td>
+          <td>各インスタンスでの Tiny Megatron テストと、インスタンス間での Megatron テスト</td>
+          <td>ハードウェアテストはパスするが正しくトレーニングできない GPU (NaN / 無限大 loss、発散、時間内未完了)</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>MultiNodeTrainingValidation の仕様</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>対象オーケストレーター</td><td>Amazon EKS のみ</td></tr>
+        <tr><td>対象インスタンス</td><td>EFA 対応の NVIDIA GPU インスタンスタイプ (例: ml.p5.48xlarge)</td></tr>
+        <tr><td>失敗条件</td><td>loss が NaN または無限大、loss の発散、制限時間内の未完了</td></tr>
+        <tr><td>実行タイミング</td><td>インスタンスの作成・更新時 (<code class="inline">OnStartDeepHealthChecks</code>)、またはオンデマンド (<code class="inline">StartClusterHealthCheck</code>)</td></tr>
+        <tr><td>所要時間の目安</td><td>AWS Blog の 2 ノード (ml.p5.48xlarge) 検証では Tiny Megatron 約 4 分 + Megatron 約 4 分の計約 8 分を追加 (ディープヘルスチェック全体は DCGM レベル 4 診断が大半を占め約 1 時間 28 分)</td></tr>
+        <tr><td>結果の確認</td><td>CloudWatch Logs の <code class="inline">DeepHealthCheckResults/&lt;id&gt;</code> ログストリーム、ノードラベル <code class="inline">sagemaker.amazonaws.com/deep-health-check-status</code>、各ノードの <code class="inline">/var/log/aws/clusters/sagemaker-deep-health-check.log</code></td></tr>
+      </table>
+    </div>
+
+    <h3>インスタンスグループ設定例</h3>
+    <p style="font-size:14px;"><code class="inline">create-cluster</code> または <code class="inline">update-cluster</code> に渡すインスタンスグループ設定の <code class="inline">OnStartDeepHealthChecks</code> に追加します。</p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">JSON</span>
+        <span class="code-title">インスタンスグループ設定</span>
+      </div>
+      <pre><code class="language-json">{
+  "InstanceGroupName": "&lt;instance-group&gt;",
+  "InstanceType": "ml.p5.48xlarge",
+  "InstanceCount": 2,
+  "LifeCycleConfig": {
+    "SourceS3Uri": "s3://&lt;bucket&gt;/&lt;prefix&gt;",
+    "OnCreate": "on_create.sh"
+  },
+  "ExecutionRole": "arn:aws:iam::&lt;account-id&gt;:role/&lt;hyperpod-execution-role&gt;",
+  "OnStartDeepHealthChecks": [
+    "InstanceStress",
+    "InstanceConnectivity",
+    "MultiNodeTrainingValidation"
+  ]
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法</h2>
+
+    <h3>前提条件</h3>
+    <ul class="plain">
+      <li>Amazon EKS でオーケストレーションされた SageMaker HyperPod クラスター</li>
+      <li>EFA 対応の NVIDIA GPU インスタンスタイプ (例: ml.p5.48xlarge) のインスタンスグループ (Megatron テストは同一インスタンスタイプのインスタンス間で実行される)</li>
+      <li>自動復旧を利用する場合は、自動ノード復旧 (automatic node recovery) の有効化</li>
+    </ul>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">インスタンスグループでチェックを有効化</div>
+        <p style="font-size:14px; margin:4px 0;">
+          <code class="inline">OnStartDeepHealthChecks</code> に <code class="inline">MultiNodeTrainingValidation</code> を追加して
+          <code class="inline">create-cluster</code> / <code class="inline">update-cluster</code> を実行後、設定内容を確認。
+          出力に 3 つのチェック名が表示されれば有効化は完了です。
+        </p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">設定の確認</span></div>
+          <pre><code class="language-bash">aws sagemaker describe-cluster \
+  --cluster-name &lt;cluster-name&gt; \
+  --query "InstanceGroups[?InstanceGroupName=='&lt;instance-group&gt;'].OnStartDeepHealthChecks"</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">オンデマンドでチェックを実行</div>
+        <p style="font-size:14px; margin:4px 0;">
+          既存インスタンスに対してオンデマンド実行。長期の事前トレーニング開始前の検証に有効です。
+          特定インスタンスのみ検証する場合は設定に <code class="inline">"InstanceIds": [...]</code> を追加。
+          オンデマンド実行は <code class="inline">DeepHealthCheck</code> タイプのクラスターオペレーションを作成します。
+        </p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">オンデマンド実行</span></div>
+          <pre><code class="language-bash">aws sagemaker start-cluster-health-check \
+  --cluster-name &lt;cluster-name&gt; \
+  --deep-health-check-configurations \
+  '[{"InstanceGroupName": "&lt;instance-group&gt;", "DeepHealthChecks": ["MultiNodeTrainingValidation"]}]'</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">結果を確認</div>
+        <p style="font-size:14px; margin:4px 0;">
+          オペレーションイベントの一覧とノードラベル (Passed など) で合否を確認。詳細は CloudWatch ロググループ
+          <code class="inline">/aws/sagemaker/Clusters/&lt;cluster-name&gt;/&lt;cluster-id&gt;</code> の
+          <code class="inline">DeepHealthCheckResults/&lt;id&gt;</code> ログストリームにテストごとに 1 行ずつ記録されます。
+          トレーニングの詳細ログは各インスタンスの <code class="inline">/var/log/aws/clusters/sagemaker-deep-health-check.log</code> で確認できます。
+        </p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">結果の確認</span></div>
+          <pre><code class="language-bash"># クラスターオペレーションのイベントを確認
+aws sagemaker list-cluster-events \
+  --cluster-name &lt;cluster-name&gt; \
+  --operation-id &lt;operation-id&gt;
+
+# ノードラベルで合否を確認
+kubectl get nodes \
+  -l sagemaker.amazonaws.com/instance-group-name=&lt;instance-group&gt; \
+  -L sagemaker.amazonaws.com/deep-health-check-status</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メリット / デメリット -->
+  <div class="section">
+    <h2>⚖️ メリットと制約事項</h2>
+    <div class="two-col">
+      <div>
+        <h3 style="margin-top:0;">👍 メリット</h3>
+        <div class="check-item"><span><strong>計算リソースの浪費防止</strong>: 数週間規模の事前トレーニングが数日後に NaN loss で失敗するリスクを低減</span></div>
+        <div class="check-item"><span><strong>goodput の向上</strong>: 不良ハードウェアへのジョブスケジュールを防ぎ、有効なトレーニング時間の割合を向上</span></div>
+        <div class="check-item"><span><strong>運用負荷の軽減</strong>: 自動ノード復旧との組み合わせで検出から交換まで自動化</span></div>
+        <div class="check-item"><span><strong>計算正常性の検証</strong>: silent data corruption のような数値異常を実トレーニングで検出</span></div>
+        <div class="check-item"><span><strong>原因の切り分けが容易</strong>: 固定の既知正常ワークロードにより失敗をハードウェア起因と明確に判断</span></div>
+        <div class="check-item"><span><strong>継続的な検証</strong>: ノード追加・交換のたびに実行し、クラスターの計算正常性を継続的に担保</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top:0;">⚠️ 制限事項・考慮点</h3>
+        <div class="cross-item"><span>Amazon EKS オーケストレーションのクラスターのみサポート (Slurm は対象外)</span></div>
+        <div class="cross-item"><span>EFA 対応の NVIDIA GPU インスタンスタイプのみ (Trainium は対象外)</span></div>
+        <div class="cross-item"><span>Megatron テストは同一インスタンスタイプのインスタンス間でのみ実行</span></div>
+        <div class="cross-item"><span>移動 (move) されたノードは再実行されないため、検証にはオンデマンド実行が必要</span></div>
+        <div class="warn-item"><span>チェック実行時間が追加される (例: 約 8 分)。完了までインスタンスはワークロードを受け入れられないため、キャパシティ追加時は計画に考慮</span></div>
+        <div class="warn-item"><span>合格は「固定の参照ワークロードを正しくトレーニングできた」ことの検証であり、ユーザー自身のジョブの収束を保証するものではない</span></div>
+        <div class="warn-item"><span>ディープヘルスチェック全体では DCGM レベル 4 診断が所要時間の大半 (例: 約 74 分)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>💼 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🧠 1. 長期事前トレーニング前の検証</div>
+      <p><strong>シナリオ</strong>: 数週間かかる基盤モデルの事前トレーニングを、数十台の ml.p5.48xlarge で開始する前に全ノードの計算正常性を確認したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash">aws sagemaker start-cluster-health-check \
+  --cluster-name llm-pretrain-cluster \
+  --deep-health-check-configurations \
+  '[{"InstanceGroupName": "gpu-group", "DeepHealthChecks": ["MultiNodeTrainingValidation"]}]'</code></pre>
+      </div>
+      <p><span class="effect-label">✨ 効果</span>: 微細な故障のある GPU を事前に検出し、トレーニング開始数日後に NaN loss で中断して GPU 時間を浪費するリスクを低減。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔁 2. ノード追加・交換時の自動検証</div>
+      <p><strong>シナリオ</strong>: スケールアップや障害ノードの交換が頻繁な環境で、新しいノードが常に検証済みの状態でジョブを受け入れるようにしたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">JSON</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-json">"OnStartDeepHealthChecks": [
+  "InstanceStress",
+  "InstanceConnectivity",
+  "MultiNodeTrainingValidation"
+]</code></pre>
+      </div>
+      <p><span class="effect-label">✨ 効果</span>: 新規ノードと交換ノードが、ジョブがスケジュールされる前に必ずトレーニング正常性を検証されるため、不良ハードウェアの混入を防止。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🤖 3. 自動ノード復旧と組み合わせた無人運用</div>
+      <p><strong>シナリオ</strong>: 大規模クラスターの運用で、不良インスタンスの検出から復旧までを人手を介さずに完結させたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">Bash</span><span class="code-title">実装例</span></div>
+        <pre><code class="language-bash"># チェック結果をノードラベルで確認
+kubectl get nodes \
+  -l sagemaker.amazonaws.com/instance-group-name=gpu-group \
+  -L sagemaker.amazonaws.com/deep-health-check-status</code></pre>
+      </div>
+      <p><span class="effect-label">✨ 効果</span>: 失敗したインスタンスは失敗ラベルが付与され、自動ノード復旧により再起動または交換されるため、運用チームの介入なしに健全なクラスター状態を維持。</p>
+    </div>
+  </div>
+
+  <!-- 料金・リージョン -->
+  <div class="section">
+    <h2>💰 料金と利用可能リージョン</h2>
+    <div class="two-col">
+      <div class="card" style="margin:0;">
+        <div class="card-title">💵 料金</div>
+        <p style="margin:0; font-size:14px;">
+          MultiNodeTrainingValidation 自体に関する追加料金の記載はなく、SageMaker HyperPod の通常のインスタンス料金が適用されます。
+          チェック実行中のインスタンスはワークロードを受け入れられないため、チェック時間分だけ有効活用の開始が遅れる点は考慮が必要です。
+          詳細は <a class="aws-link" href="https://aws.amazon.com/sagemaker/pricing/" target="_blank" rel="noopener noreferrer">料金ページ</a> を参照。
+        </p>
+      </div>
+      <div class="card" style="margin:0;">
+        <div class="card-title">🌍 利用可能リージョン</div>
+        <p style="margin:0; font-size:14px;">
+          SageMaker HyperPod が利用可能なすべての AWS リージョンで、Amazon EKS でオーケストレーションされたクラスターに対して利用できます。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <ul class="plain">
+      <li><strong>Amazon EKS</strong>: 本チェックは EKS オーケストレーションの HyperPod クラスターでのみ利用可能</li>
+      <li><strong>Elastic Fabric Adapter (EFA)</strong>: Megatron テストはインスタンス間通信に EFA を使用するため、EFA 対応インスタンスタイプが必須</li>
+      <li><strong>HyperPod 自動ノード復旧</strong>: チェックに失敗したインスタンスの再起動・交換を自動化</li>
+      <li><strong>HyperPod Kubernetes Resource Monitoring Agent</strong>: 同時期に発表された Kubernetes レイヤーの問題を検出するエージェント。本チェックがハードウェアの計算正常性を、エージェントがクラスターレイヤーをカバーする補完関係</li>
+      <li><strong>Amazon CloudWatch Logs</strong>: チェック結果が <code class="inline">DeepHealthCheckResults</code> ログストリームに記録される</li>
+    </ul>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section" style="border: 1px solid rgba(255, 153, 0, 0.5);">
+    <h2>🎯 まとめ</h2>
+    <p>
+      MultiNodeTrainingValidation は、ハードウェアテストでは検出できない<span class="highlight">「正しく計算できない GPU」</span>を、
+      実際の Megatron-LM トレーニングワークロードによりジョブ実行前に検出する新しいディープヘルスチェックです。
+      silent data corruption による本番トレーニングの中断は大規模クラスターで現実に発生する問題であり、
+      長期の事前トレーニングを運用するチームへの影響は大きいアップデートです。
+    </p>
+    <div class="check-item"><span>EKS オーケストレーションの HyperPod クラスターでは、インスタンスグループの <code class="inline">OnStartDeepHealthChecks</code> への追加を推奨</span></div>
+    <div class="check-item"><span>長期トレーニング開始前のオンデマンド実行を運用に組み込むことを推奨</span></div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <p>📎 出典:</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-sagemaker-hyperpod-training-validation/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-sagemaker-hyperpod-training-validation/</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/blogs/machine-learning/introducing-workload-recovery-and-expanded-infrastructure-checks-on-amazon-sagemaker-hyperpod/" target="_blank" rel="noopener noreferrer">AWS Blog: Introducing workload recovery and expanded infrastructure checks on Amazon SageMaker HyperPod</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-eks-resiliency-deep-health-checks.html" target="_blank" rel="noopener noreferrer">ドキュメント: Deep health checks</a></li>
+      <li><a class="aws-link" href="https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_StartClusterHealthCheck.html" target="_blank" rel="noopener noreferrer">API リファレンス: StartClusterHealthCheck</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/sagemaker/pricing/" target="_blank" rel="noopener noreferrer">料金ページ: https://aws.amazon.com/sagemaker/pricing/</a></li>
+    </ul>
+    <p style="margin-top: 12px;">本インフォグラフィックは AWS News レポート (2026-11-23) をもとに作成されました。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

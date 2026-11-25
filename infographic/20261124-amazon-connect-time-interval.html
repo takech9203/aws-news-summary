@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon Connect - Customer ダッシュボードが履歴メトリクスの時間間隔グループ化をサポート</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+    }
+
+    .date-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+      font-size: 14px;
+      padding: 4px 14px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+      margin-left: 8px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.4;
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    /* 間隔バッジ */
+    .interval-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin: 20px 0;
+    }
+
+    .interval-badge {
+      background: rgba(255, 153, 0, 0.12);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 18px;
+      text-align: center;
+      min-width: 120px;
+    }
+
+    .interval-badge .value {
+      display: block;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--aws-orange);
+    }
+
+    .interval-badge .label {
+      display: block;
+      font-size: 12px;
+      color: var(--aws-light-gray);
+      margin-top: 4px;
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 720px) {
+      .before-after { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 { margin-top: 0; }
+    .before-box h3 { color: #FF8A73; }
+    .after-box h3 { color: #6FCF5A; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 2px;
+      list-style: none;
+    }
+
+    .before-box li, .after-box li {
+      margin: 8px 0;
+      padding-left: 24px;
+      position: relative;
+      font-size: 14px;
+    }
+
+    .before-box li::before {
+      content: "✗";
+      position: absolute;
+      left: 0;
+      color: var(--aws-red);
+      font-weight: 700;
+    }
+
+    .after-box li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #6FCF5A;
+      font-weight: 700;
+    }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .check-icon { color: #6FCF5A; font-size: 18px; flex-shrink: 0; }
+    .cross-icon { color: var(--aws-red); font-size: 18px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-orange);
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--aws-light-gray);
+    }
+
+    /* ステップ */
+    .step-list { margin: 16px 0; }
+
+    .step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin: 14px 0;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 15px;
+    }
+
+    .step-body .step-title {
+      font-weight: 700;
+      color: var(--aws-white);
+      margin-bottom: 4px;
+    }
+
+    .step-body .step-desc { font-size: 14px; }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 14px 0;
+    }
+
+    .usecase-title {
+      font-weight: 700;
+      color: var(--aws-orange);
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+
+    .usecase .scenario {
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .usecase ol {
+      margin: 8px 0;
+      padding-left: 22px;
+      font-size: 14px;
+    }
+
+    .usecase li { margin: 4px 0; }
+
+    .usecase .effect {
+      background: rgba(29, 129, 2, 0.15);
+      border-left: 3px solid var(--aws-green);
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    /* メリットグリッド */
+    .merit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 720px) {
+      .merit-grid { grid-template-columns: 1fr; }
+    }
+
+    .merit-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .merit-box h3 { margin-top: 0; color: var(--aws-orange); font-size: 16px; }
+    .merit-box ul { margin: 0; padding-left: 2px; list-style: none; }
+    .merit-box li { margin: 8px 0; font-size: 14px; }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-caption {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* 統計カード */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 720px) {
+      .stat-row { grid-template-columns: 1fr; }
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .stat-card .stat-value {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-card .stat-label {
+      font-size: 13px;
+      margin-top: 6px;
+      color: var(--aws-light-gray);
+    }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul {
+      margin: 8px 0 0 0;
+      padding-left: 18px;
+    }
+
+    footer li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- タイトルエリア -->
+    <div class="header">
+      <div>
+        <span class="service-badge">Amazon Connect</span>
+        <span class="date-badge">📅 2026 年 11 月 24 日</span>
+      </div>
+      <h1>📊 Customer ダッシュボードが履歴メトリクスの時間間隔グループ化をサポート</h1>
+      <div class="subtitle">トレーリングウィジェットの履歴メトリクスを 15 分〜週次の 5 種類の間隔でグループ化し、時系列分析がダッシュボード上で完結</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📌 概要</h2>
+      <p>
+        Amazon Connect Customer の分析ダッシュボードで、トレーリングウィジェットに表示される履歴メトリクスを<span class="highlight">時間間隔でグループ化</span>できるようになりました。各間隔がウィジェット内の行として表示され、マネージャーはパフォーマンスデータの可視化方法をきめ細かく制御できます。
+      </p>
+
+      <div class="interval-badges">
+        <div class="interval-badge"><span class="value">15 分</span><span class="label">時間範囲 3 日未満</span></div>
+        <div class="interval-badge"><span class="value">30 分</span><span class="label">時間範囲 3 日未満</span></div>
+        <div class="interval-badge"><span class="value">1 時間</span><span class="label">時間範囲 3 日未満</span></div>
+        <div class="interval-badge"><span class="value">日次</span><span class="label">時間範囲 35 日未満</span></div>
+        <div class="interval-badge"><span class="value">週次</span><span class="label">時間範囲 35 日未満</span></div>
+      </div>
+
+      <p style="font-size: 14px;">
+        たとえば平均処理時間 AHT のスパイクを調査する際に、日次ビューから 15 分間隔のビューにドリルダウンして発生時刻を特定し、週次ビューにズームアウトして一時的な事象か広範なトレンドかを確認する、といった分析が<span class="highlight">同じダッシュボード上で完結</span>します。Queue などの他のグループ化と組み合わせると、間隔がネストされた行として表示され、多角的な分析が可能です。
+      </p>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>😓 アップデート前の課題</h3>
+          <ul>
+            <li>ウィジェットには時間範囲全体の集計値しか表示されず、どの時間帯に問題が発生したかを特定できなかった</li>
+            <li>スパイク発生時刻の特定には、時間範囲フィルターの繰り返し変更や履歴メトリクスレポートの別途作成が必要だった</li>
+            <li>日次と 15 分間隔など、粒度の異なるビューを切り替えた比較分析がダッシュボード上の操作だけでは難しかった</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>🚀 アップデート後の改善</h3>
+          <ul>
+            <li>15 分、30 分、1 時間、日次、週次の 5 種類の間隔でメトリクスの推移を行単位で表示できるようになった</li>
+            <li>ドリルダウンやズームアウトといった粒度の切り替えが、ウィジェットの編集操作だけで完結するようになった</li>
+            <li>Queue などの既存のグループ化と組み合わせて、キューごとの時間帯別パフォーマンスをネスト表示できるようになった</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🗺️ 分析フロー</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    WFM(["👤 ワークフォースマネージャー"]) --> Daily["📊 日次間隔ビュー<br/>平均処理時間のスパイクを検知"]
+    Daily --> Switch{"🔍 間隔グループ化の変更"}
+    Switch -->|"ドリルダウン"| Min15["⏱️ 15 分間隔ビュー<br/>スパイクの発生時刻を特定"]
+    Switch -->|"ズームアウト"| Weekly["📈 週次間隔ビュー<br/>広範なトレンドかどうかを確認"]
+    Min15 --> Action["✅ 原因分析と対策<br/>シフト調整・トレーニングなど"]
+    Weekly --> Action
+
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef decision fill:#F3E5F5,stroke:#7B61FF,stroke-width:2px,color:#333333
+    classDef input fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+
+    class WFM user
+    class Daily,Min15,Weekly process
+    class Switch decision
+    class Action input
+        </pre>
+      </div>
+      <p class="diagram-caption">
+        日次ビューでスパイクを検知し、15 分間隔へのドリルダウンで発生時刻を特定、週次ビューへのズームアウトでトレンドを確認する分析フロー
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚙️ 主要機能</h2>
+
+      <div class="card">
+        <div class="card-title">⏱️ 時間間隔によるグループ化 Interval グループ化</div>
+        <p style="font-size: 14px; margin: 0;">
+          トレーリングウィジェットのデータを時間間隔でグループ化し、メトリクスの時系列変化を行単位で表示。15 分、30 分、1 時間 (Hourly)、日次 (Daily)、週次 (Weekly) の 5 種類から選択可能。グループ化列には「Interval (Hourly)」のように選択した間隔が表示され、間隔ごとに 1 行ずつデータが並びます。
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🧩 対象ウィジェット</div>
+        <p style="font-size: 14px; margin: 0;">
+          Trailing queue performance や Trailing agent performance などの<span class="highlight">トレーリングウィジェット</span>で利用可能。Current queue performance などのリアルタイムウィジェットでは利用不可。ウィジェットには最大 3 つのグループ化を追加できます。
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔗 他のグループ化との組み合わせ (ネスト表示)</div>
+        <p style="font-size: 14px; margin: 0;">
+          Interval グループ化を Queue などの他のグループ化と組み合わせると、間隔がネストされた行として表示。他のグループ化の行を展開すると、その配下に各間隔の行が表示され、キューごと・エージェントごとの時間帯別パフォーマンス分析が可能です。
+        </p>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>⏰ 選択可能な時間間隔と時間範囲の条件</h3>
+      <p style="font-size: 14px;">選択できる間隔は、ダッシュボードで選択している時間範囲に依存します。利用できない間隔がある場合、ウィジェットには選択可能な間隔の一覧を示すメッセージが表示されます。</p>
+      <table>
+        <tr><th>時間間隔</th><th>利用可能な時間範囲</th></tr>
+        <tr><td>15 分</td><td>時間範囲が 3 日未満の場合</td></tr>
+        <tr><td>30 分</td><td>時間範囲が 3 日未満の場合</td></tr>
+        <tr><td>1 時間 (Hourly)</td><td>時間範囲が 3 日未満の場合</td></tr>
+        <tr><td>日次 (Daily)</td><td>時間範囲が 35 日未満の場合</td></tr>
+        <tr><td>週次 (Weekly)</td><td>時間範囲が 35 日未満の場合</td></tr>
+      </table>
+
+      <h3>🚧 機能の制約</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>グループ化の上限</td><td>1 ウィジェットあたり最大 3 つのグループ化</td></tr>
+        <tr><td>対象ウィジェット</td><td>トレーリングウィジェットのみ (リアルタイムウィジェットは対象外)</td></tr>
+        <tr><td>比較表示 (Show comparison)</td><td>Interval グループ化の使用中は利用不可。比較を表示するには Interval グループ化の削除が必要</td></tr>
+      </table>
+
+      <h3>🔐 必要な権限</h3>
+      <p style="font-size: 14px;">ダッシュボードの利用には、管理者アカウント、またはセキュリティプロファイルで以下のいずれかの権限が必要です。</p>
+      <table>
+        <tr><th>権限</th><th>内容</th></tr>
+        <tr><td>Analytics and Optimization - Access metrics</td><td>メトリクスへのアクセス権限</td></tr>
+        <tr><td>Dashboard - Access</td><td>ダッシュボードへのアクセス権限</td></tr>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>📋 前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>Amazon Connect Customer のインスタンスが作成済みであること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ダッシュボードにアクセスできる権限 (Analytics and Optimization - Access metrics または Dashboard - Access) を持つユーザーであること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>対象のダッシュボードに Trailing queue performance などのトレーリングウィジェットが配置されていること</span></div>
+
+      <h3>🪜 手順</h3>
+      <div class="step-list">
+        <div class="step-item">
+          <div class="step-number">1</div>
+          <div class="step-body">
+            <div class="step-title">ウィジェットの編集画面を開く</div>
+            <div class="step-desc">ダッシュボード上の対象のトレーリングウィジェットで、アクションアイコンを選択し [Edit] を選択します。ウィジェットの編集ペインが表示されます。</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-number">2</div>
+          <div class="step-body">
+            <div class="step-title">Interval グループ化を追加する</div>
+            <div class="step-desc">編集ペインで [Add grouping] を選択し、新しいグループ化のリストから [Interval] を選択します。続いて、15 分、30 分、Hourly、Daily、Weekly の中から表示したい間隔を選択します。</div>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-number">3</div>
+          <div class="step-body">
+            <div class="step-title">保存して表示を確認する</div>
+            <div class="step-desc">[Save] を選択して設定を保存します。グループ化列に「Interval (Hourly)」のように選択した間隔が表示され、間隔ごとに 1 行ずつメトリクスが表示されます。他のグループ化と組み合わせた場合は、その行を展開すると間隔ごとの行が表示されます。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+      <div class="merit-grid">
+        <div class="merit-box">
+          <h3>💼 ビジネス面</h3>
+          <ul>
+            <li>🎯 <strong>問題の早期特定</strong>: 異常が発生した時間帯を 15 分単位で特定でき、原因調査と対策のリードタイムを短縮</li>
+            <li>👥 <strong>ワークフォース管理の精度向上</strong>: 時間帯別のコンタクト量や処理時間の傾向を把握し、シフト計画や人員配置の最適化に活用</li>
+            <li>💰 <strong>追加コストなしで利用可能</strong>: 既存のダッシュボード機能の拡張であり、追加料金なしで時系列分析の能力が向上</li>
+          </ul>
+        </div>
+        <div class="merit-box">
+          <h3>🔬 技術面</h3>
+          <ul>
+            <li>🖥️ <strong>ダッシュボード上で分析が完結</strong>: 時間範囲フィルターの繰り返し変更や別レポートの作成が不要</li>
+            <li>🔍 <strong>柔軟な粒度選択</strong>: 15 分から週次まで 5 段階の間隔を、調査の目的に応じて使い分け可能</li>
+            <li>🧩 <strong>既存グループ化との組み合わせ</strong>: Queue などとのネスト表示により、ディメンションを掛け合わせた分析が可能</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>🚫 制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>Interval グループ化はトレーリングウィジェットのみで利用でき、Current queue performance などのリアルタイムウィジェットでは利用できない</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>15 分、30 分、1 時間の間隔はダッシュボードの時間範囲が 3 日未満、日次・週次は 35 日未満の場合にのみ選択できる</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>Interval グループ化の使用中は比較表示 (Show comparison) オプションを利用できない</span></div>
+
+      <h3>🤔 考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>1 ウィジェットに追加できるグループ化は最大 3 つであり、Interval を含める場合は他のグループ化の構成を検討する必要がある</span></div>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>グループ化はウィジェットで選択しているメトリクスに応じて動的に提供されるため、メトリクスの組み合わせによっては意図したグループ化が選択できない場合がある</span></div>
+      <div class="check-item"><span class="warn-icon">⚠️</span><span>35 日以上の長期トレンド分析には、ダッシュボードではなく履歴メトリクスレポートやデータレイク連携の利用を検討する必要がある</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <div class="usecase-title">1. 平均処理時間のスパイク調査</div>
+        <div class="scenario"><strong>シナリオ</strong>: ワークフォースマネージャーが日次ビューで平均処理時間 AHT のスパイクに気づき、原因を調査したい。</div>
+        <ol>
+          <li>Trailing queue performance ウィジェットに Interval グループ化 (Daily) を追加し、スパイクが発生した日を特定</li>
+          <li>時間範囲を該当日を含む 3 日未満に絞り、間隔を 15 分に変更</li>
+          <li>スパイクが発生した正確な時刻を特定し、該当時間帯のコンタクト量やエージェント稼働状況を確認</li>
+          <li>間隔を Weekly に変更し、同様の傾向が毎週発生していないかを確認</li>
+        </ol>
+        <div class="effect">✅ <strong>効果</strong>: スパイクの発生時刻と再現性をダッシュボード上の操作だけで特定でき、一時的な事象か構造的な問題かを迅速に判断できる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">2. 時間帯別のサービスレベル監視とシフト最適化</div>
+        <div class="scenario"><strong>シナリオ</strong>: スーパーバイザーが、サービスレベルが低下する時間帯を特定して人員配置を最適化したい。</div>
+        <ol>
+          <li>Trailing queue performance ウィジェットに Interval グループ化 (Hourly) と Queue グループ化を追加</li>
+          <li>キューの行を展開し、キューごとの時間帯別サービスレベルをネスト表示で確認</li>
+          <li>サービスレベルが低下する時間帯とキューの組み合わせを特定し、シフト計画に反映</li>
+        </ol>
+        <div class="effect">✅ <strong>効果</strong>: キュー別・時間帯別のボトルネックが可視化され、根拠に基づいた人員配置の調整が可能になる。</div>
+      </div>
+
+      <div class="usecase">
+        <div class="usecase-title">3. 施策導入後の効果測定</div>
+        <div class="scenario"><strong>シナリオ</strong>: 新しいルーティング設定やエージェントトレーニングを導入した後、パフォーマンス改善の定着を確認したい。</div>
+        <ol>
+          <li>Trailing agent performance ウィジェットに Interval グループ化 (Daily) を追加し、導入前後の日次推移を確認</li>
+          <li>間隔を Weekly に変更し、改善が週単位のトレンドとして定着しているかを確認</li>
+          <li>必要に応じて 15 分・30 分間隔で特定の日の詳細を確認し、残存する課題を特定</li>
+        </ol>
+        <div class="effect">✅ <strong>効果</strong>: 施策の効果を複数の時間粒度で検証でき、短期的な変動と長期的なトレンドを区別した評価が可能になる。</div>
+      </div>
+    </div>
+
+    <!-- 料金・リージョン -->
+    <div class="section">
+      <h2>💰 料金・利用可能リージョン</h2>
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-value">追加料金なし</div>
+          <div class="stat-label">Amazon Connect の標準の従量制料金体系の範囲内で利用可能</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">5 種類</div>
+          <div class="stat-label">選択できる時間間隔 (15 分 / 30 分 / 1 時間 / 日次 / 週次)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">全リージョン</div>
+          <div class="stat-label">Amazon Connect Customer が提供されているすべての AWS リージョンで利用可能</div>
+        </div>
+      </div>
+      <p style="font-size: 14px;">
+        詳細は <a class="aws-link" href="https://aws.amazon.com/connect/pricing/" target="_blank" rel="noopener noreferrer">Amazon Connect の料金ページ</a> および <a class="aws-link" href="https://docs.aws.amazon.com/connect/latest/adminguide/regions.html#amazonconnect_region" target="_blank" rel="noopener noreferrer">リージョン別の利用可能状況</a> を参照してください。
+      </p>
+    </div>
+
+    <!-- 関連サービス・機能 -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <div class="card-title">🧰 ダッシュボードウィジェットのカスタマイズ</div>
+        <p style="font-size: 14px; margin: 0;">メトリクスの選択、フィルター、しきい値、比較表示など、今回の Interval グループ化と組み合わせて利用できるウィジェット設定機能。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">📚 Amazon Connect 履歴メトリクス</div>
+        <p style="font-size: 14px; margin: 0;">ダッシュボードの元データとなるメトリクス群。35 日を超える長期分析には履歴メトリクスレポートの活用が有効。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🧮 Amazon Connect カスタムメトリクス</div>
+        <p style="font-size: 14px; margin: 0;">カスタムサービスレベル計算などの独自メトリクスを定義し、ウィジェットに追加して Interval グループ化と併用可能。</p>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <div class="check-item"><span class="check-icon">✓</span><span>トレーリングウィジェットの履歴メトリクスを 15 分から週次までの 5 種類の時間間隔でグループ化できるようになった</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>スパイク調査やトレンド確認といった時系列分析がダッシュボード上で完結する</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>追加料金なしで利用でき、ウィジェットの編集画面から Interval グループ化を追加するだけで有効化できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>コンタクトセンターのパフォーマンス管理を行っているチームは、既存のダッシュボードへの Interval グループ化の追加と、時間帯別の分析フローへの組み込みの検討がおすすめ</span></div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典・参考リンク</p>
+      <ul>
+        <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-connect-time-interval/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-connect-time-interval/</a></li>
+        <li>ドキュメント (Configure groupings): <a class="aws-link" href="https://docs.aws.amazon.com/connect/latest/adminguide/dashboard-customize-widgets.html#configure-groupings" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/connect/latest/adminguide/dashboard-customize-widgets.html#configure-groupings</a></li>
+        <li>Amazon Connect 製品ページ: <a class="aws-link" href="https://aws.amazon.com/connect/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/connect/</a></li>
+        <li>Amazon Connect 料金ページ: <a class="aws-link" href="https://aws.amazon.com/connect/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/connect/pricing/</a></li>
+      </ul>
+      <p style="margin-top: 12px;">本インフォグラフィックは AWS News レポート (2026-11-24) をもとに作成されています。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+</body>
+</html>
