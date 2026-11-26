@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon SageMaker HyperPod - NCCL Profiler</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.release-date {
+  color: var(--aws-smile-orange);
+  font-weight: 600;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.card ul { margin: 8px 0 0 0; padding-left: 20px; }
+.card li { margin: 4px 0; }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+@media (max-width: 760px) {
+  .before-after { grid-template-columns: 1fr; }
+}
+
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+
+.before-box .ba-title { color: #FF6B4A; }
+.after-box .ba-title { color: #4CAF50; }
+
+.ba-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.before-box ul, .after-box ul { margin: 0; padding-left: 20px; }
+.before-box li, .after-box li { margin: 6px 0; font-size: 14px; }
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+td {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: top;
+}
+
+td code, p code, li code {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--aws-smile-orange);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+/* Check / cross lists */
+.check-item, .cross-item, .warn-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+.cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+/* Use cases */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-smile-orange);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.usecase .label {
+  font-weight: 600;
+  color: var(--aws-white);
+}
+
+/* Stats */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.18), rgba(140, 79, 255, 0.15));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--aws-white);
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--aws-light-gray);
+  margin-top: 4px;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* Mermaid */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+.diagram-note {
+  font-size: 14px;
+  color: var(--aws-light-gray);
+  margin-top: 8px;
+}
+
+/* Step headers */
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 8px 0;
+}
+
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  font-size: 16px;
+}
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+}
+
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+.region-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.region-badge {
+  background: rgba(0, 161, 201, 0.15);
+  border: 1px solid rgba(0, 161, 201, 0.5);
+  color: var(--aws-teal);
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 14px;
+}
+
+.related-list { margin: 0; padding-left: 0; list-style: none; }
+.related-list li {
+  margin: 10px 0;
+  padding-left: 24px;
+  position: relative;
+}
+.related-list li::before {
+  content: "→";
+  color: var(--aws-orange);
+  position: absolute;
+  left: 0;
+  font-weight: 700;
+}
+
+.summary-box {
+  background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(0, 161, 201, 0.1));
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  color: var(--aws-light-gray);
+}
+
+footer ul { margin: 8px 0 0 0; padding-left: 20px; }
+footer li { margin: 4px 0; word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <span class="service-badge">Amazon SageMaker HyperPod</span>
+    <h1>📊 HyperPod NCCL Profiler</h1>
+    <div class="subtitle">
+      トレーニングジョブの NCCL 通信プロファイリングをサポート —
+      ジョブを止めずに GPU 間通信のボトルネックを特定
+      <br><span class="release-date">📅 リリース日: 2026 年 11 月 23 日</span>
+    </div>
+  </div>
+
+  <!-- 概要 -->
+  <div class="section">
+    <h2>💡 概要</h2>
+    <p>
+      Amazon SageMaker HyperPod が、トレーニングジョブに対する
+      <span class="highlight">NVIDIA Collective Communications Library (NCCL) プロファイリング</span>
+      をサポートしました。分散トレーニングでは AllReduce、AllGather、ReduceScatter などの集合通信が
+      すべてのランクの到達で初めて完了するため、<span class="highlight">1 つの遅い GPU やリンクがジョブ全体を遅くし、しかもエラーを出さない</span>ことが多くあります。
+    </p>
+    <p>
+      HyperPod NCCL Profiler は<span class="highlight">プラグインとしてトレーニングジョブにロード</span>され、
+      トレーニングコードの変更なしに、ランクごとの帯域幅と実行時間のメトリクスを
+      Amazon CloudWatch または Amazon Managed Service for Prometheus に送信します。
+      Amazon Managed Grafana のダッシュボードで、<span class="highlight">ジョブを停止することなく</span>ボトルネックとなっているノードや GPU を特定できます。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>スロットリングされた 1 つの GPU や劣化したリンクが、エラーを出さずにジョブ全体を遅くすることがあった</li>
+          <li>原因の診断には、ジョブを停止して NCCL テスト (nccl-tests) を実行する必要があった</li>
+          <li>ネットワークの問題なのか、特定の GPU の故障なのかの切り分けが困難だった</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>プラグイン方式でロードされ、トレーニングコードの変更が不要に</li>
+          <li>ランクごとの帯域幅・実行時間・待機時間を CloudWatch / Prometheus に送信し、Grafana で確認可能に</li>
+          <li>ダッシュボードがピアより遅れている GPU を持つノードを特定し、スロットリングの有無を表示</li>
+          <li>全ノード同時の帯域幅低下も表示され、ネットワーク問題と GPU 故障を区別可能に</li>
+        </ul>
+      </div>
+    </div>
+
+    <p>
+      数百から数千の AI アクセラレーターにまたがる生成 AI モデル開発を行う
+      ML エンジニアやインフラ担当者にとって、通信性能の劣化を迅速に切り分けられる重要なアップデートです。
+    </p>
+  </div>
+
+  <!-- アーキテクチャ図 -->
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Cluster["☁️ SageMaker HyperPod クラスター EKS / Slurm"]
+        subgraph Node["🖥️ トレーニングノード"]
+            Init["📦 Init コンテナ&lt;br/&gt;hyperpod-nccl-profiler イメージ"]
+            Vol[("📂 emptyDir ボリューム&lt;br/&gt;libnccl_profiler.so")]
+            Train["⚡ トレーニングコンテナ&lt;br/&gt;NCCL 2.27.5 以降"]
+            Collector["📡 Node Collector&lt;br/&gt;オブザーバビリティアドオン"]
+        end
+    end
+    subgraph Store["🗄️ メトリクスストア"]
+        direction LR
+        CW["📈 Amazon CloudWatch"]
+        AMP["📈 Amazon Managed Service&lt;br/&gt;for Prometheus"]
+        CW ~~~ AMP
+    end
+    Grafana["📺 Amazon Managed Grafana&lt;br/&gt;NCCL Profiler ダッシュボード"]
+    User(["👤 ML エンジニア"])
+
+    Init --&gt;|プラグインをコピー| Vol
+    Vol --&gt;|読み取り専用マウント| Train
+    Train --&gt;|ランクごとの NCCL メトリクス| Collector
+    Collector --&gt; CW
+    Collector -.-&gt; AMP
+    CW --&gt; Grafana
+    AMP -.-&gt; Grafana
+    Grafana --&gt; User
+
+    classDef cloud fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef layer fill:none,stroke:#E1BEE7,stroke-width:2px,color:#666666
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef storage fill:#DCEDC8,stroke:#C5E1A5,stroke-width:2px,color:#33691E
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class Cluster cloud
+    class Node,Store layer
+    class Init,Collector internal
+    class Train compute
+    class Vol storage
+    class CW,AMP database
+    class Grafana,User user
+      </pre>
+    </div>
+    <p class="diagram-note">
+      Init コンテナがプロファイラープラグインをボリューム経由でトレーニングコンテナに配置し、NCCL が起動時にプラグインをロードします。
+      収集されたメトリクスは同一ノード上のオブザーバビリティアドオンのコレクターを経由してメトリクスストアに送信され、
+      Amazon Managed Grafana の NCCL Profiler ダッシュボードで可視化されます。
+    </p>
+  </div>
+
+  <!-- 主要機能 -->
+  <div class="section">
+    <h2>⚙️ 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ トレーニングコード変更不要の NCCL プロファイリング</div>
+      <ul>
+        <li>NCCL プロファイラープラグイン (<code>libnccl_profiler.so</code>) として、トレーニングコンテナ内の NCCL ライブラリが起動時にロード</li>
+        <li>各集合通信および送受信操作の GPU 上での実行を計測</li>
+        <li>ジョブごとに有効化する方式で、設定していないジョブはプロファイリングされない</li>
+        <li>メトリクスを送信できない場合でも、トレーニングは影響を受けずに継続</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ ランクごとの詳細メトリクス</div>
+      <ul>
+        <li>帯域幅 (アルゴリズム帯域幅・バス帯域幅)、実行時間、待機時間をランク単位で収集</li>
+        <li>メトリクスに GPU UUID が付与され、GPU 使用率、クロック、温度、エラーなどの DCGM メトリクスと並べて確認可能</li>
+        <li>テンソルデータやモデルの内容は収集せず、パフォーマンスメトリクスのみを送信</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ NCCL Profiler ダッシュボード</div>
+      <ul>
+        <li>HyperPod コンソールで Amazon Managed Grafana と連携してアドオンをセットアップすると、ダッシュボードが自動でインストール</li>
+        <li>ジョブレベルから単一 GPU まで掘り下げて、ピアより遅れているノードや GPU、通信グループごとの帯域幅を確認</li>
+        <li>ノード内通信とノード間通信、メッセージサイズ別、NCCL アルゴリズム・プロトコル別の分析が可能</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ 柔軟なメトリクスストアの選択</div>
+      <ul>
+        <li>Amazon CloudWatch または Amazon Managed Service for Prometheus のいずれかにメトリクスを送信可能</li>
+        <li>CloudWatch の場合は PromQL でクエリでき、CloudWatch アラームの作成も可能</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 技術仕様 -->
+  <div class="section">
+    <h2>🔬 技術仕様</h2>
+
+    <h3>📈 NCCL メトリクス一覧</h3>
+    <table>
+      <tr><th>メトリクス</th><th>単位</th><th>説明</th></tr>
+      <tr><td><code>nccl_collective_exec_time_microseconds</code></td><td>マイクロ秒</td><td>集合通信の GPU カーネル実行時間</td></tr>
+      <tr><td><code>nccl_collective_wait_time_microseconds</code></td><td>マイクロ秒</td><td>集合通信の発行から最初の GPU カーネル開始までの時間</td></tr>
+      <tr><td><code>nccl_collective_algobw_gbs</code> / <code>nccl_algorithm_bandwidth_gbs</code></td><td>GB/s</td><td>アルゴリズム帯域幅 (ランクあたりの転送データ量 ÷ 実行時間)</td></tr>
+      <tr><td><code>nccl_bus_bandwidth_gbs</code></td><td>GB/s</td><td>バス帯域幅 (ランク数で調整した帯域幅。nccl-tests の結果と比較可能)</td></tr>
+      <tr><td><code>nccl_p2p_exec_time_microseconds</code></td><td>マイクロ秒</td><td>Send/Recv 操作の GPU 実行時間</td></tr>
+      <tr><td><code>nccl_p2p_wait_time_microseconds</code></td><td>マイクロ秒</td><td>Send/Recv 操作の発行からカーネル開始までの時間</td></tr>
+      <tr><td><code>nccl_p2p_bus_bandwidth_gbs</code> / <code>nccl_p2p_algobw_gbs</code></td><td>GB/s</td><td>Send/Recv 操作の帯域幅</td></tr>
+    </table>
+    <p>
+      各データポイントには <code>job_name</code>、<code>hostname</code>、<code>rank</code>、<code>comm_id</code>、<code>gpu_uuid</code>、
+      <code>op</code> (AllReduce、AllGather など)、<code>algo</code>、<code>proto</code>、<code>message_size</code>
+      などのディメンションが付与されます。
+    </p>
+
+    <h3>🔧 動作仕様</h3>
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">10 秒</div>
+        <div class="stat-label">デフォルトのメトリクス送信間隔 (profiler.toml)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">8 KiB 以上</div>
+        <div class="stat-label">計測対象の操作サイズ (それ未満はレイテンシーが支配的)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">NCCL 2.27.5+</div>
+        <div class="stat-label">必要な NCCL バージョン</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">GPU メモリ 0</div>
+        <div class="stat-label">GPU メモリは不使用。ステップ時間への影響なし (検証時)</div>
+      </div>
+    </div>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>配布形式</td><td>リージョンごとの ECR コンテナイメージ <code>{account-id}.dkr.ecr.{region}.amazonaws.com/hyperpod-nccl-profiler:latest</code></td></tr>
+      <tr><td>オーバーヘッド</td><td>検証 (最大 13B パラメータのモデル、ml.g7.48xlarge x 2 ノード) でランクあたり約 1.5 ホスト CPU コア、150〜190 MiB のホストメモリを使用。ネットワーク性能が安定している場合、トレーニングのステップ時間に変化なし</td></tr>
+    </table>
+
+    <h3>🌱 環境変数の設定</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">YAML</span>
+        <span class="code-title">トレーニングコンテナの環境変数</span>
+      </div>
+      <pre><code class="language-yaml">env:
+  - name: NCCL_PROFILER_PLUGIN       # 必須: プラグインのパス
+    value: /opt/amazon/hyperpod-nccl-profiler/libnccl_profiler.so
+  - name: HYPERPOD_NCCL_PROFILER_CONFIG  # 必須: 設定ファイルのパス
+    value: /opt/amazon/hyperpod-nccl-profiler/profiler.toml
+  - name: HYPERPOD_JOB_NAME          # ダッシュボード用: job_name ディメンション
+    value: fsdp2
+  - name: HYPERPOD_JOB_ID            # ダッシュボード用: ジョブ一覧に表示される
+    value: run-1
+  - name: NODE_NAME                  # 推奨: hostname ディメンション
+    valueFrom:
+      fieldRef:
+        fieldPath: spec.nodeName
+  - name: NCCL_DEBUG                 # 推奨: プロファイラーの警告をログに出力
+    value: WARN</code></pre>
+    </div>
+  </div>
+
+  <!-- 設定方法 -->
+  <div class="section">
+    <h2>🛠️ 設定方法 (EKS オーケストレーションの場合)</h2>
+
+    <h3>📋 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Amazon EKS でオーケストレーションされ、NVIDIA GPU インスタンスを持つ SageMaker HyperPod クラスター (Slurm クラスターはオブザーバビリティ拡張の設定で対応)</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>SageMaker HyperPod オブザーバビリティアドオンのセットアップ</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>トレーニングコンテナ内の NCCL バージョン 2.27.5 以降</span></div>
+
+    <div class="step-header">
+      <div class="step-number">1</div>
+      <div class="step-title">ポッドテンプレートにボリュームと Init コンテナを追加</div>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">YAML</span>
+        <span class="code-title">PyTorchJob / HyperPodPyTorchJob のポッドテンプレート</span>
+      </div>
+      <pre><code class="language-yaml">volumes:
+  - name: hyperpod-nccl-profiler
+    emptyDir: {}
+initContainers:
+  - name: install-nccl-profiler
+    image: {{account-id}}.dkr.ecr.{{region}}.amazonaws.com/hyperpod-nccl-profiler:latest
+    command:
+      - sh
+      - -c
+      - cp -v /hyperpod-nccl-profiler/libnccl_profiler.so /hyperpod-nccl-profiler/profiler.toml /opt/amazon/hyperpod-nccl-profiler/
+    volumeMounts:
+      - name: hyperpod-nccl-profiler
+        mountPath: /opt/amazon/hyperpod-nccl-profiler</code></pre>
+    </div>
+    <p>
+      Init コンテナがプロファイラーイメージからプラグインとデフォルト設定ファイルをボリュームにコピーします。
+      リージョンごとのアカウント ID はドキュメントに記載されています (東京リージョン ap-northeast-1 は <code>533267052152</code>)。
+    </p>
+
+    <div class="step-header">
+      <div class="step-number">2</div>
+      <div class="step-title">トレーニングコンテナにボリュームをマウントし環境変数を設定</div>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">YAML</span>
+        <span class="code-title">トレーニングコンテナの設定</span>
+      </div>
+      <pre><code class="language-yaml">containers:
+  - name: pytorch
+    volumeMounts:
+      - name: hyperpod-nccl-profiler
+        mountPath: /opt/amazon/hyperpod-nccl-profiler
+        readOnly: true
+    env:
+      - name: NCCL_PROFILER_PLUGIN
+        value: /opt/amazon/hyperpod-nccl-profiler/libnccl_profiler.so
+      - name: HYPERPOD_NCCL_PROFILER_CONFIG
+        value: /opt/amazon/hyperpod-nccl-profiler/profiler.toml</code></pre>
+    </div>
+    <p>
+      独自のトレーニングイメージをビルドする場合は、Dockerfile の <code>COPY --from</code> で
+      プロファイラーファイルをイメージに含めれば、Init コンテナとボリュームは不要です。
+    </p>
+
+    <div class="step-header">
+      <div class="step-number">3</div>
+      <div class="step-title">メトリクスの到達を確認</div>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">Bash</span>
+        <span class="code-title">プラグインのロード確認</span>
+      </div>
+      <pre><code class="language-bash"># トレーニングポッドの状態を確認
+kubectl get pods
+
+# NCCL_DEBUG=INFO の場合、ログでプラグインのロードを確認
+# 「PROFILER/Plugin: Loaded HYPERPOD_NCCL_PROFILER_V{n}」が出力される</code></pre>
+    </div>
+    <p>
+      トレーニング開始の数分後に、CloudWatch コンソールの Query Studio で
+      <code>nccl_bus_bandwidth_gbs</code> を PromQL でクエリし、メトリクスの到達を確認します。
+    </p>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">PromQL</span>
+        <span class="code-title">各 GPU の AllGather バス帯域幅を取得するクエリ例</span>
+      </div>
+      <pre><code class="language-text">avg by (gpu_uuid, hostname) (nccl_bus_bandwidth_gbs{op="AllGather", job_name="{{my-job}}"})</code></pre>
+    </div>
+  </div>
+
+  <!-- メリット -->
+  <div class="section">
+    <h2>✨ メリット</h2>
+
+    <h3>💼 ビジネス面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>トレーニングの中断コスト削減</strong>: 従来はジョブを停止して NCCL テストを実行する必要があったが、稼働中のジョブのまま診断でき、高価な GPU クラスターの停止時間を削減できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>GPU リソースの有効活用</strong>: サイレントな性能劣化 (スロットリングやリンク劣化) を早期に検出し、数百〜数千のアクセラレーターの投資効果を最大化できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>障害切り分けの迅速化</strong>: ネットワーク問題と GPU 故障を区別できるため、適切なチームへのエスカレーションと復旧が迅速になる</span></div>
+
+    <h3>🔧 技術面</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>コード変更不要</strong>: プラグイン方式のため、トレーニングスクリプトや分散学習フレームワークの変更なしに有効化できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>GPU メトリクスとの相関分析</strong>: NCCL メトリクスと DCGM の GPU メトリクス (温度、クロック、スロットリング、XID エラーなど) が同じ GPU UUID で紐づくため、遅い GPU の根本原因を一画面で分析できる</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span><strong>低オーバーヘッドで安全</strong>: GPU メモリを消費せず、ネットワークが安定していればステップ時間に影響しない。メトリクス送信に失敗してもトレーニングは継続する</span></div>
+  </div>
+
+  <!-- デメリット・制約事項 -->
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+
+    <h3>🚫 制限事項</h3>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>トレーニングコンテナ内の NCCL バージョン 2.27.5 以降が必要</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>8 KiB 未満の操作は計測されない (レイテンシーが支配的なため)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>GPU キューに 5 秒を超える処理が積まれている場合、該当の操作はデータポイントを生成せず、ジョブ稼働中でもメトリクスが途切れることがある (nccl-tests で大きなメッセージを使う場合は <code>-z 1</code> オプションを使用)</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>NCCL メトリクスは <code>aws cloudwatch list-metrics</code> の出力には表示されず、PromQL でクエリする必要がある</span></div>
+    <div class="cross-item"><span class="cross-icon">✗</span><span>オブザーバビリティアドオンは CloudWatch と Amazon Managed Service for Prometheus の両方に同時送信できない</span></div>
+
+    <h3>🤔 考慮すべき点</h3>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>ランクあたり約 1.5 ホスト CPU コアと 150〜190 MiB のホストメモリを消費するため、データローディングなどでホスト CPU がボトルネックのワークロードでは余裕を確保する必要がある</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span><code>latest</code> タグはリリースごとに変わるため、検証済み構成を維持するにはイメージをダイジェストで参照することが推奨される</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span><code>hostNetwork: true</code> を使用するトレーニングポッドでは <code>dnsPolicy: ClusterFirstWithHostNet</code> の設定が必要 (コレクターのクラスター DNS 名を解決するため)</span></div>
+    <div class="warn-item"><span class="warn-icon">⚠</span><span>NCCL Profiler ダッシュボードには <code>HYPERPOD_JOB_ID</code> を設定したジョブのみが表示される</span></div>
+  </div>
+
+  <!-- ユースケース -->
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">📉 ユースケース 1: スループット低下時の遅延ノード特定</div>
+      <p><span class="label">シナリオ</span>: 大規模な FSDP トレーニング中に、エラーは出ていないがステップ時間が徐々に悪化している。どのノードが原因か特定したい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">手順</span></div>
+        <pre><code class="language-text">NCCL Profiler ダッシュボードで対象の Job ID を選択し、
+「Groups of N GPUs」行の「Nodes below 0.95x」「Slowest node」パネルを確認。
+特定されたノードの「Per-GPU hardware DCGM」行で
+温度、SM クロック、スロットリング時間、XID エラーを確認する。</code></pre>
+      </div>
+      <p><span class="label">効果</span>: ジョブを停止せずに、他のランクを待たせている GPU とその原因 (サーマルスロットリングなど) を特定し、該当ノードの交換や修復を計画的に実施できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔀 ユースケース 2: ネットワーク問題と GPU 故障の切り分け</div>
+      <p><span class="label">シナリオ</span>: トレーニングの通信帯域幅が低下した。ネットワークインフラの問題なのか、特定の GPU の問題なのかを切り分けたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">PromQL</span><span class="code-title">全ランクのバス帯域幅を比較</span></div>
+        <pre><code class="language-text">avg by (gpu_uuid, hostname) (nccl_bus_bandwidth_gbs{op="AllReduce", job_name="my-job"})
+
+- 1 つのランクのみ実行時間が短い (帯域幅が高い) → 他ランクがそのランクを待っている
+- 全ランクで同時に帯域幅が低下 → ネットワーク経路の輻輳など共有の原因</code></pre>
+      </div>
+      <p><span class="label">効果</span>: ダッシュボードのパターン分析により、インフラチームへのエスカレーション (ネットワーク) かノード交換 (GPU 故障) かを迅速に判断できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">⏸️ ユースケース 3: ハング検出と通信グループ別の分析</div>
+      <p><span class="label">シナリオ</span>: 大規模ジョブが進捗しなくなった。どのランクが停止しているのか、またテンソル並列とデータ並列のどちらの通信グループに問題があるのかを調べたい。</p>
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">手順</span></div>
+        <pre><code class="language-text">- メトリクスの報告が止まったシリーズ (ランク) を特定 → ハングの疑い
+- comm_id / comm_name ディメンションでフィルタリングし、
+  テンソル並列グループとデータ並列グループの帯域幅を分離して比較
+- 「inside vs across nodes」行でノード内通信とノード間通信を比較</code></pre>
+      </div>
+      <p><span class="label">効果</span>: 集合通信を完了しなくなったランクを特定してハングを検出できる。また、ノード内 NVLink とノード間ネットワークのどちらで性能が劣化したかをメッセージサイズ別に分析できる。</p>
+    </div>
+  </div>
+
+  <!-- 料金 -->
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      HyperPod NCCL Profiler 自体の<span class="highlight">追加料金に関する記載は公式発表にはありません</span>。
+      メトリクスの保存とクエリには、送信先として選択した Amazon CloudWatch または
+      Amazon Managed Service for Prometheus、およびダッシュボード表示に使用する
+      Amazon Managed Grafana の標準料金が適用されます。
+    </p>
+  </div>
+
+  <!-- 利用可能リージョン -->
+  <div class="section">
+    <h2>🌏 利用可能リージョン</h2>
+    <p>
+      SageMaker HyperPod が利用可能なすべての AWS リージョンで、Amazon EKS または Slurm
+      でオーケストレーションされたクラスター向けに利用できます。
+      プロファイラーのコンテナイメージは以下を含む各リージョンの ECR で提供されています
+      (リージョンごとのアカウント ID はドキュメントを参照)。
+    </p>
+    <div class="region-badges">
+      <span class="region-badge">🗼 東京 ap-northeast-1</span>
+      <span class="region-badge">🇰🇷 ソウル ap-northeast-2</span>
+      <span class="region-badge">🇮🇳 ムンバイ ap-south-1</span>
+      <span class="region-badge">🇸🇬 シンガポール ap-southeast-1</span>
+      <span class="region-badge">🇦🇺 シドニー ap-southeast-2</span>
+      <span class="region-badge">🇺🇸 バージニア北部 us-east-1</span>
+      <span class="region-badge">🇺🇸 オハイオ us-east-2</span>
+      <span class="region-badge">🇺🇸 オレゴン us-west-2</span>
+      <span class="region-badge">🇩🇪 フランクフルト eu-central-1</span>
+      <span class="region-badge">🇮🇪 アイルランド eu-west-1</span>
+    </div>
+  </div>
+
+  <!-- 関連サービス -->
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <ul class="related-list">
+      <li><strong>SageMaker HyperPod オブザーバビリティアドオン</strong>: NCCL メトリクスの送信経路となるアドオン。DCGM、ノードエクスポーター、EFA、Kueue などのメトリクスも収集し、本プロファイラーの前提条件となる</li>
+      <li><strong>Amazon CloudWatch</strong>: メトリクスストアの選択肢の 1 つ。Query Studio での PromQL クエリや、PromQL ベースのアラーム作成が可能</li>
+      <li><strong>Amazon Managed Service for Prometheus</strong>: もう 1 つのメトリクスストアの選択肢。既存の Prometheus ベースの監視基盤と統合できる</li>
+      <li><strong>Amazon Managed Grafana</strong>: NCCL Profiler ダッシュボードのホスト先。NCCL メトリクスと GPU ハードウェアメトリクスを並べて可視化する</li>
+      <li><strong>Elastic Fabric Adapter (EFA)</strong>: HyperPod のノード間高速通信を担うネットワークインターフェイス。NCCL メトリクスと合わせてネットワーク性能の分析に活用できる</li>
+    </ul>
+  </div>
+
+  <!-- まとめ -->
+  <div class="section">
+    <h2>📝 まとめ</h2>
+    <div class="summary-box">
+      <p style="margin: 0;">
+        HyperPod NCCL Profiler により、分散トレーニングの通信性能を<span class="highlight">ジョブを停止せずに可視化</span>できるようになり、
+        従来はジョブ停止と NCCL テストの実行が必要だったボトルネック診断が大幅に効率化されます。
+        大規模 GPU クラスターで HyperPod を運用しているチームは、オブザーバビリティアドオンのセットアップと
+        <span class="highlight">NCCL 2.27.5 以降</span>への更新を確認したうえで、
+        主要なトレーニングジョブでプロファイラーを有効化することを推奨します。
+      </p>
+    </div>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-sagemaker-hyperpod-nccl-profiler/" target="_blank" rel="noopener noreferrer" class="aws-link">公式発表 (What's New): Amazon SageMaker HyperPod NCCL Profiler</a></li>
+      <li><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/hyperpod-observability-nccl-metrics.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Monitoring NCCL communication in training jobs on SageMaker HyperPod clusters</a></li>
+      <li><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-observability-addon.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Amazon EKS クラスターのオブザーバビリティアドオン</a></li>
+      <li><a href="https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-cluster-observability-slurm-extension-config.html" target="_blank" rel="noopener noreferrer" class="aws-link">ドキュメント: Slurm 向けオブザーバビリティ拡張の設定</a></li>
+      <li><a href="https://github.com/NVIDIA/nccl/blob/master/plugins/profiler/README.md" target="_blank" rel="noopener noreferrer" class="aws-link">NVIDIA NCCL プロファイラープラグイン (GitHub)</a></li>
+    </ul>
+    <p style="margin-top: 12px;">本インフォグラフィックは AWS News レポート (2026-11-23) を基に生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

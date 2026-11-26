@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Lambda - Lambda durable functions による MicroVM オーケストレーション (開発者プレビュー)</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+:root {
+  --aws-squid-ink: #232F3E;
+  --aws-dark-squid: #1A242F;
+  --aws-orange: #FF9900;
+  --aws-smile-orange: #FFAD33;
+  --aws-white: #FFFFFF;
+  --aws-light-gray: #D5DBDB;
+  --aws-teal: #00A1C9;
+  --aws-purple: #8C4FFF;
+  --aws-green: #1D8102;
+  --aws-red: #D13212;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--aws-squid-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  color: var(--aws-light-gray);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 20px;
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.service-badge {
+  display: inline-block;
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.preview-badge {
+  display: inline-block;
+  background: rgba(140, 79, 255, 0.25);
+  border: 1px solid var(--aws-purple);
+  color: #C7A8FF;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 3px 12px;
+  border-radius: 16px;
+  margin-left: 8px;
+}
+
+h1, .title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--aws-white);
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+h2, .section-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--aws-orange);
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aws-white);
+  margin: 20px 0 10px 0;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--aws-light-gray);
+}
+
+.section {
+  background: var(--aws-dark-squid);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.highlight {
+  background-color: rgba(255, 153, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--aws-orange);
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(255, 153, 0, 0.3);
+  border-left: 4px solid var(--aws-orange);
+}
+
+.card-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.card p, .card ul { margin: 6px 0; }
+
+ul { padding-left: 22px; margin: 8px 0; }
+li { margin: 6px 0; }
+
+.aws-link {
+  color: var(--aws-teal);
+  text-decoration: none;
+  word-break: break-all;
+}
+.aws-link:hover { color: var(--aws-smile-orange); }
+
+/* Before / After */
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+.before-box, .after-box {
+  border-radius: 8px;
+  padding: 16px;
+}
+.before-box {
+  background: rgba(209, 50, 18, 0.1);
+  border: 1px solid rgba(209, 50, 18, 0.5);
+}
+.after-box {
+  background: rgba(29, 129, 2, 0.12);
+  border: 1px solid rgba(29, 129, 2, 0.6);
+}
+.before-box .ba-title { color: #FF8A73; font-weight: 700; margin-bottom: 8px; }
+.after-box .ba-title { color: #6FCF5A; font-weight: 700; margin-bottom: 8px; }
+.before-box ul, .after-box ul { padding-left: 20px; }
+
+/* フロー図 */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.flow-step {
+  background: var(--aws-dark-squid);
+  border: 2px solid var(--aws-orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+  color: var(--aws-white);
+}
+.flow-arrow {
+  color: var(--aws-orange);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+th {
+  background: rgba(255, 153, 0, 0.15);
+  color: var(--aws-orange);
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+td {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--aws-light-gray);
+}
+
+/* チェックリスト */
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-icon { color: #6FCF5A; font-size: 18px; flex-shrink: 0; }
+.cross-icon { color: #FF8A73; font-size: 18px; flex-shrink: 0; }
+.warn-icon { color: var(--aws-smile-orange); font-size: 18px; flex-shrink: 0; }
+
+/* メリットグリッド */
+.merit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.merit-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 16px;
+}
+.merit-box .merit-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 8px;
+}
+
+/* ユースケース */
+.usecase {
+  background: rgba(255, 153, 0, 0.08);
+  border: 1px solid rgba(255, 153, 0, 0.4);
+  border-radius: 8px;
+  padding: 18px;
+  margin: 14px 0;
+}
+.usecase-title {
+  font-weight: 700;
+  color: var(--aws-orange);
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+.usecase-label {
+  font-weight: 600;
+  color: var(--aws-white);
+}
+.usecase-steps {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 10px 0;
+  font-size: 14px;
+}
+.usecase-steps ol { margin: 0; padding-left: 20px; }
+
+/* Mermaid コンテナ */
+.mermaid-container {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+  border: 2px solid rgba(255, 153, 0, 0.3);
+  overflow-x: auto;
+}
+.mermaid {
+  display: flex;
+  justify-content: center;
+}
+
+/* コードブロック */
+.code-block {
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 153, 0, 0.2);
+}
+.code-header {
+  background: #16213e;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.code-lang { color: var(--aws-orange); font-weight: bold; }
+.code-title { color: var(--aws-light-gray); }
+.code-block pre { margin: 0; padding: 0; overflow-x: auto; }
+.code-block code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px !important;
+  display: block;
+}
+
+/* ステップ */
+.step-item {
+  display: flex;
+  gap: 14px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+.step-number {
+  background: var(--aws-orange);
+  color: var(--aws-squid-ink);
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.step-content { flex: 1; min-width: 0; }
+.step-content .step-title {
+  font-weight: 700;
+  color: var(--aws-white);
+  margin-bottom: 4px;
+}
+
+/* 関連サービス */
+.related-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.related-item {
+  background: rgba(0, 161, 201, 0.08);
+  border: 1px solid rgba(0, 161, 201, 0.4);
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 14px;
+}
+.related-item .related-name {
+  font-weight: 700;
+  color: var(--aws-teal);
+  margin-bottom: 4px;
+}
+
+footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: var(--aws-light-gray);
+}
+footer ul { padding-left: 20px; }
+footer li { margin: 4px 0; }
+
+@media (max-width: 700px) {
+  .before-after, .merit-grid, .related-grid { grid-template-columns: 1fr; }
+  h1 { font-size: 24px; }
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <span class="service-badge">⚡ AWS Lambda</span><span class="preview-badge">🧪 開発者プレビュー</span>
+    </div>
+    <h1>Lambda durable functions による<br>MicroVM オーケストレーション</h1>
+    <div class="subtitle">📅 リリース日: 2026 年 11 月 25 日 | AWS Durable Execution SDK の extensions として提供</div>
+  </div>
+
+  <div class="section">
+    <h2>📝 概要</h2>
+    <p>
+      Lambda durable functions から <span class="highlight">Lambda MicroVM をオーケストレーション</span>できる
+      AWS Durable Execution SDK の拡張機能 (extensions) が開発者プレビューとして登場しました。
+      MicroVM 上でタスクを実行する durable オペレーションと、MicroVM のライフサイクル管理機能を追加します。
+    </p>
+    <div class="flow-diagram">
+      <div class="flow-step">🔄 Durable Functions<br><small>最長 1 年のワークフロー<br>チェックポイント + 自動リトライ</small></div>
+      <span class="flow-arrow">✚</span>
+      <div class="flow-step">📦 Lambda MicroVM<br><small>VM レベル分離<br>ほぼ瞬時の起動・再開</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step">🛡️ 分離サンドボックスの<br>長時間ワークフロー<br><small>独自オーケストレーション基盤が不要</small></div>
+    </div>
+    <p>
+      主な対象は、<span class="highlight">ソフトウェアファクトリー</span>、<span class="highlight">セキュリティスキャナー</span>、<span class="highlight">CI/CD ジョブ</span>など、
+      信頼できないコードや AI エージェントが生成したコードを分離されたサンドボックスで実行する必要がある開発者です。
+    </p>
+
+    <div class="before-after">
+      <div class="before-box">
+        <div class="ba-title">❌ Before: アップデート前の課題</div>
+        <ul>
+          <li>MicroVM の起動・監視・終了を自前のオーケストレーションロジックで実装</li>
+          <li>失敗時のリトライや途中状態の保存 (チェックポイント) を独自に作り込み</li>
+          <li>複数 MicroVM の並列調整や認証トークンのリフレッシュを自分で管理</li>
+        </ul>
+      </div>
+      <div class="after-box">
+        <div class="ba-title">✅ After: アップデート後の改善</div>
+        <ul>
+          <li>タスク実行とライフサイクル管理を durable オペレーションとして記述可能</li>
+          <li>チェックポイント、自動リトライ、トークンリフレッシュを自動処理</li>
+          <li>ファイルとメモリを共有するセッションモードが利用可能</li>
+          <li>1 つの durable function から複数 MicroVM を並列オーケストレーション</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏗️ アーキテクチャ図</h2>
+    <div class="mermaid-container">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Sources["📨 イベントソース"]
+        direction LR
+        SQS["📬 Amazon SQS"]
+        EB["🚌 Amazon EventBridge"]
+        SQS ~~~ EB
+    end
+
+    subgraph Lambda["⚡ AWS Lambda"]
+        DF["🔄 Durable Function<br/>オーケストレーター"]
+        CP[("💾 チェックポイント<br/>実行状態")]
+    end
+
+    subgraph MicroVMs["📦 Lambda MicroVM 分離サンドボックス"]
+        direction LR
+        VM1["🖥️ MicroVM 1<br/>Worker ライブラリ"]
+        VM2["🖥️ MicroVM 2<br/>Worker ライブラリ"]
+        VM3["🖥️ MicroVM 3<br/>Worker ライブラリ"]
+        VM1 ~~~ VM2 ~~~ VM3
+    end
+
+    Sources --> DF
+    DF -->|タスク送信・ライフサイクル管理| VM1
+    DF -->|タスク送信・ライフサイクル管理| VM2
+    DF -->|タスク送信・ライフサイクル管理| VM3
+    VM1 -.->|ハートビート・結果報告| DF
+    VM2 -.->|ハートビート・結果報告| DF
+    VM3 -.->|ハートビート・結果報告| DF
+    DF <-->|進捗保存・自動リトライ| CP
+
+    classDef source fill:#E9F7EC,stroke:#66BB6A,stroke-width:2px,color:#333333
+    classDef orchestrator fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef vm fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef storage fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+
+    class SQS,EB source
+    class DF orchestrator
+    class VM1,VM2,VM3 vm
+    class CP storage
+    class Sources,Lambda,MicroVMs layer
+      </pre>
+    </div>
+    <p>
+      Amazon SQS や Amazon EventBridge などのイベントをトリガーに durable function が起動し、複数の MicroVM を並列にオーケストレーションします。
+      durable function は進捗をチェックポイントに保存しながら、失敗タスクのリトライやトークンリフレッシュを自動的に処理します。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🔧 主要機能</h2>
+
+    <div class="card">
+      <div class="card-title">1️⃣ MicroVM 向け durable オペレーション</div>
+      <ul>
+        <li>MicroVM 上でのタスク実行とライフサイクル管理を durable オペレーションとして記述可能</li>
+        <li>進捗のチェックポイント、失敗タスクのリトライ、MicroVM トークンのリフレッシュを自動処理</li>
+        <li>オーケストレーションロジックを通常のコードとして記述でき、独自のステート管理が不要</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2️⃣ 2 つのタスク実行モード</div>
+      <ul>
+        <li><strong>個別タスクモード</strong>: 単一のタスクを MicroVM 上で実行</li>
+        <li><strong>セッションモード</strong>: 複数タスクが同一 MicroVM 上でファイルとメモリを共有しながら実行</li>
+        <li>ビルドの中間成果物を引き継ぐ CI/CD パイプラインなど、状態を保持したい処理に有効</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3️⃣ 並列オーケストレーション</div>
+      <ul>
+        <li>1 つの durable function から複数の MicroVM を同時に調整可能</li>
+        <li>大量のスキャン対象やビルドジョブを並列化して処理時間を短縮</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4️⃣ イベント駆動連携</div>
+      <ul>
+        <li>Amazon SQS や Amazon EventBridge などのイベントソースと連携して起動可能</li>
+        <li>キューに投入されたジョブを順次 MicroVM で処理するワーカーパターンを構築できる</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">5️⃣ Worker ライブラリ (オプション)</div>
+      <ul>
+        <li>MicroVM イメージ内にインストールして使用するライブラリ</li>
+        <li>タスクの受信、ハートビートの送信、結果の報告を担当</li>
+        <li>JS/TS 版と Python 版が GitHub で提供されている</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📋 技術仕様</h2>
+    <table>
+      <tr><th>項目</th><th>詳細</th></tr>
+      <tr><td>提供ステータス</td><td>開発者プレビュー (本番ワークロードでの利用は非推奨)</td></tr>
+      <tr><td>対応言語</td><td>TypeScript、Python</td></tr>
+      <tr><td>提供パッケージ</td><td>AWS Durable Execution SDK の extensions パッケージ (GitHub)</td></tr>
+      <tr><td>Worker ライブラリ</td><td>aws-durable-execution-sdk-js-compute-worker / aws-durable-execution-sdk-python-compute-worker</td></tr>
+      <tr><td>実行時間</td><td>durable functions の仕様に準拠 (最長 1 年、チェックポイント・自動リトライ内蔵)</td></tr>
+      <tr><td>分離レベル</td><td>MicroVM による VM レベルの分離</td></tr>
+    </table>
+    <h3>🔄 API 変更履歴</h3>
+    <p>
+      今回のアップデートは AWS Durable Execution SDK の拡張パッケージとして提供されるものであり、この発表に伴う Lambda サービス API の新規追加は AWS API Changes では確認されていません。
+      なお、関連サービスである Lambda MicroVMs では、2026 年 11 月 20 日に KMS カスタマーマネージドキー対応に伴う
+      <a class="aws-link" href="https://awsapichanges.com/archive/changes/e9d2b3-lambda.html" target="_blank" rel="noopener noreferrer">API 更新 (lambda、7 updated api methods)</a> が行われています。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ 設定方法</h2>
+    <h3>✅ 前提条件</h3>
+    <div class="check-item"><span class="check-icon">✓</span><span>Lambda durable functions と Lambda MicroVMs の両方が利用可能なリージョンであること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>TypeScript または Python で durable function を開発していること</span></div>
+    <div class="check-item"><span class="check-icon">✓</span><span>MicroVM イメージの作成と実行に必要な IAM 権限が設定されていること</span></div>
+
+    <h3>🪜 手順</h3>
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">SDK extensions パッケージの導入</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">TypeScript の場合 (パッケージ名は GitHub リポジトリを参照)</span>
+          </div>
+          <pre><code class="language-bash">npm install @aws/durable-execution-sdk-js-extensions</code></pre>
+        </div>
+        <p>durable function のプロジェクトに、MicroVM オーケストレーション用の durable オペレーションを提供する extensions パッケージを追加します。正確なパッケージ名とバージョンは GitHub リポジトリ (aws-durable-execution-sdk-js / aws-durable-execution-sdk-python) を確認してください。</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">MicroVM イメージへの Worker ライブラリの組み込み (オプション)</div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">Python の場合 (パッケージ名は GitHub リポジトリを参照)</span>
+          </div>
+          <pre><code class="language-bash">pip install aws-durable-execution-sdk-python-compute-worker</code></pre>
+        </div>
+        <p>タスクの受信、ハートビート送信、結果報告を行う Worker ライブラリを MicroVM イメージに組み込みます。Worker ライブラリの利用はオプションです。</p>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">durable function でオーケストレーションを実装</div>
+        <p>durable function のコード内で、extensions が提供する durable オペレーションを使用して MicroVM の起動、タスクの実行 (個別タスクまたはセッション)、終了を記述します。実装の詳細は GitHub の examples パッケージにあるサンプルアプリケーションを参照してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💡 メリット</h2>
+    <div class="merit-grid">
+      <div class="merit-box">
+        <div class="merit-title">💼 ビジネス面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>開発工数の削減</strong>: ライフサイクル管理、リトライ、状態管理の作り込みが不要になり、ビジネスロジックに集中できる</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>AI エージェント活用の安全性向上</strong>: エージェント生成コードを VM レベルで分離して実行し、セキュリティリスクを低減</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>スケーラブルなジョブ処理基盤</strong>: 大量のジョブを扱う基盤をサーバーレスで構築できる</span></div>
+      </div>
+      <div class="merit-box">
+        <div class="merit-title">🔧 技術面</div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>耐久性のあるオーケストレーション</strong>: チェックポイントと自動リトライで障害から自動復旧</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>柔軟な実行モデル</strong>: 個別タスクとセッションの 2 モードでステートレス処理と状態共有の両方に対応</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>並列処理</strong>: 複数の MicroVM を同時制御してスループットを向上</span></div>
+        <div class="check-item"><span class="check-icon">✓</span><span><strong>イベント駆動アーキテクチャとの統合</strong>: SQS や EventBridge と組み合わせて疎結合な構成を実現</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ デメリット・制約事項</h2>
+    <h3>🚧 制限事項</h3>
+    <div class="check-item"><span class="cross-icon">✗</span><span>開発者プレビューのため機能が変更される可能性があり、本番ワークロードでの利用は推奨されない</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>対応言語は TypeScript と Python に限定される</span></div>
+    <div class="check-item"><span class="cross-icon">✗</span><span>Lambda durable functions と Lambda MicroVMs の両方が利用可能なリージョンでのみ使用できる</span></div>
+    <h3>🤔 考慮すべき点</h3>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>プレビュー期間中は仕様変更に追従する必要があるため、検証環境での評価から始めることが推奨される</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>発表時点では料金に関する記載がないため、durable functions と MicroVMs それぞれの課金体系を事前に確認する必要がある</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>Worker ライブラリを使用する場合は MicroVM イメージの再ビルドと管理が必要になる</span></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 ユースケース</h2>
+
+    <div class="usecase">
+      <div class="usecase-title">🤖 1. AI エージェント生成コードの安全な実行基盤</div>
+      <p><span class="usecase-label">シナリオ</span>: AI コーディングエージェントが生成したコードを、本番環境や開発者の環境から分離した場所でビルド・テストしたい。</p>
+      <div class="usecase-steps">
+        <ol>
+          <li>エージェントがコードを生成し、Amazon SQS にジョブを送信</li>
+          <li>durable function がジョブを受信し、MicroVM を起動</li>
+          <li>セッションモードでビルドとテストを順次実行 (ファイル・メモリを共有)</li>
+          <li>結果を report し、MicroVM を終了</li>
+        </ol>
+      </div>
+      <p><span class="usecase-label">効果</span>: VM レベルの分離により、信頼できないコードが他のワークロードへ影響を与えるリスクを排除しながら、自動リトライで安定したパイプラインを実現できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🔍 2. 大規模セキュリティスキャナー</div>
+      <p><span class="usecase-label">シナリオ</span>: 多数のリポジトリやアーティファクトに対して、マルウェアスキャンや脆弱性スキャンを並列実行したい。</p>
+      <div class="usecase-steps">
+        <ol>
+          <li>スキャン対象リストをもとに durable function がスキャンジョブを分割</li>
+          <li>複数の MicroVM を並列に起動し、各 MicroVM に個別タスクとしてスキャンを割り当て</li>
+          <li>Worker ライブラリがハートビートを送信し、進捗を durable function が追跡</li>
+          <li>失敗したスキャンは自動リトライし、全結果を集約</li>
+        </ol>
+      </div>
+      <p><span class="usecase-label">効果</span>: 並列オーケストレーションにより大量の対象を短時間で処理でき、チェックポイントにより長時間のスキャンバッチも途中から再開できる。</p>
+    </div>
+
+    <div class="usecase">
+      <div class="usecase-title">🚀 3. サーバーレス CI/CD ジョブ実行</div>
+      <p><span class="usecase-label">シナリオ</span>: ビルドサーバーを常時稼働させずに、コミットをトリガーとした CI/CD ジョブを分離環境で実行したい。</p>
+      <div class="usecase-steps">
+        <ol>
+          <li>リポジトリのイベントを Amazon EventBridge 経由で durable function に連携</li>
+          <li>MicroVM をほぼ瞬時に起動し、セッションモードでビルド、テスト、パッケージングを実行</li>
+          <li>各ステップの完了をチェックポイントに記録</li>
+          <li>ジョブ完了後に MicroVM を終了し、アイドルコストを排除</li>
+        </ol>
+      </div>
+      <p><span class="usecase-label">効果</span>: 常時稼働のビルドインフラが不要になり、ジョブ単位の分離とコスト効率を両立できる。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>💰 料金</h2>
+    <p>
+      発表時点では、この拡張機能に固有の料金に関する記載はありません。
+      Lambda durable functions および Lambda MicroVMs それぞれの料金体系が適用されると考えられるため、
+      利用前に AWS Lambda の料金ページで最新の課金情報を確認してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🌍 利用可能リージョン</h2>
+    <p>
+      Lambda durable functions と Lambda MicroVMs の<span class="highlight">両方が利用可能なすべてのリージョン</span>で使用できます。
+      各機能の対応リージョンは、それぞれの製品ページおよびドキュメントを確認してください。
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>🔗 関連サービス・機能</h2>
+    <div class="related-grid">
+      <div class="related-item">
+        <div class="related-name">🔄 Lambda durable functions</div>
+        最長 1 年間実行できるワークフローをチェックポイントと自動リトライ付きで記述できる Lambda の機能。本拡張機能のオーケストレーション基盤
+      </div>
+      <div class="related-item">
+        <div class="related-name">📦 Lambda MicroVMs</div>
+        VM レベルの分離とほぼ瞬時の起動・再開を提供するサーバーレスコンピュートプリミティブ。タスクの実行環境
+      </div>
+      <div class="related-item">
+        <div class="related-name">📬 Amazon SQS</div>
+        ジョブキューとして durable function のトリガーに利用可能
+      </div>
+      <div class="related-item">
+        <div class="related-name">🚌 Amazon EventBridge</div>
+        イベント駆動で durable function を起動するイベントバスとして利用可能
+      </div>
+      <div class="related-item">
+        <div class="related-name">🪜 AWS Step Functions</div>
+        同様にワークフローオーケストレーションを提供するサービス。コード中心で MicroVM と密結合したオーケストレーションを行いたい場合に本機能が選択肢となる
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📌 まとめ</h2>
+    <p>
+      Lambda durable functions と Lambda MicroVMs を組み合わせることで、
+      <span class="highlight">信頼できないコードや AI エージェント生成コードを分離サンドボックスで実行する長時間ワークフロー</span>を、
+      独自のオーケストレーション基盤なしで構築できるようになりました。
+    </p>
+    <div class="check-item"><span class="check-icon">✓</span><span>ソフトウェアファクトリー、セキュリティスキャナー、CI/CD 基盤を検討しているチームは、GitHub のサンプルアプリケーションを使った検証から始めることを推奨</span></div>
+    <div class="check-item"><span class="warn-icon">⚠</span><span>開発者プレビューのため、本番適用は GA を待ち、仕様変更の動向を注視すること</span></div>
+  </div>
+
+  <footer>
+    <p>📎 出典・参考リンク</p>
+    <ul>
+      <li><a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/lambda-durable-microvm/" target="_blank" rel="noopener noreferrer">公式発表 (What's New): https://aws.amazon.com/about-aws/whats-new/2026/11/lambda-durable-microvm/</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/lambda/lambda-microvms/" target="_blank" rel="noopener noreferrer">Lambda MicroVMs 製品ページ</a></li>
+      <li><a class="aws-link" href="https://aws.amazon.com/lambda/lambda-durable-functions/" target="_blank" rel="noopener noreferrer">Lambda durable functions 製品ページ</a></li>
+      <li><a class="aws-link" href="https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-extensions" target="_blank" rel="noopener noreferrer">SDK extensions パッケージ (TypeScript)</a></li>
+      <li><a class="aws-link" href="https://github.com/aws/aws-durable-execution-sdk-python/tree/main/packages/aws-durable-execution-sdk-python-extensions" target="_blank" rel="noopener noreferrer">SDK extensions パッケージ (Python)</a></li>
+      <li><a class="aws-link" href="https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-compute-worker" target="_blank" rel="noopener noreferrer">MicroVM Worker ライブラリ (JS/TS)</a></li>
+      <li><a class="aws-link" href="https://github.com/aws/aws-durable-execution-sdk-python/tree/main/packages/aws-durable-execution-sdk-python-compute-worker" target="_blank" rel="noopener noreferrer">MicroVM Worker ライブラリ (Python)</a></li>
+      <li><a class="aws-link" href="https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-examples" target="_blank" rel="noopener noreferrer">サンプルアプリケーション (examples パッケージ)</a></li>
+    </ul>
+    <p>本インフォグラフィックは AWS News レポート (2026-11-25-lambda-durable-microvm.md) をもとに生成されています。</p>
+  </footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#FF9900',
+            primaryTextColor: '#232F3E',
+            primaryBorderColor: '#FF9900',
+            lineColor: '#FF9900',
+            secondaryColor: '#F5F5F5',
+            tertiaryColor: '#FAFAFA',
+            background: '#FFFFFF',
+            mainBkg: '#FFF3E0',
+            nodeBorder: '#FF9900',
+            clusterBkg: '#FFF8E1',
+            clusterBorder: '#FF9900',
+            edgeLabelBackground: '#FFFFFF',
+            textColor: '#232F3E'
+        }
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
