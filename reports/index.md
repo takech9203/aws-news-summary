@@ -6,6 +6,7 @@
 ## 2026 年
 
 - [2026-11-26 - Kiro - KiroBench: 開発者が Kiro に持ち込む実作業でコーディングエージェントを評価するベンチマーク](2026/2026-11-26-kiro-kirobench.md)
+- [2026-11-26 - Amazon RDS for PostgreSQL - マイナーバージョン 18.7、17.12、16.16、15.20、14.25 のサポート](2026/2026-11-26-amazon-rds-postgresql-18-7-17-12-16-16-15-20-14-25.md)
 - [2026-11-25 - AWS IoT Core - Service Quotas コンソールでのクォータと使用状況の可視化](2026/2026-11-25-aws-iot-core-quota-usage-monitoring.md)
 - [2026-11-25 - Amazon EC2 - C9g インスタンスがシドニー、アイルランド、スペイン、サンパウロの各リージョンで利用可能に](2026/2026-11-25-amazon-ec2-c9g-instances-additional-regions.md)
 - [2026-11-25 - Kiro - GPT 6.2 Astra Preview、クレジットプーリング使用上限とオーバーエイジ、CLI 3.6 パッチ](2026/2026-11-25-kiro-changelog-2026-11-25.md)
@@ -15,6 +16,7 @@
 - [2026-11-25 - Amazon Transcribe - Transcribe Turbo (パブリックプレビュー)](2026/2026-11-25-transcribe-turbo-preview.md)
 - [2026-11-25 - Amazon EC2 - M9g インスタンスが追加の 4 リージョンで利用可能に](2026/2026-11-25-amazon-ec2-m9g-instances-additional-regions.md)
 - [2026-11-25 - Amazon EC2 - C9gd インスタンスが欧州 (アイルランド、スペイン) リージョンで利用可能に](2026/2026-11-25-amazon-ec2-c9gd-instances-additional-regions.md)
+- [2026-11-25 - Elastic Load Balancing - ELB for Envoy の一般提供開始](2026/2026-11-25-elastic-load-balancing-for-envoy-generally-available.md)
 - [2026-11-25 - Amazon EC2 - M9gd インスタンスがアジアパシフィック (ソウル) リージョンで利用可能に](2026/2026-11-25-amazon-ec2-m9gd-asiapacific-seoul.md)
 - [2026-11-25 - Amazon EC2 - M8g インスタンスがイスラエル (テルアビブ) リージョンで利用可能に](2026/2026-11-25-amazon-ec2-m8g-instances-telaviv-region.md)
 - [2026-11-25 - AWS IAM - 信頼されたアイデンティティ伝播 (TIP) の IAM フェデレーションと IAM Roles Anywhere への拡張](2026/2026-11-25-aws-iam.md)
@@ -25,6 +27,7 @@
 - [2026-11-24 - AWS CloudFormation - 206 の新リソースタイプ追加によるリソースカバレッジの包括化](2026/2026-11-24-cloudformation-coverage-expansion.md)
 - [2026-11-24 - Amazon Connect - Customer ダッシュボードが履歴メトリクスの時間間隔グループ化をサポート](2026/2026-11-24-amazon-connect-time-interval.md)
 - [2026-11-24 - Amazon OpenSearch Serverless - アフリカ (ケープタウン) リージョンで利用可能に](2026/2026-11-24-amazon-opensearch-serverless-available-cape-town-region.md)
+- [2026-11-24 - Amazon OpenSearch Service - 新エンジンにおける分散結合・高カーディナリティ集計・query DSL サポート](2026/2026-11-24-amazon-opensearch-service-distributed-joins.md)
 - [2026-11-24 - Amazon RDS for SQL Server - 1 インスタンスあたり最大 500 データベースのサポート](2026/2026-11-24-rds-sqlserver-supports-500-databases-per-instance.md)
 - [2026-11-23 - AWS WAF - API セキュリティ (API Portal による自動検出と API Security マネージドルールグループによる保護)](2026/2026-11-23-api-security-with-waf.md)
 - [2026-11-23 - Amazon SageMaker HyperPod - Slurm クラスター向けマネージド拡張機能 (オブザーバビリティ・ユーザー管理)](2026/2026-11-23-sagemaker-hyperpod-extensions.md)
