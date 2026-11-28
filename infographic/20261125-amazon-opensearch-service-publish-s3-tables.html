@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon OpenSearch Service - Optimized エンジンから Amazon S3 Tables へのデータパブリッシュ</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    :root {
+      --aws-squid-ink: #232F3E;
+      --aws-dark-squid: #1A242F;
+      --aws-orange: #FF9900;
+      --aws-smile-orange: #FFAD33;
+      --aws-white: #FFFFFF;
+      --aws-light-gray: #D5DBDB;
+      --aws-teal: #00A1C9;
+      --aws-purple: #8C4FFF;
+      --aws-green: #1D8102;
+      --aws-red: #D13212;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: var(--aws-squid-ink);
+      font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      color: var(--aws-light-gray);
+      font-size: 16px;
+      line-height: 1.6;
+      padding: 20px;
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+
+    .date-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--aws-light-gray);
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+
+    h1, .title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aws-white);
+      margin: 0 0 8px 0;
+      line-height: 1.4;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--aws-light-gray);
+    }
+
+    h2, .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--aws-orange);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aws-white);
+      margin: 20px 0 10px 0;
+    }
+
+    .section {
+      background: var(--aws-dark-squid);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .highlight {
+      background-color: rgba(255, 153, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--aws-orange);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid rgba(255, 153, 0, 0.3);
+      border-left: 4px solid var(--aws-orange);
+    }
+
+    .card h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-smile-orange);
+      font-size: 16px;
+    }
+
+    .card p, .card ul {
+      margin: 4px 0;
+      font-size: 14px;
+    }
+
+    .card ul {
+      padding-left: 20px;
+    }
+
+    /* Before/After */
+    .before-after {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .before-box, .after-box {
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .before-box {
+      background: rgba(209, 50, 18, 0.1);
+      border: 1px solid rgba(209, 50, 18, 0.5);
+    }
+
+    .after-box {
+      background: rgba(29, 129, 2, 0.12);
+      border: 1px solid rgba(29, 129, 2, 0.6);
+    }
+
+    .before-box h3, .after-box h3 {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+    }
+
+    .before-box h3 { color: #FF6B4A; }
+    .after-box h3 { color: #4CAF50; }
+
+    .before-box ul, .after-box ul {
+      margin: 0;
+      padding-left: 4px;
+      list-style: none;
+      font-size: 14px;
+    }
+
+    .before-box li, .after-box li {
+      margin: 8px 0;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .before-box li::before {
+      content: "✗";
+      color: #FF6B4A;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+
+    .after-box li::before {
+      content: "✓";
+      color: #4CAF50;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 700px) {
+      .before-after { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+    }
+
+    /* フロー図 */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+
+    .flow-step {
+      background: var(--aws-dark-squid);
+      border: 2px solid var(--aws-orange);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 100px;
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      color: var(--aws-orange);
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    th {
+      background: rgba(255, 153, 0, 0.15);
+      color: var(--aws-smile-orange);
+      text-align: left;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    td {
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      vertical-align: top;
+    }
+
+    tr:nth-child(even) td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    code.inline {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--aws-smile-orange);
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: #FFFFFF;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+      border: 2px solid rgba(255, 153, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* コードブロック */
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 153, 0, 0.2);
+    }
+
+    .code-header {
+      background: #16213e;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .code-lang {
+      color: var(--aws-orange);
+      font-weight: bold;
+    }
+
+    .code-title {
+      color: var(--aws-light-gray);
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px !important;
+      display: block;
+    }
+
+    /* チェックリスト */
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .check-icon { color: #4CAF50; font-size: 16px; flex-shrink: 0; }
+    .cross-icon { color: #FF6B4A; font-size: 16px; flex-shrink: 0; }
+    .warn-icon { color: var(--aws-smile-orange); font-size: 16px; flex-shrink: 0; }
+
+    /* ステップ */
+    .step-item {
+      display: flex;
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .step-number {
+      background: var(--aws-orange);
+      color: var(--aws-squid-ink);
+      font-weight: 700;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .step-content { flex: 1; min-width: 0; }
+
+    .step-content h4 {
+      margin: 4px 0 8px 0;
+      color: var(--aws-white);
+      font-size: 16px;
+    }
+
+    .step-content p { margin: 6px 0; font-size: 14px; }
+
+    /* ユースケース */
+    .usecase {
+      background: rgba(255, 153, 0, 0.08);
+      border: 1px solid rgba(255, 153, 0, 0.35);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 14px 0;
+    }
+
+    .usecase h4 {
+      margin: 0 0 8px 0;
+      color: var(--aws-smile-orange);
+      font-size: 16px;
+    }
+
+    .usecase p { margin: 6px 0; font-size: 14px; }
+
+    .effect-box {
+      background: rgba(29, 129, 2, 0.12);
+      border-left: 4px solid var(--aws-green);
+      border-radius: 4px;
+      padding: 10px 14px;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    /* リージョン */
+    .region-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .region-item {
+      background: rgba(0, 161, 201, 0.1);
+      border: 1px solid rgba(0, 161, 201, 0.4);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+
+    /* 統計カード */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.2), rgba(255, 153, 0, 0.05));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aws-orange);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      margin-top: 6px;
+    }
+
+    .aws-link {
+      color: var(--aws-teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .aws-link:hover { color: var(--aws-smile-orange); }
+
+    footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 12px;
+      color: var(--aws-light-gray);
+    }
+
+    footer ul { padding-left: 20px; margin: 8px 0; }
+    footer li { margin: 4px 0; }
+
+    .note {
+      font-size: 13px;
+      color: var(--aws-light-gray);
+      opacity: 0.85;
+      margin-top: 8px;
+    }
+
+    .summary-box {
+      background: linear-gradient(135deg, rgba(255, 153, 0, 0.12), rgba(140, 79, 255, 0.08));
+      border: 1px solid rgba(255, 153, 0, 0.4);
+      border-radius: 8px;
+      padding: 18px 20px;
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ヘッダー -->
+    <div class="header">
+      <div>
+        <span class="service-badge">Amazon OpenSearch Service</span><span class="date-badge">📅 2026 年 11 月 25 日リリース</span>
+      </div>
+      <h1>🔍 Optimized エンジンから Amazon S3 Tables へのデータパブリッシュ</h1>
+      <div class="subtitle">observability データを Apache Iceberg テーブルとして公開し、パイプラインなしでオープンに再利用</div>
+    </div>
+
+    <!-- 概要 -->
+    <div class="section">
+      <h2>📋 概要</h2>
+      <p>
+        Amazon OpenSearch Service の observability 向け <span class="highlight">Optimized エンジン</span>が、OpenSearch に直接取り込まれたデータを
+        <span class="highlight">Amazon S3 Tables</span> にパブリッシュできるようになりました。Publish ポリシーを設定するだけで、選択したインデックスが
+        AWS アカウント内の <span class="highlight">Apache Iceberg テーブル</span>として利用可能になります。データの取り込み方法を変更する必要はありません。
+      </p>
+      <p>
+        パブリッシュされたテーブルは、Amazon EMR Serverless 上の Apache Spark や DuckDB などの Iceberg 互換ツールから、
+        <span class="highlight">OpenSearch ドメインにクエリ負荷をかけずに</span>クエリできます。Optimized エンジンは各インデックスをもともと
+        Apache Parquet 形式で保存しているため、パブリッシュは<span class="highlight">再エンコード不要のファイルコピーのみ</span>で完了します。
+      </p>
+
+      <div class="flow-diagram">
+        <div class="flow-step">📥 OpenSearch に<br/>直接インジェスト</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📝 Publish ポリシー<br/>ISM で自動化</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">🪣 S3 Tables<br/>Iceberg テーブル</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">📊 Spark / DuckDB<br/>から直接クエリ</div>
+      </div>
+
+      <div class="before-after">
+        <div class="before-box">
+          <h3>😣 アップデート前の課題</h3>
+          <ul>
+            <li>データを他の分析 / AI ツールで再利用するには、並行インジェストやカスタムエクスポートパイプラインの構築が必要だった</li>
+            <li>履歴調査や長期トレンド分析のために古いデータをドメイン上に保持し続けると、ストレージコストが増大した</li>
+            <li>外部ツールから過去データを分析する際、OpenSearch ドメインに直接クエリ負荷がかかっていた</li>
+          </ul>
+        </div>
+        <div class="after-box">
+          <h3>😊 アップデート後の改善</h3>
+          <ul>
+            <li>Publish ポリシーの設定のみで、選択したインデックスを Apache Iceberg テーブルとして AWS アカウント内に公開できる</li>
+            <li>Iceberg 互換の任意のエンジン (EMR Serverless、DuckDB など) から、OpenSearch に負荷をかけずに同じデータをクエリできる</li>
+            <li>ISM による自動パブリッシュとドメインからの削除で、低コストな長期保持とストレージ最適化を両立できる</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- アーキテクチャ図 -->
+    <div class="section">
+      <h2>🏗️ アーキテクチャ</h2>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart TD
+    App(["📱 アプリケーション / エージェント"]) --> Domain
+
+    subgraph OS["🔍 Amazon OpenSearch Service"]
+        Domain["⚙️ Optimized エンジンドメイン<br/>OpenSearch 3.9"]
+        ISM["🔄 ISM ポリシー<br/>publish_to_catalog"]
+        Domain --> ISM
+    end
+
+    subgraph S3T["🪣 Amazon S3 Tables"]
+        Table[("📋 Apache Iceberg テーブル<br/>テーブルバケット opensearch")]
+    end
+
+    ISM -->|エージングしたインデックスをパブリッシュ| Table
+
+    subgraph Query["📊 Iceberg 互換クエリエンジン"]
+        direction LR
+        EMR["⚡ EMR Serverless<br/>Apache Spark"]
+        Duck["🦆 DuckDB"]
+        RS["🗄️ Amazon Redshift"]
+        EMR ~~~ Duck ~~~ RS
+    end
+
+    Table -.->|OpenSearch に負荷をかけずにクエリ| Query
+    User(["👤 分析者"]) --> Query
+    SRE(["👤 運用者"]) -->|直近データの検索| Domain
+
+    classDef layer fill:none,stroke:#CCCCCC,stroke-width:2px,color:#666666
+    classDef compute fill:#FFE0B2,stroke:#FFCC80,stroke-width:2px,color:#5D4037
+    classDef internal fill:#E8F1FF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef database fill:#E8EAF6,stroke:#C5CAE9,stroke-width:2px,color:#283593
+    classDef process fill:#FFFFFF,stroke:#4A90E2,stroke-width:2px,color:#333333
+    classDef user fill:#E3F2FD,stroke:#BBDEFB,stroke-width:2px,color:#1565C0
+
+    class OS,S3T,Query layer
+    class Domain compute
+    class ISM internal
+    class Table database
+    class EMR,Duck,RS process
+    class App,User,SRE user
+        </pre>
+      </div>
+      <p class="note">
+        直近のデータは OpenSearch ドメイン上で検索可能なまま維持され、エージングしたインデックスは ISM ポリシーにより
+        Amazon S3 Tables 上の Apache Iceberg テーブルへ自動的にパブリッシュされます。パブリッシュされたテーブルは
+        Iceberg 互換の各種エンジンから OpenSearch を経由せずにクエリできます。
+      </p>
+    </div>
+
+    <!-- 主要機能 -->
+    <div class="section">
+      <h2>⚡ 主要機能</h2>
+
+      <div class="card">
+        <h4>📤 カタログパブリッシング (Publish ポリシー)</h4>
+        <ul>
+          <li>選択したインデックスを AWS アカウント内の Apache Iceberg テーブルとして公開</li>
+          <li>Parquet で保存済みのため、パブリッシュは<strong>再エンコードではなくファイルコピー</strong>で実行</li>
+          <li>パブリッシュは<strong>冪等かつ増分的</strong>: パブリッシュ済みファイルは保持され、新しいファイルのみ追加</li>
+          <li>テーブルへの最初のパブリッシュ時にテーブルが自動作成</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>📖 Iceberg v3 形式でのオープンな読み取り</h4>
+        <ul>
+          <li>テーブルは <strong>Iceberg テーブルフォーマット v3</strong> を使用</li>
+          <li>DuckDB 1.5.1 以降、Amazon EMR リリース 7.12 以降の Apache Spark、AWS Glue ETL 5.1 以降、Amazon Redshift patch 204 以降、S3 Tables Iceberg REST エンドポイントなどで読み取り可能</li>
+          <li>クエリは IAM 権限に基づいて実行され、OpenSearch のコンポーネントは関与しない</li>
+          <li>各テーブルにはインデックスのフィールドに加え、<code class="inline">index_name</code>、<code class="inline">_index_uuid</code>、<code class="inline">_shard_id</code>、<code class="inline">_start_time</code>、<code class="inline">_end_time</code> のパーティション列を含む</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>🔄 ISM によるコールドティアの自動化</h4>
+        <ul>
+          <li><code class="inline">publish_to_catalog</code> と <code class="inline">delete_from_catalog</code> が ISM アクションとして追加 (OpenSearch 3.9 以降の Optimized ドメイン)</li>
+          <li>エージングした世代をテーブルへパブリッシュ → コミット成功後にドメインから削除 → 保持期間終了時にテーブルからも削除、というライフサイクルを自動化</li>
+          <li>パブリッシュが失敗した場合、インデックスはドメイン上に残り、ISM がアクションをリトライ</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>🔌 カタログ管理用 REST API</h4>
+        <ul>
+          <li>ドメインエンドポイント上の <code class="inline">_catalog</code> API で、パブリッシュ実行、ステータス確認、テーブル / インデックス一覧、統計取得、テーブルからのインデックス削除、テーブル削除を操作可能</li>
+          <li>ドメイン名から導出された名前空間 (例: <code class="inline">my-logs</code> → <code class="inline">my_logs</code>) がカタログ名として使用される</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 技術仕様 -->
+    <div class="section">
+      <h2>🔧 技術仕様</h2>
+
+      <h3>前提条件と主な仕様</h3>
+      <table>
+        <tr><th>項目</th><th>詳細</th></tr>
+        <tr><td>バージョン</td><td>OpenSearch 3.9 以降</td></tr>
+        <tr><td>エンジンモード</td><td>Optimized エンジン (observability 向け)</td></tr>
+        <tr><td>保存時の暗号化</td><td>有効化が必須 (Optimized ドメインでは常に有効)</td></tr>
+        <tr><td>テーブル形式</td><td>Apache Iceberg テーブルフォーマット v3 (<code class="inline">date_nanos</code> は <code class="inline">timestamp_ns</code> として保存)</td></tr>
+        <tr><td>テーブルバケット</td><td>アカウント / リージョンごとに <code class="inline">opensearch</code> という名前のテーブルバケットを 1 つ使用 (全ドメインで共有)</td></tr>
+        <tr><td>対象インデックス</td><td>追記専用 (append-only) インデックスのみ (データストリームのバッキングインデックス、または <code class="inline">index.append_only.enabled: true</code> のインデックス)</td></tr>
+        <tr><td>テーブル所有権</td><td>OpenSearch Service がテーブルを管理。読み取りと読み取り権限の付与は可能だが、直接書き込みは不可</td></tr>
+        <tr><td>暗号化</td><td>カスタマーマネージド AWS KMS キーによるテーブル暗号化に対応 (有効化後の変更は不可)</td></tr>
+      </table>
+
+      <h3>API 変更履歴</h3>
+      <table>
+        <tr><th>日付</th><th>サービス</th><th>変更内容</th></tr>
+        <tr>
+          <td>2026/11/27</td>
+          <td><a class="aws-link" href="https://awsapichanges.com/archive/changes/f55894-es.html" target="_blank" rel="noopener noreferrer">Amazon OpenSearch Service</a></td>
+          <td>7 updated api methods - Optimized エンジンドメイン向けカタログ API。<code class="inline">CreateDomain</code>、<code class="inline">UpdateDomainConfig</code>、<code class="inline">DescribeDomain</code> などに <code class="inline">CatalogOptions</code> (ServiceManagedS3Tables、EncryptionConfiguration) が追加</td>
+        </tr>
+      </table>
+
+      <h3>インデックスとテーブルのバインド設定</h3>
+      <p class="note">インデックステンプレートでインデックスをテーブルにバインドします。</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <span class="code-title">インデックステンプレートの例</span>
+        </div>
+        <pre><code class="language-json">PUT _index_template/web-logs
+{
+  "index_patterns": ["web-logs*"],
+  "data_stream": {},
+  "template": {
+    "settings": {
+      "index.append_only.enabled": true,
+      "index.catalog.table": "web_logs",
+      "index.catalog.strict_mapping": true
+    }
+  }
+}</code></pre>
+      </div>
+      <table>
+        <tr><th>設定</th><th>説明</th><th>デフォルト</th></tr>
+        <tr><td><code class="inline">index.catalog.table</code></td><td>パブリッシュ先の Iceberg テーブル名</td><td>なし</td></tr>
+        <tr><td><code class="inline">index.catalog.name</code></td><td>パブリッシュ先のカタログ</td><td>ドメインのカタログ</td></tr>
+        <tr><td><code class="inline">index.catalog.strict_mapping</code></td><td>テーブルスキーマと競合するマッピング変更をマッピング時に拒否</td><td>false</td></tr>
+        <tr><td><code class="inline">index.catalog.time_field</code></td><td>時間範囲パーティションに使用するルートレベルの date / date_nanos フィールド</td><td>データストリームのタイムスタンプフィールド、次に @timestamp</td></tr>
+        <tr><td><code class="inline">index.catalog.timestamp_epoch</code></td><td>ファイルを hour / day / month / year の時間範囲でグループ化</td><td>インデックスごとに 1 範囲</td></tr>
+        <tr><td><code class="inline">index.append_only.enabled</code></td><td>インデックスを追記専用にする (バインドに必須)</td><td>false</td></tr>
+      </table>
+    </div>
+
+    <!-- 設定方法 -->
+    <div class="section">
+      <h2>🛠️ 設定方法</h2>
+
+      <h3>前提条件</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span>OpenSearch 3.9 以降の Optimized エンジンドメイン (observability ユースケース) であること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>有効化するプリンシパルに <code class="inline">es:CreateDomain</code> または <code class="inline">es:UpdateDomainConfig</code> に加え、<code class="inline">opensearch</code> テーブルバケットに対する S3 Tables 権限 (<code class="inline">s3tables:CreateTableBucket</code>、<code class="inline">s3tables:PutTableBucketPolicy</code> など) があること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ドメイン名が有効な S3 Tables 名前空間にマッピングできること</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span>ファイングレインドアクセスコントロールを使用する場合、非管理者ユーザーにカタログ権限を付与すること</span></div>
+
+      <div class="step-item">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h4>カタログパブリッシングを有効化する</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">AWS CLI</span>
+            </div>
+            <pre><code class="language-bash">aws opensearch update-domain-config \
+  --domain-name my-logs \
+  --catalog-options '{"Enabled":true,"Catalog":{"ServiceManagedS3Tables":{}}}' \
+  --region us-east-1</code></pre>
+          </div>
+          <p>既存の Optimized ドメインでカタログパブリッシングを有効化します。初回有効化時にアカウント / リージョンに <code class="inline">opensearch</code> テーブルバケットが作成されます。ドメイン新規作成時は <code class="inline">create-domain</code> に同じ <code class="inline">--catalog-options</code> を指定します。コンソールの場合は [Catalog publishing] で [Enable catalog publishing] を選択します。</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h4>設定状態を確認する</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">Bash</span>
+              <span class="code-title">AWS CLI</span>
+            </div>
+            <pre><code class="language-bash">aws opensearch describe-domain-config \
+  --domain-name my-logs \
+  --query 'DomainConfig.CatalogOptions'</code></pre>
+          </div>
+          <p><code class="inline">CatalogOptions</code> の <code class="inline">State</code> フィールドを確認します。適用中は <code class="inline">Processing</code>、適用完了後は <code class="inline">Active</code> と表示されます。</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h4>インデックスをテーブルにバインドしてパブリッシュする</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">HTTP</span>
+              <span class="code-title">_catalog API</span>
+            </div>
+            <pre><code class="language-bash">POST _catalog/my_logs/web_logs/.ds-web-logs-000001/_publish?wait_for_completion=true</code></pre>
+          </div>
+          <p>「技術仕様」セクションのインデックステンプレートでバインドを設定した後、<code class="inline">_publish</code> API でバッキングインデックスをテーブルへパブリッシュします。テーブルへの最初のパブリッシュでテーブルが作成され、レスポンスでパブリッシュ結果 (追加ファイル数、テーブルスナップショット ID など) を確認できます。運用では ISM ポリシーの <code class="inline">publish_to_catalog</code> アクション (<code class="inline">delete_index: true</code> でドメインからの削除も自動化) による自動実行を推奨します。</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h4>Iceberg 互換エンジンからクエリする</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">SQL</span>
+              <span class="code-title">DuckDB からのクエリ例</span>
+            </div>
+            <pre><code class="language-sql">INSTALL iceberg; LOAD iceberg; INSTALL httpfs; LOAD httpfs; INSTALL aws; LOAD aws;
+CREATE SECRET (TYPE s3, PROVIDER credential_chain, REGION 'us-east-1');
+ATTACH 'arn:aws:s3tables:us-east-1:111122223333:bucket/opensearch' AS s3t (TYPE iceberg, ENDPOINT_TYPE s3_tables);
+SELECT service.name, count(*) FROM s3t.my_logs.web_logs
+WHERE "@timestamp" >= TIMESTAMP '2026-11-22 06:00:00' GROUP BY 1;</code></pre>
+          </div>
+          <p>DuckDB からテーブルバケットにアタッチしてクエリする例です。クエリを実行する IAM ロール / ユーザーには <code class="inline">s3tables:GetTableData</code> などの読み取り権限が必要です。Amazon EMR Serverless の場合は、SigV4 署名を使用する Iceberg REST カタログを Spark に設定します。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- メリット -->
+    <div class="section">
+      <h2>💡 メリット</h2>
+
+      <h3>💼 ビジネス面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>ストレージコストの削減</strong>: エージングしたデータを低コストな S3 Tables に保持しながら、ドメイン上には直近のデータのみを残すことで、OpenSearch ドメインのコストを最適化できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>追加料金なし</strong>: カタログパブリッシング自体に OpenSearch Service の追加料金はなく、S3 Tables のストレージとクエリに使用するサービスの標準料金のみで利用できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>データ活用範囲の拡大</strong>: observability データを監査、長期トレンド分析、クロスデータセット分析など、検索以外の分析用途にも活用できる</span></div>
+
+      <h3>⚙️ 技術面</h3>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>パイプライン構築が不要</strong>: 並行インジェストやカスタムエクスポートパイプラインを構築せずに、オープンテーブル形式でデータを再利用できる</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>再エンコード不要の効率的なパブリッシュ</strong>: Optimized エンジンは Parquet でデータを保存しているため、パブリッシュはファイルコピーのみで高速に完了する</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>クエリ負荷の分離</strong>: 外部エンジンからのクエリは OpenSearch ドメインを経由しないため、本番の検索ワークロードに影響を与えない</span></div>
+      <div class="check-item"><span class="check-icon">✓</span><span><strong>ライフサイクルの自動化</strong>: ISM ポリシーでホット → ウォーム → コールド (S3 Tables) → 削除までのライフサイクルを宣言的に管理できる</span></div>
+    </div>
+
+    <!-- デメリット・制約事項 -->
+    <div class="section">
+      <h2>⚠️ デメリット・制約事項</h2>
+
+      <h3>🚫 制限事項</h3>
+      <div class="check-item"><span class="cross-icon">✗</span><span>カタログパブリッシングは一度有効化すると無効化できない。ドメインの保存時暗号化オプションとテーブルの KMS キーも変更できない</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>追記専用インデックスのみがバインド / パブリッシュの対象。フィールド変更は互換性のある追加に限られ、型の競合は拒否される</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>テーブルバケット名は <code class="inline">opensearch</code> に固定。OpenSearch Service 以外が作成した同名のテーブルバケットが既に存在する場合、有効化は失敗する</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>テーブルは OpenSearch Service が管理し、ユーザーは直接書き込めない</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>ドメインはテーブルを読み戻さない。ドメイン上の検索はドメインに残っているデータのみを対象とする</span></div>
+      <div class="check-item"><span class="cross-icon">✗</span><span>Amazon Athena は Iceberg V3 テーブルを読み取れないため、クエリエンジンとして使用できない</span></div>
+
+      <h3>🤔 考慮すべき点</h3>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>テーブルはドメインより長く存続する。ドメインを削除してもテーブルは削除されず、テーブルを削除 (drop) するまで S3 Tables の課金が継続する</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>テーブルからインデックスを削除しても、古いスナップショット (タイムトラベル) には S3 Tables のスナップショット有効期限 (デフォルト 120 時間) が切れるまでデータが残る</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>クエリエンジンには Iceberg V3 メタデータとナノ秒タイムスタンプ (<code class="inline">timestamp_ns</code>) のサポートが必要</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>EMR Serverless からクエリする場合、S3 Tables のインターフェイスエンドポイントまたは NAT ゲートウェイを持つ VPC でアプリケーションを実行する必要がある</span></div>
+      <div class="check-item"><span class="warn-icon">⚠</span><span>ISM は <code class="inline">publish_to_catalog</code> などのアクションをポリシー作成者の権限で実行するため、ポリシー作成者に必要なクラスター / インデックス権限を付与する必要がある</span></div>
+    </div>
+
+    <!-- ユースケース -->
+    <div class="section">
+      <h2>🎯 ユースケース</h2>
+
+      <div class="usecase">
+        <h4>1️⃣ ログデータのコールドティア化と低コスト長期保持</h4>
+        <p><strong>シナリオ</strong>: Web アプリケーションのログを OpenSearch で監視しており、直近 30 日はダッシュボードで検索したいが、コンプライアンス要件により 300 日の保持が必要。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">JSON</span>
+            <span class="code-title">ISM ポリシーによるライフサイクル自動化</span>
+          </div>
+          <pre><code class="language-json">PUT _plugins/_ism/policies/web-logs-lifecycle
+{
+  "policy": {
+    "default_state": "hot",
+    "ism_template": [{ "index_patterns": ["web-logs*"], "priority": 100 }],
+    "states": [
+      { "name": "hot",
+        "actions": [{ "rollover": { "min_index_age": "1d", "min_primary_shard_size": "30gb" } }],
+        "transitions": [{ "state_name": "warm", "conditions": { "min_index_age": "7d" } }] },
+      { "name": "warm",
+        "actions": [{ "warm_migration": {} }],
+        "transitions": [{ "state_name": "cold", "conditions": { "min_index_age": "30d" } }] },
+      { "name": "cold",
+        "actions": [
+          { "read_only": {} },
+          { "publish_to_catalog": { "table": "web_logs", "delete_index": true },
+            "retry": { "count": 3, "backoff": "exponential", "delay": "10m" } } ],
+        "transitions": [{ "state_name": "expired", "conditions": { "min_index_age": "300d" } }] },
+      { "name": "expired",
+        "actions": [{ "delete_from_catalog": {} }],
+        "transitions": [] }
+    ]
+  }
+}</code></pre>
+        </div>
+        <div class="effect-box">✅ <strong>効果</strong>: 30 日経過したログは自動的に S3 Tables へ移動してドメインのストレージを解放し、300 日まで低コストで保持。保持期間終了後はテーブルからも自動削除される。</div>
+      </div>
+
+      <div class="usecase">
+        <h4>2️⃣ インシデントの履歴調査と長期トレンド分析</h4>
+        <p><strong>シナリオ</strong>: 数か月前のインシデントの再発調査や、サービスのレイテンシーの長期トレンド分析を、本番の OpenSearch ドメインに負荷をかけずに実施したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">SQL</span>
+            <span class="code-title">DuckDB からパブリッシュ済みテーブルを直接クエリ</span>
+          </div>
+          <pre><code class="language-sql">ATTACH 'arn:aws:s3tables:ap-northeast-1:111122223333:bucket/opensearch'
+  AS s3t (TYPE iceberg, ENDPOINT_TYPE s3_tables);
+SELECT date_trunc('day', "@timestamp") AS day,
+       avg(latency_ms) AS avg_latency
+FROM s3t.my_logs.web_logs
+WHERE "@timestamp" BETWEEN TIMESTAMP '2026-08-01 00:00:00'
+                       AND TIMESTAMP '2026-11-01 00:00:00'
+GROUP BY 1 ORDER BY 1;</code></pre>
+        </div>
+        <div class="effect-box">✅ <strong>効果</strong>: 本番ドメインにクエリ負荷をかけることなく、数か月分の履歴データに対する調査・分析を Iceberg 互換ツールで実行できる。</div>
+      </div>
+
+      <div class="usecase">
+        <h4>3️⃣ EMR Serverless によるクロスデータセット分析</h4>
+        <p><strong>シナリオ</strong>: observability データをデータレイク上の他の業務データ (売上データ、顧客データなど) と組み合わせて、Spark で横断的に分析したい。</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">Bash</span>
+            <span class="code-title">Spark の Iceberg REST カタログ設定</span>
+          </div>
+          <pre><code class="language-bash">--conf spark.sql.catalog.s3t=org.apache.iceberg.spark.SparkCatalog
+--conf spark.sql.catalog.s3t.type=rest
+--conf spark.sql.catalog.s3t.uri=https://s3tables.ap-northeast-1.amazonaws.com/iceberg
+--conf spark.sql.catalog.s3t.warehouse=arn:aws:s3tables:ap-northeast-1:111122223333:bucket/opensearch
+--conf spark.sql.catalog.s3t.rest.auth.type=sigv4
+--conf spark.sql.catalog.s3t.rest.signing-name=s3tables
+--conf spark.sql.catalog.s3t.rest.signing-region=ap-northeast-1</code></pre>
+        </div>
+        <div class="effect-box">✅ <strong>効果</strong>: OpenSearch に取り込んだ observability データを、データレイク上の他の Iceberg テーブルと JOIN するなど、クロスデータセット分析に活用できる。</div>
+      </div>
+    </div>
+
+    <!-- 料金 -->
+    <div class="section">
+      <h2>💰 料金</h2>
+      <p>カタログパブリッシング機能自体に OpenSearch Service の<span class="highlight">追加料金はありません</span>。以下の標準料金が適用されます。</p>
+      <div class="card">
+        <ul>
+          <li><strong>Amazon S3 Tables</strong>: テーブルのストレージ、リクエスト、メンテナンスに対して課金。ドメイン削除後もテーブルを削除するまで課金が継続する</li>
+          <li><strong>クエリに使用するサービス</strong>: Amazon EMR Serverless、AWS Glue、Amazon Redshift など、クエリに使用する各サービスの標準料金</li>
+          <li><strong>AWS KMS</strong>: カスタマーマネージドキーを使用する場合の KMS 料金</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 利用可能リージョン -->
+    <div class="section">
+      <h2>🌏 利用可能リージョン</h2>
+      <p>OpenSearch 3.9 の新しい observability エンジンで、以下の <span class="highlight">12 リージョン</span>で利用可能です。</p>
+      <div class="region-grid">
+        <div class="region-item">🇺🇸 米国東部 (バージニア北部)</div>
+        <div class="region-item">🇺🇸 米国東部 (オハイオ)</div>
+        <div class="region-item">🇺🇸 米国西部 (オレゴン)</div>
+        <div class="region-item">🇨🇦 カナダ (中部)</div>
+        <div class="region-item">🇮🇳 アジアパシフィック (ムンバイ)</div>
+        <div class="region-item">🇸🇬 アジアパシフィック (シンガポール)</div>
+        <div class="region-item">🇦🇺 アジアパシフィック (シドニー)</div>
+        <div class="region-item">🇯🇵 アジアパシフィック (東京)</div>
+        <div class="region-item">🇩🇪 欧州 (フランクフルト)</div>
+        <div class="region-item">🇮🇪 欧州 (アイルランド)</div>
+        <div class="region-item">🇬🇧 欧州 (ロンドン)</div>
+        <div class="region-item">🇪🇸 欧州 (スペイン)</div>
+      </div>
+    </div>
+
+    <!-- 関連サービス -->
+    <div class="section">
+      <h2>🔗 関連サービス・機能</h2>
+      <div class="card">
+        <ul>
+          <li><strong>Amazon S3 Tables</strong>: パブリッシュ先となるフルマネージドな Apache Iceberg テーブルストレージ。スナップショット有効期限や未参照ファイル削除などのメンテナンスを提供</li>
+          <li><strong>Amazon EMR Serverless</strong>: Apache Spark によるテーブルのクエリ実行基盤 (Amazon EMR リリース 7.12 以降で Iceberg V3 に対応)</li>
+          <li><strong>AWS KMS</strong>: カスタマーマネージドキーによるテーブルの暗号化</li>
+          <li><strong>Index State Management (ISM)</strong>: <code class="inline">publish_to_catalog</code> / <code class="inline">delete_from_catalog</code> アクションによるライフサイクル自動化</li>
+          <li><strong>Amazon Redshift / AWS Glue / Amazon SageMaker Unified Studio</strong>: Iceberg V3 テーブルを読み取り可能なその他の AWS 分析サービス</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- まとめ -->
+    <div class="section">
+      <h2>📝 まとめ</h2>
+      <div class="summary-box">
+        <p style="margin-top: 0;">
+          OpenSearch Service の Optimized エンジンから Amazon S3 Tables への直接パブリッシュにより、
+          <span class="highlight">カスタムパイプラインなし</span>で observability データをオープンな Apache Iceberg テーブルとして再利用できるようになりました。
+          ドメインの検索性能を維持しながら、<span class="highlight">低コストな長期保持</span>と<span class="highlight">外部分析エンジンによる柔軟な分析</span>を両立できる重要なアップデートです。
+        </p>
+        <p style="margin-bottom: 0;">
+          OpenSearch 3.9 の Optimized エンジンドメインを利用している場合は、有効化が不可逆である点とテーブルバケット名の固定を踏まえた上で、
+          ISM ポリシーによるコールドティア構成の導入を検討することを推奨します。
+        </p>
+      </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+      <p>📎 出典・参考リンク</p>
+      <ul>
+        <li>公式発表 (What's New): <a class="aws-link" href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-opensearch-service-publish-s3-tables" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-opensearch-service-publish-s3-tables</a></li>
+        <li>ドキュメント: Publishing indices to Amazon S3 Tables: <a class="aws-link" href="https://docs.aws.amazon.com/opensearch-service/latest/developerguide/publishing-indices-s3-tables.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/opensearch-service/latest/developerguide/publishing-indices-s3-tables.html</a></li>
+        <li>ドキュメント: Optimized ドメインのセットアップ: <a class="aws-link" href="https://docs.aws.amazon.com/opensearch-service/latest/developerguide/optimized-log-analytics.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/opensearch-service/latest/developerguide/optimized-log-analytics.html</a></li>
+        <li>ドキュメント: Working with Apache Iceberg V3: <a class="aws-link" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/working-with-apache-iceberg-v3.html" target="_blank" rel="noopener noreferrer">https://docs.aws.amazon.com/AmazonS3/latest/userguide/working-with-apache-iceberg-v3.html</a></li>
+        <li>料金ページ (Amazon S3): <a class="aws-link" href="https://aws.amazon.com/s3/pricing/" target="_blank" rel="noopener noreferrer">https://aws.amazon.com/s3/pricing/</a></li>
+        <li>API 変更履歴: <a class="aws-link" href="https://awsapichanges.com/archive/changes/f55894-es.html" target="_blank" rel="noopener noreferrer">https://awsapichanges.com/archive/changes/f55894-es.html</a></li>
+      </ul>
+      <p>このインフォグラフィックは AWS News レポート (2026-11-25-amazon-opensearch-service-publish-s3-tables.md) をもとに生成されました。</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#FF9900',
+        primaryTextColor: '#232F3E',
+        primaryBorderColor: '#FF9900',
+        lineColor: '#FF9900',
+        secondaryColor: '#F5F5F5',
+        tertiaryColor: '#FAFAFA',
+        background: '#FFFFFF',
+        mainBkg: '#FFF3E0',
+        nodeBorder: '#FF9900',
+        clusterBkg: '#FFF8E1',
+        clusterBorder: '#FF9900',
+        edgeLabelBackground: '#FFFFFF',
+        textColor: '#232F3E'
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
