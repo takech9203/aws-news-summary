@@ -5,6 +5,9 @@
 
 ## 2026 年
 
+- [2026-11-27 - Amazon Neptune - Neptune Graph Sessions](2026/2026-11-27-amazon-neptune-graph-sessions-generally-available.md)
+- [2026-11-27 - Amazon CloudWatch - 基本 OpenTelemetry エンリッチメントを追加料金なしで提供](2026/2026-11-27-amazon-cloudwatch-opentelemetry-enrichment.md)
+- [2026-11-27 - Amazon Timestream for InfluxDB 3 - ヘテロジニアスクラスターのサポート](2026/2026-11-27-influxdb-heterogeneous-cluster.md)
 - [2026-11-26 - Kiro - KiroBench: 開発者が Kiro に持ち込む実作業でコーディングエージェントを評価するベンチマーク](2026/2026-11-26-kiro-kirobench.md)
 - [2026-11-26 - Amazon RDS for PostgreSQL - マイナーバージョン 18.7、17.12、16.16、15.20、14.25 のサポート](2026/2026-11-26-amazon-rds-postgresql-18-7-17-12-16-16-15-20-14-25.md)
 - [2026-11-25 - AWS IoT Core - Service Quotas コンソールでのクォータと使用状況の可視化](2026/2026-11-25-aws-iot-core-quota-usage-monitoring.md)
@@ -15,6 +18,7 @@
 - [2026-11-25 - Kiro - 人間の注意力を中心に据えたソフトウェアファクトリーの構築 (Building a software factory around human attention)](2026/2026-11-25-kiro-software-factory-human-attention.md)
 - [2026-11-25 - Amazon Transcribe - Transcribe Turbo (パブリックプレビュー)](2026/2026-11-25-transcribe-turbo-preview.md)
 - [2026-11-25 - Amazon EC2 - M9g インスタンスが追加の 4 リージョンで利用可能に](2026/2026-11-25-amazon-ec2-m9g-instances-additional-regions.md)
+- [2026-11-25 - Amazon OpenSearch Service - Optimized エンジンから Amazon S3 Tables へのデータパブリッシュ](2026/2026-11-25-amazon-opensearch-service-publish-s3-tables.md)
 - [2026-11-25 - Amazon EC2 - C9gd インスタンスが欧州 (アイルランド、スペイン) リージョンで利用可能に](2026/2026-11-25-amazon-ec2-c9gd-instances-additional-regions.md)
 - [2026-11-25 - Elastic Load Balancing - ELB for Envoy の一般提供開始](2026/2026-11-25-elastic-load-balancing-for-envoy-generally-available.md)
 - [2026-11-25 - Amazon EC2 - M9gd インスタンスがアジアパシフィック (ソウル) リージョンで利用可能に](2026/2026-11-25-amazon-ec2-m9gd-asiapacific-seoul.md)
